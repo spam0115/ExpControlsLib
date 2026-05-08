@@ -65,6 +65,7 @@ namespace ExpTreeLib
 
         private CShellItem _currentlyLoadedFolder;
         private CShellItem _selectedItem; // The currently selected item within the list
+        private Dictionary<string, ListViewItem> _itemIndex = new Dictionary<string, ListViewItem>(StringComparer.OrdinalIgnoreCase);
 
         private Stack<CShellItem> _backHistory = new Stack<CShellItem>();
         private Stack<CShellItem> _forwardHistory = new Stack<CShellItem>();
@@ -505,6 +506,7 @@ namespace ExpTreeLib
 
                 _ListView.BeginUpdate();
                 _ListView.Items.Clear();
+                _itemIndex.Clear();
 
                 if (_currentlyLoadedFolder != null && !ReferenceEquals(_currentlyLoadedFolder, CSI))
                     _currentlyLoadedFolder.ClearItems(true);
@@ -517,7 +519,8 @@ namespace ExpTreeLib
                 foreach (CShellItem item in combList)
                 {
                     ListViewItem lvi = MakeLVItem(item);
-                    if (_ListView.Items.Count < initialFillLim)
+                    _itemIndex[item.Path] = lvi;
+                    if (firstLoad.Count < initialFillLim)
                         lvi.ImageIndex = SystemImageListManager.GetIconIndex((CShellItem)lvi.Tag, false);
                     firstLoad.Add(lvi);
                 }
@@ -538,6 +541,7 @@ namespace ExpTreeLib
             else
             {
                 _ListView.Items.Clear();
+                _itemIndex.Clear();
                 if (_currentlyLoadedFolder != null && !ReferenceEquals(_currentlyLoadedFolder, CSI))
                     _currentlyLoadedFolder.ClearItems(true);
             }
@@ -641,6 +645,7 @@ namespace ExpTreeLib
                 if (i == 0) //first column
                 {
                     lvi = new ListViewItem(text);
+                    lvi.Name = item.Path;
                     lvi.Tag = item;
                 }
                 else
@@ -655,6 +660,7 @@ namespace ExpTreeLib
             if (lvi == null)
             {
                 lvi = new ListViewItem(item.DisplayName);
+                lvi.Name = item.Path;
                 lvi.Tag = item;
             }
 
@@ -814,6 +820,7 @@ namespace ExpTreeLib
                             {
                                 int index = lvi.Index;
                                 bool wasSelected = lvi.Selected;
+                                _itemIndex.Remove(e.Item.Path);
                                 _ListView.Items.Remove(lvi);
                                 if (wasSelected && _ListView.SelectedItems.Count == 0 && _ListView.Items.Count > 0)
                                 {
@@ -827,9 +834,17 @@ namespace ExpTreeLib
 
                     case CShItemUpdateType.Renamed:
                         {
-                            var lvi = FindLVItem(e.Item);
+                            // On Rename, we must find the item by its tag (CShellItem) because the path has changed.
+                            // However, we can use the lvi.Name which stores the OLD path used in our dictionary.
+                            var lvi = e.Item.Tag as ListViewItem;
+                            if (lvi == null || !ReferenceEquals(lvi.Tag, e.Item))
+                            {
+                                lvi = _itemIndex.Values.FirstOrDefault(x => ReferenceEquals(x.Tag, e.Item));
+                            }
+
                             if (lvi != null)
                             {
+                                _itemIndex.Remove(lvi.Name); // Remove old path key
                                 if (!ReferenceEquals(e.Item.Parent, _currentlyLoadedFolder))
                                 {
                                     _ListView.Items.Remove(lvi);
@@ -837,9 +852,10 @@ namespace ExpTreeLib
                                 else
                                 {
                                     lvi.Text = e.Item.DisplayName;
+                                    lvi.Name = e.Item.Path; // Update lvi.Name to NEW path
                                     lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
                                     _ListView.Items.Remove(lvi);
-                                    InsertLvi(lvi, _ListView);
+                                    InsertLvi(lvi, _ListView); // InsertLvi will add NEW path to index
                                 }
                             }
                             break;
@@ -854,6 +870,7 @@ namespace ExpTreeLib
                             if (lvi != null)
                             {
                                 int indx = _ListView.Items.IndexOf(lvi);
+                                _itemIndex.Remove(e.Item.Path);
                                 var newLvi = MakeLVItem(e.Item);
                                 if (IsThumbnailViewMode())
                                     _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.Path, GetThumbnailSizeForMode());
@@ -861,6 +878,7 @@ namespace ExpTreeLib
                                     newLvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
                                 _ListView.Items.RemoveAt(indx);
                                 _ListView.Items.Insert(indx, newLvi);
+                                _itemIndex[e.Item.Path] = newLvi;
                             }
                             break;
                         }
@@ -908,11 +926,8 @@ namespace ExpTreeLib
         /// <returns>The matching <see cref="ListViewItem"/>, or null if not found.</returns>
         private ListViewItem FindLVItem(CShellItem item)
         {
-            foreach (ListViewItem lvi in _ListView.Items)
-            {
-                if (ReferenceEquals(lvi.Tag, item))
-                    return lvi;
-            }
+            if (_itemIndex.TryGetValue(item.Path, out var lvi))
+                return lvi;
             return null;
         }
 
@@ -929,11 +944,13 @@ namespace ExpTreeLib
                 if (((CShellItem)lv.Items[i].Tag).CompareTo(item) > 0)
                 {
                     lv.Items.Insert(i, lvi);
+                    _itemIndex[item.Path] = lvi;
                     lvi.EnsureVisible();
                     return;
                 }
             }
             lv.Items.Add(lvi);
+            _itemIndex[item.Path] = lvi;
             lvi.EnsureVisible();
         }
 
@@ -959,6 +976,7 @@ namespace ExpTreeLib
                 // Force CShItem to re-read filesystem metadata
                 item.Refresh(); // call whatever invalidation method CShItem exposes
 
+                _itemIndex.Remove(item.Path);
                 var newLvi = MakeLVItem(item);
 
                 if (IsThumbnailViewMode())
@@ -968,6 +986,7 @@ namespace ExpTreeLib
 
                 _ListView.Items.RemoveAt(indx);
                 _ListView.Items.Insert(indx, newLvi);
+                _itemIndex[item.Path] = newLvi;
             }
             finally
             {
@@ -977,18 +996,15 @@ namespace ExpTreeLib
 
         /// <summary>
         /// Refresh by path string.
-        /// todo: make this faster by using some sort of sorted datastructure instead of brute force search.
         /// </summary>
         public ListViewItem RefreshItem(string fileName)
         {
-            var lvi = _ListView.Items
-                .Cast<ListViewItem>()
-                .FirstOrDefault(i => i.Tag is CShellItem c &&
-                    string.Equals(c.DisplayName, fileName, StringComparison.OrdinalIgnoreCase)); //displayname, text, or name could work
+            // Try to find the item by its display name using the index values
+            var lvi = _itemIndex.Values.FirstOrDefault(i => i.Tag is CShellItem c &&
+                    string.Equals(c.DisplayName, fileName, StringComparison.OrdinalIgnoreCase));
 
             if (lvi is null)
             {
-                //todo: write an error message
                 return null;
             }
             if (lvi.Tag is CShellItem csi)
@@ -1962,11 +1978,10 @@ namespace ExpTreeLib
 
         /// <summary>
         /// Finds a ListViewItem by its display name (case-insensitive).
-        /// todo: make this faster by using some sort of sorted datastructure instead of brute force search.
         /// </summary>
         public ListViewItem FindItemByName(string name)
         {
-            foreach (ListViewItem lvi in _ListView.Items)
+            foreach (var lvi in _itemIndex.Values)
             {
                 if (string.Equals(lvi.Text, name, StringComparison.OrdinalIgnoreCase))
                     return lvi;
@@ -1976,11 +1991,10 @@ namespace ExpTreeLib
 
         /// <summary>
         /// Finds a ListViewItem by its Shell ID (PIDL).
-        /// todo: make this faster by using some sort of sorted datastructure instead of brute force search.
         /// </summary>
         public ListViewItem FindItemByID(IntPtr pidl)
         {
-            foreach (ListViewItem lvi in _ListView.Items)
+            foreach (var lvi in _itemIndex.Values)
             {
                 if (lvi.Tag is CShellItem csi && CShellItem.IsEqual(csi.PIDL, pidl))
                     return lvi;
@@ -1990,15 +2004,11 @@ namespace ExpTreeLib
 
         /// <summary>
         /// Finds a ListViewItem by its full filesystem path.
-        /// todo: make this faster by using some sort of sorted datastructure instead of brute force search.
         /// </summary>
         public ListViewItem FindItemByPath(string path)
         {
-            foreach (ListViewItem lvi in _ListView.Items)
-            {
-                if (lvi.Tag is CShellItem csi && string.Equals(csi.Path, path, StringComparison.OrdinalIgnoreCase))
-                    return lvi;
-            }
+            if (_itemIndex.TryGetValue(path, out var lvi))
+                return lvi;
             return null;
         }
 
