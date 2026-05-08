@@ -1,0 +1,20 @@
+{
+  "scenarioId": "dotnet-version-upgrade",
+  "operationId": "0121d36c-c026-407e-a43c-abed87374aef",
+  "description": "Upgrade .NET projects to newer .NET versions",
+  "startTime": "2026-04-22T17:36:15.3435825Z",
+  "lastUpdateTime": "2026-04-22T23:39:34.9559841Z",
+  "stage": "Assessment",
+  "properties": {
+    "currentTask": "07-integration-validation",
+    "task:02-update-target-frameworks:startedAt": "2026-04-22T17:56:42.0171263Z",
+    "UpgradeTargetFramework": "net10.0",
+    "task:03-fix-windows-forms-compatibility:startedAt": "2026-04-22T18:03:31.3019747Z",
+    "task:07-integration-validation:startedAt": "2026-04-22T23:39:34.9559841Z",
+    "task:04-resolve-system-api-compatibility:startedAt": "2026-04-22T23:37:11.9860037Z",
+    "task:05-compile-and-verify-build:startedAt": "2026-04-22T23:38:16.4322393Z",
+    "task:06-run-unit-tests:startedAt": "2026-04-22T23:39:06.7663412Z",
+    "task:01-framework-and-sdk-setup:startedAt": "2026-04-22T17:55:00.8088539Z"
+  },
+  "folderPath": ""
+}

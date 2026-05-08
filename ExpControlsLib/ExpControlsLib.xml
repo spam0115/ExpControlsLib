@@ -1,0 +1,1618 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>ExpControlsLib</name>
+    </assembly>
+    <members>
+        <member name="E:ExpTreeLib.CDragWrapper.DragStart">
+            <summary>
+            Event Raised when a Drag is started from the associated Control
+            </summary>
+        </member>
+        <member name="E:ExpTreeLib.CDragWrapper.DragEnd">
+            <summary>
+            Event Raised when a Drag from the associated Control is complete (Dropped)
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.CDragWrapper.#ctor(System.Windows.Forms.Control)">
+            <summary>
+            Creates and registers this instance to receive events when an item is being dragged
+            </summary>
+            <param name="ctl">The ListView or TreeView for which to support the drag</param>
+        </member>
+        <member name="M:ExpTreeLib.CDragWrapper.ItemDrag(System.Object,System.Windows.Forms.ItemDragEventArgs)">
+            <summary>
+            This method initialises the dragging of a TreeNode or 1 or more ListViewItems
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.CDragWrapper.QueryContinueDrag(System.Boolean,WindowsApiLib.Shell.ShellAPI.MK)">
+            <summary>
+            Provides a minimal implementation of IDropSource.QueryContinueDrag
+            </summary>
+            <param name="fEscapePressed">True if the Escape Key is pressed</param>
+            <param name="grfKeyState">Which Button is pressed</param>
+            <returns>S_CANCEL if Escape Key is pressed, S_OK otherwise</returns>
+        </member>
+        <member name="M:ExpTreeLib.CDragWrapper.GiveFeedback(System.Windows.Forms.DragDropEffects)">
+            <summary>
+            Used to provide a minimal implementation of IDropSource.GiveFeedback
+            </summary>
+            <param name="dwEffect">Unused</param>
+            <returns>Always returns DRAGDROP_S_USEDEFAULTCURSORS</returns>
+        </member>
+        <member name="M:ExpTreeLib.CDragWrapper.Dispose">
+            <summary>
+            If not disposed, dispose the class
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.CDragWrapper.ReleaseCom">
+            <summary>
+            Release the IDataObject and free the allocated memory
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.DragStartEventHandler">
+            <summary>
+            The Delegate defining the signature of an Event Handler to Handle the Event Raised when
+            a Drag is started from a Control associated with an instance of CDragWrapper.
+            </summary>
+            <param name="sender">The Control from which the Drag originates</param>
+            <param name="e">A DragStartEventArgs constructed by CDragWrapper</param>
+        </member>
+        <member name="T:ExpTreeLib.DragStartEventArgs">
+            <summary>
+            An EventArgs which provides information about a Drag started within a Control managed by an instance of CDragWrapper.
+            </summary>
+            <remarks>
+            The information is the CShellItem of the Folder being Dragged or the Parent of the Items being Dragged
+            and the Control in which the Drag originated.
+            </remarks>
+        </member>
+        <member name="M:ExpTreeLib.DragStartEventArgs.#ctor(WindowsApiLib.Shell.CShellItem,System.Windows.Forms.Control)">
+            <summary>
+            Contructs a new Instance of this Class
+            </summary>
+            <param name="parent">The Folder being Dragged or the Parent Folder of the Items being Dragged</param>
+            <param name="dragStartControl">Control in which the Drag originated</param>
+        </member>
+        <member name="P:ExpTreeLib.DragStartEventArgs.Parent">
+            <summary>
+            The Folder being Dragged or the Parent Folder of the Items being Dragged
+            </summary>
+            <remarks>
+            If Drag is a single Folder then the CShellItem of that Folder. If from a ListView,
+            then the Folder containing all Item(s) being Dragged.
+            </remarks>
+        </member>
+        <member name="P:ExpTreeLib.DragStartEventArgs.DragStartControl">
+            <summary>
+            The Control in which the Drag originated
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ClvDropWrapper">
+            <summary>The ClvDropWrapper class deals with the mechanics of receiving a
+            Drag/Drop operation for a ListView.  In effect, it implements the IDropTarget interface
+            for a ListView.  It is designed to handle a ListView which <b>must</b> have CShItems 
+            in the Tags of the ListViewItems contained in the control. The ListView <b>must also</b> have the 
+            CShellItem of the <i>single</i> Parent Folder stored in its' .Tag Property
+            </summary>
+            <remarks>
+            <para>The class receives the DragEnter, DragLeave, DragOver, and DragDrop events for
+            the associated ListView and performs the Drag specific processing. Unlike CtvDropWrapper,
+            this class DOES NOT raise ShDragxxx events for the ListView, and DOES do the
+            GUI related processing.</para>
+            <para>The interesting part of this class is that it makes no decisions about the drag
+            nor does any Drop related processing itself. Instead, it acts as a broker between
+            the Drag/Drop operation and the IDropTarget interface of the underlying 
+            Shell Folder.  This allows the Shell Folder, which may be a Shell Extension, to
+            perform whatever action it needs to in order to effect the Drag/Drop.
+            The benefit of this approach is that Drag/Drop targets need not be part of the
+            File System.</para>
+            ListViews, unlike TreeViews, may be displaying non-folder items and may have
+            substantial areas within the control that are empty of any ListViewItems. This requires
+            different behavior rules for a ListView receiving a Drag.
+            <list type="bullet">
+            <item><description>Upon DragEnter, the "parent" directory of the entire set of Listview items is determined. The "parent" is
+                               determined from the CShItems contained in the ListViewItem.Tags or if there are no ListViewItems, from
+                               the CShellItem contained in the ListView's .Tag. </description></item>
+            <item><description>The default pdweffect for this control/drag is obtained from the IDropTarget of that "parent"</description></item>
+            <item><description>If there is no common "parent" and if the ListView's Tag does not contain a CShellItem,
+                               the default pdweffect for this control/drag is set to "None"</description></item>
+            <item><description>Upon DragOver: 
+            <br />If over a ListViewItem representing a Directory,Obtain IDropTarget from the Directory, and invoke its DragEnter,DragOver to set pwdeffects.
+            <br />Also set BackGroundColor of that ListView Item to SelectedColor
+            <br />If not over a ListViewItem representing a directory AndAlso a common "parent" can be determined from the ListViewItems or the ListView's
+            .Tag Property then use IDropTarget of parent to accept DragOver and adjust pdweffect.
+            <br />If not over a ListViewItem representing a directory AndAlso if no common "parent" can be determined, then
+            set pwdeffects to "None"</description></item>
+            <item><description>Upon DragLeave, all local vars are reset to "New" state</description></item>
+            <item><description>Upon DragDrop, the IDropTarget.DragDrop of the Folder represented by the current ListViewItem
+            is called and all local vars are reset to "New" state.</description></item>
+            </list>
+            </remarks>
+        </member>
+        <member name="M:ExpTreeLib.ClvDropWrapper.#ctor(System.Windows.Forms.ListView)">
+            <summary>
+            Initializes a new instance of the Class.
+            </summary>
+            <param name="ctl">The ListView for whom this Class will Handle Drag/Drops.</param>
+            <remarks>Registers itself to Handle Drag/Drops for the ListView.</remarks>
+        </member>
+        <member name="M:ExpTreeLib.ClvDropWrapper.DragEnter(System.IntPtr,WindowsApiLib.Shell.ShellAPI.MK,WindowsApiLib.Shell.ShellAPI.POINT,System.Windows.Forms.DragDropEffects@)">
+            <summary>
+            For internal use only
+            DragEnter is called by the Shell as a drag enters the listview. It determines the default (parent)
+            DropTarget and default (parent) pdwEffect for use in those areas of the ListView that do not
+            contain eligible DropTargets.
+            </summary>
+            <param name="pDataObj">IDataObject of the Folder of the Item being dragged, containing references to
+            the item(s) being Dragged.</param>
+            <param name="grfKeyState">State of the keyboard keys at this moment</param>
+            <param name="pt">Location, in screen coordinates, of the mouse.</param>
+            <param name="pdwEffect">Permitted Drop actions as set by the DragSource.</param>
+            <returns>Always returns S_OK (0)</returns>
+            <remarks></remarks>
+        </member>
+        <member name="M:ExpTreeLib.ClvDropWrapper.DragOver(WindowsApiLib.Shell.ShellAPI.MK,WindowsApiLib.Shell.ShellAPI.POINT,System.Windows.Forms.DragDropEffects@)">
+            <summary>
+            For internal use only
+            Entered when a Drag moves over the surface of the associated Control.<br />
+            If the Mouse is over a ListViewItem representing a Folder, sets that item as the 
+            most recent potential Drop Target and Changes the colors of that ListViewItem.
+            </summary>
+            <param name="grfKeyState">The state of certain Keyboard keys</param>
+            <param name="pt">The location of the Mouse in the Control.</param>
+            <param name="pdwEffect">The actions permitted by the DragSource</param>
+            <returns>S_OK</returns>
+        </member>
+        <member name="M:ExpTreeLib.ClvDropWrapper.DragLeave">
+            <summary>
+            For internal use only
+            DragLeave is raised by the Shell when the Drag is cancelled or otherwise leaves the underlying
+            listview.  The handler does whatever cleanup is needed to prepare for another DragEnter.
+            </summary>
+            <returns>Always returns S_OK</returns>
+            <remarks></remarks>
+        </member>
+        <member name="M:ExpTreeLib.ClvDropWrapper.DragDrop(System.IntPtr,WindowsApiLib.Shell.ShellAPI.MK,WindowsApiLib.Shell.ShellAPI.POINT,System.Windows.Forms.DragDropEffects@)">
+            <summary>
+            For internal use only
+            Entered when a DragDrop has occurred on the associated Control.
+            Normally simply passes the Drop on to the Dropped on Folder which is determined here
+            in conjuction with DragEnter.
+            </summary>
+            <param name="pDataObj">Pointer to the IDataObject</param>
+            <param name="grfKeyState">State of the keyboard Keys and Mouse Buttons</param>
+            <param name="pt">Where the Drop occurred on the Control</param>
+            <param name="pdwEffect">Result of the Drop - unreliable in case of Move</param>
+            <returns>S_OK</returns>
+        </member>
+        <member name="M:ExpTreeLib.ClvDropWrapper.DisposeDropWrapper">
+            <summary>
+            Revokes the View from getting drop messages and releases the IDropTarget
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ClvDropWrapper.ReleaseCom">
+            <summary>
+            Release the IDropTarget and free's the allocated memory
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ContextMenu">
+            <summary>
+            WindowsContextMenu provides the infrastucture for displaying a Windows Context Menu on a Control
+            and for Invoking a Command selected by the user from that Context Menu. Cascaded sub-menus are created,
+            displayed, and responded to as required.
+            The Context Menu applies to all CShItems
+            passed to the ShowMenu Function and all CShItems must be in the same Folder. 
+            </summary>
+            <remarks>Though specifically designed for ListView and TreeView Controls, this Class will work for any Control which
+                     is associated with a single Folder and can provide CShItems from that Folder.</remarks>
+        </member>
+        <member name="M:ExpTreeLib.ContextMenu.ShowMenu(System.IntPtr,WindowsApiLib.Shell.CShellItem[],System.Drawing.Point,System.Boolean,WindowsApiLib.Shell.ShellAPI.CMInvokeCommandInfoEx@)">
+            <summary>
+            If this method returns true then the caller must call ReleaseMenu
+            </summary>
+            <param name="hwnd">The handle to the control to host the ContextMenu</param>
+            <param name="items">The items for which to show the ContextMenu. These items must be in the same folder.</param>
+            <param name="pt">The point where the ContextMenu should appear</param>
+            <param name="allowrename">Set if the ContextMenu should contain the Rename command where appropriate</param>
+            <param name="cmi">The command information for the users selection</param>
+            <returns></returns>
+            <remarks></remarks>
+        </member>
+        <member name="M:ExpTreeLib.ContextMenu.InvokeCommand(WindowsApiLib.Shell.IContextMenu,System.UInt32,System.String,System.Drawing.Point)">
+            <summary>
+            Invokes a specific command from an IContextMenu
+            </summary>
+            <param name="iContextMenu">the IContextMenu containing the item</param>
+            <param name="cmd">the index of the command to invoke</param>
+            <param name="parentDir">the parent directory from where to invoke</param>
+            <param name="ptInvoke">the point (in screen co�rdinates) from which to invoke</param>
+        </member>
+        <member name="M:ExpTreeLib.ContextMenu.SetUpNewMenu(WindowsApiLib.Shell.CShellItem,System.IntPtr,System.Int32)">
+            <summary>
+            If this method returns true then the caller must call ReleaseNewMenu
+            </summary>
+            <param name="itm"></param>
+            <param name="contextMenu"></param>
+            <param name="index"></param>
+            <returns></returns>
+            <remarks></remarks>
+        </member>
+        <member name="T:ExpTreeLib.ControlDropWrapper">
+            <summary>
+            A Class to serve as a broker between a Control that is associated with a single Folder and
+            a DragTo/DropOn operation initiated From any other DragSource that the Shell supports. The calling application may change 
+            the associated Folder of an instance of ControlDropWrapper as needed - it is not needed or desireable to create new a instance
+            as the associated Folder changes.<br />
+            This should not be used for TreeView or ListView Controls which require special handling.
+            </summary>
+            <remarks>Originally the targeted use of this Class was for DragSources that provide email items,however it will also work
+                     for Drags from WinExplorer or any application that provides an IDataObject with appropriately formatted data.</remarks>
+                     
+        </member>
+        <member name="P:ExpTreeLib.ControlDropWrapper.FullPath">
+            <summary>
+            Contains the Full Path of the Folder associated with this Control
+            </summary>
+            <returns>The Full Path of the Folder associated with this Control</returns>
+            <remarks>Setting this Property to another valid Path will release all references to the previous Folder (if any) and
+                     associate this instance with the new Folder.</remarks>
+        </member>
+        <member name="M:ExpTreeLib.ControlDropWrapper.DragEnter(System.IntPtr,WindowsApiLib.Shell.ShellAPI.MK,WindowsApiLib.Shell.ShellAPI.POINT,System.Windows.Forms.DragDropEffects@)">
+            <summary>
+            For internal use only<br />
+            DragEnter is called by the Shell as a drag enters the Control. Its main function is to
+            save off the IDataObject of the Drag for use in DragOver processing, since DragOver does
+            not receive the IDataObject as a parameter.
+            </summary>
+            <param name="pDataObj">IDataObject of the Folder of the Item being dragged, containing references to
+            the item(s) being Dragged.</param>
+            <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
+            <param name="pt">Location, in screen coordinates, of the mouse.</param>
+            <param name="pdwEffect">Permitted Drop actions as set by the DragSource.</param>
+            <returns>S_OK</returns>
+        </member>
+        <member name="M:ExpTreeLib.ControlDropWrapper.DragOver(WindowsApiLib.Shell.ShellAPI.MK,WindowsApiLib.Shell.ShellAPI.POINT,System.Windows.Forms.DragDropEffects@)">
+            <summary>
+            For internal use only
+            Entered when a Drag moves over the surface of the associated Control.<br />
+            </summary>
+            <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
+            <param name="pt">Location, in screen coordinates, of the mouse.</param>
+            <param name="pdwEffect">Permitted Drop actions as set by the DragSource and modified by
+            candidate DropTargets.</param>
+            <returns>S_OK</returns>
+        </member>
+        <member name="M:ExpTreeLib.ControlDropWrapper.DragLeave">
+            <summary>
+            DragLeave is raised by the Shell when the Drag is cancelled or otherwise leaves the underlying
+            Control.  The handler does whatever cleanup is needed to prepare for another DragEnter.
+            </summary>
+            <returns>S_OK</returns>
+        </member>
+        <member name="M:ExpTreeLib.ControlDropWrapper.DragDrop(System.IntPtr,WindowsApiLib.Shell.ShellAPI.MK,WindowsApiLib.Shell.ShellAPI.POINT,System.Windows.Forms.DragDropEffects@)">
+            <summary>
+            For internal use only<br />
+            Entered when a DragDrop has occurred on the associated Control.
+            </summary>
+            <param name="pDataObj">Pointer to the IDataObject</param>
+            <param name="grfKeyState">State of the keyboard Keys and Mouse Buttons</param>
+            <param name="pt">Where the Drop occurred on the Control</param>
+            <param name="pdwEffect">Result of the Drop - unreliable in case of Move</param>
+            <returns>S_OK</returns>
+        </member>
+        <member name="T:ExpTreeLib.CtvDropWrapper">
+            <summary>The CtvDropWrapper class deals with the mechanics of receiving a
+            Drag/Drop operation for a TreeView Control. In effect, it implements the IDropTarget interface
+            for a TreeView. It is designed to handle a TreeView which <b>must</b> have CShItems 
+            in the Tags of the TreeNodes contained in the control.
+            </summary>
+            <remarks>
+            <para>The class recieves the DragEnter, DragLeave, DragOver, and DragDrop events for
+            the associated TreeView, performs the Drag specific processing, and raises corresponding 
+            Events for the associated TreeView to allow the TreeView to do any GUI related processing.</para>
+            The interesting part of this class is that it makes no decisions about the drag
+            nor does any Drop related processing itself. Instead, it acts as a broker between
+            the Drag/Drop operation and the IDropTarget interface of the underlying 
+            Shell Folder.  This allows the Shell Folder, which may be a Shell Extention, to
+            perform whatever action it needs to in order to effect the Drag/Drop.
+            The benefit of this approach is that Drag/Drop targets need not be part of the
+            File System.
+            </remarks>
+            
+        </member>
+        <member name="E:ExpTreeLib.CtvDropWrapper.ShDragEnter">
+            <summary>
+            The Event Raised by this Class to inform the TreeView that a Drag has entered the TreeView
+            </summary>
+            <param name="pDataObj">Pointer to the DataObject being Dragged.</param>
+            <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
+            <param name="pdwEffect">The type of Drop actions permitted by the Drag Source</param>
+        </member>
+        <member name="E:ExpTreeLib.CtvDropWrapper.ShDragOver">
+            <summary>
+            The Event Raised by this Class to inform the TreeView that a Drag has moved over the TreeView
+            </summary>
+            <param name="Node">The TreeNode that the Drag is over</param>
+            <param name="ClientPoint">Location, in Client coordinates, of the mouse.</param>
+            <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
+            <param name="pdwEffect">The type of Drop actions permitted by the Drag Source</param>
+        </member>
+        <member name="E:ExpTreeLib.CtvDropWrapper.ShDragLeave">
+            <summary>
+            The Event Raised by this Class to inform the TreeView that a Drag has left the TreeView
+            </summary>
+        </member>
+        <member name="E:ExpTreeLib.CtvDropWrapper.ShDragDrop">
+            <summary>
+            The Event Raised by this Class to inform the TreeView that a Drop has occured on the TreeView
+            </summary>
+            <param name="Node">The TreeNode that the Drop occured on</param>
+            <param name="grfKeyState"></param>
+            <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
+        </member>
+        <member name="T:ExpTreeLib.CtvDropWrapper.KeyStates">
+            <summary>
+            Bit mask showing the state of Control Keys and Mouse Buttons during a Drag
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.CtvDropWrapper.#ctor(System.Windows.Forms.TreeView)">
+            <summary>
+            Initializes a new instance of the Class.
+            </summary>
+            <param name="ctl">The TreeView for which this instance will Handle Drag/Drop</param>
+            <remarks>Registers itself to Handle Drag/Drops for the TreeView.</remarks>
+        </member>
+        <member name="M:ExpTreeLib.CtvDropWrapper.DragEnter(System.IntPtr,WindowsApiLib.Shell.ShellAPI.MK,WindowsApiLib.Shell.ShellAPI.POINT,System.Windows.Forms.DragDropEffects@)">
+            <summary>
+            For internal use only<br />
+            DragEnter is called by the Shell as a drag enters the TreeView. Its main function is to
+            save off the IDataObject of the Drag for use in DragOver processing, since DragOver does
+            not receive the IDataObject as a parameter.
+            </summary>
+            <param name="pDataObj">IDataObject of the Folder of the Item being dragged, containing references to
+            the item(s) being Dragged.</param>
+            <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
+            <param name="pt">Location, in screen coordinates, of the mouse.</param>
+            <param name="pdwEffect">Permitted Drop actions as set by the DragSource.</param>
+            <returns>Always returns S_OK (0)</returns>
+        </member>
+        <member name="M:ExpTreeLib.CtvDropWrapper.DragOver(WindowsApiLib.Shell.ShellAPI.MK,WindowsApiLib.Shell.ShellAPI.POINT,System.Windows.Forms.DragDropEffects@)">
+            <summary>
+            For internal use only
+            Entered when a Drag moves over the surface of the associated Control.<br />
+            </summary>
+            <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
+            <param name="pt">Location, in screen coordinates, of the mouse.</param>
+            <param name="pdwEffect">Permitted Drop actions as set by the DragSource and modified by
+            candidate DropTargets.</param>
+            <returns>Always returns S_OK (0)</returns>
+        </member>
+        <member name="M:ExpTreeLib.CtvDropWrapper.DragLeave">
+            <summary>
+            DragLeave is raised by the Shell when the Drag is cancelled or otherwise leaves the underlying
+            TreeView.  The handler does whatever cleanup is needed to prepare for another DragEnter.
+            </summary>
+            <returns>Always returns S_OK</returns>
+            <remarks></remarks>
+        </member>
+        <member name="M:ExpTreeLib.CtvDropWrapper.DragDrop(System.IntPtr,WindowsApiLib.Shell.ShellAPI.MK,WindowsApiLib.Shell.ShellAPI.POINT,System.Windows.Forms.DragDropEffects@)">
+            <summary>
+            For internal use only
+            Entered when a DragDrop has occurred on the associated Control.
+            </summary>
+            <param name="pDataObj">Pointer to the IDataObject</param>
+            <param name="grfKeyState">State of the keyboard Keys and Mouse Buttons</param>
+            <param name="pt">Where the Drop occurred on the Control</param>
+            <param name="pdwEffect">Result of the Drop - unreliable in case of Move</param>
+            <returns>S_OK</returns>
+        </member>
+        <member name="M:ExpTreeLib.CtvDropWrapper.DisposeDropWrapper">
+            <summary>
+            Revokes the View from getting drop messages and releases the IDropTarget
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.CtvDropWrapper.ReleaseCom">
+            <summary>
+            Release the IDropTarget and free's the allocated memory
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ExpList">
+            <summary>
+                This Form is a fully working start point for any form which requires an ExplorerTree and
+                ListView with enough room left for application specific controls.
+                
+                Explanation about how file icons are handled:
+                It is handled by a weird mix of Windows and custom code.  We use the OS's Shell's 
+                SystemImageListManager - it caches icons and provides them on demand to the ListView.  
+                The Listview is linked to the SystemImageListManager by calling 
+                SystemImageListManager.SetListViewImageList(ExpFileList, ...).  However, just setting the image list
+                doesn't link the listview items to the image list - you still have to set the ImageIndex of each 
+                ListViewItem to the appropriate index in the SystemImageList.  This is done by setting  
+                ListViewItem.ImageIndex = SystemImageListManager.GetIconIndex(lvi.Tag) (Tag contains a reference to 
+                the CShellItem for each Shell item entity.).
+                
+                However, for thumbnail display modes, Windows Shell doesn't have native support for that. 
+                We implented the ThumbnailImageListManager to make up for that shortfall and fill in the SystemImageListManager.
+            
+                Item images a draw by passing SystemImageLists into the Windows Shell ListView control.
+                
+            </summary>
+            <remarks> 
+                <para>This template form illustrates the use of:
+                <list type="bullet">
+                <item><description>Use of the ExpTreeNodeSelected Event Handler.</description></item>
+                <item><description>Use of LVColSorter for column sorting. See MakeLviItem for a custom ListViewItem 
+                builder which is compatible with and useful for LVColSorter. 
+                See Also SortLVItems for how to perform a Refresh of the 
+                ListView in response to a Refresh command from the Context Menu.</description></item>
+                <item><description>Full Context Menus in the ListView.</description></item>
+                <item><description>ListViewItem editing (first SubItem only) if the ListViewItem.Tag is a CShellItem.</description></item>
+                <item><description>Handling of dynamic update Events from CShItemUpdate Events.</description></item>
+                <item><description>Proper handling of the Delete Key.</description></item>
+                <item><description>Shows how to handle a DoubleClick on a ListViewItem.</description></item>
+                </list>
+                </para>
+            </remarks>
+            
+        </member>
+        <member name="T:ExpTreeLib.ExpList.ExpListItemClickEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpTreeLib.ExpList.ExpListItemClick"/> event.
+            </summary>
+            <param name="SelPath">The path of the clicked item.</param>
+            <param name="Item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> that was clicked.</param>
+        </member>
+        <member name="E:ExpTreeLib.ExpList.ExpListItemClick">
+            <summary>
+            Occurs when an item in the list view is clicked.
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ExpList.ExpListItemDoubleClickEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpTreeLib.ExpList.ExpListItemDoubleClick"/> event.
+            </summary>
+            <param name="SelPath">The path of the double-clicked item.</param>
+            <param name="Item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> that was double-clicked.</param>
+        </member>
+        <member name="E:ExpTreeLib.ExpList.ExpListItemDoubleClick">
+            <summary>
+            Occurs when an item in the list view is double-clicked.
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ExpList.ExpListItemMouseMBUpEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpTreeLib.ExpList.ExpListItemMouseMBUp"/> event.
+            </summary>
+            <param name="SelPath">The path of the item.</param>
+            <param name="Item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/>.</param>
+        </member>
+        <member name="T:ExpTreeLib.ExpList.ExpListItemArrowKeyUpEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpTreeLib.ExpList.ExpListItemArrowKeyUp"/> event.
+            </summary>
+            <param name="SelPath">The path of the item.</param>
+            <param name="Item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/>.</param>
+        </member>
+        <member name="E:ExpTreeLib.ExpList.ExpListItemArrowKeyUp">
+            <summary>
+            Occurs when an arrow key is released, changing the selection.
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ExpList.ExpListItemsChangedEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpTreeLib.ExpList.ExpListItemsChanged"/> event.
+            </summary>
+            <param name="SelPath">The path of the item.</param>
+            <param name="Item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/>.</param>
+        </member>
+        <member name="E:ExpTreeLib.ExpList.ExpListItemsChanged">
+            <summary>
+            Occurs when the items in the list view have changed (e.g., created or deleted).
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ExpList.ExpListSelectedIndexChangedEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpTreeLib.ExpList.ExpListItemGetSelItems"/> event.
+            </summary>
+            <param name="listViewItemCollection">The collection of selected list view items.</param>
+        </member>
+        <member name="E:ExpTreeLib.ExpList.SelectedIndexChanged">
+            <summary>
+            Occurs when the selection in the list view is requested.
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ExpList.ExpListItemGetSelItemsEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpTreeLib.ExpList.ExpListItemGetSelItems"/> event.
+            </summary>
+            <param name="listViewItemCollection">The collection of selected list view items.</param>
+        </member>
+        <member name="E:ExpTreeLib.ExpList.ExpListItemGetSelItems">
+            <summary>
+            Occurs when the selection in the list view is requested.
+            </summary>
+        </member>
+        <member name="E:ExpTreeLib.ExpList.ExpListGetColumnData">
+            <summary>
+            Occurs when data for a custom column is requested.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.#ctor">
+            <summary>
+            Initializes a new instance of <see cref="T:ExpTreeLib.ExpList"/>, wires up all event handlers
+            for the control and its child <see cref="F:ExpTreeLib.ExpList._ListView"/> ListView.
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ExpList.ExpListGetColumnDataEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpTreeLib.ExpList.ExpListGetColumnData"/> event.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.DisplayMode">
+            <summary>
+            Gets or sets the display mode used to present items in the list view.
+            </summary>
+            <remarks>Use this property to select among multiple visual representations for items,
+            including standard views and thumbnail modes. Changing the display mode updates the appearance of the list
+            view accordingly.</remarks>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.SetupImageListsForListView(ExpTreeLib.ListViewDisplayMode)">
+            <summary>
+            Configures the image lists bound to the ListView for the given display mode.
+            For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
+            list is applied and each item's <see cref="P:System.Windows.Forms.ListViewItem.ImageIndex"/> is refreshed.
+            For custom thumbnail modes, the ListView is switched to LargeIcon view and
+            <see cref="M:ExpTreeLib.ExpList.LoadThumbnails(System.Int32,System.Boolean)"/> is called to populate thumbnail images.
+            </summary>
+            <param name="value">The <see cref="T:ExpTreeLib.ListViewDisplayMode"/> to configure for.</param>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.CurrentPath">
+            <summary>
+            Gets or sets the current file system path displayed in the list view.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.SelectedItem">
+            <summary>
+            Gets the <see cref="T:WindowsApiLib.Shell.CShellItem"/> representing the currently selected folder in the tree or the folder being viewed.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.CurrentFolderItem">
+            <summary>
+            Gets the <see cref="T:WindowsApiLib.Shell.CShellItem"/> representing the currently loaded/displayed folder.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.Columns">
+            <summary>
+            Gets the collection of all column headers that appear in the list view.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.Items">
+            <summary>
+            Gets the collection of all items that appear in the list view.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.MultiSelect">
+            <summary>
+            Gets or sets a value indicating whether multiple items can be selected.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.FullRowSelect">
+            <summary>
+            Gets or sets a value indicating whether clicking an item selects all its subitems.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.GridLines">
+            <summary>
+            Gets or sets a value indicating whether grid lines appear between the rows and columns.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.HeaderStyle">
+            <summary>
+            Gets or sets the column header style.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.ExpList_Load(System.Object,System.EventArgs)">
+            <summary>
+            Handles the <see cref="!:Control.Load"/> event of the <see cref="T:ExpTreeLib.ExpList"/> control.
+            Initializes drag and drop wrappers, thumbnail manager, and shell item update notifications.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.ExpFileList_HandleCreated(System.Object,System.EventArgs)">
+            <summary>
+            Handles the <see cref="E:System.Windows.Forms.Control.HandleCreated"/> event of the <see cref="F:ExpTreeLib.ExpList._ListView"/> ListView.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.ExpList_VisibleChanged(System.Object,System.EventArgs)">
+            <summary>
+            Handles the <see cref="E:System.Windows.Forms.Control.VisibleChanged"/> event of the <see cref="T:ExpTreeLib.ExpList"/> control.
+            Re-configures image lists for the current display mode when the control becomes visible.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.WndProc(System.Windows.Forms.Message@)">
+            <summary>
+            Overrides <see cref="M:System.Windows.Forms.Control.WndProc(System.Windows.Forms.Message@)"/> to handle shell context menu messages.
+            </summary>
+            <param name="m">The Windows <see cref="T:System.Windows.Forms.Message"/> to process.</param>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.DisplayFiles(System.String,WindowsApiLib.Shell.CShellItem,System.Boolean,System.Boolean)">
+            <summary>
+            Populates the list view with files and directories from the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
+            </summary>
+            <param name="pathName">The display path of the folder.</param>
+            <param name="CSI">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> representing the folder to display.</param>
+            <param name="includeFolder">True to include subdirectories in the list.</param>
+            <param name="reload">True to force a reload even if the same item was previously selected.</param>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.MakeLVItem(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Creates a <see cref="T:System.Windows.Forms.ListViewItem"/> for a given <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
+            Populates columns based on <see cref="E:ExpTreeLib.ExpList.ExpListGetColumnData"/> event or <see cref="P:System.Windows.Forms.ColumnHeader.Tag"/> mapping.
+            </summary>
+            <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to create the list view item for.</param>
+            <returns>A configured <see cref="T:System.Windows.Forms.ListViewItem"/>.</returns>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.GetThumbnailSizeForMode(System.Nullable{ExpTreeLib.ListViewDisplayMode})">
+            <summary>
+            Gets the pixel size for a given thumbnail display mode
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.LoadThumbnails(System.Int32,System.Boolean)">
+            <summary>
+            Loads thumbnails into image lists.  Then assigns the image list to the ListView.
+            </summary>
+            <param name="thumbnailSize">The size of the thumbnails to load.</param>
+            <param name="onlyVisible">If true, only loads thumbnails for items currently visible in the viewport that don't already have one.</param>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.SelectedItems">
+            <summary>
+            Exposes the SelectedItems collection of the internal ListView to allow external handlers to access the currently selected items.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.UpdateInvoke(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
+            <summary>
+            Marshals shell item update events to the UI thread.
+            </summary>
+            <param name="sender">The source of the event.</param>
+            <param name="e">The <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the event data.</param>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.DoItemUpdate(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
+            <summary>
+            Performs the actual update of list view items in response to shell changes.
+            Handles creation, deletion, renaming, and other updates of files and folders.
+            </summary>
+            <param name="sender">The source of the event.</param>
+            <param name="e">The <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the event data.</param>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.FindLVItem(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Finds the <see cref="T:System.Windows.Forms.ListViewItem"/> corresponding to a specific <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
+            </summary>
+            <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to search for.</param>
+            <returns>The matching <see cref="T:System.Windows.Forms.ListViewItem"/>, or null if not found.</returns>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.InsertLvi(System.Windows.Forms.ListViewItem,System.Windows.Forms.ListView)">
+            <summary>
+            Inserts a <see cref="T:System.Windows.Forms.ListViewItem"/> into the ListView, maintaining sort order.
+            </summary>
+            <param name="lvi">The <see cref="T:System.Windows.Forms.ListViewItem"/> to insert.</param>
+            <param name="lv">The <see cref="T:System.Windows.Forms.ListView"/> to insert into.</param>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.RefreshItem(System.Windows.Forms.ListViewItem,WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Refreshes the display of a single item whose underlying filesystem data has changed.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.RefreshItem(System.String)">
+            <summary>
+            Refresh by path string.
+            todo: make this faster by using some sort of sorted datastructure instead of brute force search.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.GoBack">
+            <summary>
+            Navigates back to the previous folder in the history.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.GoForward">
+            <summary>
+            Navigates forward to the next folder in the history.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.GoUp">
+            <summary>
+            Navigates to the parent folder of the currently loaded folder.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.CanGoBack">
+            <summary>
+            Gets a value indicating whether there is a folder to navigate back to.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.CanGoForward">
+            <summary>
+            Gets a value indicating whether there is a folder to navigate forward to.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpList.CanGoUp">
+            <summary>
+            Gets a value indicating whether the current folder has a parent folder to navigate to.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.ExpFileList_DoubleClick(System.Object,System.EventArgs)">
+            <summary>
+            Handles double-click events on list view items. 
+            Folders are navigated into, while files are launched.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.ExpFileList_BeforeLabelEdit(System.Object,System.Windows.Forms.LabelEditEventArgs)">
+            <summary>
+            Handles the <see cref="E:System.Windows.Forms.ListView.BeforeLabelEdit"/> event.
+            Determines if an item can be renamed and sets up the edit control.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.ExpFileList_AfterLabelEdit(System.Object,System.Windows.Forms.LabelEditEventArgs)">
+            <summary>
+            Handles the <see cref="E:System.Windows.Forms.ListView.AfterLabelEdit"/> event.
+            Applies the new name to the shell item.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.IsWithin(System.Windows.Forms.Control,System.Windows.Forms.MouseEventArgs)">
+            <summary>
+            Determines if the mouse coordinates are within the client area of the specified control.
+            </summary>
+            <param name="ctl">The control to check.</param>
+            <param name="e">The <see cref="T:System.Windows.Forms.MouseEventArgs"/> containing the mouse position.</param>
+            <returns>True if the mouse is within the control's client area.</returns>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.SortLVItems">
+            <summary>
+            Sorts the items in the list view based on their tags (CShellItem).
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.ExpFileList_MouseLeave(System.Object,System.EventArgs)">
+            <summary>
+            Handles the MouseLeave event to track when the mouse is outside the list view.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.ExpFileList_MouseDown(System.Object,System.Windows.Forms.MouseEventArgs)">
+            <summary>
+            Handles the MouseDown event to reset the out-of-range flag for right-clicks.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.ExpFileList_MouseUp(System.Object,System.Windows.Forms.MouseEventArgs)">
+            <summary>
+            Handles the MouseUp event to trigger context menus or middle-click actions.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.CreateContextMenu(System.IntPtr@,System.IntPtr@,System.IntPtr@)">
+            <summary>
+            Creates a native Windows context menu for the current folder.
+            </summary>
+            <param name="comContextMenu">Output parameter for the main context menu handle.</param>
+            <param name="viewSubMenu">Output parameter for the View submenu handle.</param>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.ShowAndHandleContextMenu(System.Drawing.Point)">
+            <summary>
+            Displays a context menu for the ListView when no items are selected.
+            This menu includes view options (Tiles, Large Icons, List, Details), 
+            refresh, select all, paste operations, and new item creation.
+            </summary>
+            <param name="pt">The point (in screen coordinates) where the menu should be displayed.</param>
+            <remarks>
+            This function handles the creation and management of Windows popup menus.
+            It directly manages native menu handles via Win32 API calls and must properly
+            release all COM objects and menu handles to avoid memory leaks and access violations.
+            
+            Key operations:
+            1. Creates two popup menus: a main context menu and a View submenu
+            2. Populates menus with commands and their checked states
+            3. Determines menu item availability based on clipboard contents
+            4. Invokes the selected command on shell objects (IShellFolder, IContextMenu)
+            5. Releases all COM interfaces and menu handles in the CLEANUP section
+            
+            Memory safety note: Menu handles (comContextMenu, viewSubMenu) must be released
+            via Marshal.Release() after TrackPopupMenuEx returns. COM objects (IContextMenu, 
+            IShellFolder) must be released by ReleaseComObject() to prevent heap corruption.
+            Mixing release mechanisms or skipping releases can cause access violations.
+            </remarks>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.ExpList_KeyUp(System.Object,System.Windows.Forms.KeyEventArgs)">
+            <summary>
+            Handles the KeyUp event for navigation keys.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.ExpFileList_KeyDown(System.Object,System.Windows.Forms.KeyEventArgs)">
+            <summary>
+            Handles KeyDown events for shortcuts (Ctrl+A, Ctrl+C/V/X, Delete, F2, F5, Enter).
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.LaunchFile(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Launches a file using the default system handler.
+            </summary>
+            <param name="csi">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to launch.</param>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.WinMenu(System.String)">
+            <summary>
+            Invokes a standard shell action (cut, copy, paste, delete) on the selected items.
+            </summary>
+            <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.IsThumbnailViewMode">
+            <summary>
+            Determines if the current display mode is a thumbnail-based view.
+            </summary>
+            <returns>True if in a thumbnail view mode.</returns>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.FindItemByName(System.String)">
+            <summary>
+            Finds a ListViewItem by its display name (case-insensitive).
+            todo: make this faster by using some sort of sorted datastructure instead of brute force search.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.FindItemByID(System.IntPtr)">
+            <summary>
+            Finds a ListViewItem by its Shell ID (PIDL).
+            todo: make this faster by using some sort of sorted datastructure instead of brute force search.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.FindItemByPath(System.String)">
+            <summary>
+            Finds a ListViewItem by its full filesystem path.
+            todo: make this faster by using some sort of sorted datastructure instead of brute force search.
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ExpList.ListViewScrollHook">
+            <summary>
+            Hook for capturing scroll and other events from the ListView to trigger lazy loading.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.Dispose(System.Boolean)">
+            <summary> 
+            Clean up any resources being used.
+            </summary>
+            <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.InitializeComponent">
+            <summary> 
+            Required method for Designer support - do not modify 
+            the contents of this method with the code editor.
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ExpListGetColumnDataEventArgs">
+            <summary>
+            Event arguments for the <see cref="E:ExpTreeLib.ExpList.ExpListGetColumnData"/> event.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpListGetColumnDataEventArgs.Item">
+            <summary>
+            Gets the <see cref="T:WindowsApiLib.Shell.CShellItem"/> being displayed.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpListGetColumnDataEventArgs.Column">
+            <summary>
+            Gets the <see cref="T:System.Windows.Forms.ColumnHeader"/> for which data is requested.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpListGetColumnDataEventArgs.Text">
+            <summary>
+            Gets or sets the text to display in the column.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpListGetColumnDataEventArgs.Tag">
+            <summary>
+            Gets or sets the tag for the sub-item.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpListGetColumnDataEventArgs.Handled">
+            <summary>
+            Gets or sets a value indicating whether the event has been handled.
+            If true, the default property mapping logic will be skipped.
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ExpTree">
+            <summary>
+            ExpTree is a UserControl encapsulating a TreeView which will display all or part of the Windows Shell
+            Namespace.  The Shell Namespace is a superset of the Windows file system. It is the Tree commonly shown
+            by Windows Explorer, in Classic View. That is, it is a Tree rooted in the Desktop.
+            ExpTree supports Drag and Drop and standard Windows Context Menus.
+            </summary>
+            <remarks>ExpTree raises one major Event, ExpTreeNodeSelected. That event is raised whenever the 
+            Selected TreeNode changes because of User Action (i.e. -- clicking on the node)</remarks>
+        </member>
+        <member name="E:ExpTreeLib.ExpTree.StartUpDirectoryChanged">
+            <summary>
+            StartUpDirectoryChanged is raised when the root of the TreeView is changed via StartUpDirectory
+            Property. 
+            </summary>
+            <param name="newVal">One of the StartDir Enum values that represent the possible Start Up Directories.</param>
+            <remarks>Seldom listened for since, in typical use, the Method which set the StartUpDirectory value
+            is the only Method which is interested. It is also true that a by-product of setting the StartUpDirectory 
+            value is the Selection of the new root node.  That change in SelectedNode will cause an ExpTreeNodeSelected
+            Event to be raised.</remarks>
+        </member>
+        <member name="E:ExpTreeLib.ExpTree.ExpTreeNodeSelected">
+            <summary>
+            ExpTreeNodeSelected is raised when a Node in the TreeView is Selected.
+            </summary>
+            <param name="SelPath">The Path of the CShellItem represented by the TreeNode, and stored in the
+            TreeNode's Tag.</param>
+            <param name="Item">The CShellItem represented by the TreeNode, and stored in the
+            TreeNode's Tag.</param>
+            <remarks></remarks>
+        </member>
+        <member name="P:ExpTreeLib.ExpTree.AllowDrop">
+            <summary>
+            Turns this ExpTree Control's ability to accept Drops on or Off.<br />
+            True - Enables the ExpTree Control to accept Drops.<br />
+            False - Disables the ExpTree Control acceptance of  Drops.
+            </summary>
+            <returns>True or False</returns>
+            <remarks>Works by assigning or  removing an instance of CtvDropWrapper to the Local variable DropHandler.</remarks>
+        </member>
+        <member name="P:ExpTreeLib.ExpTree.RootItem">
+            <summary>
+            RootItem is a Run-Time only Property. Setting this Item via an External call results in
+            re-setting the entire tree to be rooted in the input CShellItem.
+            The new CShellItem must be a valid CShellItem of some kind of Folder (File Folder or System Folder).
+            Attempts to set it using a non-Folder CShellItem are ignored.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpTree.SelectedItem">
+            <summary>
+            Run-time only Property which returns the CShellItem underlying the SelectedNode of the TreeView.
+            </summary>
+            <returns>The underlying CShellItem of the TreeView.SelectedNode. If none Selected, returns Nothing.</returns>
+        </member>
+        <member name="P:ExpTreeLib.ExpTree.Nodes">
+            <summary>
+            Gets the collection of tree nodes that are assigned to the tree view control.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpTree.ShowHiddenFolders">
+            <summary>
+            ShowHiddenFolders sets or gets a Boolean indicating whether or not to Display Folders with the Hidden Attribute.
+            </summary>
+            <value></value>
+            <returns>True if ExpTree is Displaying Hidden Folders, False if not.</returns>
+            <remarks>Hidden Folders may be Displayed or not Displayed at run-time.</remarks>
+        </member>
+        <member name="P:ExpTreeLib.ExpTree.ShowRootLines">
+            <summary>
+            Exposes the normal TreeView ShowRootLines property.
+            </summary>
+            <value></value>
+            <returns>The state of the underlying TreeView property.</returns>
+            <remarks></remarks>
+        </member>
+        <member name="T:ExpTreeLib.ExpTree.StartDir">
+            <summary>
+            The values representing the System's Special Folders.
+            </summary>
+            <remarks>Certain Special Folders are disallowed since they may not exist, or may cause program failure
+            on certain versions of Windows (primarily the older, unsupported versions).</remarks>
+        </member>
+        <member name="P:ExpTreeLib.ExpTree.StartUpDirectory">
+            <summary>
+            Sets the initial Root directory of ExpTree.
+            </summary>
+            <value>Must be one of the StartDir Enum values.</value>
+            <returns>Current StartDir value.</returns>
+            <remarks></remarks>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.ExpandANode(System.String,System.Boolean)">
+            <summary>
+            Expands TreeNodes from the tree root through the input Path. All intermediate nodes between the
+            Tree Root and the input Path are Expanded. If the Optional Property SelectExpandedNode is True (the Default),
+            the Expanded Node will be Selected, Raising a ExpNodeSelected Event. If False, the current Selected Node is unchanged
+            and no Event is Raised.
+            </summary>
+            <param name="newPath">The FileSystem path of the Node node to be Expanded.</param>
+            <param name="SelectExpandedNode">If True(the Default) then Select the Expanded Node.<br />
+                                             If False, Do Not Select the Expanded Node.</param>
+            <returns>True if Successful, False otherwise.</returns>
+            <remarks>The preferred method is to use:
+            <pre lang="vbnet">Public Function ExpandANode(ByVal newItem As CShellItem) As Boolean</pre> 
+            If the item defined by the input Path does not exist, False is returned.<br />
+            Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
+            ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.ExpandANode(WindowsApiLib.Shell.CShellItem,System.Boolean)">
+            <summary>
+            Expands TreeNodes from the tree root through the input CShellItem. All intermediate nodes between the
+            Tree Root and the input CShellItem are Expanded. If the Optional Property SelectExpandedNode is True (the Default),
+            the Expanded Node will be Selected, Raising a ExpNodeSelected Event. If False, the current Selected Node is unchanged
+            and no Event is Raised.
+            </summary>
+            <param name="newItem">The CShellItem representing the Shell Namespace object whose TreeNode is to
+            be expanded.</param>
+            <param name="SelectExpandedNode">If True(the Default) then Select the Expanded Node.<br />
+                                             If False, Do Not Select the Expanded Node.</param>
+            <returns>True if Successful, False otherwise.</returns>
+            <remarks>This is the preferred method of ExpandANode.<br />
+            Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
+            ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.MakeNode(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Creates a TreeNode whose .Text is the DisplayName of the CShellItem.<br />
+            Sets the IconIndexes for that TreeNode from the CShellItem.<br />
+            Sets the Tag of the TreeNode to the CShellItem<br />
+            If the CShellItem (a Folder) has or may have sub-Folders (see Remarks), adds a Dummy node to
+              the TreeNode's .Nodes collection. This is always done if the input CShellItem represents a Removable device. Checking
+              further on such devices may cause unacceptable delays.
+            Returns the complete TreeNode.
+            </summary>
+            <param name="item">The CShellItem to make a TreeNode to represent.</param>
+            <returns>A TreeNode set up to represent the CShellItem.</returns>
+            <remarks>
+            This routine will not be called if the CShellItem (a Folder) is Hidden and ExpTree's ShowHidden Property is False.<br />
+            If the Folder is Hidden and ShowHidden is True, then this routine will be called.<br />
+            If the Folder is Hidden and it only contains Hidden Folders (files are not considered here), then, 
+            the HasSubFolders attribute may be returned False even though Hidden Folders exist. In that case, we 
+            must make an extra check to ensure that the TreeNode is expandable.<br />
+            
+            There are additional complication with HasSubFolders. 
+            <ul>
+            <li>
+            On XP and earlier systems, HasSubFolders was always
+            returned True if the Folder was on a Remote system. On Vista and above, the OS would check and return an 
+            accurate value. This extra check can take a long time on Remote systems - approximately the same amount of time as checking
+            item.GetDirectories.Count. Versions 2.12 and above of ExpTreeLib have a modified HasSubFolders Property which will always
+            return True if the Folder is on a Remote system, restoring XP behavior.</li>
+            <li>
+            On XP and earlier systems, compressed files (.zip, .cab, etc) were treated as files. On Vista and above, they are treated
+            as Folders. ExpTreeLib continues to treat such files as files. The HasSubfolder attribute will report a Folder which
+            contains only compressed files as True. In MakeNode, I simply accept the Vista and above interpretation, setting a dummy
+            node in such a Folder. An attempt to expand such a TreeNode will just turn off the expansion marker.
+            </li>
+            </ul>
+            </remarks>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.RefreshTree(WindowsApiLib.Shell.CShellItem)">
+            <summary>RefreshTree Method thanks to Calum McLellan</summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.PopulateNode(System.Windows.Forms.TreeNode)">
+            <summary>
+            Called to Populate the TreeNodes of a TreeNode that only contains a Dummy Node.
+            </summary>
+            <param name="NodeToFill">The unexpanded TreeNode to Fill</param>
+            <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
+            Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.GoBack">
+            <summary>
+            Navigates back to the previous folder in the history.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.GoForward">
+            <summary>
+            Navigates forward to the next folder in the history.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.GoUp">
+            <summary>
+            Navigates to the parent folder of the currently loaded folder.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpTree.CanGoBack">
+            <summary>
+            Gets a value indicating whether there is a folder to navigate back to.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpTree.CanGoForward">
+            <summary>
+            Gets a value indicating whether there is a folder to navigate forward to.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpTree.CanGoUp">
+            <summary>
+            Gets a value indicating whether the current folder has a parent folder to navigate to.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.Tv1_VisibleChanged(System.Object,System.EventArgs)">
+            <summary>When a form containing this control is Hidden and then re-Shown,
+            the association to the SystemImageList is lost.  Also lost is the
+            Expanded state of the various TreeNodes. 
+            The VisibleChanged Event occurs when the form is re-shown (and other times
+            as well).  
+            We re-establish the SystemImageList as the ImageList for the TreeView and
+            restore at least some of the Expansion.</summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.Tv1_BeforeCollapse(System.Object,System.Windows.Forms.TreeViewCancelEventArgs)">
+            <summary>Should never occur since if the condition tested for is True,
+            the user should never be able to Collapse the node. However, it is
+            theoretically possible for the code to request a collapse of this node
+            If it occurs, cancel it</summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.DragWrapper_ShDragEnter(System.IntPtr,System.Int32,System.Int32)">
+            <summary>ShDragEnter does nothing. It is here for debug tracking</summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.DragWrapper_ShDragLeave">
+            <summary>Drag has left the control. Cleanup what we have to</summary>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.DragWrapper_ShDragOver(System.Windows.Forms.TreeNode,System.Drawing.Point,System.Int32,System.Int32)">
+            <summary>ShDragOver manages the appearance of the TreeView.  Management of
+            the underlying FolderItem is done in CDragWrapper
+            Credit to Cory Smith for TreeView colorizing technique and code,
+            at http://addressof.com/blog/archive/2004/10/01/955.aspx
+            Node expansion based on expandNodeTimer added by me.
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.ExpTree.AllowFolderRename">
+            <summary>
+            Allow renaming of folders using LabelEdit
+            </summary>
+            <value></value>
+            <returns></returns>
+            <remarks></remarks>
+        </member>
+        <member name="P:ExpTreeLib.ExpTree.UseWindowsContextMenu">
+            <summary>
+            Sets whether or not the control should use Windows System context menu for TreeNode items.
+            </summary>
+            <returns>The current setting (True or False).</returns>
+            <remarks>Setting this Property to False prevents the display and processing of Windows Context Menus on a Right-Click on a TreeNode.</remarks>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.WndProc(System.Windows.Forms.Message@)">
+            <summary>
+            Windows Message Handler for receiving Messages associated with a System Menu. 
+            This is what causes Cascading menus to Display
+            </summary>
+            <param name="m">A Windows Message</param>
+            <remarks>Only Handles Messages relating to Windows Context Menus</remarks>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.InsertNode(System.Windows.Forms.TreeNode,System.Windows.Forms.TreeNode)">
+            <summary>
+            Insert a TreeNode into its' Parent's Nodes list in its' proper location
+            in its' Parent Node's Nodes list.
+            </summary>
+            <param name="Node">The Node to be inserted</param>
+            <param name="ParentNode">The Parent Node of the Node to be inserted.</param>
+            <remarks>Only called from Dynamic update code when the Parent Node is known (ie displayed).</remarks>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.SortNodes(System.Windows.Forms.TreeNode)">
+            <summary>
+            Sorts the Nodes of the input TreeNode
+            </summary>
+            <param name="N">The Node whose Nodes.Collection is to be sorted</param>
+            <remarks></remarks>
+        </member>
+        <member name="M:ExpTreeLib.ExpTree.NodePath(System.Windows.Forms.TreeNode)">
+            <summary>
+            NodePath returns the Text version of the full path of a TreeNode.
+            </summary>
+            <param name="node">The TreeNode to return the full path for.</param>
+            <returns>The full path to the input node within a tree</returns>
+            <remarks>Used only for some Debug.WriteLine statements.</remarks>
+        </member>
+        <member name="T:ExpTreeLib.ListViewDisplayMode">
+            <summary>
+            this is basically a superset of the View enum from Forms.View.  
+            The original values from user32.h doesn't include values to support thumbnails in XP (and later).
+            </summary>
+        </member>
+        <member name="F:ExpTreeLib.ListViewDisplayMode.LargeIcon">
+            <summary>
+             Each item appears as a full-sized icon with a label below it.
+            </summary>
+        </member>
+        <member name="F:ExpTreeLib.ListViewDisplayMode.Details">
+            <summary>
+             Each item appears on a separate line with further
+             information about each item arranged in columns. The left
+             most column
+             contains a small icon and
+             label, and subsequent columns contain subitems as specified by the application. A
+             column displays a header which can display a caption for the
+             column. The user can resize each column at runtime.
+            </summary>
+        </member>
+        <member name="F:ExpTreeLib.ListViewDisplayMode.SmallIcon">
+            <summary>
+             Each item appears as a small icon with a label to its right.
+            </summary>
+        </member>
+        <member name="F:ExpTreeLib.ListViewDisplayMode.List">
+            <summary>
+             Each item
+             appears as a small icon with a label to its right.
+             Items are arranged in columns with no column headers.
+            </summary>
+        </member>
+        <member name="F:ExpTreeLib.ListViewDisplayMode.Tile">
+            <summary>
+             Tile view.
+            </summary>
+        </member>
+        <member name="F:ExpTreeLib.ListViewDisplayMode.Thumbnail">
+            new values below
+            <summary>
+            </summary>
+        </member>
+        <member name="F:ExpTreeLib.ListViewDisplayMode.LargeThumbnail">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="F:ExpTreeLib.ListViewDisplayMode.ExtraLargeThumbnail">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.LVColSorter">
+            <summary>
+            LVColSorter is a Class to be used as a ListViewItemSorter. 
+            LVColSorter may be used as the ListViewItemSorter for ListViews populated by any means, but works
+            best when the .Tag properties of the ListViewItems and SubItems are set as described in Remarks.
+            </summary>
+            <remarks>LVColSorter uses the .Tag properties of ListViewItems and SubItems to Sort the contents of a
+            ListView based on the underlying data. If no .Tag properties are set, or if the value of those
+            properties do not implement the IComparable interface, then LVColSorter sorts based on the .Text
+            properties of the SubItems of the ListViewItems.
+            <para>If the .Text properties of SubItems are structured properly for Sorting, then no .Tag information
+            is required for Sorting. Most .Text is not properly structured for Sorting. In that case, 
+            the .Tag property may be set to provide this class with the information needed for a proper Sort.</para>
+            <para>Set the .Tags as follows:
+            <list type="table">
+            <item><term>Each ListViewItem</term><description>The Class instance or DataRow from which the ListViewItem is built.
+                                                             The instance should support the IComparable Interface,
+                                                             if not, it is ignored for Sort purposes and may be omitted.</description></item>
+            <item><term>Each SubItem</term><description>If the .Text property will not Sort correctly, then the .Tag should be
+                                           set to the original Value (Date, Double, etc.)</description></item>
+            </list>See the documentation of the Compare Method of this Class for the actual Sort rules.</para>
+            <para>Class Properties
+            or DataRow Fields whose Value is a String will Sort based on that String. String
+            Properties that have been Formatted in a non-Sortable Format in the original data will not Sort correctly. 
+            The application
+            will have to deal with that case separately by setting the SubItem.Tags to a Sortable Value.</para>
+            <para>Each instance of LVColSorter will handle the ListView.ColumnClick event for the associated
+            ListView. The using application <i>should not</i> Handle that Event. When a new ListViewItemSorter
+            is assigned to a ListView, any prior instances of LVColSorter will remove themselves from the 
+            EventHandler list of that ListView. In other words, multiple ListViewItemSorters may be assigned
+            to a ListView without causing prior instances to attempt to handle ColumnClick.</para></remarks>
+            
+        </member>
+        <member name="M:ExpTreeLib.LVColSorter.Compare(System.Object,System.Object)">
+            <summary>
+            Compares two ListViewItems from the same ListView in accordance to the Sort rules of the Class.
+            </summary>
+            <param name="x">First ListViewItem to be Compared.</param>
+            <param name="y">Second ListViewItem to be Compared.</param>
+            <returns><list type="table">
+            <item><term>-1</term><description>If the First item is Less than the Second.</description></item>
+            <item><term>0</term><description>If the two items are Equal.</description></item>
+            <item><term>1</term><description>If the First item is Greater than the Second.</description></item>
+            </list></returns>
+            <remarks>Odd numbers of clicks on a column will sort Ascending, even numbers will sort 
+            Descending (click 1 Ascending, Click 2 Descending ...). The Sort rules are:
+            <list type="number">
+            <item><description>If the Clicked column is Column 0 and the ListViewItem's Tag supports the
+                               Icomparable Interface, then Compare the ListViewItems Tags.</description></item>
+            <item><description>Otherwise, or if the ListViewItems .Tags Compare Equal, then continue with
+                               the following rules.</description></item>
+            <item><description>If the Clicked column's ListViewItem.SubItem's Tag property supports the
+                               IComparable Interface, then use CompareTo to compare the .Tags</description></item>
+            <item><description>If the Clicked column's ListViewItem.SubItem's Tag property is Nothing or
+                               does not support the Icomparable Interface, Compare the .Text properties.</description></item>
+            <item><description>If the items Compare Equal and the Clicked column is not Column 0 then
+                               continue the Comparison based on the Column 0 rules above. This has
+                               the effect of using the either the source Class instances or the contents of
+                               column 0 as a secondary key for the Sort.</description></item>
+            <item><description>The result of the comparison is toggled according to if the sort is
+                               Ascending or Decending. This sort order is determined by reversing the
+                               sort order of the last click on this column.</description></item>
+            </list></remarks>
+            
+        </member>
+        <member name="M:ExpTreeLib.LVColSorter.#ctor(System.Windows.Forms.ListView)">
+            <summary>
+            Creates a new instance of LVColSorter based on a fully populated
+            ListView, with ColumnHeaders defined. Assigns its own Handler for ListView.ColumnClick Events.
+            </summary>
+            <param name="lv">A fully populated ListView, preferably set up by SetUpListView, which will
+            be using this instance as the ListViewItemSorter.</param>
+            <remarks></remarks>
+        </member>
+        <member name="M:ExpTreeLib.LVColSorter.CompareUsingCompareTo(System.Object,System.Object)">
+            <summary>
+            Use reflection to call an object's CompareTo method (works for generic and non-generic IComparable)
+            </summary>
+        </member>
+        <member name="P:ExpTreeLib.LVColSorter.OrderOfSort">
+            <summary>
+            The order in which the ListView was last sorted.
+            </summary>
+            <returns>A SortOrder indicating the order in which the ListView was last sorted.</returns>
+            <remarks>A return of SortOrder.None indicates that the ListView has never been sorted.
+            The Properties OrderOfSort and SortColumn may be used if the application wishes to Draw Sort
+            glyphs on the ColumnHeaders.
+            </remarks>
+        </member>
+        <member name="P:ExpTreeLib.LVColSorter.SortColumn">
+            <summary>
+            The ListView column on which the ListView was last sorted. Setting this property to a valid
+            value will cause the ListView to be sorted on that column in the order based on OrderOfSort rules.
+            Specifically, the column will be sorted in reverse of the order it was last sorted.
+            </summary>
+            <returns>The ListView column on which the ListView was last sorted.</returns>
+            <remarks>Unsorted ListViews will return 0 for the SortColumn.
+            The Properties OrderOfSort and SortColumn may be used if the application wishes to Draw Sort
+            glyphs on the ColumnHeaders.
+            </remarks>
+        </member>
+        <member name="T:ExpTreeLib.ListViewSortGlyph">
+            <summary>
+            Set the Sort Glyph on a ListView Column.
+            Obtained from <a href="http://stackoverflow.com/questions/254129/how-to-i-display-a-sort-arrow-in-the-header-of-a-list-view-column-using-c">here</a>
+            and converted to VB.Net by JDP using
+            <a href="http://www.developerfusion.com/tools/convert/csharp-to-vb/">The tools at DeveloperFusion.com</a>
+            JDP also added all XML comments.
+            
+            The only Public member is the Shared Sub SetIcon.
+            </summary>
+            <remarks>
+            This Class is included here for the use of the LVColSorter Class. However, it may used with any ListViewColumnSorter that calls it.
+            <para>Normally the Caller will set the Glyph to point to the direction that the Column will be Sorted on the NEXT ColumnClick</para></remarks>
+        </member>
+        <member name="M:ExpTreeLib.ListViewSortGlyph.SetSortIcon(System.Windows.Forms.ListView,System.Int32,System.Windows.Forms.SortOrder)">
+            <summary>
+            Set the input ordering Sort Glyph on the input Column of the input ListView, and clears the Sort Glyph from all other Columns.
+            </summary>
+            <param name="ListViewControl">The ListView Control containing the Column</param>
+            <param name="ColumnIndex">The Index of the Column to receive the Sort Glyph</param>
+            <param name="Order">The SortOrder designator of the desired Glyph</param>
+            <remarks></remarks>
+        </member>
+        <member name="T:ExpTreeLib.NamespaceDoc">
+            <summary>
+            Contains the User Control <see cref="T:ExpTreeLib.ExpTree">ExpTree</see>, the major Class <see cref="T:ExpTreeLib.ExpTree">CShellItem</see>,
+            the Classes that enable Drag/Drop - <see cref="T:ExpTreeLib.CDragWrapper">CDragWrapper</see>, <see cref="T:ExpTreeLib.ClvDropWrapper">ClvDropWrapper</see>,
+            <see cref="T:ExpTreeLib.CtvDropWrapper">CtvDropWrapper</see>, and <see cref="T:ExpTreeLib.ControlDropWrapper">ControlDropWrapper</see>.
+            It also contains the Class <see cref="T:ExpTreeLib.ContextMenu">WindowsContextMenu</see> that provides the infrastucture 
+            for displaying a Windows Context Menu on a Control and for Invoking a Command selected by the user from that Context Menu.
+            Additionally it contains a number of Classes that support the main Classes.
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.StaThreadRunner">
+            <summary>
+            Runs queued delegates on a pool of dedicated STA threads.
+            </summary>
+            <remarks>Use this class to do work on an STA thread, such as when working with certain Windows Forms,
+            WPF, or COM APIs (e.g. Windows Shell COM) that require STA threading and will fail with MTA context. The
+            thread is initialized in STA mode and runs a message loop to support message pumping, which is necessary for 
+            many COM scenarios.
+            </remarks>
+        </member>
+        <member name="M:ExpTreeLib.StaThreadRunner.InvokeAsync``1(System.Func{``0})">
+            <summary>
+            Queues work to run on the dedicated STA thread and returns a Task for its result.
+            </summary>
+            <typeparam name="T">The return type produced by <paramref name="work"/>.</typeparam>
+            <param name="work">
+            Delegate to execute on the STA thread. This delegate runs serially with other queued delegates.
+            </param>
+            <returns>
+            A task that completes when the delegate has executed on the STA thread.
+            The task result is the value returned by <paramref name="work"/>.
+            </returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="work"/> is null.</exception>
+            <exception cref="T:System.ObjectDisposedException">
+            Thrown if the runner has already been disposed and no more work can be queued.
+            </exception>
+            <remarks>
+            Use this for COM/Shell operations that must run in STA context.
+            Any exception thrown by <paramref name="work"/> is captured and rethrown when awaiting the returned task.
+            </remarks>
+        </member>
+        <member name="M:ExpTreeLib.StaThreadRunner.InvokeAsync(System.Action)">
+            <summary>
+            Queues void work to run on the dedicated STA thread and returns a Task that completes when done.
+            </summary>
+            <param name="work">
+            Delegate to execute on the STA thread. This delegate runs serially with other queued delegates.
+            </param>
+            <returns>
+            A task that completes when <paramref name="work"/> has finished executing on the STA thread.
+            </returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="work"/> is null.</exception>
+            <exception cref="T:System.ObjectDisposedException">
+            Thrown if the runner has already been disposed and no more work can be queued.
+            </exception>
+            <remarks>
+            Convenience overload for non-returning operations. Internally forwards to <see cref="M:ExpTreeLib.StaThreadRunner.InvokeAsync``1(System.Func{``0})"/>.
+            Any exception thrown by <paramref name="work"/> is captured and rethrown when awaiting the returned task.
+            </remarks>
+        </member>
+        <member name="M:ExpTreeLib.StaThreadRunner.CancelPending">
+            <summary>
+            Cancels all pending (not-yet-started) items currently in the queue.
+            </summary>
+            <returns>Number of items canceled.</returns>
+        </member>
+        <member name="T:ExpTreeLib.ThumbnailImageListManager">
+            <summary>
+            Manages ImageLists for thumbnail display modes in the ListView control.
+            Creates and maintains separate ImageLists for different thumbnail sizes.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailImageListManager.GetImageList(System.Int32)">
+            <summary>
+            Gets or creates an ImageList for the specified thumbnail size
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailImageListManager.RequestThumbnail(System.Windows.Forms.ListViewItem,System.String,System.Int32)">
+            <summary>
+            Requests a thumbnail for a file and updates the ListView when ready
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailImageListManager.OnThumbnailReady(System.Object,ExpTreeLib.ThumbnailReadyEventArgs)">
+            <summary>
+            Handles thumbnail ready events and updates the ListView.
+            Important: this is where the image lists is assigned to the ListView.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailImageListManager.Clear">
+            <summary>
+            Clears all ImageLists and resets the ListView
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailImageListManager.ClearCache">
+            <summary>
+            Clears the thumbnail cache
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ThumbnailProvider">
+            <summary>
+            Provides thumbnail extraction for shell items using Windows Shell APIs
+            (specifically <c>IShellItemImageFactory</c>). Thumbnails are produced on
+            background worker tasks, cached in memory, and delivered to consumers via
+            the <see cref="E:ExpTreeLib.ThumbnailProvider.ThumbnailReady"/> event.
+            </summary>
+            <remarks>
+            This class is Windows-only because it depends on the Windows Shell COM
+            surface and GDI bitmap interop. Always call <see cref="M:ExpTreeLib.ThumbnailProvider.Dispose"/> when
+            you are finished with an instance so that the background processor task,
+            COM apartment, and cached <see cref="T:System.Drawing.Image"/> objects are released.
+            </remarks>
+        </member>
+        <member name="F:ExpTreeLib.ThumbnailProvider._thumbnailCache">
+            <summary>
+            In-memory cache of previously generated thumbnails keyed by
+            "path|size". Avoids repeated shell calls and HBITMAP marshaling.
+            </summary>
+        </member>
+        <member name="F:ExpTreeLib.ThumbnailProvider._requestQueueRunner">
+            <summary>
+            queue for holding pending thumbnail requests that will be processed by the background worker.
+            Do NOT use a bounded, blocking queue.  We need the UI to be responsive at all times.
+            </summary>
+        </member>
+        <member name="F:ExpTreeLib.ThumbnailProvider._cancellationTokenSource">
+            <summary>Cancellation source used to stop the background processor on dispose.</summary>
+        </member>
+        <member name="E:ExpTreeLib.ThumbnailProvider.ThumbnailReady">
+            <summary>
+            Raised on a worker thread when a thumbnail (or null fallback) becomes
+            available for a previously submitted request. Subscribers that update
+            UI must marshal back to the UI thread themselves.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailProvider.#ctor">
+            <summary>
+            Initializes a new <see cref="T:ExpTreeLib.ThumbnailProvider"/> and starts the
+            background thumbnail processor.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailProvider.EnqueueThumbnailRequest(WindowsApiLib.Shell.CShellItem,System.Int32,System.Object)">
+            <summary>
+            Queues a thumbnail request that will be processed asynchronously for the specified shell
+            item. If the thumbnail is already cached, <see cref="E:ExpTreeLib.ThumbnailProvider.ThumbnailReady"/>
+            is raised synchronously on the calling thread; otherwise it will be
+            raised later on a background thread.
+            </summary>
+            <param name="shellItem">The shell item to generate a thumbnail for.</param>
+            <param name="size">Desired thumbnail size in pixels (e.g., 96, 256).</param>
+            <param name="tag">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailProvider.GenerateThumbnail(ExpTreeLib.ThumbnailProvider.ThumbnailRequest)">
+            <summary>
+            Worker routine that produces the thumbnail for a single
+            <see cref="T:ExpTreeLib.ThumbnailProvider.ThumbnailRequest"/>, populates the cache, and raises
+            <see cref="E:ExpTreeLib.ThumbnailProvider.ThumbnailReady"/>. A null thumbnail is reported on failure
+            so consumers can fall back to an icon.
+            </summary>
+            <param name="request">The request to process.</param>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailProvider.ConstructCacheKey(System.String,System.Int32)">
+            <summary>
+            Builds the composite cache key used by <see cref="F:ExpTreeLib.ThumbnailProvider._thumbnailCache"/>:
+            the file path and requested pixel size separated by a pipe.
+            </summary>
+            <param name="filePath">Full path of the shell item.</param>
+            <param name="size">Requested square thumbnail size, in pixels.</param>
+            <returns>The cache key string.</returns>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailProvider.GetThumbnailFromOS(System.String,System.Int32)">
+            <summary>
+            Synchronously extracts a thumbnail from a file system path using
+            <c>IShellItemImageFactory</c>. Falls back to an icon image if no
+            thumbnail is available.
+            </summary>
+            <param name="filePath">Full path to the file or folder.</param>
+            <param name="size">Desired thumbnail size in pixels (square).</param>
+            <returns>
+            A <see cref="T:System.Drawing.Bitmap"/> letterboxed to <paramref name="size"/> x
+            <paramref name="size"/>, or <c>null</c> if no image could be obtained.
+            </returns>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailProvider.GetThumbnailFromOS(System.IntPtr,System.Int32)">
+            <summary>
+            Synchronously extracts a thumbnail for a shell item identified by an
+            absolute PIDL. This overload supports virtual (non-file-system) shell
+            items such as Control Panel entries or library roots.
+            </summary>
+            <param name="pidl">Absolute item identifier list (PIDL) of the shell item.</param>
+            <param name="size">Desired thumbnail size in pixels (square).</param>
+            <returns>
+            A <see cref="T:System.Drawing.Bitmap"/> letterboxed to <paramref name="size"/> x
+            <paramref name="size"/>, or <c>null</c> if no image could be obtained.
+            </returns>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailProvider.TryGetCachedThumbnail(System.String,System.Int32,System.Drawing.Image@)">
+            <summary>
+            Attempts to retrieve a previously generated thumbnail from the
+            in-memory cache.
+            </summary>
+            <param name="filePath">Path of the shell item whose thumbnail is sought.</param>
+            <param name="size">Pixel size that was originally requested.</param>
+            <param name="thumbnail">When this method returns, contains the cached image if found; otherwise <c>null</c>.</param>
+            <returns><c>true</c> if a cached thumbnail was found; otherwise <c>false</c>.</returns>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailProvider.ApplyLetterbox(System.Drawing.Image,System.Int32)">
+            <summary>
+            Scales and pads a source bitmap to fit within a square of the given size, preserving
+            aspect ratio, and centers it on a transparent background. The returned bitmap
+            is always exactly size x size, suitable for direct insertion into an ImageList.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailProvider.ClearCache">
+            <summary>
+            Clears the thumbnail cache
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.ThumbnailProvider.Dispose">
+            <summary>
+            Cleans up resources
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ThumbnailProvider.ThumbnailRequest">
+            <summary>
+            Represents a thumbnail generation request
+            </summary>
+        </member>
+        <member name="T:ExpTreeLib.ThumbnailReadyEventArgs">
+            <summary>
+            Event arguments for thumbnail ready notifications
+            </summary>
+        </member>
+        <member name="F:ExpTreeLib.UserControl1.components">
+            <summary> 
+            Required designer variable.
+            </summary>
+        </member>
+        <member name="M:ExpTreeLib.UserControl1.Dispose(System.Boolean)">
+            <summary> 
+            Clean up any resources being used.
+            </summary>
+            <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        </member>
+        <member name="M:ExpTreeLib.UserControl1.InitializeComponent">
+            <summary> 
+            Required method for Designer support - do not modify 
+            the contents of this method with the code editor.
+            </summary>
+        </member>
+    </members>
+</doc>
