@@ -519,7 +519,7 @@ namespace ExpTreeLib
                 foreach (CShellItem item in combList)
                 {
                     ListViewItem lvi = MakeLVItem(item);
-                    _itemIndex[item.Path] = lvi;
+                    _itemIndex[item.FullPath] = lvi;
                     if (firstLoad.Count < initialFillLim)
                         lvi.ImageIndex = SystemImageListManager.GetIconIndex((CShellItem)lvi.Tag, false);
                     firstLoad.Add(lvi);
@@ -645,7 +645,7 @@ namespace ExpTreeLib
                 if (i == 0) //first column
                 {
                     lvi = new ListViewItem(text);
-                    lvi.Name = item.Path;
+                    lvi.Name = item.FullPath;
                     lvi.Tag = item;
                 }
                 else
@@ -660,7 +660,7 @@ namespace ExpTreeLib
             if (lvi == null)
             {
                 lvi = new ListViewItem(item.DisplayName);
-                lvi.Name = item.Path;
+                lvi.Name = item.FullPath;
                 lvi.Tag = item;
             }
 
@@ -713,9 +713,9 @@ namespace ExpTreeLib
                 Console.WriteLine("Getting thumbnail for item: " + item.Text);
                 string? readable = ShellPidl.PidlToString(((CShellItem)item.Tag).PIDL);
 #endif
-                if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.Path))
+                if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
                 {
-                    _thumbnailManager.RequestThumbnail(item, csi.Path, thumbnailSize);
+                    _thumbnailManager.RequestThumbnail(item, csi.FullPath, thumbnailSize);
                 }
                 else if (!onlyVisible)
                 {
@@ -765,10 +765,10 @@ namespace ExpTreeLib
                 {
                     if (_currentlyLoadedFolder is null) return;
 
-                    if (_currentlyLoadedFolder.Path.StartsWith(":"))
+                    if (_currentlyLoadedFolder.FullPath.StartsWith(":"))
                         ExpListItemsChanged?.Invoke(_currentlyLoadedFolder.DisplayName, _currentlyLoadedFolder);
                     else
-                        ExpListItemsChanged?.Invoke(_currentlyLoadedFolder.Path, _currentlyLoadedFolder);
+                        ExpListItemsChanged?.Invoke(_currentlyLoadedFolder.FullPath, _currentlyLoadedFolder);
                 }
             }
         }
@@ -802,7 +802,7 @@ namespace ExpTreeLib
                                     m_CreateNew = false;
                                     lvi.BeginEdit();
                                     if (IsThumbnailViewMode())
-                                        _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.Path, GetThumbnailSizeForMode());
+                                        _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
                                 }
                             }
                             else
@@ -820,7 +820,7 @@ namespace ExpTreeLib
                             {
                                 int index = lvi.Index;
                                 bool wasSelected = lvi.Selected;
-                                _itemIndex.Remove(e.Item.Path);
+                                _itemIndex.Remove(e.Item.FullPath);
                                 _ListView.Items.Remove(lvi);
                                 if (wasSelected && _ListView.SelectedItems.Count == 0 && _ListView.Items.Count > 0)
                                 {
@@ -852,7 +852,7 @@ namespace ExpTreeLib
                                 else
                                 {
                                     lvi.Text = e.Item.DisplayName;
-                                    lvi.Name = e.Item.Path; // Update lvi.Name to NEW path
+                                    lvi.Name = e.Item.FullPath; // Update lvi.Name to NEW path
                                     lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
                                     _ListView.Items.Remove(lvi);
                                     InsertLvi(lvi, _ListView); // InsertLvi will add NEW path to index
@@ -870,15 +870,37 @@ namespace ExpTreeLib
                             if (lvi != null)
                             {
                                 int indx = _ListView.Items.IndexOf(lvi);
-                                _itemIndex.Remove(e.Item.Path);
                                 var newLvi = MakeLVItem(e.Item);
                                 if (IsThumbnailViewMode())
-                                    _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.Path, GetThumbnailSizeForMode());
+                                    _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
                                 else 
                                     newLvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
-                                _ListView.Items.RemoveAt(indx);
-                                _ListView.Items.Insert(indx, newLvi);
-                                _itemIndex[e.Item.Path] = newLvi;
+
+                                //_ListView.Items.RemoveAt(indx);
+                                //_ListView.Items.Insert(indx, newLvi);
+
+                                // Update primary text
+                                lvi.Text = newLvi.Text;
+
+                                for (int i = 1; i < newLvi.SubItems.Count; i++)
+                                { //the first subitem is actually the main item text, so subitems start at index 1
+                                    if (lvi.SubItems.Count < i) // Expand number of columns if needed 
+                                        lvi.SubItems.Add(newLvi.SubItems[i].Text);
+                                    else
+                                        lvi.SubItems[i].Text = newLvi.SubItems[i].Text;
+                                }
+                                // Copy other fields if needed
+                                lvi.ImageIndex = newLvi.ImageIndex;
+                                lvi.StateImageIndex = newLvi.StateImageIndex;
+                                lvi.Checked = newLvi.Checked;
+                                lvi.Tag = newLvi.Tag;
+                                lvi.ForeColor = newLvi.ForeColor;
+                                lvi.BackColor = newLvi.BackColor;
+                                lvi.Font = newLvi.Font;
+                                lvi.Tag = newLvi.Tag;
+
+                                //_itemIndex.Remove(e.Item.Path);
+                                //_itemIndex[e.Item.Path] = newLvi;
                             }
                             break;
                         }
@@ -888,7 +910,7 @@ namespace ExpTreeLib
                             var lvi = FindLVItem(e.Item);
                             if (lvi != null) {
                                 if (IsThumbnailViewMode())
-                                    _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.Path, GetThumbnailSizeForMode());
+                                    _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
                                 else 
                                     lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal; 
                             }
@@ -902,7 +924,7 @@ namespace ExpTreeLib
                             {
                                 lvi.Text = e.Item.DisplayName;
                                 if (IsThumbnailViewMode())
-                                    _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.Path, GetThumbnailSizeForMode());
+                                    _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
                                 else lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
                             }
                             break;
@@ -926,7 +948,7 @@ namespace ExpTreeLib
         /// <returns>The matching <see cref="ListViewItem"/>, or null if not found.</returns>
         private ListViewItem FindLVItem(CShellItem item)
         {
-            if (_itemIndex.TryGetValue(item.Path, out var lvi))
+            if (_itemIndex.TryGetValue(item.FullPath, out var lvi))
                 return lvi;
             return null;
         }
@@ -944,13 +966,13 @@ namespace ExpTreeLib
                 if (((CShellItem)lv.Items[i].Tag).CompareTo(item) > 0)
                 {
                     lv.Items.Insert(i, lvi);
-                    _itemIndex[item.Path] = lvi;
+                    _itemIndex[item.FullPath] = lvi;
                     lvi.EnsureVisible();
                     return;
                 }
             }
             lv.Items.Add(lvi);
-            _itemIndex[item.Path] = lvi;
+            _itemIndex[item.FullPath] = lvi;
             lvi.EnsureVisible();
         }
 
@@ -969,24 +991,43 @@ namespace ExpTreeLib
         {
             int indx = _ListView.Items.IndexOf(lvi);
 
-
-            _ListView.BeginUpdate();
             try
             {
-                // Force CShItem to re-read filesystem metadata
-                item.Refresh(); // call whatever invalidation method CShItem exposes
+                _ListView.BeginUpdate();
 
-                _itemIndex.Remove(item.Path);
+                //Force CShItem to re-read filesystem metadata
+                //item.Refresh(); // call whatever invalidation method CShItem exposes
+
                 var newLvi = MakeLVItem(item);
 
                 if (IsThumbnailViewMode())
-                    _thumbnailManager.RequestThumbnail(newLvi, item.Path, GetThumbnailSizeForMode());
+                    _thumbnailManager.RequestThumbnail(newLvi, item.FullPath, GetThumbnailSizeForMode());
                 else
                     newLvi.ImageIndex = SystemImageListManager.GetIconIndex(item, false);
 
-                _ListView.Items.RemoveAt(indx);
-                _ListView.Items.Insert(indx, newLvi);
-                _itemIndex[item.Path] = newLvi;
+                // Update primary text
+                lvi.Text = newLvi.Text;
+
+                for (int i = 1; i < newLvi.SubItems.Count; i++)
+                { //the first subitem is actually the main item text, so subitems start at index 1
+                    if (lvi.SubItems.Count < i) // Expand number of columns if needed 
+                        lvi.SubItems.Add(newLvi.SubItems[i].Text);
+                    else
+                        lvi.SubItems[i].Text = newLvi.SubItems[i].Text;
+                }
+                // Copy other fields if needed
+                lvi.ImageIndex = newLvi.ImageIndex;
+                lvi.StateImageIndex = newLvi.StateImageIndex;
+                lvi.Checked = newLvi.Checked;
+                lvi.Tag = newLvi.Tag;
+                lvi.ForeColor = newLvi.ForeColor;
+                lvi.BackColor = newLvi.BackColor;
+                lvi.Font = newLvi.Font;
+                lvi.Tag = newLvi.Tag;
+
+                //update index
+                _itemIndex.Remove(item.FullPath);
+                _itemIndex[item.FullPath] = newLvi;
             }
             finally
             {
@@ -1029,7 +1070,7 @@ namespace ExpTreeLib
                 _isNavigatingHistory = true;
                 try
                 {
-                    DisplayFiles(prev.Path, prev, true);
+                    DisplayFiles(prev.FullPath, prev, true);
                 }
                 finally
                 {
@@ -1050,7 +1091,7 @@ namespace ExpTreeLib
                 _isNavigatingHistory = true;
                 try
                 {
-                    DisplayFiles(next.Path, next, true);
+                    DisplayFiles(next.FullPath, next, true);
                 }
                 finally
                 {
@@ -1067,7 +1108,7 @@ namespace ExpTreeLib
             if (_currentlyLoadedFolder?.Parent != null)
             {
                 var parent = _currentlyLoadedFolder.Parent;
-                DisplayFiles(parent.Path, parent, true);
+                DisplayFiles(parent.FullPath, parent, true);
             }
         }
 
@@ -1114,10 +1155,10 @@ namespace ExpTreeLib
             var csi = (CShellItem)_ListView.SelectedItems[0].Tag;
             if (csi.IsFolder)
             {
-                if (csi.Path.StartsWith(":"))
+                if (csi.FullPath.StartsWith(":"))
                     ExpListItemDoubleClick?.Invoke(csi.DisplayName, csi);
                 else
-                    ExpListItemDoubleClick?.Invoke(csi.Path, csi);
+                    ExpListItemDoubleClick?.Invoke(csi.FullPath, csi);
             }
             else
             {
@@ -1177,7 +1218,7 @@ namespace ExpTreeLib
 
             var item = (CShellItem)_ListView.Items[e.Item].Tag;
             if ((!item.IsFileSystem) || item.IsDisk ||
-                item.Path == CShellItem.GetCShItem(CSIDL.MYDOCUMENTS).Path ||
+                item.FullPath == CShellItem.GetCShItem(CSIDL.MYDOCUMENTS).FullPath ||
                 !item.CanRename)
             {
                 System.Media.SystemSounds.Beep.Play();
@@ -1205,7 +1246,7 @@ namespace ExpTreeLib
                     return;
                 }
 
-                string path = item.Path;
+                string path = item.FullPath;
                 int index = path.LastIndexOf('\\');
                 if (index == -1)
                 {
@@ -1330,7 +1371,7 @@ namespace ExpTreeLib
                         {
                             string strPath = itms[0].Parent == CShellItem.GetDeskTop()
                                 ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-                                : itms[0].Parent.Path;
+                                : itms[0].Parent.FullPath;
 
                             m_WindowsContextMenu.InvokeCommand(m_WindowsContextMenu.winMenu, (UInt32)cmi.lpVerb.ToInt32(), strPath, pt);
                         }
@@ -1349,7 +1390,7 @@ namespace ExpTreeLib
             if (e.Button == MouseButtons.Middle && _ListView.SelectedItems.Count > 0)
             {
                 var csi = (CShellItem)_ListView.SelectedItems[0].Tag;
-                ExpListItemMouseMBUp?.Invoke(csi.Path, csi);
+                ExpListItemMouseMBUp?.Invoke(csi.FullPath, csi);
             }
             OnMouseUp(e);
         }
@@ -1465,7 +1506,7 @@ namespace ExpTreeLib
                 // The "New" submenu is managed by m_WindowsContextMenu.SetUpNewMenu(),
                 // which adds file creation options for the selected folder.
                 if (_currentlyLoadedFolder.IsFolder &&
-                    ((!_currentlyLoadedFolder.Path.StartsWith("::")) || _currentlyLoadedFolder == CShellItem.GetDeskTop()))
+                    ((!_currentlyLoadedFolder.FullPath.StartsWith("::")) || _currentlyLoadedFolder == CShellItem.GetDeskTop()))
                 {
                     int xIndex = GetMenuItemCount(comContextMenu.ToInt32());
                     m_WindowsContextMenu.SetUpNewMenu(_currentlyLoadedFolder, comContextMenu, xIndex);
@@ -1657,7 +1698,7 @@ namespace ExpTreeLib
                 && _ListView.SelectedItems.Count > 0)
             {
                 var csi = (CShellItem)_ListView.SelectedItems[0].Tag;
-                ExpListItemArrowKeyUp?.Invoke(csi.Path, csi);
+                ExpListItemArrowKeyUp?.Invoke(csi.FullPath, csi);
             }
             OnKeyUp(e);
         }
@@ -1706,14 +1747,14 @@ namespace ExpTreeLib
 
                 if (csi.IsFolder)
                 {
-                    if (csi.Path.StartsWith(":"))
+                    if (csi.FullPath.StartsWith(":"))
                         ExpListItemDoubleClick?.Invoke(csi.DisplayName, csi);
                     else
-                        ExpListItemDoubleClick?.Invoke(csi.Path, csi);
+                        ExpListItemDoubleClick?.Invoke(csi.FullPath, csi);
                 }
                 else
                 {
-                    string path = csi.Path;
+                    string path = csi.FullPath;
                     try
                     {
                         if (name == Path.GetFileName(path))
@@ -1740,7 +1781,7 @@ namespace ExpTreeLib
         private void LaunchFile(CShellItem csi)
         {
             var psi = new ProcessStartInfo {
-                FileName = csi.Path,
+                FileName = csi.FullPath,
                 UseShellExecute = true
             };
             Process.Start(psi);

@@ -125,7 +125,7 @@ namespace ExpTreeLib
             if (tag.Item == null || tag.Item.ListView != _listView) return;
 
             // safety: item still points to same shell object/path
-            if (!(tag.Item.Tag is CShellItem csi) || !string.Equals(csi.Path, tag.FilePath, StringComparison.OrdinalIgnoreCase))
+            if (!(tag.Item.Tag is CShellItem csi) || !string.Equals(csi.FullPath, tag.FilePath, StringComparison.OrdinalIgnoreCase))
                 return;
 
             if (e.Thumbnail == null)

@@ -902,9 +902,9 @@ namespace ExpTreeLib
             _lastSelectedCSI = CSI;
 
             // **********Added by Lukai-2021.12.02, If a folder is created by code "My.Computer.FileSystem.CreateDirectory(folderPath)", then this folder can't be shown automatically, I need to refresh it in here manually
-            if (System.IO.Directory.Exists(CSI.Path))
+            if (System.IO.Directory.Exists(CSI.FullPath))
             {
-                if (e.Node.GetNodeCount(false) != System.IO.Directory.GetDirectories(CSI.Path).Length)
+                if (e.Node.GetNodeCount(false) != System.IO.Directory.GetDirectories(CSI.FullPath).Length)
                 {
                     CSI.UpdateRefresh(false, true);
                 }
@@ -913,13 +913,13 @@ namespace ExpTreeLib
 
             if (EnableEventPost) // turned off during RefreshTree
             {
-                if (CSI.Path.StartsWith(":"))
+                if (CSI.FullPath.StartsWith(":"))
                 {
                     ExpTreeNodeSelected?.Invoke(CSI.DisplayName, CSI);
                 }
                 else
                 {
-                    ExpTreeNodeSelected?.Invoke(CSI.Path, CSI);
+                    ExpTreeNodeSelected?.Invoke(CSI.FullPath, CSI);
                 }
             }
         }
@@ -1265,7 +1265,7 @@ namespace ExpTreeLib
             // item.Path = CShellItem.GetCShItem(CSIDL.MYDOCUMENTS).Path Or _
             // Not (item.CanRename) Then
             // Changed 11/28/2010
-            if (item.Path.StartsWith("::") || item.IsDisk || !m_allowFolderRename || (item.Path ?? "") == (CShellItem.GetCShItem(CSIDL.MYDOCUMENTS).Path ?? "") || !item.CanRename)
+            if (item.FullPath.StartsWith("::") || item.IsDisk || !m_allowFolderRename || (item.FullPath ?? "") == (CShellItem.GetCShItem(CSIDL.MYDOCUMENTS).FullPath ?? "") || !item.CanRename)
             {
                 System.Media.SystemSounds.Beep.Play();
                 e.CancelEdit = true;
@@ -1274,7 +1274,7 @@ namespace ExpTreeLib
             if (e.CancelEdit == false)
             {
                 var editWnd = SendMessage(tv1.Handle, TVM_GETEDITCONTROL, (IntPtr)0, IntPtr.Zero);
-                int textLen = System.IO.Path.GetFileNameWithoutExtension(item.Path).Length;
+                int textLen = System.IO.Path.GetFileNameWithoutExtension(item.FullPath).Length;
                 SendMessage(editWnd, EM_SETSEL, (IntPtr)0, (IntPtr)textLen);
             }
         }
@@ -1374,7 +1374,7 @@ namespace ExpTreeLib
                             }
                             else
                             {
-                                strPath = itms[0].Parent.Path;
+                                strPath = itms[0].Parent.FullPath;
                             }
                             m_windowsContextMenu.InvokeCommand(m_windowsContextMenu.winMenu, (uint)cmi.lpVerb, strPath, pt);
                         }
@@ -1557,13 +1557,13 @@ namespace ExpTreeLib
                                             tv1.Invalidate();
                                             if (ReferenceEquals(node, tv1.SelectedNode))
                                             {
-                                                if (e.Item.Path.StartsWith(":"))
+                                                if (e.Item.FullPath.StartsWith(":"))
                                                 {
                                                     ExpTreeNodeSelected?.Invoke(e.Item.DisplayName, e.Item);
                                                 }
                                                 else
                                                 {
-                                                    ExpTreeNodeSelected?.Invoke(e.Item.Path, e.Item);
+                                                    ExpTreeNodeSelected?.Invoke(e.Item.FullPath, e.Item);
                                                 }
                                             }
                                             exitSelect2 = true;

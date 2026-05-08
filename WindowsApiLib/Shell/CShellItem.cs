@@ -551,7 +551,7 @@ namespace WindowsApiLib.Shell
                 m_IsDisk = true;
                 try // 04/16/2012 Entire Try Block
                 {
-                    var disk = new System.Management.ManagementObject("win32_logicaldisk.deviceid=\"" + Path.Substring(0, 2) + "\"");
+                    var disk = new System.Management.ManagementObject("win32_logicaldisk.deviceid=\"" + FullPath.Substring(0, 2) + "\"");
                     m_Length = Convert.ToInt64(disk["Size"]);
                     if ((Convert.ToUInt32(disk["DriveType"]).ToString() ?? "") == (4.ToString() ?? ""))
                     {
@@ -1079,7 +1079,7 @@ namespace WindowsApiLib.Shell
             }
             else if (m_IsDisk) // implies that both are
             {
-                return string.Compare(Path, Other.Path);
+                return string.Compare(FullPath, Other.FullPath);
             }
             else
             {
@@ -1122,7 +1122,7 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                return m_DeskTopDirectory.Path;
+                return m_DeskTopDirectory.FullPath;
             }
         }
         /// <summary>
@@ -1187,7 +1187,7 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Contains the Full Path and file name of the instance as obtained from Folder.GetDisplayNameOf
         /// </summary>
-        public string Path
+        public string FullPath
         {
             get
             {
@@ -1739,7 +1739,7 @@ namespace WindowsApiLib.Shell
             // fix DisplayName
             if (m_DisplayName.Equals(""))
             {
-                m_DisplayName = Path;
+                m_DisplayName = FullPath;
             }
             // Fix TypeName
             // If m_IsFolder And m_TypeName.Equals("File") Then
@@ -2005,9 +2005,9 @@ namespace WindowsApiLib.Shell
             else if (m_IsFileSystem & !m_IsFolder)
             {
                 // in this case, it's a file
-                if (File.Exists(Path))
+                if (File.Exists(FullPath))
                 {
-                    var fi = new FileInfo(Path);
+                    var fi = new FileInfo(FullPath);
                     m_LastWriteTime = fi.LastWriteTime;
                     m_LastAccessTime = fi.LastAccessTime;
                     m_CreationTime = fi.CreationTime;
@@ -2017,9 +2017,9 @@ namespace WindowsApiLib.Shell
             }
             else if (m_IsFileSystem & m_IsFolder)
             {
-                if (Directory.Exists(Path))
+                if (Directory.Exists(FullPath))
                 {
-                    var di = new DirectoryInfo(Path);
+                    var di = new DirectoryInfo(FullPath);
                     m_LastWriteTime = di.LastWriteTime;
                     m_LastAccessTime = di.LastAccessTime;
                     m_CreationTime = di.CreationTime;
@@ -2201,7 +2201,7 @@ namespace WindowsApiLib.Shell
                 {
                     try
                     {
-                        _IsSystem_m_IsSystem = (File.GetAttributes(Path) & FileAttributes.System) == FileAttributes.System;
+                        _IsSystem_m_IsSystem = (File.GetAttributes(FullPath) & FileAttributes.System) == FileAttributes.System;
                         _IsSystem_HaveSysInfo = true;
                     }
                     catch (Exception ex)
@@ -2365,7 +2365,7 @@ namespace WindowsApiLib.Shell
         public bool Equals(CShellItem other)
         {
             bool EqualsRet = default;
-            EqualsRet = Path.Equals(other.Path);
+            EqualsRet = FullPath.Equals(other.FullPath);
             return EqualsRet;
         }
         #endregion
@@ -2680,17 +2680,17 @@ namespace WindowsApiLib.Shell
     /// DisplayName</remarks>
         public string GetFileName()
         {
-            if (Path.StartsWith("::{")) // Path is really a GUID
+            if (FullPath.StartsWith("::{")) // Path is really a GUID
             {
                 return DisplayName;
             }
             else if (m_IsDisk)
             {
-                return Path.Substring(0, 1);
+                return FullPath.Substring(0, 1);
             }
             else
             {
-                return System.IO.Path.GetFileName(Path);
+                return System.IO.Path.GetFileName(FullPath);
             }
         }
         #endregion
@@ -2731,7 +2731,7 @@ namespace WindowsApiLib.Shell
             if (IsLink)
             {
                 pf = (IPersistFile)m_Link;
-                int HR = pf.Load(Path, 0);
+                int HR = pf.Load(FullPath, 0);
                 if (HR == S_OK)
                 {
                     WIN32_FIND_DATA wfd;
@@ -2853,7 +2853,7 @@ namespace WindowsApiLib.Shell
             {
                 if (ptr == IntPtr.Zero)                                               // 11/09/2013 - Investigate other
                 {
-                    Debug.WriteLine("Content=IntPtr.Zero while filling " + Path);     // 11/09/2013 - Investigate other
+                    Debug.WriteLine("Content=IntPtr.Zero while filling " + FullPath);     // 11/09/2013 - Investigate other
                     Marshal.FreeCoTaskMem(ptr);                                          // 11/09/2013 - Investigate other
                     continue;                                                        // 11/09/2013 - Investigate other
                 }
@@ -3722,17 +3722,15 @@ namespace WindowsApiLib.Shell
                         CShItemUpdate?.Invoke(oldParentItem, new ShellItemUpdateEventArgs(this, changeType));
                         break;
                     }
-                case CShItemUpdateType.UpdateDir:        // raised when content of a dir changes
+                case CShItemUpdateType.UpdateDir: // raised when content of a dir changes
                     {
-                        DoUpdateDir(this);                     // recursively check this Folder and all known sub-Folders for change     '5/21/2012
+                        DoUpdateDir(this); // recursively check this Folder and all known sub-Folders for change     '5/21/2012
                         break;
                     }
 
-                case CShItemUpdateType.Updated:      // raised when Attributes (Item or Items under a Folder) change
+                case CShItemUpdateType.Updated: // raised when Attributes (Item or Items under a Folder) change
                     {
                         // Debug.WriteLine("Updated for " & Me.Path)
-                    UPDATED:
-                        ;
                         ResetInfo();
                         // Previous versions called ResetChildren. Changed to UpdateRefresh - which impacts performance.
                         // Decided for now (6/12/2012) to do neither, so commented it out. This message is often closely followed or preceeded

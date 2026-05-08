@@ -95,7 +95,7 @@ namespace ExpTreeLib
         public void EnqueueThumbnailRequest(CShellItem shellItem, int size, object tag = null)
         {
             // Check cache first
-            if (TryGetCachedThumbnail(shellItem.Path, size, out var cachedImage))
+            if (TryGetCachedThumbnail(shellItem.FullPath, size, out var cachedImage))
             {
 #if DEBUG
                 Console.WriteLine("\tFound cached thumbnail: " + shellItem.DisplayName);
@@ -150,7 +150,7 @@ namespace ExpTreeLib
 
                 if (thumbnail != null)
                 {
-                    _thumbnailCache.TryAdd(ConstructCacheKey(request.ShellItem.Path, request.Size), thumbnail);
+                    _thumbnailCache.TryAdd(ConstructCacheKey(request.ShellItem.FullPath, request.Size), thumbnail);
                 }
                 else
                 {
@@ -165,7 +165,7 @@ namespace ExpTreeLib
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error generating thumbnail for {request.ShellItem.Path}: {ex}");
+                System.Diagnostics.Debug.WriteLine($"Error generating thumbnail for {request.ShellItem.FullPath}: {ex}");
                 ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.ShellItem, null, request.Tag, request.Size));
             }
         }
