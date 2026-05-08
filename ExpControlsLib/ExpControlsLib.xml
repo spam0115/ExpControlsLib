@@ -706,7 +706,6 @@
         <member name="M:ExpTreeLib.ExpList.RefreshItem(System.String)">
             <summary>
             Refresh by path string.
-            todo: make this faster by using some sort of sorted datastructure instead of brute force search.
             </summary>
         </member>
         <member name="M:ExpTreeLib.ExpList.GoBack">
@@ -848,19 +847,16 @@
         <member name="M:ExpTreeLib.ExpList.FindItemByName(System.String)">
             <summary>
             Finds a ListViewItem by its display name (case-insensitive).
-            todo: make this faster by using some sort of sorted datastructure instead of brute force search.
             </summary>
         </member>
         <member name="M:ExpTreeLib.ExpList.FindItemByID(System.IntPtr)">
             <summary>
             Finds a ListViewItem by its Shell ID (PIDL).
-            todo: make this faster by using some sort of sorted datastructure instead of brute force search.
             </summary>
         </member>
         <member name="M:ExpTreeLib.ExpList.FindItemByPath(System.String)">
             <summary>
             Finds a ListViewItem by its full filesystem path.
-            todo: make this faster by using some sort of sorted datastructure instead of brute force search.
             </summary>
         </member>
         <member name="T:ExpTreeLib.ExpList.ListViewScrollHook">
