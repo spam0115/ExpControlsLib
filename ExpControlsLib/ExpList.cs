@@ -12,6 +12,8 @@ using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
+using static System.Net.Mime.MediaTypeNames;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.TrayNotify;
 using static WindowsApiLib.Shell.CShellItem;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
@@ -265,7 +267,7 @@ namespace ExpTreeLib
 
                 // *** FIX: re-bind every item's ImageIndex to the system image list ***
                 bool large = (value == ListViewDisplayMode.LargeIcon);
-                _ListView.BeginUpdate();
+                //_ListView.BeginUpdate();
                 try
                 {
                     foreach (ListViewItem lvi in _ListView.Items)
@@ -276,7 +278,9 @@ namespace ExpTreeLib
                             lvi.ImageIndex = -1;
                     }
                 }
-                finally { _ListView.EndUpdate(); }
+                finally { 
+                    //_ListView.EndUpdate();
+                }
             }
             else //custom thumbnail view modes
             {
@@ -504,7 +508,7 @@ namespace ExpTreeLib
                 if (includeFolder) combList.AddRange(dirList);
                 combList.AddRange(fileList);
 
-                _ListView.BeginUpdate();
+                _ListView.BeginUpdate(); //todo: may be better to remove this.
                 _ListView.Items.Clear();
                 _itemIndex.Clear();
 
@@ -570,9 +574,14 @@ namespace ExpTreeLib
         /// <returns>A configured <see cref="ListViewItem"/>.</returns>
         private ListViewItem MakeLVItem(CShellItem item)
         {
-            ListViewItem lvi = null;
+            if (item == null) return new ListViewItem("Error: no CShellItem provided to MakeLVItem()");
 
-            for (int i = 0; i < _ListView.Columns.Count; i++)
+            ListViewItem lvi = new ListViewItem(item.DisplayName);
+            lvi.Name = item.FullPath;
+            lvi.Tag = item;
+            item.Tag = lvi;
+
+            for (int i = 1; i < _ListView.Columns.Count; i++) //column 0 is populated by the constructor
             {
                 ColumnHeader col = _ListView.Columns[i];
                 string text = string.Empty;
@@ -637,34 +646,12 @@ namespace ExpTreeLib
                         text = item.DisplayName;
                     }
                 }
-                else if (i == 0) // Default only for the first column if no mapping or event
-                {
-                    text = item.DisplayName;
-                }
 
-                if (i == 0) //first column
-                {
-                    lvi = new ListViewItem(text);
-                    lvi.Name = item.FullPath;
-                    lvi.Tag = item;
-                }
-                else
-                {
-                    ListViewItem.ListViewSubItem si = lvi.SubItems.Add(text);
-                    si.Tag = tag;
-                }
+                ListViewItem.ListViewSubItem si = lvi.SubItems.Add(text);
+                si.Tag = tag;
 
             } //end for
 
-            // Safety fallback if no columns defined
-            if (lvi == null)
-            {
-                lvi = new ListViewItem(item.DisplayName);
-                lvi.Name = item.FullPath;
-                lvi.Tag = item;
-            }
-
-            item.Tag = lvi;
             return lvi;
         }
 
@@ -786,7 +773,7 @@ namespace ExpTreeLib
 
             try
             {
-                _ListView.BeginUpdate();
+                //_ListView.BeginUpdate();
 
                 switch (e.UpdateType)
                 {
@@ -869,7 +856,8 @@ namespace ExpTreeLib
                             var lvi = FindLVItem(e.Item);
                             if (lvi != null)
                             {
-                                int indx = _ListView.Items.IndexOf(lvi);
+                                //int indx = _ListView.Items.IndexOf(lvi);
+                                int indx = lvi.Index;
                                 var newLvi = MakeLVItem(e.Item);
                                 if (IsThumbnailViewMode())
                                     _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
@@ -937,7 +925,7 @@ namespace ExpTreeLib
             }
             finally
             {
-                _ListView.EndUpdate();
+                //_ListView.EndUpdate();
             }
         }
 
@@ -989,49 +977,117 @@ namespace ExpTreeLib
         /// </summary>
         public void RefreshItem(ListViewItem lvi, CShellItem item)
         {
-            int indx = _ListView.Items.IndexOf(lvi);
 
             try
             {
-                _ListView.BeginUpdate();
+                //_ListView.BeginUpdate();
 
                 //Force CShItem to re-read filesystem metadata
                 //item.Refresh(); // call whatever invalidation method CShItem exposes
 
-                var newLvi = MakeLVItem(item);
+                //var newLvi = MakeLVItem(item);
 
                 if (IsThumbnailViewMode())
-                    _thumbnailManager.RequestThumbnail(newLvi, item.FullPath, GetThumbnailSizeForMode());
+                    _thumbnailManager.RequestThumbnail(lvi, item.FullPath, GetThumbnailSizeForMode());
                 else
-                    newLvi.ImageIndex = SystemImageListManager.GetIconIndex(item, false);
+                    lvi.ImageIndex = SystemImageListManager.GetIconIndex(item, false);
 
                 // Update primary text
-                lvi.Text = newLvi.Text;
+                lvi.Text = item.DisplayName;
+                lvi.Tag = item;
+                item.Tag = lvi;
 
-                for (int i = 1; i < newLvi.SubItems.Count; i++)
-                { //the first subitem is actually the main item text, so subitems start at index 1
-                    if (lvi.SubItems.Count < i) // Expand number of columns if needed 
-                        lvi.SubItems.Add(newLvi.SubItems[i].Text);
-                    else
-                        lvi.SubItems[i].Text = newLvi.SubItems[i].Text;
-                }
+                for (int i = 1; i < _ListView.Columns.Count; i++)
+                {
+                    ColumnHeader col = _ListView.Columns[i];
+                    string text = string.Empty;
+                    object tag = null;
+
+                    // 1. Try Tag Mapping
+                    string mapping = col.Tag?.ToString();
+                    if (!string.IsNullOrEmpty(mapping) && mapping.StartsWith("."))
+                    {
+                        string propName = mapping.Substring(1);
+                        // Optimization: Check for common properties directly
+                        switch (propName)
+                        {
+                            case "DisplayName":
+                                text = item.DisplayName;
+                                break;
+                            case "Size":
+                                if (!item.IsDisk && item.IsFileSystem && !item.IsFolder)
+                                {
+                                    text = item.Size;
+                                    tag = item.Length;
+                                }
+                                break;
+                            case "LastWriteTime":
+                                if (!item.IsDisk && item.LastWriteTime != EmptyTimeValue)
+                                {
+                                    text = item.LastWriteTime.ToString("MM/dd/yyyy HH:mm:ss");
+                                    tag = item.LastWriteTime;
+                                }
+                                break;
+                            case "CreationTime":
+                                if (!item.IsDisk && item.CreationTime != EmptyTimeValue)
+                                {
+                                    text = item.CreationTime.ToString("MM/dd/yyyy HH:mm:ss");
+                                    tag = item.CreationTime;
+                                }
+                                break;
+                            default:
+                                // Fallback to reflection for other properties
+                                PropertyInfo prop = item.GetType().GetProperty(propName);
+                                if (prop != null)
+                                {
+                                    object val = prop.GetValue(item);
+                                    text = val?.ToString() ?? string.Empty;
+                                    tag = val;
+                                }
+                                break;
+                        }
+                    }
+                    else if (ExpListGetColumnData is not null) // 2. Try Event
+                    {
+                        var args = new ExpListGetColumnDataEventArgs(item, col);
+                        ExpListGetColumnData?.Invoke(this, args);
+
+                        if (args.Handled)
+                        {
+                            text = args.Text;
+                            tag = args.Tag;
+                        }
+                        else if (i == 0)
+                        {
+                            text = item.DisplayName;
+                        }
+                    }
+
+                    lvi.SubItems[i].Text = text;
+                    lvi.SubItems[i].Tag = tag;
+                } //end for
+
+
+
+                //lvi.SubItems[0] = "
+
+                //for (int i = 1; i < newLvi.SubItems.Count; i++)
+                //{ //the first subitem is actually the main item text, so subitems start at index 1
+                //    if (lvi.SubItems.Count < i) // Expand number of columns if needed 
+                //        lvi.SubItems.Add(newLvi.SubItems[i].Text);
+                //    else
+                //        lvi.SubItems[i].Text = newLvi.SubItems[i].Text;
+                //}
                 // Copy other fields if needed
-                lvi.ImageIndex = newLvi.ImageIndex;
-                lvi.StateImageIndex = newLvi.StateImageIndex;
-                lvi.Checked = newLvi.Checked;
-                lvi.Tag = newLvi.Tag;
-                lvi.ForeColor = newLvi.ForeColor;
-                lvi.BackColor = newLvi.BackColor;
-                lvi.Font = newLvi.Font;
-                lvi.Tag = newLvi.Tag;
+                lvi.Tag = item;
 
                 //update index
-                _itemIndex.Remove(item.FullPath);
-                _itemIndex[item.FullPath] = newLvi;
+                //_itemIndex.Remove(item.FullPath);
+                //_itemIndex[item.FullPath] = newLvi;
             }
             finally
             {
-                _ListView.EndUpdate();
+                //_ListView.EndUpdate();
             }
         }
 
@@ -2058,6 +2114,17 @@ namespace ExpTreeLib
         #region Lazy Thumbnail Loading Support
 
         private ListViewScrollHook _scrollHook;
+        /// <summary>
+        /// The _thumbnailTimer is a debounce timer used to implement Lazy Loading. Even though the actual thumbnail generation
+        ///happens on background threads(via ThumbnailProvider), the timer is essential for maintaining UI performance and
+        ///efficiency.
+        ///Here is why it's necessary:
+        ///1. Preventing "Scroll Stutter"
+        ///The ListView fires dozens of scroll events per second during rapid scrolling.If the app tried to calculate which
+        ///items are visible on every single event, the UI thread would "stutter" because it's spending too much time doing
+        ///geometry calculations instead of rendering the list. The timer waits for a 200ms pause in scrolling before doing this
+        ///calculation.
+        /// </summary>
         private System.Windows.Forms.Timer _thumbnailTimer;
 
         /// <summary>
@@ -2101,6 +2168,7 @@ namespace ExpTreeLib
 
         private void OnListViewScroll()
         {
+            //issues a new request to get thumbnails after a brief debounce delay
             _thumbnailTimer?.Stop();
             _thumbnailTimer?.Start();
         }
