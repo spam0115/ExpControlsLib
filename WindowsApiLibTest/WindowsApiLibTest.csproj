@@ -12,8 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ExpControlsLib\ExpControlsLib.csproj" />
     <ProjectReference Include="..\WindowsApiLib\WindowsApiLib.csproj" />
-    <ProjectReference Include="..\ExpTreeLib\ExpControlsLib.csproj" />
   </ItemGroup>
 
   <ItemGroup>
