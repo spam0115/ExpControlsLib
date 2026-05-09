@@ -3183,20 +3183,30 @@ namespace WindowsApiLib.Shell
                 HR = IEnum.Next(1, out ptr, out itemCnt);
                 while (HR == NOERROR && itemCnt > 0 && !ptr.Equals(IntPtr.Zero))
                 {
-                    if ((flags & SHCONTF.FOLDERS) != 0) //discard out non folders
+                    bool includeFolders = (flags & SHCONTF.FOLDERS) != 0;
+                    bool includeNonFolders = (flags & SHCONTF.NONFOLDERS) != 0;
+
+                    if (!includeFolders && !includeNonFolders)
                     {
-                        bool ItemIsFolder = IsFolderRel(ptr);
-                        if (!ItemIsFolder) Marshal.FreeCoTaskMem(ptr);
+                        // Nothing is allowed, so we can reject without checking item type.
+                        Marshal.FreeCoTaskMem(ptr);
                     }
-                    else if ((flags & SHCONTF.NONFOLDERS) != 0) //discard out non folders
+                    else if (includeFolders && includeNonFolders)
                     {
-                        bool ItemIsFolder = IsFolderRel(ptr);
-                        if (ItemIsFolder) Marshal.FreeCoTaskMem(ptr);
+                        // Everything is allowed, so no need to check item type.
+                        rVal.Add(ptr);
                     }
                     else
                     {
-                        rVal.Add(ptr);
+                        // Only one category is allowed; now we need to know what this item is.
+                        bool itemIsFolder = IsFolderRel(ptr); //don't do this earlier so we can sometimes avoid the expense
+
+                        if ((itemIsFolder && !includeFolders) || (!itemIsFolder && !includeNonFolders))
+                            Marshal.FreeCoTaskMem(ptr);
+                        else
+                            rVal.Add(ptr);
                     }
+
                     ptr = IntPtr.Zero;
                     itemCnt = 0;
                     HR = IEnum.Next(1, out ptr, out itemCnt);
