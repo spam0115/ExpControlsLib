@@ -1747,7 +1747,7 @@ namespace ExpTreeLib
             {
                 var tmp = new TreeNode[N.Nodes.Count];
                 N.Nodes.CopyTo(tmp, 0);
-                Array.Sort(tmp, new CShellItem.TagComparer());
+                Array.Sort(tmp, new WindowsApiLib.Shell.TagComparer());
                 // tv1.BeginUpdate()      '6/18/2012 - not needed already in BeginUpdate when this rtn called
                 N.Nodes.Clear();
                 N.Nodes.AddRange(tmp);

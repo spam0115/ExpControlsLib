@@ -142,10 +142,10 @@ namespace WindowsApiLib
         #region        Public Static Methods
 
         /// <summary> Join two byte arrays containing PIDLS. 
-    /// Returns NOTHING if error
-    /// </summary>
-    /// <returns>A Byte() containing the resultant ITEMIDLIST.</returns>
-    /// <remarks>Both Byte() must be properly terminated (nulnul)</remarks>
+        /// Returns NOTHING if error
+        /// </summary>
+        /// <returns>A Byte() containing the resultant ITEMIDLIST.</returns>
+        /// <remarks>Both Byte() must be properly terminated (nulnul)</remarks>
         public static byte[] JoinPidlBytes(byte[] b1, byte[] b2)
         {
             if (IsValidPidl(b1) & IsValidPidl(b2))
@@ -169,13 +169,13 @@ namespace WindowsApiLib
         }
 
         /// <summary>
-    /// Copy the contents of a byte() containing a pidl to
-    /// CoTaskMemory, returning an IntPtr that points to that mem block
-    /// Caller must free the IntPtr when done with it
-    /// </summary>
-    /// <param name="b">A Byte() containing a valid PIDL</param>
-    /// <returns>An IntPtr pointing to the newly allocated and created PIDL</returns>
-    /// <remarks>Caller is responsible for Freeing the PIDL when no longer required</remarks>
+        /// Copy the contents of a byte() containing a pidl to
+        /// CoTaskMemory, returning an IntPtr that points to that mem block
+        /// Caller must free the IntPtr when done with it
+        /// </summary>
+        /// <param name="b">A Byte() containing a valid PIDL</param>
+        /// <returns>An IntPtr pointing to the newly allocated and created PIDL</returns>
+        /// <remarks>Caller is responsible for Freeing the PIDL when no longer required</remarks>
         public static IntPtr BytesToPidl(byte[] b)
         {
             IntPtr BytesToPidlRet = default;
@@ -193,14 +193,14 @@ namespace WindowsApiLib
         }
 
         /// <summary>returns True if the beginning of pidlA matches PidlB exactly for pidlB's entire length</summary>
-    /// <returns>True if the beginning of pidlA matches PidlB exactly for pidlB's entire length</returns>
+        /// <returns>True if the beginning of pidlA matches PidlB exactly for pidlB's entire length</returns>
         public static bool StartsWith(IntPtr pidlA, IntPtr pidlB)
         {
             return StartsWith(new CPidl(pidlA), new CPidl(pidlB));
         }
 
         /// <summary>returns True if the beginning of A matches B exactly for B's entire length</summary>
-    /// <returns>True if the beginning of A matches B exactly for pidlB's entire length</returns>
+        /// <returns>True if the beginning of A matches B exactly for B's entire length</returns>
         public static bool StartsWith(CPidl A, CPidl B)
         {
             return A.StartsWith(B);
@@ -505,6 +505,28 @@ namespace WindowsApiLib
             // on fall thru, it is ok as far as we can check
             IsValidPidlRet = true;
             return IsValidPidlRet;
+        }
+
+
+        /// <summary>IsAncestorOf tests if Pidl1 is an ancestor of Pidl2.</summary>
+        /// <param name="Pidl1">Relative or Absolute PIDL of potential ancestor.</param>
+        /// <param name="Pidl2">Absolute PIDL of potential descendant.</param>
+        /// <param name="ImmediateOnly">If True, returns True only if Pidl1 is the Immediate Ancestor of Pidl2.</param>
+        /// <returns>True if Pidl1 is an ancestor of Pidl2, False otherwise.</returns>
+        public static bool IsAncestorOf(IntPtr Pidl1, IntPtr Pidl2, bool ImmediateOnly = false)
+        {
+            if (Pidl1.Equals(IntPtr.Zero) || Pidl2.Equals(IntPtr.Zero)) return false;
+            return ILIsParent(Pidl1, Pidl2, ImmediateOnly);
+        }
+
+        /// <summary>IsAncestorOf tests if Item1 is an ancestor of Item2.</summary>
+        /// <param name="Item1">Potential ancestor CShellItem.</param>
+        /// <param name="Item2">Potential descendant CShellItem.</param>
+        /// <param name="ImmediateOnly">If True, returns True only if Item1 is the Immediate Ancestor of Item2.</param>
+        /// <returns>True if Item1 is an ancestor of Item2, False otherwise.</returns>
+        public static bool IsAncestorOf(CShellItem Item1, CShellItem Item2, bool ImmediateOnly = false)
+        {
+            return IsAncestorOf(Item1.PIDL, Item2.PIDL, ImmediateOnly);
         }
 
         #region    DumpPidl Routines

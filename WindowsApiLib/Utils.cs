@@ -20,5 +20,18 @@ namespace WindowsApiLib
 
             return Regex.IsMatch(input, regex, RegexOptions.CultureInvariant);
         }
+        public static long GetDiskSize(string drivePath)
+        {
+            try
+            {
+                var deviceId = drivePath.Substring(0, 2);
+                var disk = new System.Management.ManagementObject("win32_logicaldisk.deviceid=\"" + deviceId + "\"");
+                return Convert.ToInt64(disk["Size"]);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
     }
 }
