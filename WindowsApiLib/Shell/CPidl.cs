@@ -148,12 +148,12 @@ namespace WindowsApiLib
     /// <remarks>Both Byte() must be properly terminated (nulnul)</remarks>
         public static byte[] JoinPidlBytes(byte[] b1, byte[] b2)
         {
-            if (CShellItem.IsValidPidl(b1) & CShellItem.IsValidPidl(b2))
+            if (IsValidPidl(b1) & IsValidPidl(b2))
             {
                 var b = new byte[b1.Length + b2.Length - 3 + 1]; // allow for leaving off first nulnul
                 Array.Copy(b1, b, b1.Length - 2);
                 Array.Copy(b2, 0, b, b1.Length - 2, b2.Length);
-                if (CShellItem.IsValidPidl(b))
+                if (IsValidPidl(b))
                 {
                     return b;
                 }
@@ -180,7 +180,7 @@ namespace WindowsApiLib
         {
             IntPtr BytesToPidlRet = default;
             BytesToPidlRet = IntPtr.Zero;       // assume failure
-            if (CShellItem.IsValidPidl(b))
+            if (IsValidPidl(b))
             {
                 int bLen = b.Length;
                 BytesToPidlRet = Marshal.AllocCoTaskMem(bLen);
@@ -482,7 +482,30 @@ namespace WindowsApiLib
             }  // 6/8/2012 - ToInt64 works on both 32 & 64 bit systems (though code is never executed on 64 bit systems)
         }
 
-
+        /// <summary>It is impossible to validate a PIDL completely since its contents
+        /// are arbitrarily defined by the creating Shell Namespace.  However, it
+        /// is possible to validate the structure of a PIDL.</summary>
+        /// <returns>True if input Byte() contains a valid PIDL structure, False Otherwise</returns>
+        public static bool IsValidPidl(byte[] b)
+        {
+            bool IsValidPidlRet = default;
+            IsValidPidlRet = false;     // assume failure
+            int bMax = b.Length - 1;   // max value that index can have
+            if (bMax < 1)
+                return IsValidPidlRet; // min size is 2 bytes
+            int cb = b[0] + b[1] * 256;
+            int indx = 0;
+            while (cb > 0)
+            {
+                if (indx + cb + 1 > bMax)
+                    return IsValidPidlRet; // an error
+                indx += cb;
+                cb = b[indx] + b[indx + 1] * 256;
+            }
+            // on fall thru, it is ok as far as we can check
+            IsValidPidlRet = true;
+            return IsValidPidlRet;
+        }
 
         #region    DumpPidl Routines
         /// <summary>
@@ -643,6 +666,8 @@ namespace WindowsApiLib
 
         #endregion
 
+        #region Private methods
+
         /// <summary>
         /// Get Size in bytes of the first (possibly only)
         /// SHItem in an ID list.  Note: the full size of
@@ -696,6 +721,7 @@ namespace WindowsApiLib
             }
         }
 
+        /*
         // TODO: Test IsReallyEqual on Fat32.
         /// <summary>
         /// IsReallyEqual compares Pidls using the IsEqual routine. If IsEqual declares them Equal, IsReallyEqual
@@ -711,17 +737,19 @@ namespace WindowsApiLib
         /// <remarks>At this point, this has been tested on NTFS file systems only.</remarks>
         internal static bool IsReallyEqual(IntPtr Pidl1, IntPtr Pidl2)
         {
-            return default;
-            // IsReallyEqual = IsEqual(Pidl1, Pidl2)
-            // If IsReallyEqual AndAlso Win2KOrAbove Then           'IsEqual says they are -- if Win2KOrAbove, then check the last ItemID
-            // IsReallyEqual = AreBytesEqual(ILFindLastID(Pidl1), ILFindLastID(Pidl2))
-            // 'If Not IsReallyEqual Then
-            // '    Debug.WriteLine("IsReallyEqual found mismatch")
-            // '    DumpPidl(Pidl1)
-            // '    DumpPidl(Pidl2)
-            // 'End If
-            // End If
+            IsReallyEqual = IsEqual(Pidl1, Pidl2)
+             If IsReallyEqual AndAlso Win2KOrAbove Then           'IsEqual says they are -- if Win2KOrAbove, then check the last ItemID
+             IsReallyEqual = AreBytesEqual(ILFindLastID(Pidl1), ILFindLastID(Pidl2))
+             'If Not IsReallyEqual Then
+             '    Debug.WriteLine("IsReallyEqual found mismatch")
+             '    DumpPidl(Pidl1)
+             '    DumpPidl(Pidl2)
+             'End If
+             End If
         }
+        */
+
+        #endregion
 
         #region        GetEnumerator
         /// <summary>
@@ -744,9 +772,9 @@ namespace WindowsApiLib
             private readonly bool m_NotEmpty = false; // the desktop PIDL is zero length
 
             /// <summary>
-        /// Creates a New instance of ICPidlEnumerator
-        /// </summary>
-        /// <param name="b">A Byte() containing a valid PIDL</param>
+            /// Creates a New instance of ICPidlEnumerator
+            /// </summary>
+            /// <param name="b">A Byte() containing a valid PIDL</param>
             public ICPidlEnumerator(byte[] b)
             {
                 m_bytes = b;
@@ -757,9 +785,9 @@ namespace WindowsApiLib
             }
 
             /// <summary>
-        /// Returns the Byte() containing the Current Item ID
-        /// </summary>
-        /// <returns>Current ID as Byte()</returns>
+            /// Returns the Byte() containing the Current Item ID
+            /// </summary>
+            /// <returns>Current ID as Byte()</returns>
             public object Current
             {
                 get

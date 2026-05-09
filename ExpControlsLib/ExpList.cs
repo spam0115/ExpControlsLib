@@ -777,7 +777,7 @@ namespace ExpTreeLib
 
                 switch (e.UpdateType)
                 {
-                    case CShellItem.CShItemUpdateType.Created:
+                    case CShItemUpdateType.Created:
                         {
                             var lvi = MakeLVItem(e.Item);
 
@@ -1707,7 +1707,7 @@ namespace ExpTreeLib
                         break;
                     default:
                         // Handle commands from the "New" submenu.
-                        if (CShellItem.IsVista) cmdID -= 1;
+                        if (WinSDK.VistaOrAbove) cmdID -= 1;
                         cmi.lpVerb = (IntPtr)cmdID;
                         cmi.lpVerbW = (IntPtr)cmdID;
                         m_CreateNew = true;
