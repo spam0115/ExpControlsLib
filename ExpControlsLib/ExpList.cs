@@ -978,8 +978,17 @@ namespace ExpTreeLib
                     }
                 }
 
-                lvi.SubItems[i].Text = text;
-                lvi.SubItems[i].Tag = tag;
+                if (lvi.SubItems.Count <= i)
+                {
+                    var si = lvi.SubItems.Add(new ListViewItem.ListViewSubItem());
+                    si.Text = text;
+                    si.Tag = tag;
+                }
+                else
+                {
+                    lvi.SubItems[i].Text = text;
+                    lvi.SubItems[i].Tag = tag;
+                }
             } //end for
 
             lvi.Tag = item;
