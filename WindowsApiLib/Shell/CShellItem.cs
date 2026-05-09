@@ -362,7 +362,8 @@ namespace WindowsApiLib.Shell
 
             dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.SYSICONINDEX | SHGFI.PIDL;
             dwAttr = 0;
-            var H = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+            var desktop = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+
             m_DisplayName = shfi.szDisplayName;
             m_TypeName = StrSystemFolder;   // not returned correctly by SHGetFileInfo
             m_IconIndexNormal = shfi.iIcon;
@@ -397,17 +398,29 @@ namespace WindowsApiLib.Shell
             m_updater = new CShellItemUpdater(this);
         }
 
-        internal CShellItem(IntPtr pidl, CShellItem parent)
+        internal CShellItem(IntPtr pidl, CShellItem parent = null)
         {
             if (DesktopBase == null)
             {
                 DesktopBase = new CShellItem(); // This initializes the Desktop folder
             }
             m_Parent = parent;
-            m_Pidl = CPidl.ConcatPidls(parent.PIDL, pidl);
+            if (parent == null)
+            {
+                m_Pidl = pidl;
+                // Get some attributes
+                IShellFolder m_Folder = null;
+                SHGetDesktopFolder(ref m_Folder);
 
-            // Get some attributes
-            SetUpAttributes(parent.Folder, pidl);
+                SetUpAttributes(m_Folder, pidl);
+            }
+            else 
+            {
+                m_Pidl = CPidl.ConcatPidls(parent.PIDL, pidl);
+                // Get some attributes
+                SetUpAttributes(parent.Folder, pidl);
+            }
+
 
             // Set unfetched value for IconIndex....
             m_IconIndexNormal = -1;
@@ -524,32 +537,7 @@ namespace WindowsApiLib.Shell
         }
 
 
-        /// <summary>Returns both the IShellFolder interface of the parent folder
-        /// and the relative pidl of the input PIDL</summary>
-        /// <remarks>Several internal functions need this information and do not have
-        /// it readily available. GetParentOf serves those functions</remarks>
-        private static IShellFolder GetParentOf(IntPtr pidl, ref IntPtr relPidl)
-        {
-            IShellFolder GetParentOfRet = default;
-            GetParentOfRet = null;     // avoid VB2005 warning
-            var HR = default(int);
-            int itemCnt = CPidl.PidlCount(pidl);
-            if (itemCnt == 1)         // parent is desktop
-            {
-                HR = SHGetDesktopFolder(ref GetParentOfRet);
-                relPidl = pidl;
-            }
-            else
-            {
-                IntPtr tmpPidl;
-                tmpPidl = CPidl.TrimPidl(pidl, ref relPidl);
-                GetParentOfRet = ShellHelper.GetFolder(DesktopBase, tmpPidl);
-                Marshal.FreeCoTaskMem(tmpPidl);
-            }
-            if (!(HR == NOERROR))
-                Marshal.ThrowExceptionForHR(HR);
-            return GetParentOfRet;
-        }
+
 
         /// <summary>Get the base attributes of the folder/file that this CShellItem represents</summary>
         /// <param name="folder">Parent Folder of this Item</param>
@@ -1414,6 +1402,25 @@ namespace WindowsApiLib.Shell
 
 
         /// <summary>
+        /// Associated listview item
+        /// </summary>
+        public ListViewItem? LVItem { get; set; }
+
+        /// <summary>
+        /// Associated treeview item
+        /// </summary>
+        public TreeNode? TNode { get; set; }
+
+        /// <summary>
+        /// An Object which may used to store custom information
+        /// </summary>
+        /// <returns>The object provided by the consumer</returns>
+        /// <remarks>
+        /// Property may be used for any application defined purpose.
+        /// </remarks>
+        public object Tag { get; set; }
+
+        /// <summary>
         /// The Name of the File or Directory. If a Special Folder, then the Windows name for that Special Folder
         /// </summary>
         /// <returns>The Name of the File or Directory. If a Special Folder, then the Windows name for that Special Folder</returns>
@@ -1614,20 +1621,7 @@ namespace WindowsApiLib.Shell
         /// <returns>The number of Folders currently known to this instance. If not
         /// initialized, return 0</returns>
         /// <remarks>Property added 02/10/2014 to avoid UpdateRefresh</remarks>
-        public int DirCount
-        {
-            get
-            {
-                if (FoldersInitialized)
-                {
-                    return m_Directories.Count;
-                }
-                else
-                {
-                    return 0;
-                }
-            }
-        }
+        public int DirCount => FoldersInitialized ? m_Directories.Count : 0;
         /// <summary>
         /// Returns the number of Files currently known to this instance. If not
         /// initialized, return 0
@@ -1635,20 +1629,7 @@ namespace WindowsApiLib.Shell
         /// <returns>The number of Files currently known to this instance. If not
         /// initialized, return 0</returns>
         /// <remarks>Property added 02/10/2014 to avoid UpdateRefresh</remarks>
-        public int FileCount
-        {
-            get
-            {
-                if (FilesInitialized)
-                {
-                    return m_Files.Count;
-                }
-                else
-                {
-                    return 0;
-                }
-            }
-        }
+        public int FileCount => FilesInitialized ? m_Files.Count : 0;
 
 
         /// <summary>
@@ -1792,61 +1773,31 @@ namespace WindowsApiLib.Shell
         /// True if this instance is a Disk like device, False otherwise
         /// </summary>
         /// <returns>True if this instance is a Disk like device, False otherwise</returns>
-        public bool IsDisk
-        {
-            get
-            {
-                return m_IsDisk;
-            }
-        }
+        public bool IsDisk => m_IsDisk;
 
         /// <summary>
         /// True if this instance is a Link (.lnk or Shortcut), False otherwise
         /// </summary>
         /// <returns>True if this instance is a Link (.lnk or Shortcut), False otherwise</returns>
-        public bool IsLink
-        {
-            get
-            {
-                return m_IsLink;
-            }
-        }
+        public bool IsLink => m_IsLink;
 
         /// <summary>
         /// True if this instance is Shared, False otherwise
         /// </summary>
         /// <returns>True if this instance Shared, False otherwise</returns>
-        public bool IsShared
-        {
-            get
-            {
-                return m_IsShared;
-            }
-        }
+        public bool IsShared => m_IsShared;
 
         /// <summary>
         /// True if this instance is Hidden, False otherwise
         /// </summary>
         /// <returns>True if this instance Hidden, False otherwise</returns>
-        public bool IsHidden
-        {
-            get
-            {
-                return m_IsHidden;
-            }
-        }
+        public bool IsHidden => m_IsHidden;
 
         /// <summary>
         /// True if this instance is a Removable device, False otherwise
         /// </summary>
         /// <returns>True if this instance is a Removable device, False otherwise</returns>
-        public bool IsRemovable
-        {
-            get
-            {
-                return m_IsRemovable;
-            }
-        }
+        public bool IsRemovable => m_IsRemovable;
 
         /// <summary>
         /// Returns True if this CShellItem represents a Folder/File stored on a Remote system
@@ -1856,25 +1807,13 @@ namespace WindowsApiLib.Shell
         /// A Remote item is any item whose path is a UNC not referring to the Local system or
         /// resides on a Mapped (Network) Drive. Set up in SetupAttributes.
         /// </remarks>
-        public bool IsRemote  // 4/14/2012
-        {
-            get                                         // 4/14/2012
-            {
-                return m_IsRemote;                       // 4/14/2012
-            }                                     // 4/14/2012
-        }
+        public bool IsRemote => m_IsRemote;
 
         /// <summary>
         /// True if this instance can be Renamed, False otherwise
         /// </summary>
         /// <returns>True if this instance can be Renamed, False otherwise</returns>
-        public bool CanRename
-        {
-            get
-            {
-                return m_CanRename;
-            }
-        }
+        public bool CanRename => m_CanRename;
 
         private string m_size = "[]";
         /// <summary>
@@ -1942,123 +1881,56 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        /// <summary>
-        /// An Object which may used to associate application information with this instance
-        /// </summary>
-        /// <returns>An Object which may used to associate application information with this instance. Nothing if not set by application.</returns>
-        /// <remarks>
-        /// Property may be used for any application defined purpose.
-        /// </remarks>
-        public object Tag
-        {
-            get
-            {
-                return m_Tag;
-            }
-            set
-            {
-                m_Tag = value;
-            }
-        }
-
-
         #region        Drag Ops Properties
 
         /// <summary>
         /// Returns True if instance may be Moved, False otherwise.
         /// </summary>
         /// <returns>True if instance may be Moved, False otherwise.</returns>
-        public bool CanMove
-        {
-            get
-            {
-                return m_CanMove;
-            }
-        }
+        public bool CanMove => m_CanMove;
 
         /// <summary>
         /// Returns True if instance can be Copied, False otherwise
         /// </summary>
         /// <returns>True if instance can be Copied, False otherwise</returns>
-        public bool CanCopy
-        {
-            get
-            {
-                return m_CanCopy;
-            }
-        }
+        public bool CanCopy => m_CanCopy;
 
         /// <summary>
         /// Returns True if instance can be Deleted, False otherwise
         /// </summary>
         /// <returns>True if instance can be Deleted, False otherwise</returns>
-        public bool CanDelete
-        {
-            get
-            {
-                return m_CanDelete;
-            }
-        }
+        public bool CanDelete => m_CanDelete;
 
         /// <summary>
         /// Returns True if instance can be Linked to, False otherwise
         /// </summary>
         /// <returns>True if instance can be Linked to, False otherwise</returns>
-        public bool CanLink
-        {
-            get
-            {
-                return m_CanLink;
-            }
-        }
+        public bool CanLink => m_CanLink;
 
         /// <summary>
         /// Returns True if instance can be a Drop Target, False otherwise
         /// </summary>
         /// <returns>True if instance can be a Drop Target, False otherwise</returns>
-        public bool IsDropTarget
-        {
-            get
-            {
-                return m_IsDropTarget;
-            }
-        }
+        public bool IsDropTarget => m_IsDropTarget;
+
         #endregion
 
         #region        Shared Properties
         /// <summary>
         /// Contains a String with the Local representation of "My Computer"
         /// </summary>
-        public static string StrMyComputer
-        {
-            get
-            {
-                return m_strMyComputer;
-            }
-        }
+        public static string StrMyComputer => m_strMyComputer;
         /// <summary>
         /// Contains a String with the Local representation of "System Folder".
         /// </summary>
-        public static string StrSystemFolder
-        {
-            get
-            {
-                return m_strSystemFolder;
-            }
-        }
+        public static string StrSystemFolder => m_strSystemFolder;
         /// <summary>
         /// Contains a String with the Full Path of the Desktop Directory
         /// </summary>
         /// <value></value>
         /// <returns></returns>
         /// <remarks></remarks>
-        public static string DesktopDirectoryPath
-        {
-            get
-            {
-                return m_DeskTopDirectory.FullPath;
-            }
-        }
+        public static string DesktopDirectoryPath => m_DeskTopDirectory?.FullPath;
 
         #endregion
 

@@ -789,7 +789,7 @@ namespace ExpTreeLib
                                     m_CreateNew = false;
                                     lvi.BeginEdit();
                                     if (IsThumbnailViewMode())
-                                        _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
+                                        _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode());
                                 }
                             }
                             else
@@ -823,7 +823,7 @@ namespace ExpTreeLib
                         {
                             // On Rename, we must find the item by its tag (CShellItem) because the path has changed.
                             // However, we can use the lvi.Name which stores the OLD path used in our dictionary.
-                            var lvi = e.Item.Tag as ListViewItem;
+                            var lvi = e.Item.LVItem;
                             if (lvi == null || !ReferenceEquals(lvi.Tag, e.Item))
                             {
                                 lvi = _itemIndex.Values.FirstOrDefault(x => ReferenceEquals(x.Tag, e.Item));
@@ -860,7 +860,7 @@ namespace ExpTreeLib
                                 int indx = lvi.Index;
                                 var newLvi = MakeLVItem(e.Item);
                                 if (IsThumbnailViewMode())
-                                    _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
+                                    _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode());
                                 else 
                                     newLvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
 
@@ -898,7 +898,7 @@ namespace ExpTreeLib
                             var lvi = FindLVItem(e.Item);
                             if (lvi != null) {
                                 if (IsThumbnailViewMode())
-                                    _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
+                                    _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode());
                                 else 
                                     lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal; 
                             }
@@ -912,7 +912,7 @@ namespace ExpTreeLib
                             {
                                 lvi.Text = e.Item.DisplayName;
                                 if (IsThumbnailViewMode())
-                                    _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
+                                    _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode());
                                 else lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
                             }
                             break;
@@ -993,7 +993,7 @@ namespace ExpTreeLib
                 // Update primary text
                 lvi.Text = item.DisplayName;
                 lvi.Tag = item;
-                item.Tag = lvi;
+                item.LVItem = lvi;
 
                 for (int i = 1; i < _ListView.Columns.Count; i++)
                 {

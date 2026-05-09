@@ -774,33 +774,6 @@ namespace WindowsApiLib.Shell
             return MakeFolderFromBytesRet;
         }
 
-        /// <summary>Returns both the IShellFolder interface of the parent folder
-        /// and the relative pidl of the input PIDL</summary>
-        /// <remarks>Several internal functions need this information and do not have
-        /// it readily available. GetParentOf serves those functions</remarks>
-        public static IShellFolder GetParentOf(IntPtr pidl, ref IntPtr relPidl)
-        {
-            IShellFolder GetParentOfRet = default;
-            GetParentOfRet = null;     // avoid VB2005 warning
-            var HR = default(int);
-            int itemCnt = CPidl.PidlCount(pidl);
-            if (itemCnt == 1)         // parent is desktop
-            {
-                HR = SHGetDesktopFolder(ref GetParentOfRet);
-                relPidl = pidl;
-            }
-            else
-            {
-                IntPtr tmpPidl;
-                tmpPidl = CPidl.TrimPidl(pidl, ref relPidl);
-                GetParentOfRet = GetFolder(CShellItem.GetDeskTop(), tmpPidl);
-                Marshal.FreeCoTaskMem(tmpPidl);
-            }
-            if (!(HR == NOERROR))
-                Marshal.ThrowExceptionForHR(HR);
-            return GetParentOfRet;
-        }
-
 
         /// <summary>
         /// Returns an ArrayList containing the CShItems of all Folders in the entire internal tree.

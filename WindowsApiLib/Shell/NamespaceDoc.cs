@@ -83,7 +83,7 @@ namespace WindowsApiLib.Shell
             ["7B81BE6A-CE2B-4676-A29E-EB907A5126C5"] = ProgramsAndFeatures,
             ["ED7BA470-8E54-465E-825C-99712043E01C"] = AllTasks_GodMode,
             ["1CF1260C-4DD0-4EBB-811F-33C572699FDE"] = Music
-    };
+        };
 
 
         // Builds explorer shell URI, e.g. shell:::{645FF040-...}
