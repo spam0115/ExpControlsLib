@@ -669,6 +669,20 @@
             Exposes the SelectedItems collection of the internal ListView to allow external handlers to access the currently selected items.
             </summary>
         </member>
+        <member name="M:ExpTreeLib.ExpList.FindLVItem(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Finds the <see cref="T:System.Windows.Forms.ListViewItem"/> corresponding to a specific <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
+            </summary>
+            <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to search for.</param>
+            <returns>The matching <see cref="T:System.Windows.Forms.ListViewItem"/>, or null if not found.</returns>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.InsertLvi(System.Windows.Forms.ListViewItem,System.Windows.Forms.ListView)">
+            <summary>
+            Inserts a <see cref="T:System.Windows.Forms.ListViewItem"/> into the ListView, maintaining sort order.
+            </summary>
+            <param name="lvi">The <see cref="T:System.Windows.Forms.ListViewItem"/> to insert.</param>
+            <param name="lv">The <see cref="T:System.Windows.Forms.ListView"/> to insert into.</param>
+        </member>
         <member name="M:ExpTreeLib.ExpList.UpdateInvoke(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
             <summary>
             Marshals shell item update events to the UI thread.
@@ -683,20 +697,6 @@
             </summary>
             <param name="sender">The source of the event.</param>
             <param name="e">The <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the event data.</param>
-        </member>
-        <member name="M:ExpTreeLib.ExpList.FindLVItem(WindowsApiLib.Shell.CShellItem)">
-            <summary>
-            Finds the <see cref="T:System.Windows.Forms.ListViewItem"/> corresponding to a specific <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
-            </summary>
-            <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to search for.</param>
-            <returns>The matching <see cref="T:System.Windows.Forms.ListViewItem"/>, or null if not found.</returns>
-        </member>
-        <member name="M:ExpTreeLib.ExpList.InsertLvi(System.Windows.Forms.ListViewItem,System.Windows.Forms.ListView)">
-            <summary>
-            Inserts a <see cref="T:System.Windows.Forms.ListViewItem"/> into the ListView, maintaining sort order.
-            </summary>
-            <param name="lvi">The <see cref="T:System.Windows.Forms.ListViewItem"/> to insert.</param>
-            <param name="lv">The <see cref="T:System.Windows.Forms.ListView"/> to insert into.</param>
         </member>
         <member name="M:ExpTreeLib.ExpList.UpdateLviUsingCsi(WindowsApiLib.Shell.CShellItem)">
             <summary>

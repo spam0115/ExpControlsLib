@@ -73,12 +73,8 @@ namespace WindowsApiLib.Shell
                 var m_Pidl = Marshal.AllocCoTaskMem(2);
                 Marshal.WriteInt16(m_Pidl, 0, 0);
 
-                //dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.SYSICONINDEX | SHGFI.PIDL;
-                //dwAttr = 0;
-                //var desktop = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
                 var csi = new CShellItem(m_Pidl);
                 DesktopCSI = csi;
-
 
                 // also get local name for "My Documents"
                 var pchEaten = default(int);
