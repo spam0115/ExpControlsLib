@@ -577,80 +577,8 @@ namespace ExpTreeLib
             if (item == null) return new ListViewItem("Error: no CShellItem provided to MakeLVItem()");
 
             ListViewItem lvi = new ListViewItem(item.DisplayName);
-            lvi.Name = item.FullPath;
-            lvi.Tag = item;
-            item.Tag = lvi;
 
-            for (int i = 1; i < _ListView.Columns.Count; i++) //column 0 is populated by the constructor
-            {
-                ColumnHeader col = _ListView.Columns[i];
-                string text = string.Empty;
-                object tag = null;
-
-                // 1. Try Tag Mapping
-                string mapping = col.Tag?.ToString();
-                if (!string.IsNullOrEmpty(mapping) && mapping.StartsWith("."))
-                {
-                    string propName = mapping.Substring(1);
-                    // Optimization: Check for common properties directly
-                    switch (propName)
-                    {
-                        case "DisplayName":
-                            text = item.DisplayName;
-                            break;
-                        case "Size":
-                            if (!item.IsDisk && item.IsFileSystem && !item.IsFolder)
-                            {
-                                text = item.Size;
-                                tag = item.Length;
-                            }
-                            break;
-                        case "LastWriteTime":
-                            if (!item.IsDisk && item.LastWriteTime != EmptyTimeValue)
-                            {
-                                text = item.LastWriteTime.ToString("MM/dd/yyyy HH:mm:ss");
-                                tag = item.LastWriteTime;
-                            }
-                            break;
-                        case "CreationTime":
-                            if (!item.IsDisk && item.CreationTime != EmptyTimeValue)
-                            {
-                                text = item.CreationTime.ToString("MM/dd/yyyy HH:mm:ss");
-                                tag = item.CreationTime;
-                            }
-                            break;
-                        default:
-                            // Fallback to reflection for other properties
-                            PropertyInfo prop = item.GetType().GetProperty(propName);
-                            if (prop != null)
-                            {
-                                object val = prop.GetValue(item);
-                                text = val?.ToString() ?? string.Empty;
-                                tag = val;
-                            }
-                            break;
-                    }
-                }
-                else if (ExpListGetColumnData is not null) // 2. Try Event
-                {
-                    var args = new ExpListGetColumnDataEventArgs(item, col);
-                    ExpListGetColumnData?.Invoke(this, args);
-
-                    if (args.Handled)
-                    {
-                        text = args.Text;
-                        tag = args.Tag;
-                    }
-                    else if (i == 0)
-                    {
-                        text = item.DisplayName;
-                    }
-                }
-
-                ListViewItem.ListViewSubItem si = lvi.SubItems.Add(text);
-                si.Tag = tag;
-
-            } //end for
+            UpdateLviUsingCsi(lvi, item);
 
             return lvi;
         }
@@ -722,6 +650,42 @@ namespace ExpTreeLib
         /// </summary>
         public ListView.SelectedListViewItemCollection SelectedItems => _ListView.SelectedItems;
 
+
+        /// <summary>
+        /// Finds the <see cref="ListViewItem"/> corresponding to a specific <see cref="CShellItem"/>.
+        /// </summary>
+        /// <param name="item">The <see cref="CShellItem"/> to search for.</param>
+        /// <returns>The matching <see cref="ListViewItem"/>, or null if not found.</returns>
+        private ListViewItem FindLVItem(CShellItem item)
+        {
+            if (_itemIndex.TryGetValue(item.FullPath, out var lvi))
+                return lvi;
+            return null;
+        }
+
+        /// <summary>
+        /// Inserts a <see cref="ListViewItem"/> into the ListView, maintaining sort order.
+        /// </summary>
+        /// <param name="lvi">The <see cref="ListViewItem"/> to insert.</param>
+        /// <param name="lv">The <see cref="ListView"/> to insert into.</param>
+        private void InsertLvi(ListViewItem lvi, ListView lv)
+        {
+            var item = (CShellItem)lvi.Tag;
+            for (int i = 0; i < lv.Items.Count; i++)
+            {
+                if (((CShellItem)lv.Items[i].Tag).CompareTo(item) > 0)
+                {
+                    lv.Items.Insert(i, lvi);
+                    _itemIndex[item.FullPath] = lvi;
+                    lvi.EnsureVisible();
+                    return;
+                }
+            }
+            lv.Items.Add(lvi);
+            _itemIndex[item.FullPath] = lvi;
+            lvi.EnsureVisible();
+        }
+
         /// <summary>
         /// Marshals shell item update events to the UI thread.
         /// </summary>
@@ -789,7 +753,7 @@ namespace ExpTreeLib
                                     m_CreateNew = false;
                                     lvi.BeginEdit();
                                     if (IsThumbnailViewMode())
-                                        _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
+                                        _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode());
                                 }
                             }
                             else
@@ -823,7 +787,7 @@ namespace ExpTreeLib
                         {
                             // On Rename, we must find the item by its tag (CShellItem) because the path has changed.
                             // However, we can use the lvi.Name which stores the OLD path used in our dictionary.
-                            var lvi = e.Item.Tag as ListViewItem;
+                            var lvi = e.Item.LVItem;
                             if (lvi == null || !ReferenceEquals(lvi.Tag, e.Item))
                             {
                                 lvi = _itemIndex.Values.FirstOrDefault(x => ReferenceEquals(x.Tag, e.Item));
@@ -856,39 +820,7 @@ namespace ExpTreeLib
                             var lvi = FindLVItem(e.Item);
                             if (lvi != null)
                             {
-                                //int indx = _ListView.Items.IndexOf(lvi);
-                                int indx = lvi.Index;
-                                var newLvi = MakeLVItem(e.Item);
-                                if (IsThumbnailViewMode())
-                                    _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
-                                else 
-                                    newLvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
-
-                                //_ListView.Items.RemoveAt(indx);
-                                //_ListView.Items.Insert(indx, newLvi);
-
-                                // Update primary text
-                                lvi.Text = newLvi.Text;
-
-                                for (int i = 1; i < newLvi.SubItems.Count; i++)
-                                { //the first subitem is actually the main item text, so subitems start at index 1
-                                    if (lvi.SubItems.Count < i) // Expand number of columns if needed 
-                                        lvi.SubItems.Add(newLvi.SubItems[i].Text);
-                                    else
-                                        lvi.SubItems[i].Text = newLvi.SubItems[i].Text;
-                                }
-                                // Copy other fields if needed
-                                lvi.ImageIndex = newLvi.ImageIndex;
-                                lvi.StateImageIndex = newLvi.StateImageIndex;
-                                lvi.Checked = newLvi.Checked;
-                                lvi.Tag = newLvi.Tag;
-                                lvi.ForeColor = newLvi.ForeColor;
-                                lvi.BackColor = newLvi.BackColor;
-                                lvi.Font = newLvi.Font;
-                                lvi.Tag = newLvi.Tag;
-
-                                //_itemIndex.Remove(e.Item.Path);
-                                //_itemIndex[e.Item.Path] = newLvi;
+                                UpdateLviUsingCsi(lvi, e.Item);
                             }
                             break;
                         }
@@ -898,7 +830,7 @@ namespace ExpTreeLib
                             var lvi = FindLVItem(e.Item);
                             if (lvi != null) {
                                 if (IsThumbnailViewMode())
-                                    _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
+                                    _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode());
                                 else 
                                     lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal; 
                             }
@@ -912,7 +844,7 @@ namespace ExpTreeLib
                             {
                                 lvi.Text = e.Item.DisplayName;
                                 if (IsThumbnailViewMode())
-                                    _thumbnailManager.RequestThumbnail((ListViewItem)e.Item.Tag, e.Item.FullPath, GetThumbnailSizeForMode());
+                                    _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode());
                                 else lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
                             }
                             break;
@@ -927,41 +859,6 @@ namespace ExpTreeLib
             {
                 //_ListView.EndUpdate();
             }
-        }
-
-        /// <summary>
-        /// Finds the <see cref="ListViewItem"/> corresponding to a specific <see cref="CShellItem"/>.
-        /// </summary>
-        /// <param name="item">The <see cref="CShellItem"/> to search for.</param>
-        /// <returns>The matching <see cref="ListViewItem"/>, or null if not found.</returns>
-        private ListViewItem FindLVItem(CShellItem item)
-        {
-            if (_itemIndex.TryGetValue(item.FullPath, out var lvi))
-                return lvi;
-            return null;
-        }
-
-        /// <summary>
-        /// Inserts a <see cref="ListViewItem"/> into the ListView, maintaining sort order.
-        /// </summary>
-        /// <param name="lvi">The <see cref="ListViewItem"/> to insert.</param>
-        /// <param name="lv">The <see cref="ListView"/> to insert into.</param>
-        private void InsertLvi(ListViewItem lvi, ListView lv)
-        {
-            var item = (CShellItem)lvi.Tag;
-            for (int i = 0; i < lv.Items.Count; i++)
-            {
-                if (((CShellItem)lv.Items[i].Tag).CompareTo(item) > 0)
-                {
-                    lv.Items.Insert(i, lvi);
-                    _itemIndex[item.FullPath] = lvi;
-                    lvi.EnsureVisible();
-                    return;
-                }
-            }
-            lv.Items.Add(lvi);
-            _itemIndex[item.FullPath] = lvi;
-            lvi.EnsureVisible();
         }
 
         /// <summary>
@@ -983,129 +880,109 @@ namespace ExpTreeLib
         /// </summary>
         public void UpdateLviUsingCsi(ListViewItem lvi, CShellItem item)
         {
-            try
+            if (lvi == null || item == null) return;
+
+            // try deferring this to lazy loading
+            //if (IsThumbnailViewMode())
+            //    _thumbnailManager.RequestThumbnail(lvi, item.FullPath, GetThumbnailSizeForMode());
+            //else
+            //    lvi.ImageIndex = SystemImageListManager.GetIconIndex(item, false);
+
+            // Update primary text
+            lvi.Text = item.DisplayName;
+            lvi.Tag = item;
+            item.LVItem = lvi;
+
+            for (int i = 1; i < _ListView.Columns.Count; i++)
             {
-                if (IsThumbnailViewMode())
-                    _thumbnailManager.RequestThumbnail(lvi, item.FullPath, GetThumbnailSizeForMode());
-                else
-                    lvi.ImageIndex = SystemImageListManager.GetIconIndex(item, false);
+                ColumnHeader col = _ListView.Columns[i];
+                string text = string.Empty;
+                object tag = null;
 
-                // Update primary text
-                lvi.Text = item.DisplayName;
-                lvi.Tag = item;
-                item.Tag = lvi;
-
-                for (int i = 1; i < _ListView.Columns.Count; i++)
+                // 1. Try Tag Mapping
+                string mapping = col.Tag?.ToString();
+                if (!string.IsNullOrEmpty(mapping) && mapping.StartsWith("."))
                 {
-                    ColumnHeader col = _ListView.Columns[i];
-                    string text = string.Empty;
-                    object tag = null;
-
-                    // 1. Try Tag Mapping
-                    string mapping = col.Tag?.ToString();
-                    if (!string.IsNullOrEmpty(mapping) && mapping.StartsWith("."))
+                    string propName = mapping.Substring(1);
+                    // Optimization: Check for common properties directly
+                    switch (propName)
                     {
-                        string propName = mapping.Substring(1);
-                        // Optimization: Check for common properties directly
-                        switch (propName)
-                        {
-                            case "DisplayName":
-                                text = item.DisplayName;
-                                break;
-                            case "Size":
-                                if (!item.IsDisk && item.IsFileSystem && !item.IsFolder)
+                        case "DisplayName":
+                            text = item.DisplayName;
+                            break;
+                        case "Size":
+                            if (!item.IsDisk && item.IsFileSystem && !item.IsFolder)
+                            {
+                                text = item.Size;
+                                tag = item.Length;
+                            }
+                            break;
+                        case "LastWriteTime":
+                            if (!item.IsDisk && item.LastWriteTime != EmptyTimeValue)
+                            {
+                                text = item.LastWriteTime.ToString("MM/dd/yyyy HH:mm:ss");
+                                tag = item.LastWriteTime;
+                            }
+                            break;
+                        case "CreationTime":
+                            if (!item.IsDisk && item.CreationTime != EmptyTimeValue)
+                            {
+                                text = item.CreationTime.ToString("MM/dd/yyyy HH:mm:ss");
+                                tag = item.CreationTime;
+                            }
+                            break;
+                        default:  // Fallback to reflection for other properties
+                            if (mapping.StartsWith(".Tag")) //get the value from one of the fields within the custom Tag object property
+                            {
+                                if (item.Tag != null)
                                 {
-                                    text = item.Size;
-                                    tag = item.Length;
-                                }
-                                break;
-                            case "LastWriteTime":
-                                if (!item.IsDisk && item.LastWriteTime != EmptyTimeValue)
-                                {
-                                    text = item.LastWriteTime.ToString("MM/dd/yyyy HH:mm:ss");
-                                    tag = item.LastWriteTime;
-                                }
-                                break;
-                            case "CreationTime":
-                                if (!item.IsDisk && item.CreationTime != EmptyTimeValue)
-                                {
-                                    text = item.CreationTime.ToString("MM/dd/yyyy HH:mm:ss");
-                                    tag = item.CreationTime;
-                                }
-                                break;
-                            default:  // Fallback to reflection for other properties
-                                if (mapping.StartsWith(".Tag")) //get the value from one of the fields within the custom Tag object property
-                                {
-                                    if (item.Tag != null)
-                                    {
-                                        string fieldName = mapping.Substring(4);
-                                        if (string.IsNullOrEmpty(fieldName)) break;
+                                    string fieldName = mapping.Substring(4);
+                                    if (string.IsNullOrEmpty(fieldName)) break;
 
-                                        Type tagType = item.Tag.GetType();
-                                        FieldInfo field = tagType.GetField(fieldName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase);
-                                        if (field != null)
-                                        {
-                                            object val = field.GetValue(item.Tag);
-                                            text = val?.ToString() ?? string.Empty;
-                                            tag = val;
-                                        }
-                                    }
-                                }
-                                else
-                                { 
-                                    PropertyInfo prop = item.GetType().GetProperty(propName);
-                                    if (prop != null)
+                                    Type tagType = item.Tag.GetType();
+                                    FieldInfo field = tagType.GetField(fieldName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase);
+                                    if (field != null)
                                     {
-                                        object val = prop.GetValue(item);
+                                        object val = field.GetValue(item.Tag);
                                         text = val?.ToString() ?? string.Empty;
                                         tag = val;
                                     }
                                 }
-                                break;
-                        }
+                            }
+                            else
+                            { 
+                                PropertyInfo prop = item.GetType().GetProperty(propName);
+                                if (prop != null)
+                                {
+                                    object val = prop.GetValue(item);
+                                    text = val?.ToString() ?? string.Empty;
+                                    tag = val;
+                                }
+                            }
+                            break;
                     }
-                    else if (ExpListGetColumnData is not null) // 2. Try Event
+                }
+                else if (ExpListGetColumnData is not null) // 2. Try Event
+                {
+                    var args = new ExpListGetColumnDataEventArgs(item, col);
+                    ExpListGetColumnData?.Invoke(this, args);
+
+                    if (args.Handled)
                     {
-                        var args = new ExpListGetColumnDataEventArgs(item, col);
-                        ExpListGetColumnData?.Invoke(this, args);
-
-                        if (args.Handled)
-                        {
-                            text = args.Text;
-                            tag = args.Tag;
-                        }
-                        else if (i == 0)
-                        {
-                            text = item.DisplayName;
-                        }
+                        text = args.Text;
+                        tag = args.Tag;
                     }
+                    else if (i == 0)
+                    {
+                        text = item.DisplayName;
+                    }
+                }
 
-                    lvi.SubItems[i].Text = text;
-                    lvi.SubItems[i].Tag = tag;
-                } //end for
+                lvi.SubItems[i].Text = text;
+                lvi.SubItems[i].Tag = tag;
+            } //end for
 
-
-
-                //lvi.SubItems[0] = "
-
-                //for (int i = 1; i < newLvi.SubItems.Count; i++)
-                //{ //the first subitem is actually the main item text, so subitems start at index 1
-                //    if (lvi.SubItems.Count < i) // Expand number of columns if needed 
-                //        lvi.SubItems.Add(newLvi.SubItems[i].Text);
-                //    else
-                //        lvi.SubItems[i].Text = newLvi.SubItems[i].Text;
-                //}
-                // Copy other fields if needed
-                lvi.Tag = item;
-
-                //update index
-                //_itemIndex.Remove(item.FullPath);
-                //_itemIndex[item.FullPath] = newLvi;
-            }
-            finally
-            {
-                //_ListView.EndUpdate();
-            }
+            lvi.Tag = item;
         }
 
         /// <summary>

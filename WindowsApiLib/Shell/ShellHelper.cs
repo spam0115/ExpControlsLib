@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
+using WindowsApiLib;
 using WindowsApiLib.Shell.Interfaces;
 using static WindowsApiLib.Shell.ShellAPI;
 
@@ -729,6 +730,78 @@ namespace WindowsApiLib.Shell
             }    // Removed 10/22/2011 - restored 11/13/2013
             return rVal;
         }
+
+        #region        Shell Navigation and PIDL Utilities
+
+        /// <summary>The WalkAllCallBack delegate defines the signature of 
+        /// the routine to be passed to AllFolderWalk which returns the CShellItem of each
+        /// file and directory in and below an Folder CShellItem.
+        /// </summary>
+        /// <example>Dim DWalk as New CShellItem.WalkAllCallBack(addressof yourroutine)</example>
+        public delegate bool WalkAllCallBack(CShellItem info, int UserLevel, int Tag);
+
+        /// <summary>
+        /// Given a Byte() containing a valid PIDL of a Folder, return the IShellFolder of that Folder
+        /// </summary>
+        /// <param name="b">Byte() containing a valid PIDL of a Folder</param>
+        /// <returns>The IShellFolder for the requested PIDL. If Byte() does not contain a valid PIDL of a Folder, return Nothing</returns>
+        public static IShellFolder MakeFolderFromBytes(byte[] b)
+        {
+            IShellFolder MakeFolderFromBytesRet = default;
+            CShellItem.GetDeskTop();                        // ensure we are initialized
+                                                 // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
+            if (!CPidl.IsValidPidl(b))
+                return null;
+            if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
+            {
+                return CShellItem.GetDeskTop().Folder;
+            }
+            else if (b.Length == 0)   // Also indicates the desktop
+            {
+                return CShellItem.GetDeskTop().Folder;
+            }
+            else
+            {
+                var ptr = Marshal.AllocCoTaskMem(b.Length);
+                if (ptr.Equals(IntPtr.Zero))
+                    return null;
+                Marshal.Copy(b, 0, ptr, b.Length);
+                // the next statement assigns a IshellFolder object to the function return, or has an error
+                MakeFolderFromBytesRet = GetFolder(CShellItem.GetDeskTop(), ptr);
+                Marshal.FreeCoTaskMem(ptr);
+            }
+
+            return MakeFolderFromBytesRet;
+        }
+
+
+        /// <summary>
+        /// Returns an ArrayList containing the CShItems of all Folders in the entire internal tree.
+        /// </summary>
+        /// <returns>An ArrayList containing the CShItems of all Folders in the entire internal tree.</returns>
+        /// <remarks>The sort order is determined by standard tree traversal (Depth First).</remarks>
+        public static ArrayList AllFolderWalk()
+        {
+            var rVal = new ArrayList();
+            var desktop = CShellItem.GetDeskTop();
+            rVal.Add(desktop);
+            WalkHelper(desktop, rVal);
+            return rVal;
+        }
+
+        private static void WalkHelper(CShellItem item, ArrayList list)
+        {
+            if (item.FoldersInitialized)
+            {
+                foreach (CShellItem CSI in item.Directories)
+                {
+                    list.Add(CSI);
+                    WalkHelper(CSI, list);
+                }
+            }
+        }
+
+        #endregion
 
     }
 }

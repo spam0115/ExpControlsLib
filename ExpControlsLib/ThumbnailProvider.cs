@@ -251,7 +251,7 @@ namespace ExpTreeLib
             try
             {
 #if DEBUG
-                string name = WindowsApiLib.ShellPidl.PidlToString(CPidl.ILFindLastID(pidl));
+                string name = ShellPidl.PidlToString(CPidl.ILFindLastID(pidl));
                 Console.WriteLine("\tRequesting thumbnail from OS: " + name);
 #endif
                 Guid iid = ShellAPI.IID_IShellItemImageFactory;
