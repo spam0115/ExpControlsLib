@@ -698,7 +698,13 @@
             <param name="lvi">The <see cref="T:System.Windows.Forms.ListViewItem"/> to insert.</param>
             <param name="lv">The <see cref="T:System.Windows.Forms.ListView"/> to insert into.</param>
         </member>
-        <member name="M:ExpTreeLib.ExpList.RefreshItem(System.Windows.Forms.ListViewItem,WindowsApiLib.Shell.CShellItem)">
+        <member name="M:ExpTreeLib.ExpList.UpdateLviUsingCsi(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Refreshes the list view item associated with data from the given shell item.
+            </summary>
+            <param name="csi">The shell item whose corresponding list view item will be refreshed. Cannot be null.</param>
+        </member>
+        <member name="M:ExpTreeLib.ExpList.UpdateLviUsingCsi(System.Windows.Forms.ListViewItem,WindowsApiLib.Shell.CShellItem)">
             <summary>
             Refreshes the display of a single item whose underlying filesystem data has changed.
             </summary>
@@ -858,6 +864,19 @@
             <summary>
             Finds a ListViewItem by its full filesystem path.
             </summary>
+        </member>
+        <member name="F:ExpTreeLib.ExpList._thumbnailTimer">
+             <summary>
+             The _thumbnailTimer is a debounce timer used to implement Lazy Loading. Even though the actual thumbnail generation
+            happens on background threads(via ThumbnailProvider), the timer is essential for maintaining UI performance and
+            efficiency.
+            Here is why it's necessary:
+            1. Preventing "Scroll Stutter"
+            The ListView fires dozens of scroll events per second during rapid scrolling.If the app tried to calculate which
+            items are visible on every single event, the UI thread would "stutter" because it's spending too much time doing
+            geometry calculations instead of rendering the list. The timer waits for a 200ms pause in scrolling before doing this
+            calculation.
+             </summary>
         </member>
         <member name="T:ExpTreeLib.ExpList.ListViewScrollHook">
             <summary>

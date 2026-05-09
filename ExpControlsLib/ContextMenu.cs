@@ -1,10 +1,11 @@
-using WindowsApiLib.Shell;
 using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
-using System.Windows.Forms;
 using System.Runtime.Versioning; // Added to annotate platform support
+using System.Windows.Forms;
+using WindowsApiLib;
+using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
 
 namespace ExpTreeLib
@@ -71,7 +72,7 @@ namespace ExpTreeLib
             for (int i = 0; i < items.Length; i++)
             {
                 if (!items[i].CanRename) allowRename = false;
-                pidls[i] = CShellItem.ILFindLastID(items[i].PIDL);
+                pidls[i] = CPidl.ILFindLastID(items[i].PIDL);
             }
 
             int prgf = 0;

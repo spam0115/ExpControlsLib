@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning; // Added to annotate platform support
 using System.Text;
 using System.Windows.Forms;
+using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
@@ -633,7 +634,7 @@ namespace ExpTreeLib
 
             CShellItem baseItem = (CShellItem)baseNode.Tag;
             IntPtr basePidl = baseItem.PIDL;
-            int lim = CShellItem.PidlCount(newItem.PIDL) - CShellItem.PidlCount(basePidl);
+            int lim = CPidl.PidlCount(newItem.PIDL) - CPidl.PidlCount(basePidl);
 
             // TODO: Test ExpandARow again on XP to ensure that the CP problem is fixed
             while (lim > 0)
@@ -1301,7 +1302,7 @@ namespace ExpTreeLib
             }
 
             var newPidl = IntPtr.Zero;
-            if (item.Parent.Folder.SetNameOf((int)tv1.Handle, CShellItem.ILFindLastID(item.PIDL), NewName, SHGDN.NORMAL, ref newPidl) == S_OK)
+            if (item.Parent.Folder.SetNameOf((int)tv1.Handle, CPidl.ILFindLastID(item.PIDL), NewName, SHGDN.NORMAL, ref newPidl) == S_OK)
             {
             }
             // the following line is not needed since use of SetNameOf will cause a renamed WM_Notify msg 
@@ -1873,7 +1874,7 @@ namespace ExpTreeLib
                     folder = CSI.Parent.Folder;
                 }
 
-                var relPidl = CShellItem.ILFindLastID(CSI.PIDL);
+                var relPidl = CPidl.ILFindLastID(CSI.PIDL);
                 var IID_IContextMenu = ShellAPI.IID_IContextMenu;
                 HR = folder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { relPidl }, ref IID_IContextMenu, prgf, out iunk);
                 #if DEBUG

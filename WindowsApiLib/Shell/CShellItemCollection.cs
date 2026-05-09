@@ -96,7 +96,7 @@ namespace WindowsApiLib.Shell
             // DumpPidl(pidl)
             foreach (CShellItem itm in this)
             {
-                if (CShellItem.IsEqual(itm.PIDL, pidl))
+                if (CPidl.IsEqual(itm.PIDL, pidl))
                 {
                     return true;
                 }
@@ -133,7 +133,7 @@ namespace WindowsApiLib.Shell
             var loopTo = m_items.Count - 1;
             for (i = 0; i <= loopTo; i++)
             {
-                if (CShellItem.IsEqual(((CShellItem)m_items[i]).PIDL, pidl))
+                if (CPidl.IsEqual(((CShellItem)m_items[i]).PIDL, pidl))
                 {
                     return i;
                 }

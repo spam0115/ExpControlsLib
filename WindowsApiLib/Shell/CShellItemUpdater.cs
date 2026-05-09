@@ -160,7 +160,7 @@ namespace WindowsApiLib.Shell
                             {
                                 IntPtr parent, realRel;
                                 IntPtr child = IntPtr.Zero;
-                                parent = CShellItem.TrimPidl(shNotify.dwItem1, ref child);
+                                parent = CPidl.TrimPidl(shNotify.dwItem1, ref child);
                                 var parentItem = CShellItem.FindCShItem(parent);
                                 if (!(parentItem == null))
                                 {
@@ -193,7 +193,7 @@ namespace WindowsApiLib.Shell
                         case SHCNE.DELETE:
                             {
                                 IntPtr parent, child = IntPtr.Zero;
-                                parent = CShellItem.TrimPidl(shNotify.dwItem1, ref child);
+                                parent = CPidl.TrimPidl(shNotify.dwItem1, ref child);
                                 CShellItem parentItem;
                                 parentItem = CShellItem.FindCShItem(parent);
                                 if (!(parentItem == null))
@@ -242,7 +242,7 @@ namespace WindowsApiLib.Shell
                             {
                                 // Make Directory
                                 IntPtr parent, realRel, child = IntPtr.Zero;
-                                parent = CShellItem.TrimPidl(shNotify.dwItem1, ref child);
+                                parent = CPidl.TrimPidl(shNotify.dwItem1, ref child);
                                 var parentItem = CShellItem.FindCShItem(parent);
                                 if (parentItem is not null)
                                 {
@@ -298,7 +298,7 @@ namespace WindowsApiLib.Shell
                             {
                                 // Removed Directory
                                 IntPtr parent, child = IntPtr.Zero;
-                                parent = CShellItem.TrimPidl(shNotify.dwItem1, ref child);
+                                parent = CPidl.TrimPidl(shNotify.dwItem1, ref child);
 
                                 var parentItem = CShellItem.FindCShItem(parent);
                                 if (parentItem is not null)

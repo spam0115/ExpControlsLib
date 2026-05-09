@@ -1,7 +1,10 @@
 ﻿using System.Collections;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
+using static WindowsApiLib.Shell.ShellAPI;
 
 namespace WindowsApiLib
 {
@@ -9,7 +12,6 @@ namespace WindowsApiLib
     /// certain Methods and Properties for comparing one cPidl to another</summary>
     public class CPidl : IEnumerable
     {
-
         #region        Private Fields
         private readonly byte[] m_bytes;   // The local copy of the PIDL
         private readonly int m_ItemCount;      // the # of ItemIDs in this ItemIDList (PIDL)
@@ -23,7 +25,7 @@ namespace WindowsApiLib
     /// <param name="Pidl">IntPtr pointing to a valid PIDL</param>
         public CPidl(IntPtr Pidl)
         {
-            int cb = CShellItem.ItemIDListSize(Pidl);
+            int cb = ItemIDListSize(Pidl);
             if (cb > 0)
             {
                 m_bytes = new byte[cb + 1 + 1];
@@ -37,7 +39,7 @@ namespace WindowsApiLib
                // ensure nulnul
             m_bytes[m_bytes.Length - 2] = 0;
             m_bytes[m_bytes.Length - 1] = 0;
-            m_ItemCount = CShellItem.PidlCount(Pidl);
+            m_ItemCount = PidlCount(Pidl);
         }
         #endregion
 
@@ -77,10 +79,6 @@ namespace WindowsApiLib
                 return m_ItemCount;
             }
         }
-
-        #endregion
-
-        #region        Public Instance Methods -- ToPIDL, Decompose, and IsEqual
 
         /// <summary> Copy the contents of a byte() containing a PIDL to
     /// CoTaskMemory, returning an IntPtr that points to that mem block
@@ -138,11 +136,11 @@ namespace WindowsApiLib
             }
             return true;         // all equal on fall thru
         }
+
         #endregion
 
-        #region        Public Shared Methods
+        #region        Public Static Methods
 
-        #region            JoinPidlBytes
         /// <summary> Join two byte arrays containing PIDLS. 
     /// Returns NOTHING if error
     /// </summary>
@@ -169,9 +167,7 @@ namespace WindowsApiLib
                 return null;
             }
         }
-        #endregion
 
-        #region            BytesToPidl
         /// <summary>
     /// Copy the contents of a byte() containing a pidl to
     /// CoTaskMemory, returning an IntPtr that points to that mem block
@@ -195,9 +191,7 @@ namespace WindowsApiLib
 
             return BytesToPidlRet;
         }
-        #endregion
 
-        #region            StartsWith
         /// <summary>returns True if the beginning of pidlA matches PidlB exactly for pidlB's entire length</summary>
     /// <returns>True if the beginning of pidlA matches PidlB exactly for pidlB's entire length</returns>
         public static bool StartsWith(IntPtr pidlA, IntPtr pidlB)
@@ -212,10 +206,396 @@ namespace WindowsApiLib
             return A.StartsWith(B);
         }
 
+
+        /// <summary>
+        /// Computes the actual size of the ItemIDList (all SHItems) pointed to by pidl.
+        /// </summary>
+        /// <param name="pidl">The pidl pointing to an ItemIDList</param>
+        /// <returns> Returns actual size of the ItemIDList, less the terminating nulnul</returns>
+        public static int ItemIDListSize(IntPtr pidl)
+        {
+            if (!pidl.Equals(IntPtr.Zero))
+            {
+                int i = ItemIDSize(pidl);
+                int b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
+                while (b > 0)
+                {
+                    i += b;
+                    b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
+                }
+                return i;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        /// <summary>
+        /// Counts the total number of SHItems in input pidl
+        /// </summary>
+        /// <param name="pidl">The pidl to obtain the count for</param>
+        /// <returns> Returns the count of SHItems pointed to by pidl</returns>
+        public static int PidlCount(IntPtr pidl)
+        {
+            if (!pidl.Equals(IntPtr.Zero))
+            {
+                int cnt = 0;
+                int i = 0;
+                int b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
+                while (b > 0)
+                {
+                    cnt += 1;
+                    i += b;
+                    b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
+                }
+                return cnt;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        /// <summary>
+        /// Given a PIDL(Pointer to ID List) as IntPtr, return an Array of PIDL, one for each ID in the List.
+        /// Each PIDL in the returned Array will be a single, well formed and terminated ID.
+        /// </summary>
+        /// <param name="pidl">The PIDL to be Factored</param>
+        /// <returns>An Array of PIDL, each a Single Relative PIDL</returns>
+        /// <remarks>The returned PIDLs must be Released when no longer needed by calling PIDLFree.</remarks>
+        public static IntPtr[] DecomposePIDL(IntPtr pidl)
+        {
+            int lim = ItemIDListSize(pidl);
+            var PIDLs = new IntPtr[(PidlCount(pidl))];
+            int i = 0;
+            var curB = default(int);
+            int offSet;
+            while (curB < lim)
+            {
+                var thisPtr = new IntPtr(pidl.ToInt64() + curB); // 6/8/2012 - ToInt64 works on both 32 & 64 bit systems
+                offSet = Marshal.ReadByte(thisPtr) + Marshal.ReadByte(thisPtr, 1) * 256;
+                PIDLs[i] = Marshal.AllocCoTaskMem(offSet + 2);
+                var b = new byte[offSet + 1 + 1];
+                Marshal.Copy(thisPtr, b, 0, offSet);
+                b[offSet] = 0;
+                b[offSet + 1] = 0;
+                Marshal.Copy(b, 0, PIDLs[i], offSet + 2);
+                // DumpPidl(PIDLs(i))
+                curB += offSet;
+                i += 1;
+            }
+            return PIDLs;
+        }
+
+        /// <summary>
+        /// AreBytesEqual performs a binary comparison of the contents of two ItemIDLists pointed to by two Pidls.
+        /// </summary>
+        /// <param name="Pidl1">IntPtr pointing to an ItemIDList.</param>
+        /// <param name="pidl2">IntPtr pointing to an ItemIDList.</param>
+        /// <returns>True if all bytes are the same, False otherwise.</returns>
+        /// <remarks>A substitute for ILIsEqual on pre-Win2K systems, and used by IsReallyEqual when binary
+        /// comparison is needed on Win2K and above systems.</remarks>
+        public static bool AreBytesEqual(IntPtr Pidl1, IntPtr pidl2)
+        {
+            int cb1;
+            int cb2;
+            cb1 = ItemIDListSize(Pidl1);
+            cb2 = ItemIDListSize(pidl2);
+            if (cb1 != cb2)
+                return false;
+            int lim32 = cb1 / 4;
+
+            int i;
+            var loopTo = lim32 - 1;
+            for (i = 0; i <= loopTo; i++)
+            {
+                if (Marshal.ReadInt32(Pidl1, i * 4) != Marshal.ReadInt32(pidl2, i * 4))
+                {
+                    // Debug.WriteLine("Mismatch at Byte " & i * 4 & " (&H" & Hex(i * 4) & ")")
+                    return false;
+                }
+            }
+            int limB = cb1 % 4;
+            int offset = lim32 * 4;
+            var loopTo1 = limB - 1;
+            for (i = 0; i <= loopTo1; i++)
+            {
+                if (Marshal.ReadByte(Pidl1, offset + i) != Marshal.ReadByte(pidl2, offset + i))
+                {
+                    // Debug.WriteLine("Mismatch at Byte " & i + offset & " (&H" & Hex(i + offset) & ")")
+                    return false;
+                }
+            }
+            return true; // made it to here, so they are equal
+        }
+
+        /// <summary>
+        /// IsEqual compares two ItemIDLists. On Win2K and above systems, it uses the ILIsEqual API, which only
+        /// compares portions of each ItemID. On such systems, the other portions of the ItemID may differ in a 
+        /// few bytes -- typically this is desired behavior, but not in UPDATEDIR cases which do a Byte comparison in addition to IsEqual.
+        /// On Pre-Win2K systems, it performs a binary comparison of the entire content of the ItemIDLists, this
+        /// is OK behavior on such systems.
+        /// </summary>
+        /// <param name="Pidl1">IntPtr pointing to an ItemIDList.</param>
+        /// <param name="Pidl2">IntPtr pointing to an ItemIDList.</param>
+        /// <returns>True if ILIsEqual returns or would return True, False otherwise.</returns>
+        /// <remarks></remarks>
+        public static bool IsEqual(IntPtr Pidl1, IntPtr Pidl2)
+        {
+            if (WinSDK.Win2KOrAbove)
+            {
+                return ILIsEqual(Pidl1, Pidl2);
+            }
+            else // do hard way, may not work for some files/folders on XP
+            {
+                return AreBytesEqual(Pidl1, Pidl2);
+            }
+        }
+
+
+        /// <summary>
+        /// Concatenates the contents of two pidls into a new Pidl (ended by 00)
+        /// allocating CoTaskMem to hold the result,
+        /// placing the concatenation (followed by 00) into the
+        /// allocated Memory,
+        /// and returning an IntPtr pointing to the allocated mem
+        /// </summary>
+        /// <param name="pidl1">IntPtr to a well formed SHItemIDList or IntPtr.Zero</param>
+        /// <param name="pidl2">IntPtr to a well formed SHItemIDList or IntPtr.Zero</param>
+        /// <returns>Returns a ptr to an ItemIDList containing the 
+        ///   concatenation of the two (followed by the req 2 zeros
+        ///   Caller must Free this pidl when done with it</returns>
+        /// <remarks>On Win2k or above systems, will use the API function ILCombine, otherwise performs
+        /// byte array manipulation to accomplish the same thing.
+        /// Caller must free the returned Pidl when no longer needed.</remarks>
+        public static IntPtr ConcatPidls(IntPtr pidl1, IntPtr pidl2)
+        {
+            if (WinSDK.Win2KOrAbove)
+            {
+                return ILCombine(pidl1, pidl2);
+            }
+            else
+            {
+                int cb1;
+                int cb2;
+                cb1 = ItemIDListSize(pidl1);
+                cb2 = ItemIDListSize(pidl2);
+                int rawCnt = cb1 + cb2;
+                if (rawCnt > 0)
+                {
+                    var b = new byte[rawCnt + 1 + 1];
+                    if (cb1 > 0)
+                    {
+                        Marshal.Copy(pidl1, b, 0, cb1);
+                    }
+                    if (cb2 > 0)
+                    {
+                        Marshal.Copy(pidl2, b, cb1, cb2);
+                    }
+                    var rVal = Marshal.AllocCoTaskMem(cb1 + cb2 + 2);
+                    b[rawCnt] = 0;
+                    b[rawCnt + 1] = 0;
+                    Marshal.Copy(b, 0, rVal, rawCnt + 2);
+                    return rVal;
+                }
+                else
+                {
+                    return IntPtr.Zero;
+                }
+            }
+        }
+
+        /// <summary>
+        /// TrimPidl returns an ItemIDList with the last ItemID trimed off.
+        /// It's purpose is to generate an ItemIDList for the Parent of a
+        /// Special Folder which can then be processed with DesktopBase.BindToObject,
+        /// yeilding a Folder for the parent of the Special Folder
+        /// It also creates and passes back a RELATIVE pidl for this item
+        /// </summary>
+        /// <param name="pidl">A pointer to a well formed ItemIDList. The PIDL to trim</param>
+        /// <param name="relPidl">BYREF IntPtr which will point to a new relative pidl
+        ///        containing the contents of the last ItemID in the ItemIDList
+        ///        terminated by the required 2 nulls.</param>
+        /// <returns> an ItemIDList with the last element removed.</returns>
+        /// <remarks>Caller must Free BOTH the returned, Trimmed PIDL and the 
+        /// returned relPidl.
+        /// </remarks>
+        public static IntPtr TrimPidl(IntPtr pidl, ref IntPtr relPidl)
+        {
+            int cb = ItemIDListSize(pidl);
+            var b = new byte[cb + 1 + 1];
+            Marshal.Copy(pidl, b, 0, cb);
+            int prev = 0;
+            int i = b[0] + b[1] * 256;
+            while (i > 0 && i < cb)
+            {
+                prev = i;
+                i += b[i] + b[i + 1] * 256;
+            }
+            if (prev + 1 < cb)
+            {
+                // first set up the relative pidl
+                b[cb] = 0;
+                b[cb + 1] = 0;
+                int cb1 = b[prev] + b[prev + 1] * 256;
+                relPidl = Marshal.AllocCoTaskMem(cb1 + 2);
+                Marshal.Copy(b, prev, relPidl, cb1 + 2);
+                b[prev] = 0;
+                b[prev + 1] = 0;
+                var rVal = Marshal.AllocCoTaskMem(prev + 2);
+                Marshal.Copy(b, 0, rVal, prev + 2);
+                return rVal;
+            }
+            else
+            {
+                return IntPtr.Zero;
+            }
+        }
+
+        /// <summary>ILFindLastID -- returns a pointer to the last ITEMID in a valid
+        /// ITEMIDLIST. Returned pointer SHOULD NOT be released since it
+        /// points to place within the original PIDL</summary>
+        /// <returns>IntPtr pointing to last ITEMID in ITEMIDLIST structure,
+        /// Returns IntPtr.Zero if given a null pointer.
+        /// If given a pointer to the Desktop, will return same pointer.</returns>
+        /// <remarks>Uses the API ILFindLastID function if Win2k or above, otherwise
+        /// computes the same thing.</remarks>
+        public static IntPtr ILFindLastID(IntPtr pidl)
+        {
+            if (WinSDK.Win2KOrAbove)
+            {
+                return ShellAPI.ILFindLastID(pidl);
+            }
+            else
+            {
+                int prev = 0;
+                int i = 0;
+                int b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
+                while (b > 0)
+                {
+                    prev = i;
+                    i += b;
+                    b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
+                }
+                return new IntPtr(pidl.ToInt64() + prev);
+            }  // 6/8/2012 - ToInt64 works on both 32 & 64 bit systems (though code is never executed on 64 bit systems)
+        }
+
+
+
+        #region    DumpPidl Routines
+        /// <summary>
+        /// Dumps, to the Debug output, the contents of the mem block pointed to by
+        /// a PIDL. Depends on the internal structure of a PIDL
+        /// </summary>
+        /// <param name="pidl">The IntPtr(a PIDL) pointing to the block to dump</param>
+        public static void DumpPidl(IntPtr pidl)
+        {
+            int cb = ItemIDListSize(pidl);
+            Debug.WriteLine("PIDL " + pidl.ToString() + " contains " + cb + " bytes");
+            if (cb > 0)
+            {
+                var b = new byte[cb + 1 + 1];
+                Marshal.Copy(pidl, b, 0, cb + 1);
+                int pidlCnt = 1;
+                int i = b[0] + b[1] * 256;
+                int curB = 0;
+                while (i > 0)
+                {
+                    Debug.Write("ItemID #" + pidlCnt + " Length = " + i);
+                    DumpHex(b, curB, curB + i - 1);
+                    pidlCnt += 1;
+                    curB += i;
+                    i = b[curB] + b[curB + 1] * 256;
+                }
+            }
+        }
+
+        /// <summary>Dump a portion or all of a Byte Array to Debug output</summary>
+        /// <param name = "b">A single dimension Byte Array</param>
+        /// <param name = "sPos">Optional start index of area to dump (default = 0)</param>
+        /// <param name = "epos">Optional last index position to dump (default = end of array)</param>
+        public static void DumpHex(byte[] b, int sPos = 0, int ePos = 0)
+        {
+            if (ePos == 0)
+                ePos = b.Length - 1;
+            int j;
+            int curB = sPos;
+            string sTmp;
+            char ch;
+            var SBH = new StringBuilder();
+            var SBT = new StringBuilder();
+            var loopTo = ePos - sPos;
+            for (j = 0; j <= loopTo; j++)
+            {
+                if (j % 16 == 0)
+                {
+                    Debug.WriteLine(SBH.ToString() + SBT.ToString());
+                    SBH = new StringBuilder();
+                    SBT = new StringBuilder("          ");
+                    SBH.Append(HexNum(j + sPos, 4) + "). ");
+                }
+                if (b[curB] < 16)
+                {
+                    sTmp = b[curB].ToString("X2");
+                }
+                else
+                {
+                    sTmp = b[curB].ToString("X");
+                }
+                SBH.Append(sTmp);
+                SBH.Append(" ");
+                ch = (char)b[curB];
+                if (char.IsControl(ch))
+                {
+                    SBT.Append(".");
+                }
+                else
+                {
+                    SBT.Append(ch);
+                }
+                curB += 1;
+            }
+
+            int fill = j % 16;
+            if (fill != 0)
+            {
+                SBH.Append(' ', 48 - 3 * (j % 16));
+            }
+            Debug.WriteLine(SBH.ToString() + SBT.ToString());
+        }
+
+        /// <summary>
+        /// Formats an Integer into a String representation of the Hexidecimal representation of that number with
+        /// enough leading zero Chars to fill nrChars number of characters.
+        /// </summary>
+        /// <param name="num">The Integer to Format</param>
+        /// <param name="nrChrs">The desired size of the returned String</param>
+        /// <returns>A String with the Hex representation of the Integer parameter</returns>
+        /// <remarks></remarks>
+        public static string HexNum(int num, int nrChrs)
+        {
+            string h = num.ToString("X");
+            var SB = new StringBuilder();
+            int i;
+            var loopTo = nrChrs - h.Length;
+            for (i = 1; i <= loopTo; i++)
+                SB.Append("0");
+            SB.Append(h);
+            return SB.ToString();
+        }
+        #endregion
+
+
+        #endregion
+
+        #region        Public methods
+
         /// <summary>Returns true if the CPidl input parameter exactly matches the
-    /// beginning of this instance of CPidl</summary>
-    /// <returns>True if the CPidl input parameter exactly matches the
-    /// beginning of this instance of CPidl</returns>
+        /// beginning of this instance of CPidl</summary>
+        /// <returns>True if the CPidl input parameter exactly matches the
+        /// beginning of this instance of CPidl</returns>
         public bool StartsWith(CPidl cp)
         {
             byte[] b = cp.PidlBytes;
@@ -230,15 +610,124 @@ namespace WindowsApiLib
             }
             return true;
         }
-        #endregion
+
+        /// <summary>
+        /// Not currently used. Compares two PIDLs Relative to the instance Folder using the folder.CompareIDs API call.
+        /// </summary>
+        /// <param name="RelPidl1">First Relative PIDL to compare.</param>
+        /// <param name="RelPidl2">Second Relative PIDL to compare.</param>
+        /// <returns>True if Equal, False otherwise.</returns>
+        /// <remarks></remarks>
+        public bool PidlsEqual(IShellFolder folder, IntPtr RelPidl1, IntPtr RelPidl2)
+        {
+            bool PidlsEqualRet = default;
+            if (folder is null)
+                return IsEqual(RelPidl1, RelPidl2);
+            PidlsEqualRet = false;            // assume not equal
+            uint lParam = (uint)SHCIDS.CANONICALONLY;
+            int H;
+            H = folder.CompareIDs(lParam, RelPidl1, RelPidl2);
+            if (H >= 0)
+            {
+                int Code = H & 0x7777;
+                if (Code == 0)
+                    return true;
+            }
+            else
+            {
+                return IsEqual(RelPidl1, RelPidl2);
+            }
+
+            return PidlsEqualRet;
+        }
 
         #endregion
+
+        /// <summary>
+        /// Get Size in bytes of the first (possibly only)
+        /// SHItem in an ID list.  Note: the full size of
+        ///   the item is the sum of the sizes of all SHItems
+        ///   in the list!!
+        /// </summary>
+        /// <param name="pidl">A pointer to a PIDL.</param>
+        private static int ItemIDSize(IntPtr pidl)
+        {
+            if (!pidl.Equals(IntPtr.Zero))
+            {
+                var b = new byte[2];
+                Marshal.Copy(pidl, b, 0, 2);
+                return b[1] * 256 + b[0];
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        /// <summary>
+        /// Given a PIDL as IntPtr, Allocate memory for and return a Clone of the input PIDL.
+        /// </summary>
+        /// <param name="pidl">A PIDL to be Cloned</param>
+        /// <returns>A Clone of the input PIDL</returns>
+        /// <remarks>The Clone must be Released when no longer needed by calling PIDLFree</remarks>
+        internal static IntPtr PIDLClone(IntPtr pidl)
+        {
+            IntPtr PIDLCloneRet = default;
+            int cb = ItemIDListSize(pidl);
+            var b = new byte[cb + 1 + 1];
+            Marshal.Copy(pidl, b, 0, cb); // not including terminating nulnul
+            b[cb] = 0;
+            b[cb + 1] = 0; // force to nulnul
+            PIDLCloneRet = Marshal.AllocCoTaskMem(cb + 2);
+            Marshal.Copy(b, 0, PIDLCloneRet, cb + 2);
+            return PIDLCloneRet;
+        }
+
+        /// <summary>
+        /// Frees a PIDL, releasing its' allocated memory
+        /// </summary>
+        /// <param name="pidl">The PIDL to be Freed</param>
+        /// <remarks></remarks>
+        internal static void PIDLFree(IntPtr pidl)
+        {
+            if (pidl != IntPtr.Zero)
+            {
+                Marshal.FreeCoTaskMem(pidl);
+            }
+        }
+
+        // TODO: Test IsReallyEqual on Fat32.
+        /// <summary>
+        /// IsReallyEqual compares Pidls using the IsEqual routine. If IsEqual declares them Equal, IsReallyEqual
+        /// checks the Last (or relative) Pidls using a byte by byte comparison. This is necessary because new file
+        /// versions created by File->Save will compare Equal in IsEqual, when we really want to know that a new version
+        /// of a file has been created. Fortunately, the relative Pidl of a new version will differ in a few bytes from
+        /// the relative Pidl of the previous version.
+        /// This Function is no longer used by WindowsApiLib.
+        /// </summary>
+        /// <param name="Pidl1">IntPtr pointing to an ItemIDList.</param>
+        /// <param name="Pidl2">IntPtr pointing to an ItemIDList.</param>
+        /// <returns>True is completely equal, False otherwise.</returns>
+        /// <remarks>At this point, this has been tested on NTFS file systems only.</remarks>
+        internal static bool IsReallyEqual(IntPtr Pidl1, IntPtr Pidl2)
+        {
+            return default;
+            // IsReallyEqual = IsEqual(Pidl1, Pidl2)
+            // If IsReallyEqual AndAlso Win2KOrAbove Then           'IsEqual says they are -- if Win2KOrAbove, then check the last ItemID
+            // IsReallyEqual = AreBytesEqual(ILFindLastID(Pidl1), ILFindLastID(Pidl2))
+            // 'If Not IsReallyEqual Then
+            // '    Debug.WriteLine("IsReallyEqual found mismatch")
+            // '    DumpPidl(Pidl1)
+            // '    DumpPidl(Pidl2)
+            // 'End If
+            // End If
+        }
 
         #region        GetEnumerator
         /// <summary>
-    /// Obtains a new Enumerator for this cPidl
-    /// </summary>
-    /// <returns>a new Enumerator for this cPidl</returns>
+        /// Obtains a new Enumerator for this cPidl
+        /// </summary>
+        /// <returns>a new Enumerator for this cPidl</returns>
         public IEnumerator GetEnumerator()
         {
             return new ICPidlEnumerator(m_bytes);

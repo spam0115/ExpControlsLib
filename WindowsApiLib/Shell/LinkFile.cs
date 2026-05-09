@@ -25,7 +25,6 @@ namespace WindowsApiLib
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
     public class LinkFile : IDisposable
     {
-
         private IShellLink m_Link;
         private bool m_Disposed = false;
         private readonly string m_LinkPath;
@@ -37,22 +36,36 @@ namespace WindowsApiLib
             Type tShellLink;
             tShellLink = Type.GetTypeFromCLSID(CLSID_ShellLink);
             m_Link = (IShellLink)Activator.CreateInstance(tShellLink);
-            if (File.Exists(fPath))
+            
+            try
             {
-                pf = (IPersistFile)m_Link;
-                int HR = pf.Load(fPath, 0);
-                if (HR == S_OK)
+                if (File.Exists(fPath))
                 {
-                    m_IsValidLink = true;
-                }
-                else
-                {
+                    pf = (IPersistFile)m_Link;
+                    int HR = pf.Load(fPath, 0);
+                    if (HR == S_OK)
+                    {
+                        m_IsValidLink = true;
+                    }
+                    else
+                    {
 #if DEBUG
-                    Marshal.ThrowExceptionForHR(HR);
+                        Marshal.ThrowExceptionForHR(HR);
 #endif
+                    }
                 }
+                m_LinkPath = fPath;
             }
-            m_LinkPath = fPath;
+            catch
+            {
+                // Clean up the COM object if initialization fails
+                if (m_Link != null)
+                {
+                    Marshal.ReleaseComObject(m_Link);
+                    m_Link = null;
+                }
+                throw;
+            }
         }
 
         #region    Dispose
@@ -117,7 +130,7 @@ namespace WindowsApiLib
             get
             {
                 WIN32_FIND_DATA wfd;
-                var SB = new StringBuilder(MAX_PATH);
+                var SB = new StringBuilder(WinSDK.MAX_PATH);
                 int HR;
                 HR = m_Link.GetPath(SB, SB.Capacity, out wfd, SLGP.UNCPRIORITY);
                 if (HR == S_OK)

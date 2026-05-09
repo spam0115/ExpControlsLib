@@ -14,7 +14,6 @@ namespace WindowsApiLib.Shell
     {
 
         #region    Constants
-        public const int MAX_PATH = 260;
         public const int FILE_ATTRIBUTE_READONLY = 0x1;
         public const int FILE_ATTRIBUTE_HIDDEN = 0x2;
         public const int FILE_ATTRIBUTE_SYSTEM = 0x4;
@@ -135,7 +134,7 @@ namespace WindowsApiLib.Shell
             public IntPtr hIcon;
             public int iIcon;
             public SFGAO dwAttributes;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = MAX_PATH)]
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = WinSDK.MAX_NAME)]
             public string szDisplayName;
             [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
             public string szTypeName;
@@ -190,11 +189,11 @@ namespace WindowsApiLib.Shell
             public int nFileSizeLow;
             public int dwReserved0;
             public int dwReserved1;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = MAX_PATH)]
-
+            
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = WinSDK.MAX_NAME)]
             public string cFileName;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
 
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
             public string cAlternateFileName;
 
             private string m_directoryname;
@@ -378,11 +377,11 @@ namespace WindowsApiLib.Shell
             public int nFileSizeLow;
             public int dwReserved0;
             public int dwReserved1;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = MAX_PATH)]
 
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = WinSDK.MAX_NAME)]
             public string cFileName;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
 
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
             public string cAlternateFileName;
         }
         #endregion
@@ -711,37 +710,31 @@ namespace WindowsApiLib.Shell
         #region        shlwapi Dll Declarations
 
         #region            STRRETtoSomeString
-        // Accepts a STRRET structure returned by IShellFolder::GetDisplayNameOf that contains or points to a 
-        // string, and then returns that string as a BSTR.
-        // <param>
-        // Pointer to a STRRET structure.
-        // Pointer to an ITEMIDLIST uniquely identifying a file object or subfolder relative
-        // Pointer to a variable of type BSTR that contains the converted string.
-        // </param>
+        /// Accepts a STRRET structure returned by IShellFolder::GetDisplayNameOf that contains or points to a 
+        /// string, and then returns that string as a BSTR.
+        /// <param>
+        /// Pointer to a STRRET structure.
+        /// Pointer to an ITEMIDLIST uniquely identifying a file object or subfolder relative
+        /// Pointer to a variable of type BSTR that contains the converted string.
+        /// </param>
         [DllImport("shlwapi.dll", CharSet = CharSet.Auto)]
         public static extern int StrRetToBSTR(ref STRRET pstr, IntPtr pidl, [MarshalAs(UnmanagedType.BStr)] ref string pbstr);
 
-
-
-
-        // <summary>
-        // Takes a STRRET structure returned by IShellFolder::GetDisplayNameOf, 
-        // converts it to a string, and 
-        // places the result in a buffer. 
-        // <param>
-        // Pointer to a STRRET structure.
-        // Pointer to an ITEMIDLIST uniquely identifying a file object or subfolder relative
-        // Pointer to a Buffer to hold the display name. It will be returned as a null-terminated
-        // string. If cchBuf is too small, 
-        // the name will be truncated to fit. 
-        // Size of pszBuf, in characters. 
-        // </param>
-        // </summary>
+        /// <summary>
+        /// Takes a STRRET structure returned by IShellFolder::GetDisplayNameOf, 
+        /// converts it to a string, and 
+        /// places the result in a buffer. 
+        /// <param>
+        /// Pointer to a STRRET structure.
+        /// Pointer to an ITEMIDLIST uniquely identifying a file object or subfolder relative
+        /// Pointer to a Buffer to hold the display name. It will be returned as a null-terminated
+        /// string. If cchBuf is too small, 
+        /// the name will be truncated to fit. 
+        /// Size of pszBuf, in characters. 
+        /// </param>
+        /// </summary>
         [DllImport("shlwapi.dll", CharSet = CharSet.Auto)]
         public static extern int StrRetToBuf(IntPtr pstr, IntPtr pidl, StringBuilder pszBuf, [MarshalAs(UnmanagedType.U4)] int cchBuf);
-
-
-
 
         #endregion
 

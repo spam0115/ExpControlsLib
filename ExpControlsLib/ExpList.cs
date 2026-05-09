@@ -964,29 +964,27 @@ namespace ExpTreeLib
             lvi.EnsureVisible();
         }
 
-        public void RefreshItem(CShellItem item)
+        /// <summary>
+        /// Refreshes the list view item associated with data from the given shell item.
+        /// </summary>
+        /// <param name="csi">The shell item whose corresponding list view item will be refreshed. Cannot be null.</param>
+        public void UpdateLviUsingCsi(CShellItem csi)
         {
-            var lvi = FindLVItem(item);
+            if (csi == null) return;
+
+            var lvi = FindLVItem(csi);
             if (lvi == null) return;
 
-            RefreshItem(lvi, item);
+            UpdateLviUsingCsi(lvi, csi);
         }
 
         /// <summary>
         /// Refreshes the display of a single item whose underlying filesystem data has changed.
         /// </summary>
-        public void RefreshItem(ListViewItem lvi, CShellItem item)
+        public void UpdateLviUsingCsi(ListViewItem lvi, CShellItem item)
         {
-
             try
             {
-                //_ListView.BeginUpdate();
-
-                //Force CShItem to re-read filesystem metadata
-                //item.Refresh(); // call whatever invalidation method CShItem exposes
-
-                //var newLvi = MakeLVItem(item);
-
                 if (IsThumbnailViewMode())
                     _thumbnailManager.RequestThumbnail(lvi, item.FullPath, GetThumbnailSizeForMode());
                 else
@@ -1035,14 +1033,33 @@ namespace ExpTreeLib
                                     tag = item.CreationTime;
                                 }
                                 break;
-                            default:
-                                // Fallback to reflection for other properties
-                                PropertyInfo prop = item.GetType().GetProperty(propName);
-                                if (prop != null)
+                            default:  // Fallback to reflection for other properties
+                                if (mapping.StartsWith(".Tag")) //get the value from one of the fields within the custom Tag object property
                                 {
-                                    object val = prop.GetValue(item);
-                                    text = val?.ToString() ?? string.Empty;
-                                    tag = val;
+                                    if (item.Tag != null)
+                                    {
+                                        string fieldName = mapping.Substring(4);
+                                        if (string.IsNullOrEmpty(fieldName)) break;
+
+                                        Type tagType = item.Tag.GetType();
+                                        FieldInfo field = tagType.GetField(fieldName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase);
+                                        if (field != null)
+                                        {
+                                            object val = field.GetValue(item.Tag);
+                                            text = val?.ToString() ?? string.Empty;
+                                            tag = val;
+                                        }
+                                    }
+                                }
+                                else
+                                { 
+                                    PropertyInfo prop = item.GetType().GetProperty(propName);
+                                    if (prop != null)
+                                    {
+                                        object val = prop.GetValue(item);
+                                        text = val?.ToString() ?? string.Empty;
+                                        tag = val;
+                                    }
                                 }
                                 break;
                         }
@@ -1105,7 +1122,7 @@ namespace ExpTreeLib
                 return null;
             }
             if (lvi.Tag is CShellItem csi)
-                RefreshItem(lvi, csi);
+                UpdateLviUsingCsi(lvi, csi);
 
             return lvi;
         }
@@ -1314,7 +1331,7 @@ namespace ExpTreeLib
                 IntPtr newPidl = IntPtr.Zero;
                 if (item.Parent.Folder.SetNameOf(
                         _ListView.Handle.ToInt32(),
-                        CShellItem.ILFindLastID(item.PIDL),
+                        CPidl.ILFindLastID(item.PIDL),
                         newName,
                         SHGDN.NORMAL,
                         newPidl) != S_OK)
@@ -1711,7 +1728,7 @@ namespace ExpTreeLib
                         ? _currentlyLoadedFolder.Folder
                         : _currentlyLoadedFolder.Parent.Folder;
 
-                    IntPtr relPidl = CShellItem.ILFindLastID(_currentlyLoadedFolder.PIDL);
+                    IntPtr relPidl = CPidl.ILFindLastID(_currentlyLoadedFolder.PIDL);
 
                     HR = folder.GetUIObjectOf(IntPtr.Zero, 1, new[] { relPidl }, IID_IContextMenu, prgf, out iunk);
 #if DEBUG
@@ -1881,7 +1898,7 @@ namespace ExpTreeLib
                             return;
                         }
 
-                        IntPtr relPidl = CShellItem.ILFindLastID(_currentlyLoadedFolder.PIDL);
+                        IntPtr relPidl = CPidl.ILFindLastID(_currentlyLoadedFolder.PIDL);
                         if (relPidl == IntPtr.Zero)
                         {
                             Debug.WriteLine("Failed to get relative PIDL for current folder");
@@ -1941,7 +1958,7 @@ namespace ExpTreeLib
                                 return;
                             }
 
-                            IntPtr pidl = CShellItem.ILFindLastID(sel.PIDL);
+                            IntPtr pidl = CPidl.ILFindLastID(sel.PIDL);
                             if (pidl == IntPtr.Zero)
                             {
                                 Debug.WriteLine($"Failed to get PIDL for item: {sel.DisplayName}");
@@ -2093,7 +2110,7 @@ namespace ExpTreeLib
         {
             foreach (var lvi in _itemIndex.Values)
             {
-                if (lvi.Tag is CShellItem csi && CShellItem.IsEqual(csi.PIDL, pidl))
+                if (lvi.Tag is CShellItem csi && CPidl.IsEqual(csi.PIDL, pidl))
                     return lvi;
             }
             return null;

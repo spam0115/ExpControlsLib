@@ -104,7 +104,7 @@ namespace WindowsApiLib.Shell
         [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static bool GetIStream(CShellItem item, IntPtr streamPtr, out IStream stream)
         {
-            if (item.Parent.Folder.BindToStorage(CShellItem.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStream, streamPtr) == S_OK)
+            if (item.Parent.Folder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStream, streamPtr) == S_OK)
             {
                 stream = (IStream)Marshal.GetTypedObjectForIUnknown(streamPtr, typeof(IStream));
                 return true;
@@ -127,7 +127,7 @@ namespace WindowsApiLib.Shell
         [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-o
         public static bool GetIStorage(CShellItem item, IntPtr storagePtr, out IStorage storage)
         {
-            if (item.Parent.Folder.BindToStorage(CShellItem.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStorage, storagePtr) == S_OK)
+            if (item.Parent.Folder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStorage, storagePtr) == S_OK)
             {
                 storage = (IStorage)Marshal.GetTypedObjectForIUnknown(storagePtr, typeof(IStorage));
                 return true;
@@ -171,7 +171,7 @@ namespace WindowsApiLib.Shell
             {
                 folder = item.Parent.Folder;
             }
-            var relpidl = CShellItem.ILFindLastID(item.PIDL);
+            var relpidl = CPidl.ILFindLastID(item.PIDL);
             IntPtr rgfReserved = IntPtr.Zero; //unused
             if (parent.Folder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { relpidl }, ShellAPI.IID_IDropTarget, rgfReserved, out dropTargetPtr) == 0)
             {
@@ -214,7 +214,7 @@ namespace WindowsApiLib.Shell
             int i = 0;
             while (i < items.Length)
             {
-                pidls[i] = CShellItem.ILFindLastID(items[i].PIDL);
+                pidls[i] = CPidl.ILFindLastID(items[i].PIDL);
                 i += 1;
             }
 
@@ -344,7 +344,7 @@ namespace WindowsApiLib.Shell
             }
 
             IntPtr rgfReserved = IntPtr.Zero; //unused
-            var ret = parent.Folder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { CShellItem.ILFindLastID(item.PIDL) }, ShellAPI.IID_IQueryInfo, rgfReserved, out iQueryInfoPtr); 
+            var ret = parent.Folder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { CPidl.ILFindLastID(item.PIDL) }, ShellAPI.IID_IQueryInfo, rgfReserved, out iQueryInfoPtr); 
 
             if (ret == S_OK)
             {
