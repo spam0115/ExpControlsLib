@@ -82,6 +82,7 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
+
         #region    Instance Private Fields
         // m_Folder and m_Pidl must be released/freed at Dispose time
         private IShellFolder m_Folder;    // if item is a folder, contains the Folder interface for this instance
@@ -153,6 +154,7 @@ namespace WindowsApiLib.Shell
 
 
         #endregion
+
 
         #region Private properties
 
@@ -318,646 +320,6 @@ namespace WindowsApiLib.Shell
                 return m_IconIndexOpenOrig;
             }
         }
-
-
-
-        #region Public Properties
-
-        /// <summary>
-        /// Property used to store information returned by FindFirstFile/FindNextFile API call.
-        /// </summary>
-        /// <returns>The current value or Nothing if not set</returns>
-        /// <remarks>Used to optimize the fetching of information otherwise only easily available from FileInfo/DirectoryInfo.</remarks>
-        public W32Find_Data W32Data
-        {
-            get
-            {
-                return m_W32Data;
-            }
-            set
-            {
-                m_W32Data = value;
-            }
-        }
-
-        /// <summary>
-        /// Database ID
-        /// </summary>
-        public long ID { get; set; }
-
-
-        /// <summary>
-        /// The Name of the File or Directory. If a Special Folder, then the Windows name for that Special Folder
-        /// </summary>
-        /// <returns>The Name of the File or Directory. If a Special Folder, then the Windows name for that Special Folder</returns>
-        /// <remarks>For a link file (xxx.txt.lnk for example) the
-        /// DisplayName property will return xxx.txt</remarks>
-        public string DisplayName
-        {
-            get
-            {
-                if (!m_HasDispType)
-                    SetDispType();
-                return m_DisplayName;
-            }
-        }
-
-        /// <summary>
-        /// An alternate way of obtaining the DisplayName
-        /// </summary>
-        /// <returns>The DisplayName</returns>
-        /// <remarks>For a link file (xxx.txt.lnk for example) the
-        /// DisplayName property will return xxx.txt</remarks>
-        public string Text
-        {
-            get
-            {
-                if (!m_HasDispType)
-                    SetDispType();
-                return m_DisplayName;
-            }
-        }
-
-        /// <summary>
-        /// Name is another way of obtaining the DisplayName
-        /// </summary>
-        /// <returns>The DisplayName of the Item</returns>
-        /// <remarks>For a link file (xxx.txt.lnk for example) the
-        /// DisplayName property will return xxx.txt</remarks>
-        public string Name
-        {
-            get
-            {
-                if (!m_HasDispType)
-                    SetDispType();
-                return m_DisplayName;
-            }
-        }
-
-        /// <summary>
-        /// The Windows TypeName (eg "Text File")
-        /// </summary>
-        /// <returns>The Windows TypeName</returns>
-        public string TypeName
-        {
-            get
-            {
-                if (!m_HasDispType)
-                    SetDispType();
-                return m_TypeName;
-            }
-        }
-
-        /// <summary>
-        /// Contains the PIDL for the current instance as an IntPtr
-        /// </summary>
-        public IntPtr PIDL
-        {
-            get
-            {
-                return m_Pidl;
-            }
-        }
-
-
-        /// <summary>
-        /// Contains the IShellFolder Interface of the instance if it is a Folder.
-        /// </summary>
-        /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
-        public IShellFolder Folder
-        {
-            get
-            {
-#if DEBUG
-                var name = ShellHelper.GetShellFolderDisplayName(m_Folder);
-#endif
-                if (m_UpdateFolder)
-                {
-                    if (m_Folder is not null)
-                        Marshal.ReleaseComObject(m_Folder);
-                    m_Folder = ShellHelper.GetFolder(Parent, ILFindLastID(m_Pidl));
-                    m_UpdateFolder = false;
-                }
-                return m_Folder;
-            }
-        }
-
-        /// <summary>
-        /// Contains the Full Path and file name of the instance as obtained from Folder.GetDisplayNameOf
-        /// </summary>
-        public string FullPath
-        {
-            get
-            {
-                if (m_Path.Equals(string.Empty))
-                {
-                    SetPath();
-                }
-                return m_Path;
-            }
-        }
-
-        /// <summary>
-        /// Contains the Full Path of the instance as obtained by traversing the internal cache's tree structure.
-        /// </summary>
-        /// <remarks>Useful for items located on certain removable drives not handled well by Folder.GetDisplayNameOf.</remarks>
-        public string ItemPath
-        {
-            get
-            {
-                var item = this;
-                var pathlist = new List<CShellItem>() { item };  // pathlist.Add(item)
-                while (item.Parent is not null)
-                {
-                    pathlist.Add(item.Parent);
-                    item = item.Parent;
-                }
-                pathlist.Reverse();
-                var SB = new StringBuilder();
-                foreach (CShellItem N in pathlist)
-                {
-                    SB.Append(N.DisplayName);
-                    SB.Append(@"\");
-                }
-                return SB.ToString();
-            }
-        }
-
-        /// <summary>
-        /// For internal use only
-        /// </summary>
-        public bool FoldersInitialized
-        {
-            get
-            {
-                return m_Directories is not null;
-            }
-        }
-
-        /// <summary>
-        /// For internal use only
-        /// </summary>
-        public bool FilesInitialized
-        {
-            get
-            {
-                return m_Files is not null;
-            }
-        }
-
-        /// <summary>
-        /// For internal use only
-        /// </summary>
-        public CShellItemCollection DirectoryList
-        {
-            get
-            {
-                return m_Directories;
-            }
-        }
-
-        /// <summary>
-        /// Returns an Array of CShItems containing the sub Directories of this instance.
-        /// </summary>
-        /// <returns>Array of CShItems containing the sub Directories of this instance.</returns>
-        public CShellItem[] Directories
-        {
-            get
-            {
-                if (!m_IsFolder)
-                {
-                    return (CShellItem[])Array.CreateInstance(typeof(CShellItem), 0);    // mod 6/27/09
-                }
-                else if (m_Directories == null)
-                {
-                    m_Directories = GetContents(SHCONTF.FOLDERS | SHCONTF.INCLUDEHIDDEN);
-                }
-                else
-                {
-                    // **********Comment by Lukai-2021.12.02, otherwise the rename function doesn't work, but after comment, it will affects tree updating, however performance is better
-                    // Me.UpdateRefresh(False, True)   '6/30/2012 - Note that it is also true that in some circumstances Windows does not post a RMDIR when Folders are removed.
-                }        // 6/30/2012 - Under some circumstances, Windows does not post MKDIR msgs when Folders are created!!! Do a refresh to ensure we are up to date
-                return m_Directories.ToArray();
-            }
-        }
-        /// <summary>
-        /// Returns the number of Folders currently known to this instance. If not
-        /// initialized, return 0
-        /// </summary>
-        /// <returns>The number of Folders currently known to this instance. If not
-        /// initialized, return 0</returns>
-        /// <remarks>Property added 02/10/2014 to avoid UpdateRefresh</remarks>
-        public int DirCount
-        {
-            get
-            {
-                if (FoldersInitialized)
-                {
-                    return m_Directories.Count;
-                }
-                else
-                {
-                    return 0;
-                }
-            }
-        }
-        /// <summary>
-        /// Returns the number of Files currently known to this instance. If not
-        /// initialized, return 0
-        /// </summary>
-        /// <returns>The number of Files currently known to this instance. If not
-        /// initialized, return 0</returns>
-        /// <remarks>Property added 02/10/2014 to avoid UpdateRefresh</remarks>
-        public int FileCount
-        {
-            get
-            {
-                if (FilesInitialized)
-                {
-                    return m_Files.Count;
-                }
-                else
-                {
-                    return 0;
-                }
-            }
-        }
-
-
-        /// <summary>
-        /// Returns an Array of CShItems containing the Files contained in this instance.
-        /// </summary>
-        /// <returns>Array of CShItems containing the Files contained in this instance.</returns>
-        public CShellItem[] Files
-        {
-            get
-            {
-                if (!m_IsFolder)
-                {
-                    return (CShellItem[])Array.CreateInstance(typeof(CShellItem), 0);    // mod 6/27/09
-                }
-                else if (m_Files == null)
-                {
-                    m_Files = GetContents(SHCONTF.NONFOLDERS | SHCONTF.INCLUDEHIDDEN);
-                }
-                else        // 6/30/2012 - Under some circumstances, Windows does not post CREATE msgs when Files are created!!! Do a refresh to ensure we are up to date
-                {
-                    UpdateRefresh(true, false);
-                }   // 6/30/2012 - Note that it is also true that in some circumstances Windows does not post a DELETE when Files are removed.
-                return m_Files.ToArray();
-            }
-        }
-
-        /// <summary>
-        /// Contains the CShellItem of this instance's Parent Folder
-        /// </summary>
-        /// <returns>CShellItem of this instance's Parent Folder</returns>
-        /// <remarks>Returns Nothing for the Desktop which has no Parent</remarks>
-        public CShellItem Parent
-        {
-            get
-            {
-                return m_Parent;
-            }
-        }
-
-        /// <summary>
-        /// For internal use only
-        /// </summary>
-        public void SetParent(CShellItem parent)
-        {
-            m_Parent = parent;
-        }
-
-        /// <summary>
-        /// This instance's Shell Attributes as returned by Folder.GetAttributesOf
-        /// </summary>
-        /// <returns>This instance's Shell Attributes as returned by Folder.GetAttributesOf</returns>
-        /// <remarks>Internal use only</remarks>
-        public SFGAO SFGAO_Attributes        // Change 10/09/2011
-        {
-            get
-            {
-                return m_SFGAO_Attributes;
-            }
-        }
-
-        /// <summary>
-        /// True if instance is Browsable, False otherwise
-        /// </summary>
-        /// <returns>True if instance is Browsable, False otherwise</returns>
-        /// <remarks>See MSDN for definition of "Browsable"</remarks>
-        public bool IsBrowsable
-        {
-            get
-            {
-                return m_IsBrowsable;
-            }
-        }
-
-        /// <summary>
-        /// True if instance is a File System item
-        /// </summary>
-        /// <returns>True if instance is a File System item</returns>
-        /// <remarks>Numerous Virtual and/or Shell Extension Folders and their content are not members of the File System</remarks>
-        public bool IsFileSystem
-        {
-            get
-            {
-                return m_IsFileSystem;
-            }
-        }
-
-        /// <summary>True if instance is a Folder, False otherwise
-        /// </summary>
-        /// <returns>True if instance is a Folder, False otherwise</returns>
-        /// <remarks>Numerous Virtual and/or Shell Extension Folders are not members of the File System</remarks>
-        public bool IsFolder
-        {
-            get
-            {
-                return m_IsFolder;
-            }
-        }
-
-        private bool m_HasSubFoldersSetup;
-
-        /// <summary>
-        /// True if item is a Folder and has sub-Folders
-        /// </summary>
-        /// <returns>True if item is a Folder and has sub-Folders, False otherwise</returns>
-        /// <remarks>Modified to make this attribute behave (with respect to Remote Folders) like XP, even on Vista/Win7.
-        /// That is, any Remote Folder is reported as HasSubFolders = True. Local Folders are tested with the API call.
-        /// On Vista/Win7, Compressed files (eg - .Zip, .Cab, etc) are considered sub Folders by this Property.
-        /// This behavior is NOT modified to behave like XP.</remarks>
-        public bool HasSubFolders
-        {
-            get
-            {
-                if (m_HasSubFoldersSetup)
-                {
-                    return m_HasSubFolders;
-                }
-                else if (m_IsRemote)          // 4/14/2012
-                {
-                    m_HasSubFolders = true;      // 4/14/2012
-                    m_HasSubFoldersSetup = true; // 4/14/2012
-                }
-                else
-                {
-                    var shfi = new SHFILEINFO() { dwAttributes = SFGAO.HASSUBFOLDER };
-                    var dwflag = SHGFI.PIDL | SHGFI.ATTRIBUTES | SHGFI.ATTR_SPECIFIED;
-                    int dwAttr = 0;
-                    var H = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
-                    if (H.ToInt32() != NOERROR && H.ToInt32() != 1)
-                    {
-                        Marshal.ThrowExceptionForHR(H.ToInt32());
-                    }
-                    m_HasSubFolders = (shfi.dwAttributes & SFGAO.HASSUBFOLDER) != 0;
-                    m_SFGAO_Attributes = m_SFGAO_Attributes | shfi.dwAttributes & SFGAO.HASSUBFOLDER;
-                    m_HasSubFoldersSetup = true;
-                }
-                return m_HasSubFolders;
-            }
-        }
-
-        /// <summary>
-        /// True if this instance is a Disk like device, False otherwise
-        /// </summary>
-        /// <returns>True if this instance is a Disk like device, False otherwise</returns>
-        public bool IsDisk
-        {
-            get
-            {
-                return m_IsDisk;
-            }
-        }
-
-        /// <summary>
-        /// True if this instance is a Link (.lnk or Shortcut), False otherwise
-        /// </summary>
-        /// <returns>True if this instance is a Link (.lnk or Shortcut), False otherwise</returns>
-        public bool IsLink
-        {
-            get
-            {
-                return m_IsLink;
-            }
-        }
-
-        /// <summary>
-        /// True if this instance is Shared, False otherwise
-        /// </summary>
-        /// <returns>True if this instance Shared, False otherwise</returns>
-        public bool IsShared
-        {
-            get
-            {
-                return m_IsShared;
-            }
-        }
-
-        /// <summary>
-        /// True if this instance is Hidden, False otherwise
-        /// </summary>
-        /// <returns>True if this instance Hidden, False otherwise</returns>
-        public bool IsHidden
-        {
-            get
-            {
-                return m_IsHidden;
-            }
-        }
-
-        /// <summary>
-        /// True if this instance is a Removable device, False otherwise
-        /// </summary>
-        /// <returns>True if this instance is a Removable device, False otherwise</returns>
-        public bool IsRemovable
-        {
-            get
-            {
-                return m_IsRemovable;
-            }
-        }
-
-        /// <summary>
-        /// Returns True if this CShellItem represents a Folder/File stored on a Remote system
-        /// </summary>
-        /// <returns>Returns True if this CShellItem represents a Folder/File stored on a Remote system, False otherwise.</returns>
-        /// <remarks>
-        /// A Remote item is any item whose path is a UNC not referring to the Local system or
-        /// resides on a Mapped (Network) Drive. Set up in SetupAttributes.
-        /// </remarks>
-        public bool IsRemote  // 4/14/2012
-        {
-            get                                         // 4/14/2012
-            {
-                return m_IsRemote;                       // 4/14/2012
-            }                                     // 4/14/2012
-        }
-
-        /// <summary>
-        /// True if this instance can be Renamed, False otherwise
-        /// </summary>
-        /// <returns>True if this instance can be Renamed, False otherwise</returns>
-        public bool CanRename
-        {
-            get
-            {
-                return m_CanRename;
-            }
-        }
-
-        private string m_size = "[]";
-        /// <summary>
-        /// A Formatted String representation of the Item's FileSize
-        /// </summary>
-        /// <returns>A Formatted String representation of the Item's FileSize</returns>
-        public string Size
-        {
-            get
-            {
-                if (m_size == "[]")
-                {
-                    GetSize();
-                }
-                return m_size;
-            }
-        }
-
-        /// <summary>
-        /// The Index of the "normal" Icon into the list maintained by SystemImageListManager and
-        /// used for the IconIndex in ListViewItems and TreeNodes.
-        /// </summary>
-        /// <value></value>
-        /// <returns>The "normal" IconIndex as used by ListViewItems and TreeNodes</returns>
-        /// <remarks></remarks>
-        public int IconIndexNormal
-        {
-            get
-            {
-                if (m_IconIndexNormal < 0)
-                {
-                    if (!m_HasDispType)
-                        SetDispType();
-                    m_IconIndexNormal = SystemImageListManager.GetIconIndex(this);
-                }
-                return m_IconIndexNormal;
-            }
-        }
-
-        /// <summary>
-        /// The Index of the "Open" Icon into the list maintained by SystemImageListManager and
-        /// used for the IconIndex in ListViewItems and TreeNodes.
-        /// </summary>
-        /// <value></value>
-        /// <returns>The "Open" IconIndex as used by ListViewItems and TreeNodes</returns>
-        /// <remarks></remarks>
-        public int IconIndexOpen
-        {
-            get
-            {
-                if (m_IconIndexOpen < 0)
-                {
-                    if (!m_HasDispType)
-                        SetDispType();
-                    if (!m_IsDisk & m_IsFileSystem & m_IsFolder)
-                    {
-                        m_IconIndexOpen = SystemImageListManager.GetIconIndex(this, true);
-                    }
-                    else
-                    {
-                        m_IconIndexOpen = m_IconIndexNormal;
-                    }
-                }
-                return m_IconIndexOpen;
-            }
-        }
-
-        /// <summary>
-        /// An Object which may used to associate application information with this instance
-        /// </summary>
-        /// <returns>An Object which may used to associate application information with this instance. Nothing if not set by application.</returns>
-        /// <remarks>
-        /// Property may be used for any application defined purpose.
-        /// </remarks>
-        public object Tag
-        {
-            get
-            {
-                return m_Tag;
-            }
-            set
-            {
-                m_Tag = value;
-            }
-        }
-
-
-        #region        Drag Ops Properties
-
-        /// <summary>
-        /// Returns True if instance may be Moved, False otherwise.
-        /// </summary>
-        /// <returns>True if instance may be Moved, False otherwise.</returns>
-        public bool CanMove
-        {
-            get
-            {
-                return m_CanMove;
-            }
-        }
-
-        /// <summary>
-        /// Returns True if instance can be Copied, False otherwise
-        /// </summary>
-        /// <returns>True if instance can be Copied, False otherwise</returns>
-        public bool CanCopy
-        {
-            get
-            {
-                return m_CanCopy;
-            }
-        }
-
-        /// <summary>
-        /// Returns True if instance can be Deleted, False otherwise
-        /// </summary>
-        /// <returns>True if instance can be Deleted, False otherwise</returns>
-        public bool CanDelete
-        {
-            get
-            {
-                return m_CanDelete;
-            }
-        }
-
-        /// <summary>
-        /// Returns True if instance can be Linked to, False otherwise
-        /// </summary>
-        /// <returns>True if instance can be Linked to, False otherwise</returns>
-        public bool CanLink
-        {
-            get
-            {
-                return m_CanLink;
-            }
-        }
-
-        /// <summary>
-        /// Returns True if instance can be a Drop Target, False otherwise
-        /// </summary>
-        /// <returns>True if instance can be a Drop Target, False otherwise</returns>
-        public bool IsDropTarget
-        {
-            get
-            {
-                return m_IsDropTarget;
-            }
-        }
-
-        #endregion
 
 
         #endregion
@@ -1787,42 +1149,6 @@ namespace WindowsApiLib.Shell
 
         #region    Properties
 
-        #region        Shared Properties
-        /// <summary>
-        /// Contains a String with the Local representation of "My Computer"
-        /// </summary>
-        public static string StrMyComputer
-        {
-            get
-            {
-                return m_strMyComputer;
-            }
-        }
-        /// <summary>
-        /// Contains a String with the Local representation of "System Folder".
-        /// </summary>
-        public static string StrSystemFolder
-        {
-            get
-            {
-                return m_strSystemFolder;
-            }
-        }
-        /// <summary>
-        /// Contains a String with the Full Path of the Desktop Directory
-        /// </summary>
-        /// <value></value>
-        /// <returns></returns>
-        /// <remarks></remarks>
-        public static string DesktopDirectoryPath
-        {
-            get
-            {
-                return m_DeskTopDirectory.FullPath;
-            }
-        }
-
-        #endregion
 
         #region        Normal Properties
 
@@ -2058,6 +1384,681 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #endregion
+
+        #endregion
+
+
+        #region Public Properties
+
+        /// <summary>
+        /// Property used to store information returned by FindFirstFile/FindNextFile API call.
+        /// </summary>
+        /// <returns>The current value or Nothing if not set</returns>
+        /// <remarks>Used to optimize the fetching of information otherwise only easily available from FileInfo/DirectoryInfo.</remarks>
+        public W32Find_Data W32Data
+        {
+            get
+            {
+                return m_W32Data;
+            }
+            set
+            {
+                m_W32Data = value;
+            }
+        }
+
+        /// <summary>
+        /// Database ID
+        /// </summary>
+        public long ID { get; set; }
+
+
+        /// <summary>
+        /// The Name of the File or Directory. If a Special Folder, then the Windows name for that Special Folder
+        /// </summary>
+        /// <returns>The Name of the File or Directory. If a Special Folder, then the Windows name for that Special Folder</returns>
+        /// <remarks>For a link file (xxx.txt.lnk for example) the
+        /// DisplayName property will return xxx.txt</remarks>
+        public string DisplayName
+        {
+            get
+            {
+                if (!m_HasDispType)
+                    SetDispType();
+                return m_DisplayName;
+            }
+        }
+
+        /// <summary>
+        /// An alternate way of obtaining the DisplayName
+        /// </summary>
+        /// <returns>The DisplayName</returns>
+        /// <remarks>For a link file (xxx.txt.lnk for example) the
+        /// DisplayName property will return xxx.txt</remarks>
+        public string Text
+        {
+            get
+            {
+                if (!m_HasDispType)
+                    SetDispType();
+                return m_DisplayName;
+            }
+        }
+
+        /// <summary>
+        /// Name is another way of obtaining the DisplayName
+        /// </summary>
+        /// <returns>The DisplayName of the Item</returns>
+        /// <remarks>For a link file (xxx.txt.lnk for example) the
+        /// DisplayName property will return xxx.txt</remarks>
+        public string Name
+        {
+            get
+            {
+                if (!m_HasDispType)
+                    SetDispType();
+                return m_DisplayName;
+            }
+        }
+
+        /// <summary>
+        /// The Windows TypeName (eg "Text File")
+        /// </summary>
+        /// <returns>The Windows TypeName</returns>
+        public string TypeName
+        {
+            get
+            {
+                if (!m_HasDispType)
+                    SetDispType();
+                return m_TypeName;
+            }
+        }
+
+        /// <summary>
+        /// Contains the PIDL for the current instance as an IntPtr
+        /// </summary>
+        public IntPtr PIDL
+        {
+            get
+            {
+                return m_Pidl;
+            }
+        }
+
+
+        /// <summary>
+        /// Contains the IShellFolder Interface of the instance if it is a Folder.
+        /// </summary>
+        /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
+        public IShellFolder Folder
+        {
+            get
+            {
+#if DEBUG
+                var name = ShellHelper.GetShellFolderDisplayName(m_Folder);
+#endif
+                if (m_UpdateFolder)
+                {
+                    if (m_Folder is not null)
+                        Marshal.ReleaseComObject(m_Folder);
+                    m_Folder = ShellHelper.GetFolder(Parent, ILFindLastID(m_Pidl));
+                    m_UpdateFolder = false;
+                }
+                return m_Folder;
+            }
+        }
+
+        /// <summary>
+        /// Contains the Full Path and file name of the instance as obtained from Folder.GetDisplayNameOf
+        /// </summary>
+        public string FullPath
+        {
+            get
+            {
+                if (m_Path.Equals(string.Empty))
+                {
+                    SetPath();
+                }
+                return m_Path;
+            }
+        }
+
+        /// <summary>
+        /// Contains the Full Path of the instance as obtained by traversing the internal cache's tree structure.
+        /// </summary>
+        /// <remarks>Useful for items located on certain removable drives not handled well by Folder.GetDisplayNameOf.</remarks>
+        public string ItemPath
+        {
+            get
+            {
+                var item = this;
+                var pathlist = new List<CShellItem>() { item };  // pathlist.Add(item)
+                while (item.Parent is not null)
+                {
+                    pathlist.Add(item.Parent);
+                    item = item.Parent;
+                }
+                pathlist.Reverse();
+                var SB = new StringBuilder();
+                foreach (CShellItem N in pathlist)
+                {
+                    SB.Append(N.DisplayName);
+                    SB.Append(@"\");
+                }
+                return SB.ToString();
+            }
+        }
+
+        /// <summary>
+        /// For internal use only
+        /// </summary>
+        public bool FoldersInitialized
+        {
+            get
+            {
+                return m_Directories is not null;
+            }
+        }
+
+        /// <summary>
+        /// For internal use only
+        /// </summary>
+        public bool FilesInitialized
+        {
+            get
+            {
+                return m_Files is not null;
+            }
+        }
+
+        /// <summary>
+        /// For internal use only
+        /// </summary>
+        public CShellItemCollection DirectoryList
+        {
+            get
+            {
+                return m_Directories;
+            }
+        }
+
+        /// <summary>
+        /// Returns an Array of CShItems containing the sub Directories of this instance.
+        /// </summary>
+        /// <returns>Array of CShItems containing the sub Directories of this instance.</returns>
+        public CShellItem[] Directories
+        {
+            get
+            {
+                if (!m_IsFolder)
+                {
+                    return (CShellItem[])Array.CreateInstance(typeof(CShellItem), 0);    // mod 6/27/09
+                }
+                else if (m_Directories == null)
+                {
+                    m_Directories = GetContents(SHCONTF.FOLDERS | SHCONTF.INCLUDEHIDDEN);
+                }
+                else
+                {
+                    // **********Comment by Lukai-2021.12.02, otherwise the rename function doesn't work, but after comment, it will affects tree updating, however performance is better
+                    // Me.UpdateRefresh(False, True)   '6/30/2012 - Note that it is also true that in some circumstances Windows does not post a RMDIR when Folders are removed.
+                }        // 6/30/2012 - Under some circumstances, Windows does not post MKDIR msgs when Folders are created!!! Do a refresh to ensure we are up to date
+                return m_Directories.ToArray();
+            }
+        }
+        /// <summary>
+        /// Returns the number of Folders currently known to this instance. If not
+        /// initialized, return 0
+        /// </summary>
+        /// <returns>The number of Folders currently known to this instance. If not
+        /// initialized, return 0</returns>
+        /// <remarks>Property added 02/10/2014 to avoid UpdateRefresh</remarks>
+        public int DirCount
+        {
+            get
+            {
+                if (FoldersInitialized)
+                {
+                    return m_Directories.Count;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+        }
+        /// <summary>
+        /// Returns the number of Files currently known to this instance. If not
+        /// initialized, return 0
+        /// </summary>
+        /// <returns>The number of Files currently known to this instance. If not
+        /// initialized, return 0</returns>
+        /// <remarks>Property added 02/10/2014 to avoid UpdateRefresh</remarks>
+        public int FileCount
+        {
+            get
+            {
+                if (FilesInitialized)
+                {
+                    return m_Files.Count;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+        }
+
+
+        /// <summary>
+        /// Returns an Array of CShItems containing the Files contained in this instance.
+        /// </summary>
+        /// <returns>Array of CShItems containing the Files contained in this instance.</returns>
+        public CShellItem[] Files
+        {
+            get
+            {
+                if (!m_IsFolder)
+                {
+                    return (CShellItem[])Array.CreateInstance(typeof(CShellItem), 0);    // mod 6/27/09
+                }
+                else if (m_Files == null)
+                {
+                    m_Files = GetContents(SHCONTF.NONFOLDERS | SHCONTF.INCLUDEHIDDEN);
+                }
+                else        // 6/30/2012 - Under some circumstances, Windows does not post CREATE msgs when Files are created!!! Do a refresh to ensure we are up to date
+                {
+                    UpdateRefresh(true, false);
+                }   // 6/30/2012 - Note that it is also true that in some circumstances Windows does not post a DELETE when Files are removed.
+                return m_Files.ToArray();
+            }
+        }
+
+        /// <summary>
+        /// Contains the CShellItem of this instance's Parent Folder
+        /// </summary>
+        /// <returns>CShellItem of this instance's Parent Folder</returns>
+        /// <remarks>Returns Nothing for the Desktop which has no Parent</remarks>
+        public CShellItem Parent
+        {
+            get
+            {
+                return m_Parent;
+            }
+        }
+
+        /// <summary>
+        /// For internal use only
+        /// </summary>
+        public void SetParent(CShellItem parent)
+        {
+            m_Parent = parent;
+        }
+
+        /// <summary>
+        /// This instance's Shell Attributes as returned by Folder.GetAttributesOf
+        /// </summary>
+        /// <returns>This instance's Shell Attributes as returned by Folder.GetAttributesOf</returns>
+        /// <remarks>Internal use only</remarks>
+        public SFGAO SFGAO_Attributes        // Change 10/09/2011
+        {
+            get
+            {
+                return m_SFGAO_Attributes;
+            }
+        }
+
+        /// <summary>
+        /// True if instance is Browsable, False otherwise
+        /// </summary>
+        /// <returns>True if instance is Browsable, False otherwise</returns>
+        /// <remarks>See MSDN for definition of "Browsable"</remarks>
+        public bool IsBrowsable
+        {
+            get
+            {
+                return m_IsBrowsable;
+            }
+        }
+
+        /// <summary>
+        /// True if instance is a File System item
+        /// </summary>
+        /// <returns>True if instance is a File System item</returns>
+        /// <remarks>Numerous Virtual and/or Shell Extension Folders and their content are not members of the File System</remarks>
+        public bool IsFileSystem
+        {
+            get
+            {
+                return m_IsFileSystem;
+            }
+        }
+
+        /// <summary>True if instance is a Folder, False otherwise
+        /// </summary>
+        /// <returns>True if instance is a Folder, False otherwise</returns>
+        /// <remarks>Numerous Virtual and/or Shell Extension Folders are not members of the File System</remarks>
+        public bool IsFolder
+        {
+            get
+            {
+                return m_IsFolder;
+            }
+        }
+
+        private bool m_HasSubFoldersSetup;
+
+        /// <summary>
+        /// True if item is a Folder and has sub-Folders
+        /// </summary>
+        /// <returns>True if item is a Folder and has sub-Folders, False otherwise</returns>
+        /// <remarks>Modified to make this attribute behave (with respect to Remote Folders) like XP, even on Vista/Win7.
+        /// That is, any Remote Folder is reported as HasSubFolders = True. Local Folders are tested with the API call.
+        /// On Vista/Win7, Compressed files (eg - .Zip, .Cab, etc) are considered sub Folders by this Property.
+        /// This behavior is NOT modified to behave like XP.</remarks>
+        public bool HasSubFolders
+        {
+            get
+            {
+                if (m_HasSubFoldersSetup)
+                {
+                    return m_HasSubFolders;
+                }
+                else if (m_IsRemote)          // 4/14/2012
+                {
+                    m_HasSubFolders = true;      // 4/14/2012
+                    m_HasSubFoldersSetup = true; // 4/14/2012
+                }
+                else
+                {
+                    var shfi = new SHFILEINFO() { dwAttributes = SFGAO.HASSUBFOLDER };
+                    var dwflag = SHGFI.PIDL | SHGFI.ATTRIBUTES | SHGFI.ATTR_SPECIFIED;
+                    int dwAttr = 0;
+                    var H = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+                    if (H.ToInt32() != NOERROR && H.ToInt32() != 1)
+                    {
+                        Marshal.ThrowExceptionForHR(H.ToInt32());
+                    }
+                    m_HasSubFolders = (shfi.dwAttributes & SFGAO.HASSUBFOLDER) != 0;
+                    m_SFGAO_Attributes = m_SFGAO_Attributes | shfi.dwAttributes & SFGAO.HASSUBFOLDER;
+                    m_HasSubFoldersSetup = true;
+                }
+                return m_HasSubFolders;
+            }
+        }
+
+        /// <summary>
+        /// True if this instance is a Disk like device, False otherwise
+        /// </summary>
+        /// <returns>True if this instance is a Disk like device, False otherwise</returns>
+        public bool IsDisk
+        {
+            get
+            {
+                return m_IsDisk;
+            }
+        }
+
+        /// <summary>
+        /// True if this instance is a Link (.lnk or Shortcut), False otherwise
+        /// </summary>
+        /// <returns>True if this instance is a Link (.lnk or Shortcut), False otherwise</returns>
+        public bool IsLink
+        {
+            get
+            {
+                return m_IsLink;
+            }
+        }
+
+        /// <summary>
+        /// True if this instance is Shared, False otherwise
+        /// </summary>
+        /// <returns>True if this instance Shared, False otherwise</returns>
+        public bool IsShared
+        {
+            get
+            {
+                return m_IsShared;
+            }
+        }
+
+        /// <summary>
+        /// True if this instance is Hidden, False otherwise
+        /// </summary>
+        /// <returns>True if this instance Hidden, False otherwise</returns>
+        public bool IsHidden
+        {
+            get
+            {
+                return m_IsHidden;
+            }
+        }
+
+        /// <summary>
+        /// True if this instance is a Removable device, False otherwise
+        /// </summary>
+        /// <returns>True if this instance is a Removable device, False otherwise</returns>
+        public bool IsRemovable
+        {
+            get
+            {
+                return m_IsRemovable;
+            }
+        }
+
+        /// <summary>
+        /// Returns True if this CShellItem represents a Folder/File stored on a Remote system
+        /// </summary>
+        /// <returns>Returns True if this CShellItem represents a Folder/File stored on a Remote system, False otherwise.</returns>
+        /// <remarks>
+        /// A Remote item is any item whose path is a UNC not referring to the Local system or
+        /// resides on a Mapped (Network) Drive. Set up in SetupAttributes.
+        /// </remarks>
+        public bool IsRemote  // 4/14/2012
+        {
+            get                                         // 4/14/2012
+            {
+                return m_IsRemote;                       // 4/14/2012
+            }                                     // 4/14/2012
+        }
+
+        /// <summary>
+        /// True if this instance can be Renamed, False otherwise
+        /// </summary>
+        /// <returns>True if this instance can be Renamed, False otherwise</returns>
+        public bool CanRename
+        {
+            get
+            {
+                return m_CanRename;
+            }
+        }
+
+        private string m_size = "[]";
+        /// <summary>
+        /// A Formatted String representation of the Item's FileSize
+        /// </summary>
+        /// <returns>A Formatted String representation of the Item's FileSize</returns>
+        public string Size
+        {
+            get
+            {
+                if (m_size == "[]")
+                {
+                    GetSize();
+                }
+                return m_size;
+            }
+        }
+
+        /// <summary>
+        /// The Index of the "normal" Icon into the list maintained by SystemImageListManager and
+        /// used for the IconIndex in ListViewItems and TreeNodes.
+        /// </summary>
+        /// <value></value>
+        /// <returns>The "normal" IconIndex as used by ListViewItems and TreeNodes</returns>
+        /// <remarks></remarks>
+        public int IconIndexNormal
+        {
+            get
+            {
+                if (m_IconIndexNormal < 0)
+                {
+                    if (!m_HasDispType)
+                        SetDispType();
+                    m_IconIndexNormal = SystemImageListManager.GetIconIndex(this);
+                }
+                return m_IconIndexNormal;
+            }
+        }
+
+        /// <summary>
+        /// The Index of the "Open" Icon into the list maintained by SystemImageListManager and
+        /// used for the IconIndex in ListViewItems and TreeNodes.
+        /// </summary>
+        /// <value></value>
+        /// <returns>The "Open" IconIndex as used by ListViewItems and TreeNodes</returns>
+        /// <remarks></remarks>
+        public int IconIndexOpen
+        {
+            get
+            {
+                if (m_IconIndexOpen < 0)
+                {
+                    if (!m_HasDispType)
+                        SetDispType();
+                    if (!m_IsDisk & m_IsFileSystem & m_IsFolder)
+                    {
+                        m_IconIndexOpen = SystemImageListManager.GetIconIndex(this, true);
+                    }
+                    else
+                    {
+                        m_IconIndexOpen = m_IconIndexNormal;
+                    }
+                }
+                return m_IconIndexOpen;
+            }
+        }
+
+        /// <summary>
+        /// An Object which may used to associate application information with this instance
+        /// </summary>
+        /// <returns>An Object which may used to associate application information with this instance. Nothing if not set by application.</returns>
+        /// <remarks>
+        /// Property may be used for any application defined purpose.
+        /// </remarks>
+        public object Tag
+        {
+            get
+            {
+                return m_Tag;
+            }
+            set
+            {
+                m_Tag = value;
+            }
+        }
+
+
+        #region        Drag Ops Properties
+
+        /// <summary>
+        /// Returns True if instance may be Moved, False otherwise.
+        /// </summary>
+        /// <returns>True if instance may be Moved, False otherwise.</returns>
+        public bool CanMove
+        {
+            get
+            {
+                return m_CanMove;
+            }
+        }
+
+        /// <summary>
+        /// Returns True if instance can be Copied, False otherwise
+        /// </summary>
+        /// <returns>True if instance can be Copied, False otherwise</returns>
+        public bool CanCopy
+        {
+            get
+            {
+                return m_CanCopy;
+            }
+        }
+
+        /// <summary>
+        /// Returns True if instance can be Deleted, False otherwise
+        /// </summary>
+        /// <returns>True if instance can be Deleted, False otherwise</returns>
+        public bool CanDelete
+        {
+            get
+            {
+                return m_CanDelete;
+            }
+        }
+
+        /// <summary>
+        /// Returns True if instance can be Linked to, False otherwise
+        /// </summary>
+        /// <returns>True if instance can be Linked to, False otherwise</returns>
+        public bool CanLink
+        {
+            get
+            {
+                return m_CanLink;
+            }
+        }
+
+        /// <summary>
+        /// Returns True if instance can be a Drop Target, False otherwise
+        /// </summary>
+        /// <returns>True if instance can be a Drop Target, False otherwise</returns>
+        public bool IsDropTarget
+        {
+            get
+            {
+                return m_IsDropTarget;
+            }
+        }
+        #endregion
+
+        #region        Shared Properties
+        /// <summary>
+        /// Contains a String with the Local representation of "My Computer"
+        /// </summary>
+        public static string StrMyComputer
+        {
+            get
+            {
+                return m_strMyComputer;
+            }
+        }
+        /// <summary>
+        /// Contains a String with the Local representation of "System Folder".
+        /// </summary>
+        public static string StrSystemFolder
+        {
+            get
+            {
+                return m_strSystemFolder;
+            }
+        }
+        /// <summary>
+        /// Contains a String with the Full Path of the Desktop Directory
+        /// </summary>
+        /// <value></value>
+        /// <returns></returns>
+        /// <remarks></remarks>
+        public static string DesktopDirectoryPath
+        {
+            get
+            {
+                return m_DeskTopDirectory.FullPath;
+            }
+        }
 
         #endregion
 
@@ -2659,6 +2660,156 @@ namespace WindowsApiLib.Shell
 
         public delegate void CShItemUpdateEventHandler(object sender, ShellItemUpdateEventArgs e);
 
+        public void Refresh()
+        {
+            Update(IntPtr.Zero, CShItemUpdateType.Updated);
+        }
+
+        /// <summary>
+        /// The UpdateRefresh function compares the Current content of the Folder with the
+        /// current state of m_Directories and m_Files, adding/deleting CShItems as appropriate  (thus causing
+        /// appropriate events to be raised for listening clients. 
+        /// Called internally to handle WM_UPDATEDIR messages which map to CShItemUpdateType.UpdateDir. 
+        /// This message indicates that the Contents of this Folder has changed.  Typically, it is fired 
+        /// when multiple items are added/deleted. In practice, several explicit add/delete notification 
+        /// messages are fired followed by WM_UPDATEDIR to indicate that there are more changes. 
+        /// Certain other types of file operations (eg Save) use only WM_UPDATEDIR rather than WM_CREATE.
+        /// </summary>
+        /// <param name="UpdateFiles">True to examine Files of this folder for changes.</param>
+        /// <param name="UpdateFolders">True to examine sub-directories of this folder for changes.</param>
+        /// <returns>True if changes have been made, False otherwise</returns>
+        /// <remarks>If m_Directories or m_Files is Nothing, then no attempt is made to compare with current 
+        /// contents.  That is, if m_files is Nothing then it is not updated, m_Directories is treated the same.
+        /// Note that m_xxxx.Count=0 is not the same thing as m_xxxx is Nothing! m_xxxx = Nothing means
+        /// no one cares about the content.  m_xxxx.Count = 0 means that someone does care, but there were 
+        /// no such items known until (perhaps) now.</remarks>
+        /// <summary>
+        /// Refreshes the information for this item from the shell and raises an Update event.
+        /// </summary>
+        public bool UpdateRefresh(bool UpdateFiles = true, bool UpdateFolders = true)
+        {
+            bool UpdateRefreshRet = default;
+            UpdateRefreshRet = false;
+            if (m_IsFolder)
+            {
+                lock (LockObj)
+                {
+                    var attrFlag = SHCONTF.INCLUDEHIDDEN;
+                    if (m_Files is not null && UpdateFiles)
+                        attrFlag = attrFlag | SHCONTF.NONFOLDERS;
+                    if (m_Directories is not null && UpdateFolders)
+                        attrFlag = attrFlag | SHCONTF.FOLDERS;
+                    if (attrFlag == SHCONTF.INCLUDEHIDDEN)
+                        return UpdateRefreshRet; // nothing expanded therefore no change
+
+                    var InvalidItems = new List<CShellItem>();              // Holds CShItems no longer present
+                    var curPidls = GetContentPtrs(attrFlag);                // Relative PIDLs of current content
+                    var tmpCurrent = new List<IntPtr>((IEnumerable<IntPtr>)curPidls.ToArray(typeof(IntPtr)));  // working list of current content
+                    if (curPidls.Count < 1)                                 // no items currently in Folder, so mark any previously known as invalid
+                    {
+                        if (m_Files is not null && UpdateFiles)
+                            InvalidItems.AddRange(m_Files.ToArray());
+                        if (m_Directories is not null && UpdateFolders)
+                            InvalidItems.AddRange(m_Directories.ToArray());
+                    }
+                    else            // there are currently some items of interest in Me.Folder
+                    {
+                        var tmpItems = new List<CShellItem>();              // working list of old known items
+                        if (m_Directories is not null && UpdateFolders)
+                            tmpItems.AddRange(m_Directories.ToArray());
+                        if (m_Files is not null && UpdateFiles)
+                            tmpItems.AddRange(m_Files.ToArray());
+                        var oldPidls = new IntPtr[tmpItems.Count];          // working list of relative pidls of known items
+                        for (int i = 0, loopTo = tmpItems.Count - 1; i <= loopTo; i++)
+                            oldPidls[i] = ILFindLastID(tmpItems[i].PIDL);
+                        for (int iold = 0, loopTo1 = oldPidls.Length - 1; iold <= loopTo1; iold++)
+                        {
+                            for (int icur = tmpCurrent.Count - 1; icur >= 0; icur -= 1) // 5/21/2012 changed to bottom-up loop
+                            {
+                                // 5/23/2012 revised the following block of code to also check vs AreBytesEqual
+                                if (CPidl.IsEqual(oldPidls[iold], tmpCurrent[icur]))    // found the same item
+                                {
+                                    if (!ReferenceEquals(this, m_Recycle) && !CPidl.AreBytesEqual(oldPidls[iold], tmpCurrent[icur]))  // 7/14/2012
+                                    {
+                                        // in this case, some aspect besides name has changed treat as UpdateItem for the old one
+                                        var UpdCSI = tmpItems[iold];
+                                        // Debug.WriteLine("***Raising Updated based on AreBytesEqual - " & UpdCSI.Name)
+                                        UpdCSI.ResetInfo();
+                                        if (UpdCSI.IsFolder)
+                                        {
+                                            UpdCSI.ResetChildren();
+                                        }
+                                        CShItemUpdate?.Invoke(UpdCSI.Parent, new ShellItemUpdateEventArgs(UpdCSI, CShItemUpdateType.Updated)); // 6/3/2012
+                                        UpdateRefreshRet = true;        // 5/24/2012  
+                                    }
+                                    // either way, we have found the matching PIDL so continue with the next "old" one (in tree)
+                                    tmpCurrent.RemoveAt(icur); // Have match, don't look at this one again - and do not add it in the following code
+                                    goto NXTOLD;
+                                }
+                                // 5/23/2012 end of revised code
+                            }
+                            // falling thru here means couldn't find iold entry
+                            InvalidItems.Add(tmpItems[iold]);
+                        NXTOLD:
+                            ;
+                        }
+                    }
+                    // any not found should be removed from my collections (raising event)
+                    if (InvalidItems.Count > 0)
+                    {
+                        UpdateRefreshRet = true;
+                        foreach (var csi in InvalidItems)
+                            RemoveItem(csi);
+                    }
+                    // anything remaining in tmpcurrent is a new entry Add it (raising event)
+                    if (tmpCurrent.Count > 0)
+                    {
+                        UpdateRefreshRet = true;
+                        foreach (IntPtr iptr in tmpCurrent)   // these are relative PIDLs
+                        {
+                            try                                 // ASUS Fix
+                            {
+                                var NewItem = new CShellItem(iptr, this);  // 11/13/2013
+                                AddItem(NewItem);                                // 11/13/2013
+                            }
+                            catch (Exception ex)               // ASUS Fix - modified 11/13/2013 was only looking for InvalidCastExcepton
+                            {
+                            }                             // ASUS Fix
+                        }
+                    }
+                    // we obtained some new relative PIDLs in curPidls, so free them
+                    foreach (IntPtr itm in curPidls)
+                        Marshal.FreeCoTaskMem(itm);
+                    // 6/18/2012 - If something changed in this Folder, then Raise an Updated Event AFTER all Adds, Deletes, etc have been posted
+                    // 6/18/2012 - One was previously Raised when working down the Tree from Me's Parent, but Adds, Deletes, etc details had not been posted
+                    // 6/18/2012 - at that time. The App did not know HOW this Folder had changed (except for attributes)
+                    if (UpdateRefreshRet && IsFolder)
+                    {
+                        if (Parent is null)
+                        {
+                            CShItemUpdate?.Invoke(GetDeskTop(), new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
+                        }
+                        else
+                        {
+                            CShItemUpdate?.Invoke(Parent, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
+                        }
+                    }
+                }
+            }
+
+            return UpdateRefreshRet;
+        }
+
+        #endregion
+
+        #endregion
+
+
+        #endregion
+
+
+        #region    Private Methods
+
         private void ResetInfo()
         {
             m_HasDispType = false;
@@ -2669,7 +2820,7 @@ namespace WindowsApiLib.Shell
                 W32Data = null;
             ResetIconIndex();
         }
-
+        
         private void ResetChildren()
         {
             // propogate changes to the known children
@@ -2869,153 +3020,6 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        public void Refresh()
-        {
-            Update(IntPtr.Zero, CShItemUpdateType.Updated);
-        }
-
-        /// <summary>
-        /// The UpdateRefresh function compares the Current content of the Folder with the
-        /// current state of m_Directories and m_Files, adding/deleting CShItems as appropriate  (thus causing
-        /// appropriate events to be raised for listening clients. 
-        /// Called internally to handle WM_UPDATEDIR messages which map to CShItemUpdateType.UpdateDir. 
-        /// This message indicates that the Contents of this Folder has changed.  Typically, it is fired 
-        /// when multiple items are added/deleted. In practice, several explicit add/delete notification 
-        /// messages are fired followed by WM_UPDATEDIR to indicate that there are more changes. 
-        /// Certain other types of file operations (eg Save) use only WM_UPDATEDIR rather than WM_CREATE.
-        /// </summary>
-        /// <param name="UpdateFiles">True to examine Files of this folder for changes.</param>
-        /// <param name="UpdateFolders">True to examine sub-directories of this folder for changes.</param>
-        /// <returns>True if changes have been made, False otherwise</returns>
-        /// <remarks>If m_Directories or m_Files is Nothing, then no attempt is made to compare with current 
-        /// contents.  That is, if m_files is Nothing then it is not updated, m_Directories is treated the same.
-        /// Note that m_xxxx.Count=0 is not the same thing as m_xxxx is Nothing! m_xxxx = Nothing means
-        /// no one cares about the content.  m_xxxx.Count = 0 means that someone does care, but there were 
-        /// no such items known until (perhaps) now.</remarks>
-        /// <summary>
-        /// Refreshes the information for this item from the shell and raises an Update event.
-        /// </summary>
-        public bool UpdateRefresh(bool UpdateFiles = true, bool UpdateFolders = true)
-        {
-            bool UpdateRefreshRet = default;
-            UpdateRefreshRet = false;
-            if (m_IsFolder)
-            {
-                lock (LockObj)
-                {
-                    var attrFlag = SHCONTF.INCLUDEHIDDEN;
-                    if (m_Files is not null && UpdateFiles)
-                        attrFlag = attrFlag | SHCONTF.NONFOLDERS;
-                    if (m_Directories is not null && UpdateFolders)
-                        attrFlag = attrFlag | SHCONTF.FOLDERS;
-                    if (attrFlag == SHCONTF.INCLUDEHIDDEN)
-                        return UpdateRefreshRet; // nothing expanded therefore no change
-
-                    var InvalidItems = new List<CShellItem>();              // Holds CShItems no longer present
-                    var curPidls = GetContentPtrs(attrFlag);                // Relative PIDLs of current content
-                    var tmpCurrent = new List<IntPtr>((IEnumerable<IntPtr>)curPidls.ToArray(typeof(IntPtr)));  // working list of current content
-                    if (curPidls.Count < 1)                                 // no items currently in Folder, so mark any previously known as invalid
-                    {
-                        if (m_Files is not null && UpdateFiles)
-                            InvalidItems.AddRange(m_Files.ToArray());
-                        if (m_Directories is not null && UpdateFolders)
-                            InvalidItems.AddRange(m_Directories.ToArray());
-                    }
-                    else            // there are currently some items of interest in Me.Folder
-                    {
-                        var tmpItems = new List<CShellItem>();              // working list of old known items
-                        if (m_Directories is not null && UpdateFolders)
-                            tmpItems.AddRange(m_Directories.ToArray());
-                        if (m_Files is not null && UpdateFiles)
-                            tmpItems.AddRange(m_Files.ToArray());
-                        var oldPidls = new IntPtr[tmpItems.Count];          // working list of relative pidls of known items
-                        for (int i = 0, loopTo = tmpItems.Count - 1; i <= loopTo; i++)
-                            oldPidls[i] = ILFindLastID(tmpItems[i].PIDL);
-                        for (int iold = 0, loopTo1 = oldPidls.Length - 1; iold <= loopTo1; iold++)
-                        {
-                            for (int icur = tmpCurrent.Count - 1; icur >= 0; icur -= 1) // 5/21/2012 changed to bottom-up loop
-                            {
-                                // 5/23/2012 revised the following block of code to also check vs AreBytesEqual
-                                if (CPidl.IsEqual(oldPidls[iold], tmpCurrent[icur]))    // found the same item
-                                {
-                                    if (!ReferenceEquals(this, m_Recycle) && !CPidl.AreBytesEqual(oldPidls[iold], tmpCurrent[icur]))  // 7/14/2012
-                                    {
-                                        // in this case, some aspect besides name has changed treat as UpdateItem for the old one
-                                        var UpdCSI = tmpItems[iold];
-                                        // Debug.WriteLine("***Raising Updated based on AreBytesEqual - " & UpdCSI.Name)
-                                        UpdCSI.ResetInfo();
-                                        if (UpdCSI.IsFolder)
-                                        {
-                                            UpdCSI.ResetChildren();
-                                        }
-                                        CShItemUpdate?.Invoke(UpdCSI.Parent, new ShellItemUpdateEventArgs(UpdCSI, CShItemUpdateType.Updated)); // 6/3/2012
-                                        UpdateRefreshRet = true;        // 5/24/2012  
-                                    }
-                                    // either way, we have found the matching PIDL so continue with the next "old" one (in tree)
-                                    tmpCurrent.RemoveAt(icur); // Have match, don't look at this one again - and do not add it in the following code
-                                    goto NXTOLD;
-                                }
-                                // 5/23/2012 end of revised code
-                            }
-                            // falling thru here means couldn't find iold entry
-                            InvalidItems.Add(tmpItems[iold]);
-                        NXTOLD:
-                            ;
-                        }
-                    }
-                    // any not found should be removed from my collections (raising event)
-                    if (InvalidItems.Count > 0)
-                    {
-                        UpdateRefreshRet = true;
-                        foreach (var csi in InvalidItems)
-                            RemoveItem(csi);
-                    }
-                    // anything remaining in tmpcurrent is a new entry Add it (raising event)
-                    if (tmpCurrent.Count > 0)
-                    {
-                        UpdateRefreshRet = true;
-                        foreach (IntPtr iptr in tmpCurrent)   // these are relative PIDLs
-                        {
-                            try                                 // ASUS Fix
-                            {
-                                var NewItem = new CShellItem(iptr, this);  // 11/13/2013
-                                AddItem(NewItem);                                // 11/13/2013
-                            }
-                            catch (Exception ex)               // ASUS Fix - modified 11/13/2013 was only looking for InvalidCastExcepton
-                            {
-                            }                             // ASUS Fix
-                        }
-                    }
-                    // we obtained some new relative PIDLs in curPidls, so free them
-                    foreach (IntPtr itm in curPidls)
-                        Marshal.FreeCoTaskMem(itm);
-                    // 6/18/2012 - If something changed in this Folder, then Raise an Updated Event AFTER all Adds, Deletes, etc have been posted
-                    // 6/18/2012 - One was previously Raised when working down the Tree from Me's Parent, but Adds, Deletes, etc details had not been posted
-                    // 6/18/2012 - at that time. The App did not know HOW this Folder had changed (except for attributes)
-                    if (UpdateRefreshRet && IsFolder)
-                    {
-                        if (Parent is null)
-                        {
-                            CShItemUpdate?.Invoke(GetDeskTop(), new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
-                        }
-                        else
-                        {
-                            CShItemUpdate?.Invoke(Parent, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
-                        }
-                    }
-                }
-            }
-
-            return UpdateRefreshRet;
-        }
-
-        #endregion
-
-        #endregion
-
-        #region    Private Instance Methods
-
-
         /// <summary>
         /// Obtains information available from FileInfo. Uses data from W32Data rather than FileInfo/DirectoryInfo if W32Data is present.
         /// </summary>
@@ -3127,12 +3131,12 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-    /// Given a relative PIDL (relative to Me.Folder) determine if item is a Folder.
-    /// </summary>
-    /// <param name="ptr">A relative PIDL, relative to Me.Folder</param>
-    /// <returns>True if item is a Folder, False is item is NOT a Folder.</returns>
-    /// <remarks>Container files (such as .zip or .cab) are marked as a "Folder" in WinXP and above, so
-    /// some further testing must be done on XP and above systems. We define such items as non-Folders.</remarks>
+        /// Given a relative PIDL (relative to Me.Folder) determine if item is a Folder.
+        /// </summary>
+        /// <param name="ptr">A relative PIDL, relative to Me.Folder</param>
+        /// <returns>True if item is a Folder, False is item is NOT a Folder.</returns>
+        /// <remarks>Container files (such as .zip or .cab) are marked as a "Folder" in WinXP and above, so
+        /// some further testing must be done on XP and above systems. We define such items as non-Folders.</remarks>
         private bool IsFolderRel(IntPtr ptr)
         {
             bool IsFolderRelRet = default;
@@ -3158,12 +3162,12 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-    /// Returns the requested Items of this Folder as an ArrayList of relative PIDLs 
-    /// (caller must free the pidls after use).
-    /// </summary>
-    /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
-    /// <returns>On error, returns an empty (count=0) ArrayList. Otherwise, returns the relative PIDLs of
-    /// the requested (via flags param) items in this Folder.</returns>
+        /// Returns the requested Items of this Folder as an ArrayList of relative PIDLs 
+        /// (caller must free the pidls after use).
+        /// </summary>
+        /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
+        /// <returns>On error, returns an empty (count=0) ArrayList. Otherwise, returns the relative PIDLs of
+        /// the requested (via flags param) items in this Folder.</returns>
         private ArrayList GetContentPtrs(SHCONTF flags)
         {
             var rVal = new ArrayList();
@@ -3189,7 +3193,7 @@ namespace WindowsApiLib.Shell
                         bool ItemIsFolder = IsFolderRel(ptr);
                         if (ItemIsFolder) Marshal.FreeCoTaskMem(ptr);
                     }
-                    else 
+                    else
                     {
                         rVal.Add(ptr);
                     }
@@ -3229,10 +3233,10 @@ namespace WindowsApiLib.Shell
                 // ElseIf HR = &HFFFFFFFF800704C6 Then
                 // GoTo NORMAL
             }
-            #if DEBUG
-                // If Not IsNothing(IEnum) Then Marshal.ReleaseComObject(IEnum)
-                // Marshal.ThrowExceptionForHR(HR)
-            #endif
+#if DEBUG
+            // If Not IsNothing(IEnum) Then Marshal.ReleaseComObject(IEnum)
+            // Marshal.ThrowExceptionForHR(HR)
+#endif
             rVal = new ArrayList(); // sometimes it is a non-fatal error,ignored
             goto NORMAL;
         }
@@ -3242,7 +3246,6 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
-        #endregion
 
         /// <summary>
         /// CShItemUpdateType is an Enum of the various types of change that will be reported in a ShellItemUpdateEventArgs.
