@@ -768,21 +768,25 @@ namespace ExpTreeLib
         {
             if (!item.IsFolder) return false;
 
-            // Assume these might have subfolders to avoid slow enumeration during tree build/refresh.
-            // Removable drives and remote/network items are skipped to maintain performance.
-            if (item.IsRemovable || item.IsRemote) return true;
-
-            // System folders (e.g., Network, Printers) should also skip accurate check.
-            if (item.FullPath.StartsWith("::")) return true;
-
-            // Fallback for mapped network drives if IsRemote hasn't been fully determined yet.
-            if (item.IsNetworkDrive) return true;
-
-            if (item.HasSubFolders)
+            // Determine if we should perform the accurate lookahead check.
+            // Rules from user: 
+            // 1. Accurate check for the root node (Desktop) and all file system objects.
+            // 2. Skip slow devices (Network, Removable) and virtual locations (other than the root).
+            
+            bool performAccurateCheck = false;
+            if (ReferenceEquals(item, RootItem) || ReferenceEquals(item, CShellItem.GetDeskTop()))
             {
-                // For local folders (including local disks), check accurately to avoid false-positive expansion arrows.
-                // This forces a one-level lookahead, which ensures the arrow is only shown
-                // if there are actually subfolders that match the current display settings.
+                performAccurateCheck = true;
+            }
+            else if (item.IsFileSystem && !item.IsRemote && !item.IsRemovable && !item.IsNetworkDrive)
+            {
+                performAccurateCheck = true;
+            }
+
+            if (performAccurateCheck)
+            {
+                // Force a one-level lookahead to ensure the arrow accurately reflects visible contents.
+                // item.Directories will perform/retrieve the enumeration.
                 foreach (CShellItem sub in item.Directories)
                 {
                     if (m_showHiddenFolders || !sub.IsHidden)
@@ -790,15 +794,14 @@ namespace ExpTreeLib
                         return true;
                     }
                 }
+                // If we reach here, we've verified that there are no visible subfolders.
+                return false;
             }
-            else if (item.IsHidden)
+            else
             {
-                if (item.DirCount > 0)           // 02/12/2014
-                {
-                    return true;
-                }
+                // Fast-path: rely on shell hints for complex/slow items to maintain responsiveness.
+                return item.HasSubFolders || (item.IsHidden && item.DirCount > 0);
             }
-            return false;
         }
 
         private void ClearTree()
