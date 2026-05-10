@@ -923,6 +923,7 @@ namespace ExpTreeLib
 
             // Update primary text
             lvi.Text = item.DisplayName;
+            lvi.Name = item.FullPath;
             lvi.Tag = item;
             item.LVItem = lvi;
 
