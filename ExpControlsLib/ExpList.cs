@@ -12,8 +12,6 @@ using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.TrayNotify;
 using static WindowsApiLib.Shell.CShellItem;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
@@ -294,13 +292,48 @@ namespace ExpTreeLib
         /// </summary>
         [Browsable(true), Category("Misc"),
          Description("The current path of ExpFileList"),
-         DefaultValue("")]
+         DefaultValue(null)]
         public string CurrentPath
         {
             get => _CurrentPath;
-            set => _CurrentPath = value;
+            set
+            {
+                if (string.IsNullOrEmpty(value))
+                {
+                    _CurrentPath = value;
+                    _ListView.BeginUpdate();
+                    _ListView.Items.Clear();
+                    _itemIndex.Clear();
+                    if (_currentlyLoadedFolder != null)
+                    {
+                        _currentlyLoadedFolder.ClearItems(true);
+                        _currentlyLoadedFolder = null;
+                    }
+                    _ListView.EndUpdate();
+                }
+                else
+                {
+                    if (value == _CurrentPath && _currentlyLoadedFolder != null) return;
+                    try
+                    {
+                        CShellItem csi = CShellItem.GetCShItem(value);
+                        if (csi != null && csi.IsFolder)
+                        {
+                            DisplayFiles(value, csi, true);
+                        }
+                        else
+                        {
+                            _CurrentPath = value;
+                        }
+                    }
+                    catch
+                    {
+                        _CurrentPath = value;
+                    }
+                }
+            }
         }
-        private string _CurrentPath = "Desktop";
+        private string _CurrentPath = null;
 
         /// <summary>
         /// Gets the <see cref="CShellItem"/> representing the currently selected folder in the tree or the folder being viewed.
@@ -909,6 +942,9 @@ namespace ExpTreeLib
                     {
                         case "DisplayName":
                             text = item.DisplayName;
+                            break;
+                        case "TypeName":
+                            text = item.TypeName;
                             break;
                         case "Size":
                             if (!item.IsDisk && item.IsFileSystem && !item.IsFolder)

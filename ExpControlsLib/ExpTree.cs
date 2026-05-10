@@ -498,6 +498,7 @@ namespace ExpTreeLib
         /// on certain versions of Windows (primarily the older, unsupported versions).</remarks>
         public enum StartDir : int
         {
+            None = -1,
             Desktop = 0x0,
             Programs = 0x2,
             Controls = 0x3,
@@ -530,7 +531,7 @@ namespace ExpTreeLib
             AdminTools = 0x30
         }
 
-        private StartDir m_StartUpDirectory = StartDir.Desktop;
+        private StartDir m_StartUpDirectory = StartDir.None;
 
         // 11/04/2012 Removed DefaultValue Property from this declaration.
         /// <summary>
@@ -542,6 +543,7 @@ namespace ExpTreeLib
         [Category("Options")]
         [Description("Sets the Initial Directory of the Tree")]
         [Browsable(true)]
+        [DefaultValue(StartDir.None)]
         public StartDir StartUpDirectory
         {
             get
@@ -622,6 +624,7 @@ namespace ExpTreeLib
             bool ExpandANodeRet = default;
             ExpandANodeRet = false;     // assume failure
             var baseNode = Root;
+            if (baseNode == null) return false; // 05/09/2026 - Handle uninitialized tree
             tv1.BeginUpdate();
             // do the drill down -- Node to expand must be included in tree
             baseNode.Expand(); // Ensure base is filled in
@@ -681,10 +684,18 @@ namespace ExpTreeLib
 
         private void OnStartUpDirectoryChanged(StartDir newVal)
         {
+            if (newVal == StartDir.None)
+            {
+                tv1.BeginUpdate();
+                ClearTree();
+                tv1.EndUpdate();
+                return;
+            }
+
             tv1.BeginUpdate();
             ClearTree();
             CShellItem special;
-            special = CShellItem.GetCShItem((CSIDL)m_StartUpDirectory);
+            special = CShellItem.GetCShItem((CSIDL)newVal);
             Root = new TreeNode(special.DisplayName)
             {
                 Tag = special,
@@ -696,7 +707,6 @@ namespace ExpTreeLib
             Root.Expand();
             tv1.EndUpdate();
         }
-
         private void BuildTree(CShellItem[] L1)
         {
             Array.Sort(L1);
