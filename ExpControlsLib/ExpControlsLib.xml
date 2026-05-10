@@ -1085,6 +1085,13 @@
             </ul>
             </remarks>
         </member>
+        <member name="M:ExpTreeLib.ExpTree.ShouldHaveDummy(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Determines if a TreeNode for the given CShellItem should have a dummy node (expansion arrow).
+            </summary>
+            <param name="item">The CShellItem to check.</param>
+            <returns>True if it should have a dummy node, false otherwise.</returns>
+        </member>
         <member name="M:ExpTreeLib.ExpTree.RefreshTree(WindowsApiLib.Shell.CShellItem)">
             <summary>RefreshTree Method thanks to Calum McLellan</summary>
         </member>

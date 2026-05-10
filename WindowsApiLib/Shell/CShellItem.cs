@@ -1746,23 +1746,23 @@ namespace WindowsApiLib.Shell
                 {
                     return m_HasSubFolders;
                 }
-                else if (m_IsRemote)          // 4/14/2012
+                else if (m_IsRemote)
                 {
-                    m_HasSubFolders = true;      // 4/14/2012
-                    m_HasSubFoldersSetup = true; // 4/14/2012
+                    m_HasSubFolders = true;
+                    m_HasSubFoldersSetup = true;
                 }
                 else
                 {
-                    var shfi = new SHFILEINFO() { dwAttributes = SFGAO.HASSUBFOLDER };
-                    var dwflag = SHGFI.PIDL | SHGFI.ATTRIBUTES | SHGFI.ATTR_SPECIFIED;
+                    var psfi = new SHFILEINFO() { dwAttributes = SFGAO.HASSUBFOLDER };
+                    var uFlags = SHGFI.PIDL | SHGFI.ATTRIBUTES | SHGFI.ATTR_SPECIFIED;
                     int dwAttr = 0;
-                    var H = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+                    var H = SHGetFileInfo(m_Pidl, dwAttr, ref psfi, cbFileInfo, uFlags);
                     if (H.ToInt32() != NOERROR && H.ToInt32() != 1)
                     {
                         Marshal.ThrowExceptionForHR(H.ToInt32());
                     }
-                    m_HasSubFolders = (shfi.dwAttributes & SFGAO.HASSUBFOLDER) != 0;
-                    m_SFGAO_Attributes = m_SFGAO_Attributes | shfi.dwAttributes & SFGAO.HASSUBFOLDER;
+                    m_HasSubFolders = (psfi.dwAttributes & SFGAO.HASSUBFOLDER) != 0;
+                    m_SFGAO_Attributes = m_SFGAO_Attributes | psfi.dwAttributes & SFGAO.HASSUBFOLDER;
                     m_HasSubFoldersSetup = true;
                 }
                 return m_HasSubFolders;

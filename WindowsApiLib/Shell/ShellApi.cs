@@ -592,13 +592,50 @@ namespace WindowsApiLib.Shell
         public static extern IntPtr SHGetFileInfo(string pszPath, int dwFileAttributes, ref SHFILEINFO sfi, int cbsfi, int uFlags);
 
 
-
-
-        // <summary>
-        // SHGetFileInfo  - for a given ItemIDList as IntPtr
-        // </summary>
+        /// <summary>
+        /// Retrieves information about a file object from the Windows Shell, such as its display name,
+        /// type name, icon, attributes, or system image list index.
+        /// </summary>
+        /// <param name="pszPath">
+        /// The locator of the file, folder, or file type to query.
+        /// If <c>uFlags</c> includes <c>SHGFI.PIDL</c>, this can be a PIDL
+        /// 
+        /// If <c>uFlags</c> includes <c>SHGFI_USEFILEATTRIBUTES</c>, this can be a file extension
+        /// (for example, <c>".txt"</c>) and does not need to reference an existing item.
+        /// </param>
+        /// <param name="dwFileAttributes">
+        /// File attributes to use when <c>SHGFI_USEFILEATTRIBUTES</c> is specified (for example,
+        /// <c>FILE_ATTRIBUTE_NORMAL</c> or <c>FILE_ATTRIBUTE_DIRECTORY</c>); otherwise typically <c>0</c>.
+        /// </param>
+        /// <param name="psfi">
+        /// On success, receives the requested Shell file information in an <see cref="SHFILEINFOW"/> structure.
+        /// </param>
+        /// <param name="cbFileInfo">
+        /// The size, in bytes, of the <see cref="SHFILEINFOW"/> structure pointed to by <paramref name="psfi"/>.
+        /// Typically <c>(uint)Marshal.SizeOf&lt;SHFILEINFOW&gt;()</c>.
+        /// </param>
+        /// <param name="uFlags">
+        /// A combination of <c>SHGFI_*</c> flags that specifies which information to retrieve
+        /// (for example, <c>SHGFI_ICON</c>, <c>SHGFI_TYPENAME</c>, <c>SHGFI_SYSICONINDEX</c>).
+        /// </param>
+        /// <returns>
+        ///     Returns a value whose meaning depends on <paramref name="uFlags"/>:
+        ///     <list type="bullet">
+        ///     <item><description>
+        ///     If <c>SHGFI_SYSICONINDEX</c> is specified, returns a handle to the system image list.
+        ///     </description></item>
+        ///     <item><description>
+        ///     Otherwise, returns a nonzero value on success; <c>0</c> on failure.
+        ///     </description></item>
+        ///     </list>
+        /// </returns>
+        /// <remarks>
+        /// This function is the Unicode variant of <c>SHGetFileInfo</c>.
+        /// If <c>SHGFI_ICON</c> is requested, <c>psfi.hIcon</c> must be released with <c>DestroyIcon</c>
+        /// when no longer needed to avoid resource leaks.
+        /// </remarks>
         [DllImport("shell32", CharSet = CharSet.Auto)]
-        public static extern IntPtr SHGetFileInfo(IntPtr ppidl, int dwFileAttributes, ref SHFILEINFO sfi, int cbsfi, SHGFI uFlags);
+        public static extern IntPtr SHGetFileInfo(IntPtr pszPath, int dwFileAttributes, ref SHFILEINFO psfi, int cbFileInfo, SHGFI uFlags);
 
 
 

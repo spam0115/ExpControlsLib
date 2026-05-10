@@ -751,22 +751,54 @@ namespace ExpTreeLib
                 ImageIndex = GetIconIndex(item, false),
                 SelectedImageIndex = GetIconIndex(item, true)
             };
-            if (item.IsRemovable)
+
+            if (ShouldHaveDummy(item))
             {
                 newNode.Nodes.Add(new TreeNode(" : "));
             }
-            else if (item.HasSubFolders)
+            return newNode;
+        }
+
+        /// <summary>
+        /// Determines if a TreeNode for the given CShellItem should have a dummy node (expansion arrow).
+        /// </summary>
+        /// <param name="item">The CShellItem to check.</param>
+        /// <returns>True if it should have a dummy node, false otherwise.</returns>
+        private bool ShouldHaveDummy(CShellItem item)
+        {
+            if (!item.IsFolder) return false;
+
+            // Assume these might have subfolders to avoid slow enumeration during tree build/refresh.
+            // Removable drives and remote/network items are skipped to maintain performance.
+            if (item.IsRemovable || item.IsRemote) return true;
+
+            // System folders (e.g., Network, Printers) should also skip accurate check.
+            if (item.FullPath.StartsWith("::")) return true;
+
+            // Fallback for mapped network drives if IsRemote hasn't been fully determined yet.
+            if (item.IsNetworkDrive) return true;
+
+            if (item.HasSubFolders)
             {
-                newNode.Nodes.Add(new TreeNode(" : "));
+                // For local folders (including local disks), check accurately to avoid false-positive expansion arrows.
+                // This forces a one-level lookahead, which ensures the arrow is only shown
+                // if there are actually subfolders that match the current display settings.
+                foreach (CShellItem sub in item.Directories)
+                {
+                    if (m_showHiddenFolders || !sub.IsHidden)
+                    {
+                        return true;
+                    }
+                }
             }
             else if (item.IsHidden)
             {
                 if (item.DirCount > 0)           // 02/12/2014
                 {
-                    newNode.Nodes.Add(new TreeNode(" : "));
+                    return true;
                 }
             }
-            return newNode;
+            return false;
         }
 
         private void ClearTree()
@@ -1549,7 +1581,7 @@ namespace ExpTreeLib
                                             }
                                             node.Collapse(false);
                                             node.Nodes.Clear();
-                                            if (item.HasSubFolders)
+                                            if (ShouldHaveDummy(item))
                                             {
                                                 node.Nodes.Add(new TreeNode(" : "));
                                             }
@@ -1589,27 +1621,16 @@ namespace ExpTreeLib
                                         // Else    '6/5/2012 - check Expandable - in case a Folder added or Deleted which may happen without another message (Async ops)
                                         if (UNode.Nodes.Count == 0)     // Was not Expandable, should it be? (Folder may have been added)
                                         {
-                                            if (e.Item.IsRemovable)
+                                            if (ShouldHaveDummy(e.Item))
                                             {
                                                 UNode.Nodes.Add(new TreeNode(" : "));
-                                            }
-                                            else if (e.Item.HasSubFolders)
-                                            {
-                                                UNode.Nodes.Add(new TreeNode(" : "));
-                                            }
-                                            else if (e.Item.IsHidden)
-                                            {
-                                                if (e.Item.DirCount > 0)             // 02/12/2014
-                                                {
-                                                    UNode.Nodes.Add(new TreeNode(" : "));
-                                                }
                                             }
                                             UNode.Collapse(false);   // 02/12/2014 can only have 0 or 1 (dummy) node - collapse to avoid showing dummy
                                         }
                                         // 02/12/2014 ElseIf Block recast and now uses DirCount rather than Directories
                                         else if (UNode.Nodes.Count == 1 && UNode.Nodes[0].Text.Equals(" : ")) // Should it still have dummy? (Folder may have been Deleted)
                                         {
-                                            if (!e.Item.IsRemovable && !e.Item.HasSubFolders && e.Item.IsHidden && e.Item.DirCount == 0)
+                                            if (!ShouldHaveDummy(e.Item))
                                             {
                                                 UNode.Nodes.Clear();
                                             }
