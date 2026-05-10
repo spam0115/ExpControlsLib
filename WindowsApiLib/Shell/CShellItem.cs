@@ -409,7 +409,6 @@ namespace WindowsApiLib.Shell
             {
                 m_Pidl = pidl;
                 // Get some attributes
-                IShellFolder m_Folder = null;
                 SHGetDesktopFolder(ref m_Folder);
 
                 SetUpAttributes(m_Folder, pidl);
@@ -673,6 +672,11 @@ namespace WindowsApiLib.Shell
         {
             // Get the Path
             // Debug.WriteLine("SetPath:" & Me.Parent.DisplayName & " Parent Folder = " & Me.Parent.ToString & " Parent Path = " & Me.Parent.Path)
+            if (Parent is null)
+            {
+                m_Path = "Unknown";
+                return;
+            }
             var folder = Parent.Folder;
             using (var memScope = new CoTaskMemPoolScope(WinSDK.s_memPool_MaxName))
             {
