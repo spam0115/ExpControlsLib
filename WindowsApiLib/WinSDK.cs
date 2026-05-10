@@ -48,7 +48,7 @@ namespace WindowsApiLib
         public static extern void CoTaskMemFree(IntPtr ptr);
 
 
-        public const int MAX_PATH = 260; // Standard Windows MAX_PATH for shell structures
+        public const int MAX_PATH = 260; // must be 260 because of struct size expectations by Windows
         public const int MAX_PATH_NT = 32767; // new nt limit but requires registry edit
 
         // Thread-safe pool for CoTaskMem allocations to reduce allocation overhead

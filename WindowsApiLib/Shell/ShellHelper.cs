@@ -672,7 +672,7 @@ namespace WindowsApiLib.Shell
                     return null;
 
                 // MAX_PATH
-                var buffer = new char[260];
+                var buffer = new char[WinSDK.MAX_PATH];
                 if (!SHGetPathFromIDListW(pidl, buffer))
                     return null;
 

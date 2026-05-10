@@ -79,7 +79,7 @@ namespace WindowsApiLib
 
             try
             {
-                var sb = new StringBuilder(260);
+                var sb = new StringBuilder(WinSDK.MAX_PATH);
                 if (ShellAPI.SHGetPathFromIDList(pidl, sb))
                     return sb.ToString();
                 else
