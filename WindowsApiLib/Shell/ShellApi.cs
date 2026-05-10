@@ -134,7 +134,7 @@ namespace WindowsApiLib.Shell
             public IntPtr hIcon;
             public int iIcon;
             public SFGAO dwAttributes;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = WinSDK.MAX_NAME)]
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = WinSDK.MAX_PATH)]
             public string szDisplayName;
             [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
             public string szTypeName;
@@ -190,7 +190,7 @@ namespace WindowsApiLib.Shell
             public int dwReserved0;
             public int dwReserved1;
             
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = WinSDK.MAX_NAME)]
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = WinSDK.MAX_PATH)]
             public string cFileName;
 
             [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
@@ -378,7 +378,7 @@ namespace WindowsApiLib.Shell
             public int dwReserved0;
             public int dwReserved1;
 
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = WinSDK.MAX_NAME)]
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = WinSDK.MAX_PATH)]
             public string cFileName;
 
             [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]

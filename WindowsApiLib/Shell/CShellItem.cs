@@ -692,8 +692,8 @@ namespace WindowsApiLib.Shell
                     int HR = folder.GetDisplayNameOf(pidl, itemflags, strr); //might want to change this so it get's this lazily
                     if (HR == S_OK)
                     {
-                        var buf = new StringBuilder(WinSDK.MAX_NAME);
-                        HR = StrRetToBuf(strr, pidl, buf, WinSDK.MAX_NAME);
+                        var buf = new StringBuilder(WinSDK.MAX_PATH);
+                        HR = StrRetToBuf(strr, pidl, buf, WinSDK.MAX_PATH);
                         if (HR == NOERROR)
                         {
                             m_Path = buf.ToString();
@@ -2436,7 +2436,7 @@ namespace WindowsApiLib.Shell
                     if (HR == S_OK)
                     {
                         WIN32_FIND_DATA wfd;
-                        var SB = new StringBuilder(WinSDK.MAX_PATH);
+                        var SB = new StringBuilder(WinSDK.MAX_PATH_NT);
                         HR = m_Link.GetPath(SB, SB.Capacity, out wfd, SLGP.UNCPRIORITY);
                         if (HR == S_OK)
                         {

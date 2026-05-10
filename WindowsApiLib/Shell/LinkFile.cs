@@ -130,7 +130,7 @@ namespace WindowsApiLib
             get
             {
                 WIN32_FIND_DATA wfd;
-                var SB = new StringBuilder(WinSDK.MAX_PATH);
+                var SB = new StringBuilder(WinSDK.MAX_PATH_NT);
                 int HR;
                 HR = m_Link.GetPath(SB, SB.Capacity, out wfd, SLGP.UNCPRIORITY);
                 if (HR == S_OK)
