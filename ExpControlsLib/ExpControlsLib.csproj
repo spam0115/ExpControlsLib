@@ -41,6 +41,7 @@
     <OutputPath>bin\</OutputPath>
     <NoWarn>$(NoWarn);WFO1000</NoWarn>
     <Deterministic>false</Deterministic>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DefineDebug>true</DefineDebug>
