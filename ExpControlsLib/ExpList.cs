@@ -63,7 +63,7 @@ namespace ExpControlsLib
         // Avoid Globalization problem-- an empty timevalue
         private readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
 
-        private CShellItem _currentlyLoadedFolder;
+        private CShellItem _currentFolderCsi;
         private CShellItem _selectedItem; // The currently selected item within the list
         private Dictionary<string, ListViewItem> _itemIndex = new Dictionary<string, ListViewItem>(StringComparer.OrdinalIgnoreCase);
 
@@ -128,6 +128,18 @@ namespace ExpControlsLib
         [Category("Action")]
         [Description("Fires on arrow key is released over an item")]
         public event ExpListItemArrowKeyUpEventHandler ExpListItemArrowKeyUp;
+
+        /// <summary>
+        /// Delegate for the <see cref="ExpListFolderChanged"/> event.
+        /// </summary>
+        /// <param name="Item">The <see cref="CShellItem"/> of the folder that was just loaded.</param>
+        public delegate void ExpListFolderChangedEventHandler(CShellItem Item);
+        /// <summary>
+        /// Occurs after the currently loaded folder has changed.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires after the currently loaded folder has changed")]
+        public event ExpListFolderChangedEventHandler ExpListFolderChanged;
 
         /// <summary>
         /// Delegate for the <see cref="ExpListItemsChanged"/> event.
@@ -210,7 +222,7 @@ namespace ExpControlsLib
             _ListView.MouseDown += ExpFileList_MouseDown;
             _ListView.MouseUp += ExpFileList_MouseUp;
             _ListView.MouseMove += ExpFileList_MouseMove;
-            _ListView.KeyUp += ExpList_KeyUp;
+            _ListView.KeyUp += ExpFileList_KeyUp;
             _ListView.KeyDown += ExpFileList_KeyDown;
             _ListView.KeyPress += ExpFileList_KeyPress;
             _ListView.SelectedIndexChanged += ExpFileList_SelectedIndexChanged;
@@ -307,10 +319,11 @@ namespace ExpControlsLib
                     }
                     _CurrentPath = value;
                     _itemIndex.Clear();
-                    if (_currentlyLoadedFolder != null)
+                    if (_currentFolderCsi != null)
                     {
-                        _currentlyLoadedFolder.ClearItems(true);
-                        _currentlyLoadedFolder = null;
+                        _currentFolderCsi.ClearItems(true);
+                        _currentFolderCsi = null;
+                        ExpListFolderChanged?.Invoke(null);
                     }
                     if (needsUpdate)
                     {
@@ -319,7 +332,7 @@ namespace ExpControlsLib
                 }
                 else
                 {
-                    if (value == _CurrentPath && _currentlyLoadedFolder != null) return;
+                    if (value == _CurrentPath && _currentFolderCsi != null) return;
                     try
                     {
                         CShellItem csi = CShellItem.GetCShItem(value);
@@ -352,7 +365,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Gets the <see cref="CShellItem"/> representing the currently loaded/displayed folder.
         /// </summary>
-        public CShellItem CurrentFolderItem => _currentlyLoadedFolder;
+        public CShellItem CurrentFolderCsi => _currentFolderCsi;
 
         /// <summary>
         /// Gets or sets the vertical scroll position of the list view.
@@ -525,17 +538,17 @@ namespace ExpControlsLib
         /// Populates the list view with files and directories from the specified <see cref="CShellItem"/>.
         /// </summary>
         /// <param name="pathName">The display path of the folder.</param>
-        /// <param name="CSI">The <see cref="CShellItem"/> representing the folder to display.</param>
+        /// <param name="csi">The <see cref="CShellItem"/> representing the folder to display.</param>
         /// <param name="includeFolder">True to include subdirectories in the list.</param>
         /// <param name="reload">True to force a reload even if the same item was previously selected.</param>
-        public void DisplayFiles(string pathName, CShellItem CSI, bool includeFolder, bool reload = false)
+        public void DisplayFiles(string pathName, CShellItem csi, bool includeFolder, bool reload = false)
         {
-            if (_currentlyLoadedFolder != null && ReferenceEquals(_currentlyLoadedFolder, CSI) && reload == false) return;
+            if (_currentFolderCsi != null && ReferenceEquals(_currentFolderCsi, csi) && reload == false) return;
 
             // record history
-            if (!_isNavigatingHistory && _currentlyLoadedFolder != null)
+            if (!_isNavigatingHistory && _currentFolderCsi != null)
             {
-                _backHistory.Push(_currentlyLoadedFolder);
+                _backHistory.Push(_currentFolderCsi);
                 _forwardHistory.Clear();
             }
 
@@ -546,8 +559,12 @@ namespace ExpControlsLib
             var fileList = new ArrayList();
             int totalItems;
 
-            if (includeFolder) dirList.AddRange(CSI.Directories);
-            if (!CSI.DisplayName.Equals(CShellItem.StrMyComputer)) fileList.AddRange(CSI.Files);
+            if (csi == null)
+            {
+                csi = CShellItem.GetCShItem(pathName);
+            }
+            if (includeFolder) dirList.AddRange(csi.Directories);
+            if (!csi.DisplayName.Equals(CShellItem.StrMyComputer)) fileList.AddRange(csi.Files);
 
             if ((dirList.Count + fileList.Count) > 0)
             {
@@ -570,8 +587,8 @@ namespace ExpControlsLib
                 _ListView.Items.Clear();
                 _itemIndex.Clear();
 
-                if (_currentlyLoadedFolder != null && !ReferenceEquals(_currentlyLoadedFolder, CSI))
-                    _currentlyLoadedFolder.ClearItems(true);
+                if (_currentFolderCsi != null && !ReferenceEquals(_currentFolderCsi, csi))
+                    _currentFolderCsi.ClearItems(true);
 
                 _ListView.Refresh();
 
@@ -604,12 +621,12 @@ namespace ExpControlsLib
             {
                 _ListView.Items.Clear();
                 _itemIndex.Clear();
-                if (_currentlyLoadedFolder != null && !ReferenceEquals(_currentlyLoadedFolder, CSI))
-                    _currentlyLoadedFolder.ClearItems(true);
+                if (_currentFolderCsi != null && !ReferenceEquals(_currentFolderCsi, csi))
+                    _currentFolderCsi.ClearItems(true);
             }
 
-            _currentlyLoadedFolder = CSI;
-            _ListView.Tag = _currentlyLoadedFolder; // For ClvDropWrapper
+            _currentFolderCsi = csi;
+            _ListView.Tag = _currentFolderCsi; // For ClvDropWrapper
 
             _ListView.ListViewItemSorter = new LVColSorter(_ListView);
 
@@ -618,6 +635,8 @@ namespace ExpControlsLib
                 //LoadAndAssignThumbnails(GetThumbnailSizeForMode(DisplayMode));
                 LoadThumbnails(GetThumbnailSizeForMode(DisplayMode));
             }
+
+            ExpListFolderChanged?.Invoke(_currentFolderCsi);
         }
 
         #endregion
@@ -772,12 +791,12 @@ namespace ExpControlsLib
 
                 if (e.UpdateType == CShItemUpdateType.Created || e.UpdateType == CShItemUpdateType.Deleted)
                 {
-                    if (_currentlyLoadedFolder is null) return;
+                    if (_currentFolderCsi is null) return;
 
-                    if (_currentlyLoadedFolder.FullPath.StartsWith(":"))
-                        ExpListItemsChanged?.Invoke(_currentlyLoadedFolder.DisplayName, _currentlyLoadedFolder);
+                    if (_currentFolderCsi.FullPath.StartsWith(":"))
+                        ExpListItemsChanged?.Invoke(_currentFolderCsi.DisplayName, _currentFolderCsi);
                     else
-                        ExpListItemsChanged?.Invoke(_currentlyLoadedFolder.FullPath, _currentlyLoadedFolder);
+                        ExpListItemsChanged?.Invoke(_currentFolderCsi.FullPath, _currentFolderCsi);
                 }
             }
         }
@@ -791,7 +810,7 @@ namespace ExpControlsLib
         private void DoItemUpdate(object sender, ShellItemUpdateEventArgs e)
         {
             var parent = (CShellItem)sender;
-            if (!ReferenceEquals(parent, _currentlyLoadedFolder)) return;
+            if (!ReferenceEquals(parent, _currentFolderCsi)) return;
 
             try
             {
@@ -854,7 +873,7 @@ namespace ExpControlsLib
                             if (lvi != null)
                             {
                                 _itemIndex.Remove(lvi.Name); // Remove old path key
-                                if (!ReferenceEquals(e.Item.Parent, _currentlyLoadedFolder))
+                                if (!ReferenceEquals(e.Item.Parent, _currentFolderCsi))
                                 {
                                     _ListView.Items.Remove(lvi);
                                 }
@@ -1086,7 +1105,7 @@ namespace ExpControlsLib
         {
             if (_backHistory.Count > 0)
             {
-                _forwardHistory.Push(_currentlyLoadedFolder);
+                _forwardHistory.Push(_currentFolderCsi);
                 var prev = _backHistory.Pop();
                 _isNavigatingHistory = true;
                 try
@@ -1107,7 +1126,7 @@ namespace ExpControlsLib
         {
             if (_forwardHistory.Count > 0)
             {
-                _backHistory.Push(_currentlyLoadedFolder);
+                _backHistory.Push(_currentFolderCsi);
                 var next = _forwardHistory.Pop();
                 _isNavigatingHistory = true;
                 try
@@ -1126,9 +1145,9 @@ namespace ExpControlsLib
         /// </summary>
         public void GoUp()
         {
-            if (_currentlyLoadedFolder?.Parent != null)
+            if (_currentFolderCsi?.Parent != null)
             {
-                var parent = _currentlyLoadedFolder.Parent;
+                var parent = _currentFolderCsi.Parent;
                 DisplayFiles(parent.FullPath, parent, true);
             }
         }
@@ -1146,7 +1165,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Gets a value indicating whether the current folder has a parent folder to navigate to.
         /// </summary>
-        public bool CanGoUp => _currentlyLoadedFolder?.Parent != null;
+        public bool CanGoUp => _currentFolderCsi?.Parent != null;
 
         #endregion
 
@@ -1496,13 +1515,13 @@ namespace ExpControlsLib
             var enabled = (uint)MFT.GRAYED;
             DragDropEffects effects = DragDropEffects.None;
 
-            if (_currentlyLoadedFolder == null)
+            if (_currentFolderCsi == null)
             {
                 enabled = (uint)MFT.BYCOMMAND;
             }
             else
             {
-                effects = CanDropClipboard(_currentlyLoadedFolder);
+                effects = CanDropClipboard(_currentFolderCsi);
                 if ((effects & DragDropEffects.Copy) == DragDropEffects.Copy ||
                     (effects & DragDropEffects.Move) == DragDropEffects.Move)
                 {
@@ -1514,7 +1533,7 @@ namespace ExpControlsLib
             AppendMenu(comContextMenu, enabled, (int)CMD.PASTE, "Paste (Ctrl+V)");
 
             // Add additional paste and context operations if a folder is selected.
-            if (_currentlyLoadedFolder != null)
+            if (_currentFolderCsi != null)
             {
                 enabled = (uint)MFT.GRAYED;
                 if ((effects & DragDropEffects.Link) == DragDropEffects.Link)
@@ -1526,11 +1545,11 @@ namespace ExpControlsLib
                 // Add New menu for writable folders (excluding special shell folders like ::).
                 // The "New" submenu is managed by m_WindowsContextMenu.SetUpNewMenu(),
                 // which adds file creation options for the selected folder.
-                if (_currentlyLoadedFolder.IsFolder &&
-                    ((!_currentlyLoadedFolder.FullPath.StartsWith("::")) || _currentlyLoadedFolder == CShellItem.GetDeskTop()))
+                if (_currentFolderCsi.IsFolder &&
+                    ((!_currentFolderCsi.FullPath.StartsWith("::")) || _currentFolderCsi == CShellItem.GetDeskTop()))
                 {
                     int xIndex = GetMenuItemCount(comContextMenu.ToInt32());
-                    m_WindowsContextMenu.SetUpNewMenu(_currentlyLoadedFolder, comContextMenu, xIndex);
+                    m_WindowsContextMenu.SetUpNewMenu(_currentFolderCsi, comContextMenu, xIndex);
                     AppendMenu(comContextMenu, (int)MFT.SEPARATOR, 0, string.Empty);
                 }
 
@@ -1627,7 +1646,7 @@ namespace ExpControlsLib
                         goto CLEANUP;
                     case CMD.REFRESH:
                         // Refresh the folder contents and re-sort the ListView items.
-                        _currentlyLoadedFolder?.UpdateRefresh();
+                        _currentFolderCsi?.UpdateRefresh();
                         SortLVItems();
                         goto CLEANUP;
                     case CMD.SELECT_ALL:
@@ -1635,7 +1654,7 @@ namespace ExpControlsLib
                         foreach (ListViewItem item in _ListView.Items) item.Selected = true;
                         goto CLEANUP;
                     case CMD.PASTE:
-                        if (_currentlyLoadedFolder != null)
+                        if (_currentFolderCsi != null)
                         {
                             cmi.lpVerb = Marshal.StringToHGlobalAnsi("paste");
                             cmi.lpVerbW = Marshal.StringToHGlobalUni("paste");
@@ -1667,16 +1686,16 @@ namespace ExpControlsLib
                         goto CLEANUP;
                 }
 
-                if (_currentlyLoadedFolder != null)
+                if (_currentFolderCsi != null)
                 {
                     int prgf = 0;
                     IntPtr iunk = IntPtr.Zero;
 
-                    IShellFolder folder = _currentlyLoadedFolder == CShellItem.GetDeskTop()
-                        ? _currentlyLoadedFolder.Folder
-                        : _currentlyLoadedFolder.Parent.Folder;
+                    IShellFolder folder = _currentFolderCsi == CShellItem.GetDeskTop()
+                        ? _currentFolderCsi.Folder
+                        : _currentFolderCsi.Parent.Folder;
 
-                    IntPtr relPidl = CPidl.ILFindLastID(_currentlyLoadedFolder.PIDL);
+                    IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
 
                     HR = folder.GetUIObjectOf(IntPtr.Zero, 1, new[] { relPidl }, IID_IContextMenu, prgf, out iunk);
 #if DEBUG
@@ -1710,19 +1729,6 @@ namespace ExpControlsLib
 
         #region Keyboard Events
 
-        /// <summary>
-        /// Handles the KeyUp event for navigation keys.
-        /// </summary>
-        private void ExpList_KeyUp(object sender, KeyEventArgs e)
-        {
-            if ((e.KeyCode == Keys.Up || e.KeyCode == Keys.Down || e.KeyCode == Keys.Left || e.KeyCode == Keys.Right)
-                && _ListView.SelectedItems.Count > 0)
-            {
-                var csi = (CShellItem)_ListView.SelectedItems[0].Tag;
-                ExpListItemArrowKeyUp?.Invoke(csi.FullPath, csi);
-            }
-            OnKeyUp(e);
-        }
 
         /// <summary>
         /// Handles KeyDown events for shortcuts (Ctrl+A, Ctrl+C/V/X, Delete, F2, F5, Enter).
@@ -1746,18 +1752,18 @@ namespace ExpControlsLib
                 }
             }
 
-            if (e.KeyCode == Keys.Delete)
-            {
-                WinMenu("delete");
-                if (_ListView.SelectedItems.Count > 150) _currentlyLoadedFolder?.UpdateRefresh();
-            }
+            //if (e.KeyCode == Keys.Delete)
+            //{
+            //    WinMenu("delete");
+            //    if (_ListView.SelectedItems.Count > 150) _currentFolderCsi?.UpdateRefresh();
+            //}
 
             if (e.KeyCode == Keys.F2 && _ListView.SelectedItems.Count > 0)
                 _ListView.SelectedItems[0].BeginEdit();
 
             if (e.KeyCode == Keys.F5)
             {
-                _currentlyLoadedFolder?.UpdateRefresh();
+                _currentFolderCsi?.UpdateRefresh();
                 SortLVItems();
             }
 
@@ -1787,11 +1793,34 @@ namespace ExpControlsLib
                     }
                 }
             }
+
             OnKeyDown(e);
+        }
+
+
+        /// <summary>
+        /// Handles the KeyUp event for navigation keys.
+        /// </summary>
+        private void ExpFileList_KeyUp(object sender, KeyEventArgs e)
+        {
+            if ((e.KeyCode == Keys.Up || e.KeyCode == Keys.Down || e.KeyCode == Keys.Left || e.KeyCode == Keys.Right)
+                && _ListView.SelectedItems.Count > 0)
+            {
+                var csi = (CShellItem)_ListView.SelectedItems[0].Tag;
+                ExpListItemArrowKeyUp?.Invoke(csi.FullPath, csi);
+            }
+            else if (e.KeyCode == Keys.Delete)
+            {
+                WinMenu("delete");
+                if (_ListView.SelectedItems.Count > 150) _currentFolderCsi?.UpdateRefresh();
+            }
+
+            OnKeyUp(e);
         }
 
         private void ExpFileList_KeyPress(object sender, KeyPressEventArgs e)
         {
+
             OnKeyPress(e);
         }
 
@@ -1815,7 +1844,7 @@ namespace ExpControlsLib
         private void WinMenu(string cmd)
         {
             // Validate preconditions
-            if (_currentlyLoadedFolder == null || !_currentlyLoadedFolder.IsFolder)
+            if (_currentFolderCsi == null || !_currentFolderCsi.IsFolder)
             {
                 return;
             }
@@ -1834,9 +1863,9 @@ namespace ExpControlsLib
                     // Get the target folder for paste operation
                     try
                     {
-                        folder = _currentlyLoadedFolder == CShellItem.GetDeskTop()
-                            ? _currentlyLoadedFolder.Folder
-                            : _currentlyLoadedFolder.Parent?.Folder;
+                        folder = _currentFolderCsi == CShellItem.GetDeskTop()
+                            ? _currentFolderCsi.Folder
+                            : _currentFolderCsi.Parent?.Folder;
 
                         if (folder == null)
                         {
@@ -1846,7 +1875,7 @@ namespace ExpControlsLib
                             return;
                         }
 
-                        IntPtr relPidl = CPidl.ILFindLastID(_currentlyLoadedFolder.PIDL);
+                        IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
                         if (relPidl == IntPtr.Zero)
                         {
                             Debug.WriteLine("Failed to get relative PIDL for current folder");
@@ -1873,7 +1902,7 @@ namespace ExpControlsLib
 
                     try
                     {
-                        folder = _currentlyLoadedFolder.Folder;
+                        folder = _currentFolderCsi.Folder;
                         if (folder == null)
                         {
                             Debug.WriteLine("Failed to get folder interface for selected items");

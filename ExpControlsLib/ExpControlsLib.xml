@@ -499,6 +499,17 @@
             Occurs when an arrow key is released, changing the selection.
             </summary>
         </member>
+        <member name="T:ExpControlsLib.ExpList.ExpListFolderChangedEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListFolderChanged"/> event.
+            </summary>
+            <param name="Item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> of the folder that was just loaded.</param>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.ExpListFolderChanged">
+            <summary>
+            Occurs after the currently loaded folder has changed.
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.ExpList.ExpListItemsChangedEventHandler">
             <summary>
             Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListItemsChanged"/> event.
@@ -577,7 +588,7 @@
             Gets the <see cref="T:WindowsApiLib.Shell.CShellItem"/> representing the currently selected folder in the tree or the folder being viewed.
             </summary>
         </member>
-        <member name="P:ExpControlsLib.ExpList.CurrentFolderItem">
+        <member name="P:ExpControlsLib.ExpList.CurrentFolderCsi">
             <summary>
             Gets the <see cref="T:WindowsApiLib.Shell.CShellItem"/> representing the currently loaded/displayed folder.
             </summary>
@@ -645,7 +656,7 @@
             Populates the list view with files and directories from the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
             </summary>
             <param name="pathName">The display path of the folder.</param>
-            <param name="CSI">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> representing the folder to display.</param>
+            <param name="csi">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> representing the folder to display.</param>
             <param name="includeFolder">True to include subdirectories in the list.</param>
             <param name="reload">True to force a reload even if the same item was previously selected.</param>
         </member>
@@ -827,14 +838,14 @@
             Mixing release mechanisms or skipping releases can cause access violations.
             </remarks>
         </member>
-        <member name="M:ExpControlsLib.ExpList.ExpList_KeyUp(System.Object,System.Windows.Forms.KeyEventArgs)">
-            <summary>
-            Handles the KeyUp event for navigation keys.
-            </summary>
-        </member>
         <member name="M:ExpControlsLib.ExpList.ExpFileList_KeyDown(System.Object,System.Windows.Forms.KeyEventArgs)">
             <summary>
             Handles KeyDown events for shortcuts (Ctrl+A, Ctrl+C/V/X, Delete, F2, F5, Enter).
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ExpFileList_KeyUp(System.Object,System.Windows.Forms.KeyEventArgs)">
+            <summary>
+            Handles the KeyUp event for navigation keys.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.LaunchFile(WindowsApiLib.Shell.CShellItem)">
