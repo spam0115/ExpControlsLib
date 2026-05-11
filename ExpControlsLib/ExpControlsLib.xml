@@ -582,6 +582,11 @@
             Gets the <see cref="T:WindowsApiLib.Shell.CShellItem"/> representing the currently loaded/displayed folder.
             </summary>
         </member>
+        <member name="P:ExpControlsLib.ExpList.VerticalScrollPosition">
+            <summary>
+            Gets or sets the vertical scroll position of the list view.
+            </summary>
+        </member>
         <member name="P:ExpControlsLib.ExpList.Columns">
             <summary>
             Gets the collection of all column headers that appear in the list view.

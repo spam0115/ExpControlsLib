@@ -38,6 +38,7 @@ namespace WindowsApiLib.Shell
 
         // ListView Message Constants
         public const int LVM_FIRST = 0x1000;
+        public const int LVM_SCROLL = LVM_FIRST + 20;
         public const int LVM_SETITEMSTATE = LVM_FIRST + 43;
         public const int LVM_SETBKIMAGE = LVM_FIRST + 68;
         public const int LVM_SETTEXTBKCOLOR = LVM_FIRST + 38;
@@ -780,11 +781,17 @@ namespace WindowsApiLib.Shell
         #region        user32 Dll Declarations
 
         #region            SendMessage
+        public const int SB_HORZ = 0;
+        public const int SB_VERT = 1;
+
         // <summary>
         // Sends a message to some Window
         // </summary>
         [DllImport("User32.dll", CharSet = CharSet.Auto)]
         public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, int wParam, int lParam);
+
+        [DllImport("user32.dll")]
+        public static extern int GetScrollPos(IntPtr hWnd, int nBar);
 
         [DllImport("user32", CharSet = CharSet.Auto)]
         public static extern int SendMessage(IntPtr hWnd, WM wMsg, int wParam, IntPtr lParam);

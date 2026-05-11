@@ -354,6 +354,25 @@ namespace ExpControlsLib
         /// </summary>
         public CShellItem CurrentFolderItem => _currentlyLoadedFolder;
 
+        /// <summary>
+        /// Gets or sets the vertical scroll position of the list view.
+        /// </summary>
+        [Browsable(false)]
+        public int VerticalScrollPosition
+        {
+            get
+            {
+                if (!_ListView.IsHandleCreated) return 0;
+                return GetScrollPos(_ListView.Handle, SB_VERT);
+            }
+            set
+            {
+                if (!_ListView.IsHandleCreated) return;
+                int current = GetScrollPos(_ListView.Handle, SB_VERT);
+                SendMessage(_ListView.Handle, (uint)LVM_SCROLL, 0, value - current);
+            }
+        }
+
 
         /// <summary>
         /// Gets the collection of all column headers that appear in the list view.
