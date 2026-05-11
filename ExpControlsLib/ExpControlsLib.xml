@@ -1209,6 +1209,23 @@
             <returns>The full path to the input node within a tree</returns>
             <remarks>Used only for some Debug.WriteLine statements.</remarks>
         </member>
+        <member name="F:ExpControlsLib.ExpTree.components">
+            <summary> 
+            Required designer variable.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Dispose(System.Boolean)">
+            <summary> 
+            Clean up any resources being used.
+            </summary>
+            <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.InitializeComponent">
+            <summary> 
+            Required method for Designer support - do not modify 
+            the contents of this method with the code editor.
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.ListViewDisplayMode">
             <summary>
             this is basically a superset of the View enum from Forms.View.  

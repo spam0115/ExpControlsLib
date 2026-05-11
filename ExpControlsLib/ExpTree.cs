@@ -29,7 +29,7 @@ namespace ExpControlsLib
     [DefaultProperty("StartUpDirectory")]
     [DefaultEvent("StartUpDirectoryChanged")]
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
-    public class ExpTree : UserControl
+    public partial class ExpTree
     {
 
         private TreeNode Root;
@@ -113,11 +113,8 @@ namespace ExpControlsLib
         private const int TVM_FIRST = 0x1100;
         private const int TVM_GETEDITCONTROL = TVM_FIRST + 15;
 
-        // Required by the Windows Form Designer
-        private readonly IContainer components;
-        private TreeView _TreeView;
-
-        internal virtual TreeView tv1
+        /* what is the point of the following proxy?
+        internal virtual TreeView _TreeView
         {
             [MethodImpl(MethodImplOptions.Synchronized)]
             get
@@ -125,131 +122,75 @@ namespace ExpControlsLib
                 return _TreeView;
             }
 
-            [MethodImpl(MethodImplOptions.Synchronized)]
-            set
-            {
-                if (_TreeView != null)
-                {
-                    _TreeView.HandleCreated -= Tv1_HandleCreated;
-                    _TreeView.HandleDestroyed -= Tv1_HandleDestroyed;
-                    _TreeView.BeforeExpand -= Tv1_BeforeExpand;
-                    _TreeView.AfterSelect -= Tv1_AfterSelect;
-                    _TreeView.VisibleChanged -= Tv1_VisibleChanged;
-                    _TreeView.BeforeCollapse -= Tv1_BeforeCollapse;
-                    _TreeView.BeforeLabelEdit -= Tv1_BeforeLabelEdit;
-                    _TreeView.AfterLabelEdit -= Tv1_AfterLabelEdit;
-                    _TreeView.MouseUp -= ExpTree_MouseUp;
-                    _TreeView.MouseDown -= Tv1_MouseDown;
-                    _TreeView.MouseMove -= Tv1_MouseMove;
-                    _TreeView.MouseEnter -= Tv1_MouseEnter;
-                    _TreeView.MouseLeave -= Tv1_MouseLeave;
-                    _TreeView.KeyPress -= Tv1_KeyPress;
-                    _TreeView.KeyUp -= Tv1_KeyUp;
-                    _TreeView.KeyDown -= Tv1_KeyDown;
-                }
+            //[MethodImpl(MethodImplOptions.Synchronized)]
+            //set
+            //{
+            //    if (_TreeView != null)
+            //    {
+            //        _TreeView.HandleCreated -= Tv1_HandleCreated;
+            //        _TreeView.HandleDestroyed -= Tv1_HandleDestroyed;
+            //        _TreeView.BeforeExpand -= Tv1_BeforeExpand;
+            //        _TreeView.AfterSelect -= Tv1_AfterSelect;
+            //        _TreeView.VisibleChanged -= Tv1_VisibleChanged;
+            //        _TreeView.BeforeCollapse -= Tv1_BeforeCollapse;
+            //        _TreeView.BeforeLabelEdit -= Tv1_BeforeLabelEdit;
+            //        _TreeView.AfterLabelEdit -= Tv1_AfterLabelEdit;
+            //        _TreeView.MouseUp -= ExpTree_MouseUp;
+            //        _TreeView.MouseDown -= Tv1_MouseDown;
+            //        _TreeView.MouseMove -= Tv1_MouseMove;
+            //        _TreeView.MouseEnter -= Tv1_MouseEnter;
+            //        _TreeView.MouseLeave -= Tv1_MouseLeave;
+            //        _TreeView.KeyPress -= Tv1_KeyPress;
+            //        _TreeView.KeyUp -= Tv1_KeyUp;
+            //        _TreeView.KeyDown -= Tv1_KeyDown;
+            //    }
 
-                _TreeView = value;
-                if (_TreeView != null)
-                {
-                    _TreeView.HandleCreated += Tv1_HandleCreated;
-                    _TreeView.HandleDestroyed += Tv1_HandleDestroyed;
-                    _TreeView.BeforeExpand += Tv1_BeforeExpand;
-                    _TreeView.AfterSelect += Tv1_AfterSelect;
-                    _TreeView.VisibleChanged += Tv1_VisibleChanged;
-                    _TreeView.BeforeCollapse += Tv1_BeforeCollapse;
-                    _TreeView.BeforeLabelEdit += Tv1_BeforeLabelEdit;
-                    _TreeView.AfterLabelEdit += Tv1_AfterLabelEdit;
-                    _TreeView.MouseUp += ExpTree_MouseUp;
-                    _TreeView.MouseDown += Tv1_MouseDown;
-                    _TreeView.MouseMove += Tv1_MouseMove;
-                    _TreeView.MouseEnter += Tv1_MouseEnter;
-                    _TreeView.MouseLeave += Tv1_MouseLeave;
-                    _TreeView.KeyPress += Tv1_KeyPress;
-                    _TreeView.KeyUp += Tv1_KeyUp;
-                    _TreeView.KeyDown += Tv1_KeyDown;
-                }
-            }
+            //    _TreeView = value;
+            //    if (_TreeView != null)
+            //    {
+            //        _TreeView.HandleCreated += Tv1_HandleCreated;
+            //        _TreeView.HandleDestroyed += Tv1_HandleDestroyed;
+            //        _TreeView.BeforeExpand += Tv1_BeforeExpand;
+            //        _TreeView.AfterSelect += Tv1_AfterSelect;
+            //        _TreeView.VisibleChanged += Tv1_VisibleChanged;
+            //        _TreeView.BeforeCollapse += Tv1_BeforeCollapse;
+            //        _TreeView.BeforeLabelEdit += Tv1_BeforeLabelEdit;
+            //        _TreeView.AfterLabelEdit += Tv1_AfterLabelEdit;
+            //        _TreeView.MouseUp += ExpTree_MouseUp;
+            //        _TreeView.MouseDown += Tv1_MouseDown;
+            //        _TreeView.MouseMove += Tv1_MouseMove;
+            //        _TreeView.MouseEnter += Tv1_MouseEnter;
+            //        _TreeView.MouseLeave += Tv1_MouseLeave;
+            //        _TreeView.KeyPress += Tv1_KeyPress;
+            //        _TreeView.KeyUp += Tv1_KeyUp;
+            //        _TreeView.KeyDown += Tv1_KeyDown;
+            //    }
+            //}
         }
-
+        */
 
         #region  Constructor/Destructor
 
         public ExpTree() : base()
         {
+            // This call is required by the Windows Form Designer.
+            InitializeComponent();
 
             // expandNodeTimer is used to expand a node that is hovered over, with a delay
             expandNodeTimer = new System.Windows.Forms.Timer();
-
-            // This call is required by the Windows Form Designer.
-            InitializeComponent();
 
             // Add any initialization after the InitializeComponent() call
 
             // setting the imagelist here allows many good things to happen, but
             // also one bad thing -- the "tooltip" like display of selectednode.text
             // is made invisible.  This remains a problem to be solved.
-            SetTreeViewImageList(tv1, false);
+            SetTreeViewImageList(_TreeView, false);
 
             StartUpDirectoryChanged += OnStartUpDirectoryChanged;
 
             CShellItem.CShItemUpdate += OnItemUpdate;            // 7/1/2012
             expandNodeTimer.Tick += ExpandNodeTimer_Tick;
 
-        }
-
-        // NOTE: The following procedure is required by the Windows Form Designer
-        // It can be modified using the Windows Form Designer.  
-        // Do not modify it using the code editor.
-        // [DebuggerStepThrough()]
-        private void InitializeComponent()
-        {
-            _TreeView = new TreeView();
-            SuspendLayout();
-            // 
-            // _TreeView
-            // 
-            _TreeView.BackColor = SystemColors.Window;
-            _TreeView.Dock = DockStyle.Fill;
-            _TreeView.ForeColor = SystemColors.ControlText;
-            _TreeView.HideSelection = false;
-            _TreeView.HotTracking = true;
-            _TreeView.Location = new Point(0, 0);
-            _TreeView.Name = "_TreeView";
-            _TreeView.ShowRootLines = false;
-            _TreeView.Size = new Size(200, 264);
-            _TreeView.TabIndex = 1;
-            _TreeView.BeforeLabelEdit += Tv1_BeforeLabelEdit;
-            _TreeView.AfterLabelEdit += Tv1_AfterLabelEdit;
-            _TreeView.BeforeCollapse += Tv1_BeforeCollapse;
-            _TreeView.BeforeExpand += Tv1_BeforeExpand;
-            _TreeView.AfterSelect += Tv1_AfterSelect;
-            _TreeView.VisibleChanged += Tv1_VisibleChanged;
-            _TreeView.HandleCreated += Tv1_HandleCreated;
-            _TreeView.HandleDestroyed += Tv1_HandleDestroyed;
-            _TreeView.KeyPress += Tv1_KeyPress;
-            _TreeView.KeyUp += Tv1_KeyUp;
-            _TreeView.MouseUp += ExpTree_MouseUp;
-            // 
-            // ExpTree
-            // 
-            Controls.Add(_TreeView);
-            Name = "ExpTree";
-            Size = new Size(200, 264);
-            ResumeLayout(false);
-        }
-
-        // ExpTree overrides dispose to clean up the component list.
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                if (components is not null)
-                {
-                    components.Dispose();
-                }
-                CShellItem.CShItemUpdate -= OnItemUpdate;     // 7/1/2012
-            }
-            base.Dispose(disposing);
         }
 
         #endregion
@@ -260,10 +201,10 @@ namespace ExpControlsLib
 
         private void Tv1_HandleCreated(object sender, EventArgs e)
         {
-            DragHandler = new ExpControlsLib.CDragWrapper(tv1);
+            DragHandler = new ExpControlsLib.CDragWrapper(_TreeView);
             if (m_AllowDrop)
-                DropHandler = new CtvDropWrapper(tv1); // 7/11/2012
-            SetWindowTheme(tv1.Handle, "explorer", null);
+                DropHandler = new CtvDropWrapper(_TreeView); // 7/11/2012
+            SetWindowTheme(_TreeView.Handle, "explorer", null);
             // Update: Check against nothing as when the treeview is used in a modal 
             // dialog and shown more than once a duplicate call causes a horizontal 
             // scrollBar to appear in the control???
@@ -298,11 +239,11 @@ namespace ExpControlsLib
                 m_AllowDrop = value;
                 if (value)
                 {
-                    if (tv1.IsHandleCreated)
+                    if (_TreeView.IsHandleCreated)
                     {
                         if (DropHandler is null)      // otherwise, already running
                         {
-                            DropHandler = new CtvDropWrapper(tv1);
+                            DropHandler = new CtvDropWrapper(_TreeView);
                         }
                     }
                 }
@@ -318,13 +259,13 @@ namespace ExpControlsLib
         {
             get
             {
-                return tv1.ForeColor;
+                return _TreeView.ForeColor;
             }
             set
             {
-                if (value != tv1.ForeColor)
+                if (value != _TreeView.ForeColor)
                 {
-                    tv1.ForeColor = value;
+                    _TreeView.ForeColor = value;
                 }
             }
         }
@@ -333,13 +274,13 @@ namespace ExpControlsLib
         {
             get
             {
-                return tv1.BackColor;
+                return _TreeView.BackColor;
             }
             set
             {
-                if (value != tv1.ForeColor)
+                if (value != _TreeView.ForeColor)
                 {
-                    tv1.BackColor = value;
+                    _TreeView.BackColor = value;
                 }
             }
         }
@@ -368,7 +309,7 @@ namespace ExpControlsLib
             {
                 if (value.IsFolder)
                 {
-                    tv1.BeginUpdate();
+                    _TreeView.BeginUpdate();
                     ClearTree();
                     CShellItem[] CSI = value.Directories;
                     Root = new TreeNode(value.DisplayName);
@@ -376,10 +317,10 @@ namespace ExpControlsLib
                     Root.ImageIndex = GetIconIndex(value, false);
                     Root.SelectedImageIndex = Root.ImageIndex;
                     Root.Tag = value;
-                    tv1.Nodes.Add(Root);
+                    _TreeView.Nodes.Add(Root);
                     Root.Expand();
-                    tv1.SelectedNode = Root;
-                    tv1.EndUpdate();
+                    _TreeView.SelectedNode = Root;
+                    _TreeView.EndUpdate();
                 }
             }
         }
@@ -393,9 +334,9 @@ namespace ExpControlsLib
         {
             get
             {
-                if (!(tv1.SelectedNode == null))
+                if (!(_TreeView.SelectedNode == null))
                 {
-                    return (CShellItem)tv1.SelectedNode.Tag;
+                    return (CShellItem)_TreeView.SelectedNode.Tag;
                 }
                 else
                 {
@@ -408,13 +349,7 @@ namespace ExpControlsLib
         /// Gets the collection of tree nodes that are assigned to the tree view control.
         /// </summary>
         [Browsable(false)]
-        public TreeNodeCollection Nodes
-        {
-            get
-            {
-                return tv1.Nodes;
-            }
-        }
+        public TreeNodeCollection Nodes => _TreeView.Nodes;
 
         /// <summary>
         /// ShowHiddenFolders sets or gets a Boolean indicating whether or not to Display Folders with the Hidden Attribute.
@@ -456,14 +391,14 @@ namespace ExpControlsLib
         {
             get
             {
-                return tv1.ShowRootLines;
+                return _TreeView.ShowRootLines;
             }
             set
             {
-                if (!(value == tv1.ShowRootLines))
+                if (!(value == _TreeView.ShowRootLines))
                 {
-                    tv1.ShowRootLines = value;
-                    tv1.Refresh();
+                    _TreeView.ShowRootLines = value;
+                    _TreeView.Refresh();
                 }
             }
         }
@@ -543,6 +478,7 @@ namespace ExpControlsLib
 
         #endregion
 
+
         #region    Public Methods
 
         #region        ExpandANode
@@ -601,7 +537,7 @@ namespace ExpControlsLib
             ExpandANodeRet = false;     // assume failure
             var baseNode = Root;
             if (baseNode == null) return false; // 05/09/2026 - Handle uninitialized tree
-            tv1.BeginUpdate();
+            _TreeView.BeginUpdate();
             // do the drill down -- Node to expand must be included in tree
             baseNode.Expand(); // Ensure base is filled in
 
@@ -641,14 +577,14 @@ namespace ExpControlsLib
                 ;
             }
             // after falling thru here, we have found & expanded the node
-            tv1.HideSelection = false;
+            _TreeView.HideSelection = false;
             Select();
             if (SelectExpandedNode)
-                tv1.SelectedNode = baseNode; // 7/13/2012
+                _TreeView.SelectedNode = baseNode; // 7/13/2012
             ExpandANodeRet = true;
         XIT:
             ;
-            tv1.EndUpdate();
+            _TreeView.EndUpdate();
             baseNode.EnsureVisible();       // 12/18/13
             return ExpandANodeRet;
         }
@@ -656,19 +592,21 @@ namespace ExpControlsLib
 
         #endregion
 
+
+
         #region    Initial Dir Set Handler
 
         private void OnStartUpDirectoryChanged(StartDir newVal)
         {
             if (newVal == StartDir.None)
             {
-                tv1.BeginUpdate();
+                _TreeView.BeginUpdate();
                 ClearTree();
-                tv1.EndUpdate();
+                _TreeView.EndUpdate();
                 return;
             }
 
-            tv1.BeginUpdate();
+            _TreeView.BeginUpdate();
             ClearTree();
             CShellItem special;
             special = CShellItem.GetCShItem((CSIDL)newVal);
@@ -679,9 +617,9 @@ namespace ExpControlsLib
             };
             Root.SelectedImageIndex = Root.ImageIndex;
             BuildTree(special.Directories);
-            tv1.Nodes.Add(Root);
+            _TreeView.Nodes.Add(Root);
             Root.Expand();
-            tv1.EndUpdate();
+            _TreeView.EndUpdate();
         }
         private void BuildTree(CShellItem[] L1)
         {
@@ -792,7 +730,7 @@ namespace ExpControlsLib
 
         private void ClearTree()
         {
-            tv1.Nodes.Clear();
+            _TreeView.Nodes.Clear();
             Root = null;
         }
         #endregion
@@ -806,18 +744,18 @@ namespace ExpControlsLib
             EnableEventPost = false;
             // Begin Calum's change -- With some modification
             TreeNode Selnode;
-            if (tv1.SelectedNode == null)
+            if (_TreeView.SelectedNode == null)
             {
                 Selnode = Root;
             }
             else
             {
-                Selnode = tv1.SelectedNode;
+                Selnode = _TreeView.SelectedNode;
             }
             // End Calum's change
             try
             {
-                tv1.BeginUpdate();
+                _TreeView.BeginUpdate();
                 CShellItem SelCSI = (CShellItem)Selnode.Tag;
                 // Set root node
                 if (rootCSI == null)
@@ -849,11 +787,11 @@ namespace ExpControlsLib
             }
             finally
             {
-                tv1.EndUpdate();
+                _TreeView.EndUpdate();
             }
             EnableEventPost = true;
             // We suppressed EventPosting during refresh, so give it one now
-            Tv1_AfterSelect(this, new TreeViewEventArgs(tv1.SelectedNode));
+            Tv1_AfterSelect(this, new TreeViewEventArgs(_TreeView.SelectedNode));
         }
 
         #region    TreeView BeforeExpand Event
@@ -1028,19 +966,19 @@ namespace ExpControlsLib
         /// restore at least some of the Expansion.</summary>
         private void Tv1_VisibleChanged(object sender, EventArgs e)
         {
-            if (tv1.Visible)
+            if (_TreeView.Visible)
             {
-                SetTreeViewImageList(tv1, false);
+                SetTreeViewImageList(_TreeView, false);
                 if (Root is not null)
                 {
                     Root.Expand();
-                    if (!(tv1.SelectedNode == null))
+                    if (!(_TreeView.SelectedNode == null))
                     {
-                        tv1.SelectedNode.Expand();
+                        _TreeView.SelectedNode.Expand();
                     }
                     else
                     {
-                        tv1.SelectedNode = Root;
+                        _TreeView.SelectedNode = Root;
                     }
                 }
             }
@@ -1052,7 +990,7 @@ namespace ExpControlsLib
         /// If it occurs, cancel it</summary>
         private void Tv1_BeforeCollapse(object sender, TreeViewCancelEventArgs e)
         {
-            if (!tv1.ShowRootLines && ReferenceEquals(e.Node, Root))
+            if (!_TreeView.ShowRootLines && ReferenceEquals(e.Node, Root))
             {
                 e.Cancel = true;
             }
@@ -1079,18 +1017,18 @@ namespace ExpControlsLib
                 DropHandler.ShDragOver -= DragWrapper_ShDragOver;
                 try
                 {
-                    tv1.BeginUpdate();
+                    _TreeView.BeginUpdate();
                     dropNode.Expand();
                     // 7/12/2012 - The following block of code relocated from ShDragOver
-                    int delta = tv1.Height - NodePoint.Y;
-                    if (delta < tv1.Height / 2d & delta > 0)
+                    int delta = _TreeView.Height - NodePoint.Y;
+                    if (delta < _TreeView.Height / 2d & delta > 0)
                     {
                         if (!(dropNode == null) && dropNode.NextVisibleNode is not null)
                         {
                             dropNode.NextVisibleNode.EnsureVisible();
                         }
                     }
-                    if (delta > tv1.Height / 2d & delta < tv1.Height)
+                    if (delta > _TreeView.Height / 2d & delta < _TreeView.Height)
                     {
                         if (!(dropNode == null) && dropNode.PrevVisibleNode is not null)
                         {
@@ -1102,7 +1040,7 @@ namespace ExpControlsLib
                 }
                 finally
                 {
-                    tv1.EndUpdate();
+                    _TreeView.EndUpdate();
                     DropHandler.ShDragOver += DragWrapper_ShDragOver;
                 }
             }
@@ -1156,7 +1094,7 @@ namespace ExpControlsLib
                 expandNodeTimer.Stop(); // not over previous node anymore
                 try
                 {
-                    tv1.BeginUpdate();
+                    _TreeView.BeginUpdate();
                     // 7/12/2012 - the following block relocated to expandNodeTime.Tick
                     // Dim delta As Integer = tv1.Height - pt.Y
                     // If delta < tv1.Height / 2 And delta > 0 Then
@@ -1172,14 +1110,14 @@ namespace ExpControlsLib
                     // 7/12/2012 - end of relocated block
                     if (!Node.BackColor.Equals(SystemColors.Highlight))
                     {
-                        ResetTreeviewNodeColor(tv1.Nodes[0]);
+                        ResetTreeviewNodeColor(_TreeView.Nodes[0]);
                         Node.BackColor = SystemColors.Highlight;
                         Node.ForeColor = SystemColors.HighlightText;
                     }
                 }
                 finally
                 {
-                    tv1.EndUpdate();
+                    _TreeView.EndUpdate();
                 }
                 dropNode = Node;     // dropNode is the Saved Global version of Node
                 NodePoint = pt;      // 7/12/2012 NodePoint is the Saved, Form Global Mouse Location (in client coordinates)
@@ -1203,7 +1141,7 @@ namespace ExpControlsLib
             }
             else
             {
-                ResetTreeviewNodeColor(tv1.Nodes[0]);
+                ResetTreeviewNodeColor(_TreeView.Nodes[0]);
             }
             dropNode = null;
             // Debug.WriteLine("Leaving ExpTree ShDragDrop")
@@ -1256,7 +1194,7 @@ namespace ExpControlsLib
             set
             {
                 m_allowFolderRename = value;
-                tv1.LabelEdit = value;
+                _TreeView.LabelEdit = value;
             }
         }
 
@@ -1289,7 +1227,7 @@ namespace ExpControlsLib
             // **********Added by Lukai-2020.06.19, only select the label without file name extension
             if (e.CancelEdit == false)
             {
-                var editWnd = SendMessage(tv1.Handle, TVM_GETEDITCONTROL, (IntPtr)0, IntPtr.Zero);
+                var editWnd = SendMessage(_TreeView.Handle, TVM_GETEDITCONTROL, (IntPtr)0, IntPtr.Zero);
                 int textLen = System.IO.Path.GetFileNameWithoutExtension(item.FullPath).Length;
                 SendMessage(editWnd, EM_SETSEL, (IntPtr)0, (IntPtr)textLen);
             }
@@ -1317,7 +1255,7 @@ namespace ExpControlsLib
             }
 
             var newPidl = IntPtr.Zero;
-            if (item.Parent.Folder.SetNameOf((int)tv1.Handle, CPidl.ILFindLastID(item.PIDL), NewName, SHGDN.NORMAL, ref newPidl) == S_OK)
+            if (item.Parent.Folder.SetNameOf((int)_TreeView.Handle, CPidl.ILFindLastID(item.PIDL), NewName, SHGDN.NORMAL, ref newPidl) == S_OK)
             {
             }
             // the following line is not needed since use of SetNameOf will cause a renamed WM_Notify msg 
@@ -1364,7 +1302,7 @@ namespace ExpControlsLib
             {
                 TreeNode tn;
                 var pt = PointToClient(MousePosition);
-                tn = tv1.GetNodeAt(pt);
+                tn = _TreeView.GetNodeAt(pt);
                 if (m_useWindowsContextMenu & !(tn == null))
                 {
                     var itms = new CShellItem[1];
@@ -1379,7 +1317,7 @@ namespace ExpControlsLib
                         string cmdName = SzToString(cmdBytes).ToLower();
                         if (cmdName.Equals("rename"))
                         {   
-                            tv1.LabelEdit = true;
+                            _TreeView.LabelEdit = true;
                             tn.BeginEdit();
                         }
                         else
@@ -1475,7 +1413,7 @@ namespace ExpControlsLib
                     // Debug.WriteLine("Located Parent Node " & pNode.Text & " of Item " & e.Item.Path)
                     try
                     {
-                        tv1.BeginUpdate();
+                        _TreeView.BeginUpdate();
                         switch (e.UpdateType)
                         {
                             case CShellItem.CShItemUpdateType.Created:  // A new Dir has been created under Parent/pNode
@@ -1519,7 +1457,7 @@ namespace ExpControlsLib
                                     {
                                         if (Node.Tag is not null && ReferenceEquals(Node.Tag, e.Item))
                                         {
-                                            bool wasSelected = ReferenceEquals(tv1.SelectedNode, Node);
+                                            bool wasSelected = ReferenceEquals(_TreeView.SelectedNode, Node);
                                             Node.Text = e.Item.DisplayName;
                                             pNode.Nodes.Remove(Node);
                                             if (GetTreeNode(e.Item.Parent, ref curPNode))
@@ -1528,7 +1466,7 @@ namespace ExpControlsLib
                                                                             // curPNode.Nodes.Add(Node)  '6/25/2012
                                                 if (wasSelected)     // 6/25/2012
                                                 {
-                                                    tv1.SelectedNode = Node;
+                                                    _TreeView.SelectedNode = Node;
                                                     Node.EnsureVisible();
                                                 }
                                             }
@@ -1571,8 +1509,8 @@ namespace ExpControlsLib
                                             }
                                             if (wasExpanded)
                                                 node.Expand();
-                                            tv1.Invalidate();
-                                            if (ReferenceEquals(node, tv1.SelectedNode))
+                                            _TreeView.Invalidate();
+                                            if (ReferenceEquals(node, _TreeView.SelectedNode))
                                             {
                                                 if (e.Item.FullPath.StartsWith(":"))
                                                 {
@@ -1638,7 +1576,7 @@ namespace ExpControlsLib
                     }
                     finally
                     {
-                        tv1.EndUpdate();
+                        _TreeView.EndUpdate();
                     }
                 }
                 else
@@ -1662,9 +1600,9 @@ namespace ExpControlsLib
 
             pathList.Reverse();
 
-            if (tv1.Nodes.Count < 1)
+            if (_TreeView.Nodes.Count < 1)
                 return false; // 11/05/2012
-            treeNode = tv1.Nodes[0];
+            treeNode = _TreeView.Nodes[0];
             int i = 0;
             // since pathList starts from Desktop and the tree may start somewhere below that, first locate
             // the tree base in the path
@@ -1800,7 +1738,7 @@ namespace ExpControlsLib
         {
             if (collapse == true)
             {
-                tv1.CollapseAll();
+                _TreeView.CollapseAll();
             }
         }
         #endregion
@@ -1823,9 +1761,9 @@ namespace ExpControlsLib
         {
             if (e.KeyCode == Keys.Enter)
             {
-                if (tv1.SelectedNode.GetNodeCount(false) > 0 & tv1.SelectedNode.IsExpanded == false)
+                if (_TreeView.SelectedNode.GetNodeCount(false) > 0 & _TreeView.SelectedNode.IsExpanded == false)
                 {
-                    tv1.SelectedNode.Expand();
+                    _TreeView.SelectedNode.Expand();
                 }
             }
             if (e.KeyCode == Keys.Delete)
