@@ -15,7 +15,7 @@ using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
 using static WindowsApiLib.SystemImageListManager;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
 
     /// <summary>
@@ -106,54 +106,12 @@ namespace ExpTreeLib
 
         private readonly ContextMenu m_windowsContextMenu = new ContextMenu();
 
-        // **********Added by Lukai-2020.06.19, for renaming
-        [DllImport("user32", CharSet = CharSet.Auto)]
-        private static extern IntPtr SendMessage(IntPtr hWnd, int wMsg, IntPtr wParam, IntPtr lParam);
+        //[DllImport("user32", CharSet = CharSet.Auto)]
+        //private static extern IntPtr SendMessage(IntPtr hWnd, int wMsg, IntPtr wParam, IntPtr lParam);
         // For ExpFileList label text selection
         private const int EM_SETSEL = 0xB1;
         private const int TVM_FIRST = 0x1100;
         private const int TVM_GETEDITCONTROL = TVM_FIRST + 15;
-
-        #region  Windows Form Designer generated code 
-
-        public ExpTree() : base()
-        {
-
-            // expandNodeTimer is used to expand a node that is hovered over, with a delay
-            expandNodeTimer = new System.Windows.Forms.Timer();
-
-            // This call is required by the Windows Form Designer.
-            InitializeComponent();
-
-            // Add any initialization after the InitializeComponent() call
-
-
-            // setting the imagelist here allows many good things to happen, but
-            // also one bad thing -- the "tooltip" like display of selectednode.text
-            // is made invisible.  This remains a problem to be solved.
-            SetTreeViewImageList(tv1, false);
-
-            StartUpDirectoryChanged += OnStartUpDirectoryChanged;
-
-            CShellItem.CShItemUpdate += OnItemUpdate;            // 7/1/2012
-            expandNodeTimer.Tick += ExpandNodeTimer_Tick;
-
-            // RaiseEvent StartUpDirectoryChanged(StartDir.Desktop)        '11/08/2013 -- Removed 01/08/2014
-
-        }
-        // ExpTree overrides dispose to clean up the component list.
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                if (components is not null)
-                {
-                    components.Dispose();
-                }
-                CShellItem.CShItemUpdate -= OnItemUpdate;     // 7/1/2012
-            }
-            base.Dispose(disposing);
-        }
 
         // Required by the Windows Form Designer
         private readonly IContainer components;
@@ -213,11 +171,36 @@ namespace ExpTreeLib
             }
         }
 
+
+        #region  Constructor/Destructor
+
+        public ExpTree() : base()
+        {
+
+            // expandNodeTimer is used to expand a node that is hovered over, with a delay
+            expandNodeTimer = new System.Windows.Forms.Timer();
+
+            // This call is required by the Windows Form Designer.
+            InitializeComponent();
+
+            // Add any initialization after the InitializeComponent() call
+
+            // setting the imagelist here allows many good things to happen, but
+            // also one bad thing -- the "tooltip" like display of selectednode.text
+            // is made invisible.  This remains a problem to be solved.
+            SetTreeViewImageList(tv1, false);
+
+            StartUpDirectoryChanged += OnStartUpDirectoryChanged;
+
+            CShellItem.CShItemUpdate += OnItemUpdate;            // 7/1/2012
+            expandNodeTimer.Tick += ExpandNodeTimer_Tick;
+
+        }
+
         // NOTE: The following procedure is required by the Windows Form Designer
         // It can be modified using the Windows Form Designer.  
         // Do not modify it using the code editor.
-
-        [DebuggerStepThrough()]
+        // [DebuggerStepThrough()]
         private void InitializeComponent()
         {
             _TreeView = new TreeView();
@@ -253,19 +236,31 @@ namespace ExpTreeLib
             Name = "ExpTree";
             Size = new Size(200, 264);
             ResumeLayout(false);
+        }
 
+        // ExpTree overrides dispose to clean up the component list.
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (components is not null)
+                {
+                    components.Dispose();
+                }
+                CShellItem.CShItemUpdate -= OnItemUpdate;     // 7/1/2012
+            }
+            base.Dispose(disposing);
         }
 
         #endregion
 
-        #region    Initialization/Destruction Events
 
         [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
         private static extern int SetWindowTheme(IntPtr hWnd, string pszSubAppName, string pszSubIdList);
 
         private void Tv1_HandleCreated(object sender, EventArgs e)
         {
-            DragHandler = new ExpTreeLib.CDragWrapper(tv1);
+            DragHandler = new ExpControlsLib.CDragWrapper(tv1);
             if (m_AllowDrop)
                 DropHandler = new CtvDropWrapper(tv1); // 7/11/2012
             SetWindowTheme(tv1.Handle, "explorer", null);
@@ -280,11 +275,8 @@ namespace ExpTreeLib
 
         }
 
-        #endregion
 
         #region    Public Properties
-
-        #region        AllowDrop - Property added 7/11/2012
 
         private bool m_AllowDrop = false;
 
@@ -322,9 +314,6 @@ namespace ExpTreeLib
             }
         }
 
-        #endregion
-
-        #region    ForeColor/BackColor - Entire Region added 5/14/2014
         public override Color ForeColor
         {
             get
@@ -354,9 +343,7 @@ namespace ExpTreeLib
                 }
             }
         }
-        #endregion
 
-        #region        RootItem
         /// <summary>
         /// RootItem is a Run-Time only Property. Setting this Item via an External call results in
         /// re-setting the entire tree to be rooted in the input CShellItem.
@@ -396,9 +383,7 @@ namespace ExpTreeLib
                 }
             }
         }
-        #endregion
 
-        #region        SelectedItem
         /// <summary>
         /// Run-time only Property which returns the CShellItem underlying the SelectedNode of the TreeView.
         /// </summary>
@@ -418,9 +403,7 @@ namespace ExpTreeLib
                 }
             }
         }
-        #endregion
 
-        #region        Nodes
         /// <summary>
         /// Gets the collection of tree nodes that are assigned to the tree view control.
         /// </summary>
@@ -432,9 +415,7 @@ namespace ExpTreeLib
                 return tv1.Nodes;
             }
         }
-        #endregion
 
-        #region        ShowHidden
         /// <summary>
         /// ShowHiddenFolders sets or gets a Boolean indicating whether or not to Display Folders with the Hidden Attribute.
         /// </summary>
@@ -461,9 +442,7 @@ namespace ExpTreeLib
                 }
             }
         }
-        #endregion
-
-        #region        ShowRootLines
+        
         /// <summary>
         /// Exposes the normal TreeView ShowRootLines property.
         /// </summary>
@@ -488,9 +467,7 @@ namespace ExpTreeLib
                 }
             }
         }
-        #endregion
 
-        #region        StartupDir
         /// <summary>
         /// The values representing the System's Special Folders.
         /// </summary>
@@ -563,7 +540,6 @@ namespace ExpTreeLib
                 }
             }
         }
-        #endregion
 
         #endregion
 
@@ -821,7 +797,6 @@ namespace ExpTreeLib
         }
         #endregion
 
-        #region    RefreshTree
         /// <summary>RefreshTree Method thanks to Calum McLellan</summary>
         [Description("Refresh the Tree and all nodes through the currently selected item")]
         private void RefreshTree(CShellItem rootCSI = null)
@@ -880,7 +855,6 @@ namespace ExpTreeLib
             // We suppressed EventPosting during refresh, so give it one now
             Tv1_AfterSelect(this, new TreeViewEventArgs(tv1.SelectedNode));
         }
-        #endregion
 
         #region    TreeView BeforeExpand Event
 
@@ -1041,9 +1015,10 @@ namespace ExpTreeLib
         public bool CanGoUp => _lastSelectedCSI?.Parent != null;
 
         #endregion
+
+
         #endregion
 
-        #region    TreeView VisibleChanged Event
         /// <summary>When a form containing this control is Hidden and then re-Shown,
         /// the association to the SystemImageList is lost.  Also lost is the
         /// Expanded state of the various TreeNodes. 
@@ -1070,9 +1045,7 @@ namespace ExpTreeLib
                 }
             }
         }
-        #endregion
 
-        #region    TreeView BeforeCollapse Event
         /// <summary>Should never occur since if the condition tested for is True,
         /// the user should never be able to Collapse the node. However, it is
         /// theoretically possible for the code to request a collapse of this node
@@ -1088,7 +1061,6 @@ namespace ExpTreeLib
                 e.Node.ImageIndex = ((CShellItem)e.Node.Tag).IconIndexNormal;
             }
         }
-        #endregion
 
         #region    CtvDropWrapper Event Handling
 
@@ -1099,7 +1071,6 @@ namespace ExpTreeLib
         private Point NodePoint;
         private System.Windows.Forms.Timer expandNodeTimer;
 
-        #region        ExpandNodeTimer_Tick
         private void ExpandNodeTimer_Tick(object sender, EventArgs e)
         {
             expandNodeTimer.Stop();
@@ -1136,7 +1107,6 @@ namespace ExpTreeLib
                 }
             }
         }
-        #endregion
 
         /// <summary>ShDragEnter does nothing. It is here for debug tracking</summary>
         private void DragWrapper_ShDragEnter(IntPtr pDataObj, int grfKeyState, int pdwEffect)
@@ -1366,6 +1336,7 @@ namespace ExpTreeLib
         // Credit Calum 
 
         private bool m_useWindowsContextMenu = true;
+
         /// <summary>
         /// Sets whether or not the control should use Windows System context menu for TreeNode items.
         /// </summary>

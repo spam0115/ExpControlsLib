@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 { 
     partial class ExpList : System.Windows.Forms.UserControl
     {

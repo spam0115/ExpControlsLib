@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
     /// <summary>
     /// LVColSorter is a Class to be used as a ListViewItemSorter. 

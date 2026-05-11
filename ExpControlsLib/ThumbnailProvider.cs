@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
     /// <summary>
     /// Provides thumbnail extraction for shell items using Windows Shell APIs

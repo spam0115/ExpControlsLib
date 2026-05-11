@@ -5,7 +5,7 @@ using System.Runtime.Versioning;
 using System.Windows.Forms;
 using static WindowsApiLib.Shell.ShellAPI;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
 
     /// <summary>

@@ -8,7 +8,7 @@ using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
     /// <summary>
     /// WindowsContextMenu provides the infrastucture for displaying a Windows Context Menu on a Control

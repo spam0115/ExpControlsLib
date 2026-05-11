@@ -2,7 +2,7 @@
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
     /// <summary>
     /// Event arguments for the <see cref="ExpList.ExpListGetColumnData"/> event.

@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
 
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only

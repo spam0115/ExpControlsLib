@@ -8,7 +8,7 @@ using System.Windows.Forms;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
     /// <summary>The CtvDropWrapper class deals with the mechanics of receiving a
     /// Drag/Drop operation for a TreeView Control. In effect, it implements the IDropTarget interface

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Windows.Win32;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
     /// <summary>
     /// this is basically a superset of the View enum from Forms.View.  

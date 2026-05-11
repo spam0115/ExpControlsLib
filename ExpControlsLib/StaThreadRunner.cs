@@ -5,7 +5,7 @@ using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
     /// <summary>
     /// Runs queued delegates on a pool of dedicated STA threads.

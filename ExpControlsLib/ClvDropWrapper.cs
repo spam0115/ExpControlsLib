@@ -8,7 +8,7 @@ using System.Windows.Forms;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
 
     /// <summary>The ClvDropWrapper class deals with the mechanics of receiving a

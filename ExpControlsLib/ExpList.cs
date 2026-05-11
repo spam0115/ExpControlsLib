@@ -17,7 +17,7 @@ using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
 
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
     /// <summary>
     ///     This Form is a fully working start point for any form which requires an ExplorerTree and
@@ -203,7 +203,6 @@ namespace ExpTreeLib
             _ListView.Resize += (s, e) => OnListViewScroll();
             _ListView.Click += ExpFileList_Click;
             _ListView.DoubleClick += ExpFileList_DoubleClick;
-            //ExpFileList.Leave += ExpFileList_Leave;
             _ListView.BeforeLabelEdit += ExpFileList_BeforeLabelEdit;
             _ListView.AfterLabelEdit += ExpFileList_AfterLabelEdit;
             _ListView.MouseLeave += ExpFileList_MouseLeave;
@@ -300,16 +299,23 @@ namespace ExpTreeLib
             {
                 if (string.IsNullOrEmpty(value))
                 {
+                    bool needsUpdate = !string.IsNullOrEmpty(_CurrentPath);
+                    if (needsUpdate)
+                    {
+                        _ListView.BeginUpdate();
+                        _ListView.Items.Clear();
+                    }
                     _CurrentPath = value;
-                    _ListView.BeginUpdate();
-                    _ListView.Items.Clear();
                     _itemIndex.Clear();
                     if (_currentlyLoadedFolder != null)
                     {
                         _currentlyLoadedFolder.ClearItems(true);
                         _currentlyLoadedFolder = null;
                     }
-                    _ListView.EndUpdate();
+                    if (needsUpdate)
+                    {
+                        _ListView.EndUpdate();
+                    }
                 }
                 else
                 {
@@ -1274,7 +1280,7 @@ namespace ExpTreeLib
 
         #region Context Menu Handlers
 
-        private readonly ExpTreeLib.ContextMenu m_WindowsContextMenu = new ExpTreeLib.ContextMenu();
+        private readonly ExpControlsLib.ContextMenu m_WindowsContextMenu = new ExpControlsLib.ContextMenu();
         private bool m_OutOfRange;
 
         /// <summary>

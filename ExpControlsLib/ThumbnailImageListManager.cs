@@ -5,7 +5,7 @@ using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
 
-namespace ExpTreeLib
+namespace ExpControlsLib
 {
     /// <summary>
     /// Manages ImageLists for thumbnail display modes in the ListView control.
