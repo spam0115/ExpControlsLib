@@ -29,8 +29,8 @@
         private void InitializeComponent()
         {
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
-            this.expTree1 = new ExpTreeLib.ExpTree();
-            this.expList1 = new ExpTreeLib.ExpList();
+            this.expTree1 = new ExpControlsLib.ExpTree();
+            this.expList1 = new ExpControlsLib.ExpList();
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).BeginInit();
             this.splitContainer1.Panel1.SuspendLayout();
             this.splitContainer1.Panel2.SuspendLayout();
@@ -63,9 +63,9 @@
             this.expTree1.Name = "expTree1";
             this.expTree1.ShowRootLines = false;
             this.expTree1.Size = new System.Drawing.Size(250, 461);
-            this.expTree1.StartUpDirectory = ExpTreeLib.ExpTree.StartDir.Desktop;
+            this.expTree1.StartUpDirectory = ExpControlsLib.ExpTree.StartDir.Desktop;
             this.expTree1.TabIndex = 0;
-            this.expTree1.ExpTreeNodeSelected += new ExpTreeLib.ExpTree.ExpTreeNodeSelectedEventHandler(this.expTree1_ExpTreeNodeSelected);
+            this.expTree1.ExpTreeNodeSelected += new ExpControlsLib.ExpTree.ExpTreeNodeSelectedEventHandler(this.expTree1_ExpTreeNodeSelected);
             // 
             // expList1
             // 
@@ -75,7 +75,7 @@
             this.expList1.Name = "expList1";
             this.expList1.Size = new System.Drawing.Size(530, 461);
             this.expList1.TabIndex = 0;
-            this.expList1.ExpListItemDoubleClick += new ExpTreeLib.ExpList.ExpListItemDoubleClickEventHandler(this.expList1_ExpListItemDoubleClick);
+            this.expList1.ExpListItemDoubleClick += new ExpControlsLib.ExpList.ExpListItemDoubleClickEventHandler(this.expList1_ExpListItemDoubleClick);
             // 
             // Form1
             // 
@@ -98,8 +98,8 @@
         #endregion
 
         private System.Windows.Forms.SplitContainer splitContainer1;
-        private ExpTreeLib.ExpTree expTree1;
-        private ExpTreeLib.ExpList expList1;
+        private ExpControlsLib.ExpTree expTree1;
+        private ExpControlsLib.ExpList expList1;
     }
 }
 

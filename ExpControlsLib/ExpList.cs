@@ -157,19 +157,19 @@ namespace ExpControlsLib
         public event ExpListItemsChangedEventHandler ExpListItemsChanged;
 
         /// <summary>
-        /// Delegate for the <see cref="ExpListItemGetSelItems"/> event.
+        /// Delegate for the <see cref="ExpListSelectedIndexChangedEventHandler"/> event.
         /// </summary>
-        /// <param name="listViewItemCollection">The collection of selected list view items.</param>
-        public delegate void ExpListSelectedIndexChangedEventHandler(SelectedListViewItemCollection Items);
+        /// <param name="items">The collection of selected list view items.</param>
+        public delegate void ExpListSelectedIndexChangedEventHandler(SelectedListViewItemCollection items);
         /// <summary>
         /// Occurs when the selection in the list view is requested.
         /// </summary>
         public event ExpListSelectedIndexChangedEventHandler SelectedIndexChanged;
 
         /// <summary>
-        /// Delegate for the <see cref="ExpListItemGetSelItems"/> event.
+        /// Delegate for the <see cref="ExpListItemSelectionChangedEventHandler"/> event.
         /// </summary>
-        /// <param name="listViewItemCollection">The collection of selected list view items.</param>
+        /// <param name="e">The ListViewItem item, ItemIndex, and IsSelected</param>
         public delegate void ExpListItemSelectionChangedEventHandler(ListViewItemSelectionChangedEventArgs e);
         /// <summary>
         /// Occurs when the selection in the list view is requested.
