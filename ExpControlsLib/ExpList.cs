@@ -164,6 +164,8 @@ namespace ExpControlsLib
         /// <summary>
         /// Occurs when the selection in the list view is requested.
         /// </summary>
+        [Category("Action")]
+        [Description("Fires when the selection collection changes, not when the selected index changes")]
         public event ExpListSelectedIndexChangedEventHandler SelectedIndexChanged;
 
         /// <summary>
@@ -174,6 +176,8 @@ namespace ExpControlsLib
         /// <summary>
         /// Occurs when the selection in the list view is requested.
         /// </summary>
+        [Category("Action")]
+        [Description("Fires when the selected item changes")]
         public event ExpListItemSelectionChangedEventHandler ItemSelectionChanged;
 
         /// <summary>
