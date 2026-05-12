@@ -12,6 +12,8 @@ using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
+using static System.Windows.Forms.ListView;
+//using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using static WindowsApiLib.Shell.CShellItem;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
@@ -158,11 +160,21 @@ namespace ExpControlsLib
         /// Delegate for the <see cref="ExpListItemGetSelItems"/> event.
         /// </summary>
         /// <param name="listViewItemCollection">The collection of selected list view items.</param>
-        public delegate void ExpListSelectedIndexChangedEventHandler(CShellItem Item);
+        public delegate void ExpListSelectedIndexChangedEventHandler(SelectedListViewItemCollection Items);
         /// <summary>
         /// Occurs when the selection in the list view is requested.
         /// </summary>
         public event ExpListSelectedIndexChangedEventHandler SelectedIndexChanged;
+
+        /// <summary>
+        /// Delegate for the <see cref="ExpListItemGetSelItems"/> event.
+        /// </summary>
+        /// <param name="listViewItemCollection">The collection of selected list view items.</param>
+        public delegate void ExpListItemSelectionChangedEventHandler(ListViewItemSelectionChangedEventArgs e);
+        /// <summary>
+        /// Occurs when the selection in the list view is requested.
+        /// </summary>
+        public event ExpListItemSelectionChangedEventHandler ItemSelectionChanged;
 
         /// <summary>
         /// Delegate for the <see cref="ExpListItemGetSelItems"/> event.
@@ -226,7 +238,9 @@ namespace ExpControlsLib
             _ListView.KeyDown += ExpFileList_KeyDown;
             _ListView.KeyPress += ExpFileList_KeyPress;
             _ListView.SelectedIndexChanged += ExpFileList_SelectedIndexChanged;
+            _ListView.ItemSelectionChanged += ExpFileList_ItemSelectionChanged;
         }
+
 
         /// <summary>
         /// Delegate for the <see cref="ExpList.ExpListGetColumnData"/> event.
@@ -1216,16 +1230,24 @@ namespace ExpControlsLib
 
         private void ExpFileList_SelectedIndexChanged(object sender, EventArgs e)
         {
+          
             if (_ListView.SelectedItems.Count > 0)
             {
+                ListView listView = (ListView)sender;
+
                 _selectedItem = (CShellItem)_ListView.SelectedItems[0].Tag;
 
-                SelectedIndexChanged?.Invoke(_selectedItem);
+                SelectedIndexChanged?.Invoke(listView.SelectedItems);
             }
-            else
-            {
-                _selectedItem = null;
-            }
+            //else
+            //{
+            //    _selectedItem = null;
+            //}
+        }
+
+        private void ExpFileList_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
+        {
+            ItemSelectionChanged?.Invoke(e);
         }
 
         #endregion
