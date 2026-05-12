@@ -2497,8 +2497,8 @@ namespace WindowsApiLib.Shell
         }
         
         /// <summary>
-    /// This method uses the CreateViewObject method of IShellFolder to obtain the IDropTarget of this
-    /// CShellItem instance. 
+    /// This method obtains the IDropTarget of this CShellItem instance. 
+    /// It primarily uses GetUIObjectOf via ShellHelper.GetIDropTarget, with a fallback to CreateViewObject.
     /// </summary>
     /// <param name="tn">The control in which the GUI representation of this CShellItem lives.</param>
     /// <returns>If successful, the IDropTarget interface of the Folder represented by this CShellItem.
@@ -2508,18 +2508,22 @@ namespace WindowsApiLib.Shell
         {
             if (Folder == null)
                 return null;
+
+            // Standard way: GetUIObjectOf on the parent
+            if (ShellHelper.GetIDropTarget(this, out var target))
+            {
+                return target;
+            }
+
+            // Fallback: CreateViewObject (might be needed for some virtual folders or background drops)
             IntPtr pInterface = IntPtr.Zero;
-            Shell.IDropTarget theInterface;
             var tnH = tn.Handle;
             if (Folder.CreateViewObject(tnH, ShellAPI.IID_IDropTarget, ref pInterface) == S_OK)
             {
-                theInterface = (Shell.IDropTarget)Marshal.GetTypedObjectForIUnknown(pInterface, typeof(Shell.IDropTarget));
-                return theInterface;
+                return (Shell.IDropTarget)Marshal.GetTypedObjectForIUnknown(pInterface, typeof(Shell.IDropTarget));
             }
-            else
-            {
-                return null;
-            }
+
+            return null;
         }
 
         #region        Update Methods

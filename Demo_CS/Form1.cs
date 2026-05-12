@@ -17,6 +17,7 @@ namespace Demo_CS
         private void Form1_Load(object sender, EventArgs e)
         {
             this.expTree1.StartUpDirectory = ExpControlsLib.ExpTree.StartDir.Desktop;
+            this.expTree1.AllowDrop = true;
             this.expList1.DisplayMode = ListViewDisplayMode.Thumbnail;
         }
 
