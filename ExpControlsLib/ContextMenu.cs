@@ -44,6 +44,7 @@ namespace ExpControlsLib
         /// <param name="pt">The point where the ContextMenu should appear</param>
         /// <param name="allowrename">Set if the ContextMenu should contain the Rename command where appropriate</param>
         /// <param name="cmi">The command information for the users selection</param>
+        /// <param name="minimal">If true, uses CMF.VERBSONLY to filter out most 3rd party extensions</param>
         /// <returns></returns>
         /// <remarks></remarks>
         public bool ShowMenu(
@@ -51,7 +52,8 @@ namespace ExpControlsLib
             CShellItem[] items,
             Point pt,
             bool allowRename,
-            [Out] out CMInvokeCommandInfoEx cmi)
+            [Out] out CMInvokeCommandInfoEx cmi,
+            bool minimal = false)
         {
             cmi = default;
             Debug.Assert(items.Length > 0);
@@ -113,8 +115,10 @@ namespace ExpControlsLib
             int startIndex = GetMenuItemCount(comContextMenu.ToInt32());
 
             // Fill the context menu
-            int flags = (int)(CMF.NORMAL | CMF.ITEMMENU);
+            int flags = (int)CMF.NORMAL;
+            if (items != null && items.Length > 0) flags |= (int)CMF.ITEMMENU;
             if (allowRename) flags |= (int)CMF.CANRENAME;
+            if (minimal) flags |= (int)CMF.NOVERBS; //.VERBSONLY;
             if ((Control.ModifierKeys & Keys.Shift) == Keys.Shift) flags |= (int)CMF.EXTENDEDVERBS;
 
             int idCount = winMenu.QueryContextMenu(comContextMenu, startIndex, min, max, flags);

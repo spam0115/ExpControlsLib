@@ -207,7 +207,7 @@
             <remarks>Though specifically designed for ListView and TreeView Controls, this Class will work for any Control which
                      is associated with a single Folder and can provide CShItems from that Folder.</remarks>
         </member>
-        <member name="M:ExpControlsLib.ContextMenu.ShowMenu(System.IntPtr,WindowsApiLib.Shell.CShellItem[],System.Drawing.Point,System.Boolean,WindowsApiLib.Shell.ShellAPI.CMInvokeCommandInfoEx@)">
+        <member name="M:ExpControlsLib.ContextMenu.ShowMenu(System.IntPtr,WindowsApiLib.Shell.CShellItem[],System.Drawing.Point,System.Boolean,WindowsApiLib.Shell.ShellAPI.CMInvokeCommandInfoEx@,System.Boolean)">
             <summary>
             If this method returns true then the caller must call ReleaseMenu
             </summary>
@@ -216,6 +216,7 @@
             <param name="pt">The point where the ContextMenu should appear</param>
             <param name="allowrename">Set if the ContextMenu should contain the Rename command where appropriate</param>
             <param name="cmi">The command information for the users selection</param>
+            <param name="minimal">If true, uses CMF.VERBSONLY to filter out most 3rd party extensions</param>
             <returns></returns>
             <remarks></remarks>
         </member>
@@ -637,6 +638,11 @@
         <member name="P:ExpControlsLib.ExpList.HeaderStyle">
             <summary>
             Gets or sets the column header style.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.MinimalContextMenu">
+            <summary>
+            Gets or sets whether to show a minimal context menu by filtering out most 3rd party extensions.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.ExpList_Load(System.Object,System.EventArgs)">
@@ -1203,6 +1209,11 @@
             </summary>
             <returns>The current setting (True or False).</returns>
             <remarks>Setting this Property to False prevents the display and processing of Windows Context Menus on a Right-Click on a TreeNode.</remarks>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.MinimalContextMenu">
+            <summary>
+            Gets or sets whether to show a minimal context menu by filtering out most 3rd party extensions.
+            </summary>
         </member>
         <member name="M:ExpControlsLib.ExpTree.WndProc(System.Windows.Forms.Message@)">
             <summary>

@@ -1274,6 +1274,7 @@ namespace ExpControlsLib
         // Credit Calum 
 
         private bool m_useWindowsContextMenu = true;
+        private bool m_minimalContextMenu = false;
 
         /// <summary>
         /// Sets whether or not the control should use Windows System context menu for TreeNode items.
@@ -1295,6 +1296,18 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Gets or sets whether to show a minimal context menu by filtering out most 3rd party extensions.
+        /// </summary>
+        [Category("Behavior")]
+        [Description("If true, filters out most 3rd party shell extensions from the context menu.")]
+        [DefaultValue(false)]
+        public bool MinimalContextMenu
+        {
+            get => m_minimalContextMenu;
+            set => m_minimalContextMenu = value;
+        }
+
 
         private void ExpTree_MouseUp(object sender, MouseEventArgs e)
         {
@@ -1308,7 +1321,7 @@ namespace ExpControlsLib
                     var itms = new CShellItem[1];
                     itms[0] = (CShellItem)tn.Tag;
                     CMInvokeCommandInfoEx cmi = default;
-                    if (m_windowsContextMenu.ShowMenu(Handle, itms, MousePosition, m_allowFolderRename, out cmi))
+                    if (m_windowsContextMenu.ShowMenu(Handle, itms, MousePosition, m_allowFolderRename, out cmi, m_minimalContextMenu))
                     {
                         // Check for rename
                         var cmdBytes = new byte[257];

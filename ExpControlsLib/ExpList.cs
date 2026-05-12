@@ -469,6 +469,14 @@ namespace ExpControlsLib
             set => _ListView.HeaderStyle = value;
         }
 
+        /// <summary>
+        /// Gets or sets whether to show a minimal context menu by filtering out most 3rd party extensions.
+        /// </summary>
+        [Category("Behavior")]
+        [Description("If true, filters out most 3rd party shell extensions from the context menu.")]
+        [DefaultValue(false)]
+        public bool MinimalContextMenu { get; set; } = false;
+
         #endregion
 
         #region Form Load/VisibleChanged ExpFileList HandleCreated
@@ -561,6 +569,7 @@ namespace ExpControlsLib
         /// <param name="reload">True to force a reload even if the same item was previously selected.</param>
         public void DisplayFiles(string pathName, CShellItem csi, bool includeFolder, bool reload = false)
         {
+            if (csi is null) return;
             if (_currentFolderCsi != null && ReferenceEquals(_currentFolderCsi, csi) && reload == false) return;
 
             // record history
@@ -1422,7 +1431,7 @@ namespace ExpControlsLib
                     CMInvokeCommandInfoEx cmi;
                     bool allowRename = _ListView.SelectedItems.Count <= 1; //Don't allow rename of more than 1 item
 
-                    if (m_WindowsContextMenu.ShowMenu(Handle, itms, MousePosition, allowRename, out cmi))
+                    if (m_WindowsContextMenu.ShowMenu(Handle, itms, MousePosition, allowRename, out cmi, MinimalContextMenu))
                     {
                         byte[] cmdBytes = new byte[256];
                         m_WindowsContextMenu.winMenu.GetCommandString(cmi.lpVerb.ToInt32(), (int)GCS.VERBA, 0, cmdBytes, 256);
