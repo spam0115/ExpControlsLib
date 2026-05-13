@@ -216,14 +216,15 @@ namespace WindowsApiLib
         {
             if (!pidl.Equals(IntPtr.Zero))
             {
-                int i = ItemIDSize(pidl);
-                int b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
-                while (b > 0)
-                {
-                    i += b;
-                    b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
-                }
-                return i;
+                return (int)ILGetSize(pidl);
+                //int i = ItemIDSize(pidl);
+                //int b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
+                //while (b > 0)
+                //{
+                //    i += b;
+                //    b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
+                //}
+                //return i;
             }
             else
             {
@@ -266,7 +267,7 @@ namespace WindowsApiLib
         /// <remarks>The returned PIDLs must be Released when no longer needed by calling PIDLFree.</remarks>
         public static IntPtr[] DecomposePIDL(IntPtr pidl)
         {
-            int lim = ItemIDListSize(pidl);
+            int lim = (int)ItemIDListSize(pidl);
             var PIDLs = new IntPtr[(PidlCount(pidl))];
             int i = 0;
             var curB = default(int);
@@ -818,7 +819,7 @@ namespace WindowsApiLib
         internal static IntPtr PIDLClone(IntPtr pidl)
         {
             IntPtr PIDLCloneRet = default;
-            int cb = ItemIDListSize(pidl);
+            var cb = (int)ItemIDListSize(pidl);
             var b = new byte[cb + 1 + 1];
             Marshal.Copy(pidl, b, 0, cb); // not including terminating nulnul
             b[cb] = 0;

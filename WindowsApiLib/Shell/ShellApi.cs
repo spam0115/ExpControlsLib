@@ -521,6 +521,9 @@ namespace WindowsApiLib.Shell
         [DllImport("shell32", CharSet = CharSet.Auto)]
         public static extern IntPtr ILGetNext(IntPtr pidl);
 
+        [DllImport("shell32.dll", ExactSpelling = true)]
+        public static extern uint ILGetSize(IntPtr pidl);
+
         #endregion
 
         #region        Notification Declarations

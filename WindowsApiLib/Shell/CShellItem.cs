@@ -2575,16 +2575,16 @@ namespace WindowsApiLib.Shell
             UpdateRefreshRet = false;
             if (m_IsFolder)
             {
+                var attrFlag = SHCONTF.INCLUDEHIDDEN;
+                if (m_Files is not null && UpdateFiles)
+                    attrFlag = attrFlag | SHCONTF.NONFOLDERS;
+                if (m_Directories is not null && UpdateFolders)
+                    attrFlag = attrFlag | SHCONTF.FOLDERS;
+                if (attrFlag == SHCONTF.INCLUDEHIDDEN)
+                    return UpdateRefreshRet; // nothing expanded therefore no change
+
                 lock (LockObj)
                 {
-                    var attrFlag = SHCONTF.INCLUDEHIDDEN;
-                    if (m_Files is not null && UpdateFiles)
-                        attrFlag = attrFlag | SHCONTF.NONFOLDERS;
-                    if (m_Directories is not null && UpdateFolders)
-                        attrFlag = attrFlag | SHCONTF.FOLDERS;
-                    if (attrFlag == SHCONTF.INCLUDEHIDDEN)
-                        return UpdateRefreshRet; // nothing expanded therefore no change
-
                     var InvalidItems = new List<CShellItem>();              // Holds CShItems no longer present
                     var curPidls = GetContentPtrs(attrFlag);                // Relative PIDLs of current content
                     var tmpCurrent = new List<IntPtr>((IEnumerable<IntPtr>)curPidls.ToArray(typeof(IntPtr)));  // working list of current content
@@ -2606,36 +2606,47 @@ namespace WindowsApiLib.Shell
                         for (int i = 0, loopTo = tmpItems.Count - 1; i <= loopTo; i++)
                             oldPidls[i] = ILFindLastID(tmpItems[i].PIDL);
 
-                        for (int iold = 0, loopTo1 = oldPidls.Length - 1; iold <= loopTo1; iold++)
+                        // Optimization: Use a dictionary to avoid O(N*M) complexity.
+                        // PIDL size is a fast, safe hash for grouping potential matches.
+                        var currentBySize = new Dictionary<int, List<int>>();
+                        for (int icur = 0; icur < tmpCurrent.Count; icur++)
                         {
-                            for (int icur = tmpCurrent.Count - 1; icur >= 0; icur -= 1) // 5/21/2012 changed to bottom-up loop
+                            var sz = CPidl.ItemIDListSize(tmpCurrent[icur]);
+                            if (!currentBySize.TryGetValue(sz, out var list))
                             {
-                                // 5/23/2012 revised the following block of code to also check vs AreBytesEqual
-                                if (CPidl.IsEqual(oldPidls[iold], tmpCurrent[icur]))    // found the same item
+                                list = new List<int>();
+                                currentBySize[sz] = list;
+                            }
+                            list.Add(icur);
+                        }
+
+                        for (int iold = 0; iold < oldPidls.Length; iold++)
+                        {
+                            var sz = CPidl.ItemIDListSize(oldPidls[iold]);
+                            if (currentBySize.TryGetValue(sz, out var matches))
+                            {
+                                for (int iMatch = matches.Count - 1; iMatch >= 0; iMatch--)
                                 {
-                                    if (!ReferenceEquals(this, m_Recycle) && !CPidl.AreBytesEqual(oldPidls[iold], tmpCurrent[icur]))  // 7/14/2012
+                                    int icur = matches[iMatch];
+                                    if (CPidl.IsEqual(oldPidls[iold], tmpCurrent[icur]))    // found the same item
                                     {
-                                        // in this case, some aspect besides name has changed treat as UpdateItem for the old one
-                                        var UpdCSI = tmpItems[iold];
-                                        // Debug.WriteLine("***Raising Updated based on AreBytesEqual - " & UpdCSI.Name)
-                                        UpdCSI.ResetInfo();
-                                        if (UpdCSI.IsFolder)
+                                        if (!ReferenceEquals(this, m_Recycle) && !CPidl.AreBytesEqual(oldPidls[iold], tmpCurrent[icur]))
                                         {
-                                            UpdCSI.ResetChildren();
+                                            var UpdCSI = tmpItems[iold];
+                                            UpdCSI.ResetInfo();
+                                            if (UpdCSI.IsFolder) UpdCSI.ResetChildren();
+                                            CShItemUpdate?.Invoke(UpdCSI.Parent, new ShellItemUpdateEventArgs(UpdCSI, CShItemUpdateType.Updated));
+                                            UpdateRefreshRet = true;
                                         }
-                                        CShItemUpdate?.Invoke(UpdCSI.Parent, new ShellItemUpdateEventArgs(UpdCSI, CShItemUpdateType.Updated)); // 6/3/2012
-                                        UpdateRefreshRet = true;        // 5/24/2012  
+                                        tmpCurrent[icur] = IntPtr.Zero; // Mark as processed
+                                        matches.RemoveAt(iMatch);
+                                        goto NXTOLD;
                                     }
-                                    // either way, we have found the matching PIDL so continue with the next "old" one (in tree)
-                                    tmpCurrent.RemoveAt(icur); // Have match, don't look at this one again - and do not add it in the following code
-                                    goto NXTOLD;
                                 }
-                                // 5/23/2012 end of revised code
                             }
                             // falling thru here means couldn't find iold entry
                             InvalidItems.Add(tmpItems[iold]);
-                        NXTOLD:
-                            ;
+                        NXTOLD:;
                         }
                     }
                     // any not found should be removed from my collections (raising event)
@@ -2648,9 +2659,10 @@ namespace WindowsApiLib.Shell
                     // anything remaining in tmpcurrent is a new entry Add it (raising event)
                     if (tmpCurrent.Count > 0)
                     {
-                        UpdateRefreshRet = true;
                         foreach (IntPtr iptr in tmpCurrent)   // these are relative PIDLs
                         {
+                            if (iptr == IntPtr.Zero) continue;
+                            UpdateRefreshRet = true;
                             try                                 // ASUS Fix
                             {
                                 var NewItem = new CShellItem(iptr, this);  // 11/13/2013
@@ -2678,7 +2690,7 @@ namespace WindowsApiLib.Shell
                             CShItemUpdate?.Invoke(Parent, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
                         }
                     }
-                }
+                } //end lock
             }
 
             return UpdateRefreshRet;
@@ -2897,11 +2909,6 @@ namespace WindowsApiLib.Shell
             if (ReferenceEquals(CSI, m_Recycle))
                 return; // 6/21/2012
             CSI.UpdateRefresh();
-            if (CSI.m_Directories is not null)
-            {
-                foreach (CShellItem FolderItem in CSI.m_Directories) // 02/18/2014 Using Directories here is redundant, causing an extra UpdateRefresh
-                    DoUpdateDir(FolderItem);
-            }
         }
 
         /// <summary>
