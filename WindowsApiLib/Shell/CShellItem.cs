@@ -585,7 +585,7 @@ namespace WindowsApiLib.Shell
             SetPath();
 
             // check for zip file = folder on xp, leave it a file
-            if (m_IsFolder && m_IsFileSystem && WinSDK.XPorAbove)
+            if (m_IsFolder && m_IsFileSystem)
             {
                 // If (m_Attributes = (m_Attributes And SFGAO.STREAM)) Then
                 if ((attrFlag & SFGAO.STREAM) != 0)   // in this case, it is not a Folder, but a .zip or .cab or etc
@@ -759,7 +759,7 @@ namespace WindowsApiLib.Shell
                 foreach (var currentCSI in BaseItem.Directories)
                 {
                     CSI = currentCSI;    // 7/2/2012 should use Directories here
-                    if (IsAncestorOf(CSI.PIDL, absPidl))
+                    if (CPidl.IsAncestorOf(CSI.PIDL, absPidl))
                     {
                         if (CPidl.IsEqual(CSI.PIDL, absPidl))  // we found the desired item
                         {
@@ -799,7 +799,7 @@ namespace WindowsApiLib.Shell
                     return null;
                 }
                 // The complication is that the desired item may not be a directory
-                if (!IsAncestorOf(BaseItem.PIDL, absPidl, true))  // Don't have immediate ancestor
+                if (!CPidl.IsAncestorOf(BaseItem.PIDL, absPidl, true))  // Don't have immediate ancestor
                 {
                     // FirstWithThisBase = True    '6/30/2012
                     FoundIt = false;     // go around again
@@ -899,7 +899,7 @@ namespace WindowsApiLib.Shell
                                            // two item PIDL, which correctly reflects the location of the corresponding Folder in the directory tree.
                                            // Because of this, in Vista and above, I must use PERSONAL as the lookup CSIDL to obtain MYDOCUMENTS.
 
-            if (ID == CSIDL.MYDOCUMENTS && WinSDK.VistaOrAbove)
+            if (ID == CSIDL.MYDOCUMENTS)
                 ID = CSIDL.PERSONAL; // added 11/28/2010
             if (ID == CSIDL.MYDOCUMENTS)  // original code - retain
             {
@@ -1016,7 +1016,7 @@ namespace WindowsApiLib.Shell
             FindCShItemRet = null;
             if (CPidl.IsEqual(BaseItem.PIDL, Abs))
                 return BaseItem;
-            if (BaseItem.FilesInitialized && IsAncestorOf(BaseItem.PIDL, Abs, true))
+            if (BaseItem.FilesInitialized && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
             {
                 foreach (CShellItem FItem in BaseItem.FileList)          // 7/2/2012 was BaseItem.Files
                 {
@@ -1030,7 +1030,7 @@ namespace WindowsApiLib.Shell
                 {
                     if (CPidl.IsEqual(DItem.PIDL, Abs))
                         return DItem;
-                    if (IsAncestorOf(DItem.PIDL, Abs))
+                    if (CPidl.IsAncestorOf(DItem.PIDL, Abs))
                     {
                         return FindCShItem(DItem, Abs);
                     }
@@ -1975,45 +1975,7 @@ namespace WindowsApiLib.Shell
         /// methods return True</remarks>
         public static bool IsAncestorOf(CShellItem ancestor, CShellItem current, bool fParent = false)
         {
-            return IsAncestorOf(ancestor.PIDL, current.PIDL, fParent);
-        }
-        /// <summary> Compares a candidate Ancestor PIDL with a Child PIDL and
-        /// returns True if Ancestor is an ancestor of the child.
-        /// if fParent is True, then only return True if Ancestor is the immediate
-        /// parent of the Child</summary>
-        /// <param name="AncestorPidl">The Absolute PIDL that is the candidate for being an Ancestor of ChildPidl.</param>
-        /// <param name="ChildPidl">The Absolute PIDL whose ancestory is being searched for.</param>
-        /// <param name="fParent">A flag. If True, then only return True if AncestorPidl is the immediate Parent of ChildPidl.</param>
-        /// <returns>True if AncestorPidl is an ancestor of ChildPidl.
-        ///          If fParent is False then will also return True if AncestorPidl and ChildPidl are equal. 
-        ///          If fParent is True, <i>only</i> returns True if AncestorPidl is the Parent of ChildPidl</returns>
-        ///          
-        public static bool IsAncestorOf(IntPtr AncestorPidl, IntPtr ChildPidl, bool fParent = false)
-        {
-            bool IsAncestorOfRet = default;
-            if (Is2KOrAbove())
-            {
-                return ILIsParent(AncestorPidl, ChildPidl, fParent);
-            }
-            else
-            {
-                var Child = new CPidl(ChildPidl);
-                var Ancestor = new CPidl(AncestorPidl);
-                IsAncestorOfRet = Child.StartsWith(Ancestor);
-                if (!IsAncestorOfRet)
-                    return IsAncestorOfRet;
-                if (fParent) // check for immediate ancestor, if desired
-                {
-                    object[] oAncBytes = Ancestor.Decompose();
-                    object[] oChildBytes = Child.Decompose();
-                    if (oAncBytes.Length != oChildBytes.Length - 1)
-                    {
-                        IsAncestorOfRet = false;
-                    }
-                }
-            }
-
-            return IsAncestorOfRet;
+            return CPidl.IsAncestorOf(ancestor.PIDL, current.PIDL, fParent);
         }
 
         #region       AllFolderWalk
@@ -2078,13 +2040,13 @@ namespace WindowsApiLib.Shell
         #region Public Instance Methods
 
         /// <summary>
-    /// Compares this instance of CShellItem to another CShellItem. Equality is based on a string comparison of
-    /// their Paths.
-    /// </summary>
-    /// <param name="other">A CShellItem to be tested for equality to the current instance.</param>
-    /// <returns>True if both paths are equal.</returns>
-    /// <remarks>An Obsolete method. Since only one copy of a CShellItem is allowed, the proper test
-    /// is "If Me Is other".</remarks>
+        /// Compares this instance of CShellItem to another CShellItem. Equality is based on a string comparison of
+        /// their Paths.
+        /// </summary>
+        /// <param name="other">A CShellItem to be tested for equality to the current instance.</param>
+        /// <returns>True if both paths are equal.</returns>
+        /// <remarks>An Obsolete method. Since only one copy of a CShellItem is allowed, the proper test
+        /// is "If Me Is other".</remarks>
         public bool Equals(CShellItem other)
         {
             bool EqualsRet = default;
@@ -2165,12 +2127,12 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-    /// Clear File and/or Folder items from the CShellItem internal cache.
-    /// </summary>
-    /// <param name="ClearFiles">Clear Files</param>
-    /// <param name="ClearDirectories">Clear Folders</param>
-    /// <remarks>Typically used to discard CShItems representing Files that are no longer displayed in 
-    /// the GUI.</remarks>
+        /// Clear File and/or Folder items from the CShellItem internal cache.
+        /// </summary>
+        /// <param name="ClearFiles">Clear Files</param>
+        /// <param name="ClearDirectories">Clear Folders</param>
+        /// <remarks>Typically used to discard CShItems representing Files that are no longer displayed in 
+        /// the GUI.</remarks>
         public void ClearItems(bool ClearFiles, bool ClearDirectories = false)
         {
             lock (LockObj)
@@ -2190,12 +2152,12 @@ namespace WindowsApiLib.Shell
 
 
         /// <summary>
-    /// Stops monitoring of changes to the File System.
-    /// </summary>
-    /// <returns>True if Successful, False otherwise</returns>
-    /// <remarks>Global Change Notification is started by default. Call this function to turn it off.
-    ///          Only turn Notification Off under rare, well understood circumstances. If turned off, NO
-    ///          changes, including those made by the application will be noticed.</remarks>
+        /// Stops monitoring of changes to the File System.
+        /// </summary>
+        /// <returns>True if Successful, False otherwise</returns>
+        /// <remarks>Global Change Notification is started by default. Call this function to turn it off.
+        ///          Only turn Notification Off under rare, well understood circumstances. If turned off, NO
+        ///          changes, including those made by the application will be noticed.</remarks>
         public bool StopGlobalNotification()
         {
             bool StopGlobalNotificationRet = default;
@@ -2240,14 +2202,14 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-    /// Returns the sub-directories of the current instance, if the current instance is a
-    /// Folder. Similar to to Property Directories except that it returns the Directories
-    /// as an ArrayList.
-    /// </summary>
-    /// <returns>If the current instance is a Folder, returns its sub-directories as an 
-    /// ArrayList containing the CShItems of its sub-directories. Returns an empty list if
-    /// there are no sub-directories. Returns Nothing if the current instance is not a Folder.</returns>
-    /// <remarks></remarks>
+        /// Returns the sub-directories of the current instance, if the current instance is a
+        /// Folder. Similar to to Property Directories except that it returns the Directories
+        /// as an ArrayList.
+        /// </summary>
+        /// <returns>If the current instance is a Folder, returns its sub-directories as an 
+        /// ArrayList containing the CShItems of its sub-directories. Returns an empty list if
+        /// there are no sub-directories. Returns Nothing if the current instance is not a Folder.</returns>
+        /// <remarks></remarks>
         public ArrayList GetDirectories()
         {
             CShellItem[] D = Directories;         // 7/2/2012 OK to use Directories in this case
@@ -2259,13 +2221,13 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-    /// If the current instance is a Folder then returns an ArrayList of the CShItems of Files 
-    /// contained in the current instance. Otherwise returns Nothing.
-    /// </summary>
-    /// <returns>An ArrayList of the CShItems of the Files in the current instance. If the 
-    /// current instance is not a Folder, returns Nothing. If there are no Files in the 
-    /// current instance, returns an empty ArrayList.</returns>
-    /// <remarks></remarks>
+        /// If the current instance is a Folder then returns an ArrayList of the CShItems of Files 
+        /// contained in the current instance. Otherwise returns Nothing.
+        /// </summary>
+        /// <returns>An ArrayList of the CShItems of the Files in the current instance. If the 
+        /// current instance is not a Folder, returns Nothing. If there are no Files in the 
+        /// current instance, returns an empty ArrayList.</returns>
+        /// <remarks></remarks>
         public ArrayList GetFiles()
         {
             CShellItem[] F = Files;
@@ -2277,12 +2239,12 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-    /// Returns the Files of this sub-folder, filtered by a filtering string, as an
-    ///   ArrayList of CShitems
-    /// </summary>
-    /// <param name="Filter">A filter string (for example: *.Doc)</param>
-    /// <returns>An ArrayList of CShItems. May return an empty ArrayList if there are none.</returns>
-    /// <remarks>Added 8/22/2012</remarks>
+        /// Returns the Files of this sub-folder, filtered by a filtering string, as an
+        ///   ArrayList of CShitems
+        /// </summary>
+        /// <param name="Filter">A filter string (for example: *.Doc)</param>
+        /// <returns>An ArrayList of CShItems. May return an empty ArrayList if there are none.</returns>
+        /// <remarks>Added 8/22/2012</remarks>
         public ArrayList GetFiles(string Filter)
         {
             ArrayList GetFilesRet = default;
@@ -2303,11 +2265,11 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-    /// Returns the Directories and Files of this sub-folder as a sorted
-    ///   ArrayList of CShitems
-    /// </summary>
-    /// <returns>An ArrayList of CShItems. May return an empty ArrayList if there are none.</returns>
-    /// <remarks>This version is the Optimized version added after any distribution of v2.14</remarks>
+        /// Returns the Directories and Files of this sub-folder as a sorted
+        ///   ArrayList of CShitems
+        /// </summary>
+        /// <returns>An ArrayList of CShItems. May return an empty ArrayList if there are none.</returns>
+        /// <remarks>This version is the Optimized version added after any distribution of v2.14</remarks>
         public ArrayList GetItems()
         {
             ArrayList GetItemsRet = default;
@@ -2374,14 +2336,14 @@ namespace WindowsApiLib.Shell
         // End Function
 
         /// <summary>GetFileName returns the Full file name of this item.
-    /// Specifically, for a link file (xxx.txt.lnk for example) the
-    /// DisplayName property will return xxx.txt, this method will
-    /// return xxx.txt.lnk.</summary>
-    /// <returns>The Name of this instance</returns>
-    /// <remarks>In most cases this is equivalent to
-    /// System.IO.Path.GetFileName(m_Path).  However, some m_Paths
-    /// actually are GUIDs.  In that case, this routine returns the
-    /// DisplayName</remarks>
+        /// Specifically, for a link file (xxx.txt.lnk for example) the
+        /// DisplayName property will return xxx.txt, this method will
+        /// return xxx.txt.lnk.</summary>
+        /// <returns>The Name of this instance</returns>
+        /// <remarks>In most cases this is equivalent to
+        /// System.IO.Path.GetFileName(m_Path).  However, some m_Paths
+        /// actually are GUIDs.  In that case, this routine returns the
+        /// DisplayName</remarks>
         public string GetFileName()
         {
             if (FullPath.StartsWith("::{")) // Path is really a GUID
@@ -2399,10 +2361,10 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-    /// Resets the IconIndex to the current value
-    /// </summary>
-    /// <remarks>Certain, seldom occuring, Dynamic Updates will cause the actual Icon and its' IconIndex to change.
-    ///          The handlers for these Update Events should Reset the IconIndex to show the new Icon.</remarks>
+        /// Resets the IconIndex to the current value
+        /// </summary>
+        /// <remarks>Certain, seldom occuring, Dynamic Updates will cause the actual Icon and its' IconIndex to change.
+        ///          The handlers for these Update Events should Reset the IconIndex to show the new Icon.</remarks>
         public void ResetIconIndex()
         {
             m_IconIndexNormal = -1;        // index into the SystemImageListManager list for Normal icon
@@ -2457,17 +2419,17 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-    /// Returns the DisplayName as the normal ToString value
-    /// </summary>
-    /// <returns>The DisplayName</returns>
+        /// Returns the DisplayName as the normal ToString value
+        /// </summary>
+        /// <returns>The DisplayName</returns>
         public override string ToString()
         {
             return m_DisplayName;
         }
         
         /// <summary>
-    /// Writes some key properties of this CShellItem to the Debug console.
-    /// </summary>
+        /// Writes some key properties of this CShellItem to the Debug console.
+        /// </summary>
         public void DebugDump()
         {
             Debug.WriteLine("DisplayName = " + m_DisplayName);
@@ -2500,13 +2462,13 @@ namespace WindowsApiLib.Shell
         }
         
         /// <summary>
-    /// This method obtains the IDropTarget of this CShellItem instance. 
-    /// It primarily uses GetUIObjectOf via ShellHelper.GetIDropTarget, with a fallback to CreateViewObject.
-    /// </summary>
-    /// <param name="tn">The control in which the GUI representation of this CShellItem lives.</param>
-    /// <returns>If successful, the IDropTarget interface of the Folder represented by this CShellItem.
-    /// If unsuccessful, returns Nothing.</returns>
-    /// <remarks>A similar function exists in the ShellHelper class. GetDropTargetOf is more efficient.</remarks>
+        /// This method obtains the IDropTarget of this CShellItem instance. 
+        /// It primarily uses GetUIObjectOf via ShellHelper.GetIDropTarget, with a fallback to CreateViewObject.
+        /// </summary>
+        /// <param name="tn">The control in which the GUI representation of this CShellItem lives.</param>
+        /// <returns>If successful, the IDropTarget interface of the Folder represented by this CShellItem.
+        /// If unsuccessful, returns Nothing.</returns>
+        /// <remarks>A similar function exists in the ShellHelper class. GetDropTargetOf is more efficient.</remarks>
         public Shell.IDropTarget GetDropTargetOf(Control tn)
         {
             if (Folder == null)
@@ -2776,11 +2738,11 @@ namespace WindowsApiLib.Shell
         /// translate the information passed to it into the appropriate set of actions needed to maintain the internal cache and to,
         /// directly or indirectly (thru the routines it calls), Raise CShItemUpdate events to notify the using application of changes.
         /// </summary>
-        /// <param name="newPidl">The absolute PIDL of the affected item. The definition of "affected item" varies with the type of
+        /// <param name="changedPidl">The absolute PIDL of the affected item. The definition of "affected item" varies with the type of
         ///                       change being reported.</param>
         /// <param name="changeType">The type of change.</param>
         /// <remarks>Serves as a bridge between CShItemUpdater and the CShellItem that should handle a change.</remarks>
-        internal void Update(IntPtr newPidl, CShItemUpdateType changeType)
+        internal void Update(IntPtr changedPidl, CShItemUpdateType changeType)
         {
             Debug.WriteLine("Entered Update: " + changeType.ToString());
             switch (changeType)
@@ -2788,20 +2750,22 @@ namespace WindowsApiLib.Shell
                 case CShItemUpdateType.Renamed:      // Item has been renamed or moved
                     {
 
-                        IntPtr newParent, newPidlRel = IntPtr.Zero;
+                        //IntPtr newParent, newPidlRel = IntPtr.Zero;
+                        //newParent = CPidl.SplitPidl(newPidl, ref newPidlRel);
+
                         IntPtr PidlRel = IntPtr.Zero, newFolderPtr = IntPtr.Zero;
-                        newParent = CPidl.TrimPidl(newPidl, ref newPidlRel);
+                        var splitPidl = CPidl.SplitPidl(changedPidl);
                         var oldParentItem = Parent;    // Save in case "renamed" to a new directory
-                        var newParentItem = FindCShItem(newParent);
+                        var newParentItem = FindCShItem(splitPidl.ShortenedPidl); // newParent);
                         if (newParentItem is null)            // renamed to a dir that is not yet in internal tree
                         {
                             Parent.RemoveItem(this);                // no longer in this Folder
                             m_Parent = null;                      // and therefore no longer in tree
                         }
-                        else if (SHGetRealIDL(newParentItem.Folder, newPidlRel, out PidlRel) == S_OK)            // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
+                        else if (SHGetRealIDL(newParentItem.Folder, splitPidl.LastElementPidl, out PidlRel) == S_OK)            // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
                         {
                             Marshal.FreeCoTaskMem(m_Pidl);
-                            m_Pidl = CPidl.ConcatPidls(newParent, PidlRel);  // we use PidlRel because newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID
+                            m_Pidl = CPidl.ConcatPidls(splitPidl.ShortenedPidl, PidlRel);  // we use PidlRel because newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID
                             if (IsFolder)            // deal with potential "Move" to a new dir
                             {
                                 if (!ReferenceEquals(newParentItem, Parent))
@@ -2858,8 +2822,10 @@ namespace WindowsApiLib.Shell
                             // Check for New ParentDir in internal Tree
                             // Note: FreeCoTaskMem will ignore IntPtr.Zero
                         Marshal.FreeCoTaskMem(PidlRel);
-                        Marshal.FreeCoTaskMem(newParent);
-                        Marshal.FreeCoTaskMem(newPidlRel);
+                        //Marshal.FreeCoTaskMem(newParent);
+                        //Marshal.FreeCoTaskMem(newPidlRel);
+                        Marshal.FreeCoTaskMem(splitPidl.LastElementPidl);
+                        Marshal.FreeCoTaskMem(splitPidl.ShortenedPidl);
                         CShItemUpdate?.Invoke(oldParentItem, new ShellItemUpdateEventArgs(this, changeType));
                         break;
                     }
@@ -3037,14 +3003,7 @@ namespace WindowsApiLib.Shell
             var aPidl = new IntPtr[1];
             aPidl[0] = ptr;
             Folder.GetAttributesOf(1, aPidl, ref attrFlag);
-            if (!WinSDK.XPorAbove)
-            {
-                if ((attrFlag & SFGAO.FOLDER) != 0) // is folder
-                {
-                    IsFolderRelRet = true;
-                }
-            }
-            else if (((attrFlag & SFGAO.FOLDER) != 0) && !((attrFlag & SFGAO.STREAM) != 0))         // XP or above
+            if (((attrFlag & SFGAO.FOLDER) != 0) && !((attrFlag & SFGAO.STREAM) != 0))         // XP or above
             {
                 IsFolderRelRet = true;
             }

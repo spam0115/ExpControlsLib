@@ -17,12 +17,8 @@ namespace WindowsApiLib
         public static bool SUCCEEDED(int hr)
         { return (hr > 0); }
 
-        // It is also useful to know if the OS is XP or above.  
-        public static readonly bool XPorAbove = ShellAPI.IsXpOrAbove();
-        // Likewise if OS is Win2K or Above
-        public static readonly bool Win2KOrAbove = ShellAPI.Is2KOrAbove();
-        // Likewise if OS is Vista or Above
-        public static readonly bool VistaOrAbove = ShellAPI.IsVistaOrAbove();
+        // if OS is Vista or Above
+        //public static readonly bool VistaOrAbove = ShellAPI.IsVistaOrAbove();
 
         [DllImport("ole32.dll", PreserveSig = true)]
         public static extern int CoInitializeEx(IntPtr pvReserved, int dwCoInit);

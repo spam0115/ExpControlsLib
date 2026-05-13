@@ -402,7 +402,20 @@ namespace WindowsApiLib
         }
 
         /// <summary>
-        /// TrimPidl returns an ItemIDList with the last ItemID trimed off.
+        /// Trim the last path item from a pidl
+        /// </summary>
+        /// <param name="pidl"></param>
+        /// <returns></returns>
+        public static IntPtr TrimPidl(IntPtr pidl)
+        {
+            IntPtr pidlCopy = ILClone(pidl);
+            ILRemoveLastID(pidlCopy);
+
+            return pidlCopy;
+        }
+
+        /// <summary>
+        /// SplitPidl returns an ItemIDList with the last ItemID trimmed off.
         /// It's purpose is to generate an ItemIDList for the Parent of a
         /// Special Folder which can then be processed with DesktopBase.BindToObject,
         /// yeilding a Folder for the parent of the Special Folder
@@ -416,37 +429,122 @@ namespace WindowsApiLib
         /// <remarks>Caller must Free BOTH the returned, Trimmed PIDL and the 
         /// returned relPidl.
         /// </remarks>
-        public static IntPtr TrimPidl(IntPtr pidl, ref IntPtr relPidl)
+        //public static IntPtr SplitPidl(IntPtr pidl, ref IntPtr relPidl)
+        //{
+        //    IntPtr pidlCopy = ILClone(pidl);
+        //    ILRemoveLastID(pidlCopy);
+
+        //    int cb = ItemIDListSize(pidl);
+        //    var b = new byte[cb + 1 + 1];
+        //    Marshal.Copy(pidl, b, 0, cb);
+        //    int prev = 0;
+        //    int i = b[0] + b[1] * 256;
+        //    while (i > 0 && i < cb) //bugged, infinite loop
+        //    {
+        //        prev = i;
+        //        i += b[i] + b[i + 1] * 256;
+        //    }
+        //    if (prev + 1 < cb)
+        //    {
+        //        // first set up the relative pidl
+        //        b[cb] = 0;
+        //        b[cb + 1] = 0;
+        //        int cb1 = b[prev] + b[prev + 1] * 256;
+        //        relPidl = Marshal.AllocCoTaskMem(cb1 + 2);
+        //        Marshal.Copy(b, prev, relPidl, cb1 + 2);
+        //        b[prev] = 0;
+        //        b[prev + 1] = 0;
+        //        var rVal = Marshal.AllocCoTaskMem(prev + 2);
+        //        Marshal.Copy(b, 0, rVal, prev + 2);
+        //        return rVal;
+        //    }
+        //    else
+        //    {
+        //        return IntPtr.Zero;
+        //    }
+        //}
+
+        public static PidlSplitResult SplitPidl(IntPtr pidl)
         {
-            int cb = ItemIDListSize(pidl);
-            var b = new byte[cb + 1 + 1];
-            Marshal.Copy(pidl, b, 0, cb);
-            int prev = 0;
-            int i = b[0] + b[1] * 256;
-            while (i > 0 && i < cb)
+            if (pidl == IntPtr.Zero)
+                throw new ArgumentNullException(nameof(pidl));
+
+            const int cbSize = sizeof(ushort);
+
+            int offset = 0;
+            int lastItemOffset = -1;
+            int lastItemSize = 0;
+
+            while (true)
             {
-                prev = i;
-                i += b[i] + b[i + 1] * 256;
+                ushort cb = unchecked((ushort)Marshal.ReadInt16(pidl, offset));
+
+                if (cb == 0)
+                    break;
+
+                if (cb < cbSize)
+                    throw new InvalidOperationException("Invalid PIDL: SHITEMID.cb is smaller than sizeof(USHORT).");
+
+                lastItemOffset = offset;
+                lastItemSize = cb;
+                offset += cb;
             }
-            if (prev + 1 < cb)
+
+            // offset currently points to the terminating USHORT cb == 0.
+            int originalSize = offset + cbSize;
+
+            if (lastItemOffset < 0)
+                throw new InvalidOperationException("PIDL has no elements to remove.");
+
+            // The shortened PIDL consists of everything before the last item,
+            // plus a terminating USHORT cb == 0.
+            int shortenedSize = lastItemOffset + cbSize;
+
+            // The last element PIDL consists of the final SHITEMID,
+            // plus a terminating USHORT cb == 0.
+            int lastElementPidlSize = lastItemSize + cbSize;
+
+            IntPtr shortenedPidl = IntPtr.Zero;
+            IntPtr lastElementPidl = IntPtr.Zero;
+
+            try
             {
-                // first set up the relative pidl
-                b[cb] = 0;
-                b[cb + 1] = 0;
-                int cb1 = b[prev] + b[prev + 1] * 256;
-                relPidl = Marshal.AllocCoTaskMem(cb1 + 2);
-                Marshal.Copy(b, prev, relPidl, cb1 + 2);
-                b[prev] = 0;
-                b[prev + 1] = 0;
-                var rVal = Marshal.AllocCoTaskMem(prev + 2);
-                Marshal.Copy(b, 0, rVal, prev + 2);
-                return rVal;
+                shortenedPidl = Marshal.AllocCoTaskMem(shortenedSize);
+                lastElementPidl = Marshal.AllocCoTaskMem(lastElementPidlSize);
+
+                // Copy everything before the last SHITEMID into the shortened PIDL.
+                if (lastItemOffset > 0)
+                {
+                    byte[] prefixBytes = new byte[lastItemOffset];
+                    Marshal.Copy(pidl, prefixBytes, 0, lastItemOffset);
+                    Marshal.Copy(prefixBytes, 0, shortenedPidl, lastItemOffset);
+                }
+
+                // Write terminating USHORT cb == 0.
+                Marshal.WriteInt16(shortenedPidl, lastItemOffset, 0);
+
+                // Copy the last SHITEMID into its own PIDL.
+                byte[] lastItemBytes = new byte[lastItemSize];
+                Marshal.Copy(IntPtr.Add(pidl, lastItemOffset), lastItemBytes, 0, lastItemSize);
+                Marshal.Copy(lastItemBytes, 0, lastElementPidl, lastItemSize);
+
+                // Write terminating USHORT cb == 0.
+                Marshal.WriteInt16(lastElementPidl, lastItemSize, 0);
+
+                return new PidlSplitResult(shortenedPidl, lastElementPidl);
             }
-            else
+            catch
             {
-                return IntPtr.Zero;
+                if (shortenedPidl != IntPtr.Zero)
+                    Marshal.FreeCoTaskMem(shortenedPidl);
+
+                if (lastElementPidl != IntPtr.Zero)
+                    Marshal.FreeCoTaskMem(lastElementPidl);
+
+                throw;
             }
         }
+
 
         /// <summary>ILFindLastID -- returns a pointer to the last ITEMID in a valid
         /// ITEMIDLIST. Returned pointer SHOULD NOT be released since it
@@ -593,41 +691,79 @@ namespace WindowsApiLib
 
 
         /// <summary>
-        /// Takes input requiring special values like Environment.SpecialFolder.DesktopDirectory which equals 0x0010.
+        /// Takes input requiring special values like Environment.SpecialFolder.DesktopDirectory which equals "::{00021400-0000-0000-C000-000000000046}".
         /// </summary>
-        /// <param name="parsingName">special values like Environment.SpecialFolder.DesktopDirectory which equals 0x0010</param>
+        /// <param name="parsingName">The text name for a Shell location</param>
         /// <returns></returns>
-        public static string? TryGetFileSystemPathFromShellParsingName(string parsingName)
+        public static string? GetFileSystemPathFromShellParsingName(string parsingName)
         {
+            if (string.IsNullOrWhiteSpace(parsingName))
+                return null;
+
+            // 1) Fast path for direct filesystem paths
+            if (Path.IsPathRooted(parsingName))
+            {
+                if (File.Exists(parsingName) || Directory.Exists(parsingName))
+                    return parsingName;
+            }
+
+            // 2) Pre-filter virtual shell namespace CLSID forms
+            //    (prevents calling SHCreateItemFromParsingName for obvious non-filesystem inputs)
+            if (IsDefinitelyVirtualNamespace(parsingName))
+                return null;
+
+            IShellItem? item = null;
+            IntPtr pathPtr = IntPtr.Zero;
+
             try
             {
-                var IID_IShellItem = new Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"); //for some unknown reason the class level "static readonly Guid IID_IShellItem" is zero.
-
                 ShellAPI.SHCreateItemFromParsingName(
                     parsingName,
                     IntPtr.Zero,
-                    IID_IShellItem,
-                    out IShellItem item);
+                    ShellAPI.IID_IShellItem,
+                    out item);
 
-                item.GetDisplayName(SIGDN.FILESYSPATH, out IntPtr pathPtr);
+                // Important: only request FILESYSPATH for filesystem-backed items.
+                uint attrs;
+                item.GetAttributes((uint)SFGAOF.FILESYSTEM, out attrs);
+                if ((attrs & (uint)SFGAOF.FILESYSTEM) == 0)
+                    return null;
 
-                try
-                {
-                    return Marshal.PtrToStringUni(pathPtr);
-                }
-                finally
-                {
-                    if (pathPtr != IntPtr.Zero)
-                        WinSDK.CoTaskMemFree(pathPtr);
-                }
+                item.GetDisplayName(SIGDN.FILESYSPATH, out pathPtr);
+                return pathPtr == IntPtr.Zero ? null : Marshal.PtrToStringUni(pathPtr);
             }
             catch (COMException)
             {
+                // Includes virtual folders and other non-filesystem shell items
                 return null;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"EXCEPTION! parsingName = {parsingName} : {ex}");
+                return null;
+            }
+            finally
+            {
+                if (pathPtr != IntPtr.Zero)
+                    WinSDK.CoTaskMemFree(pathPtr);
+
+                if (item != null && Marshal.IsComObject(item))
+                    Marshal.ReleaseComObject(item);
             }
         }
 
-        
+        private static bool IsDefinitelyVirtualNamespace(string parsingName)
+        {
+            // Common virtual forms
+            if (parsingName.StartsWith("::", StringComparison.Ordinal))
+                return true;
+
+            if (parsingName.StartsWith("shell:::", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return false;
+        }
+
         #region    DumpPidl Routines
         /// <summary>
         /// Dumps, to the Debug output, the contents of the mem block pointed to by
@@ -997,5 +1133,20 @@ namespace WindowsApiLib
         }
         #endregion
 
+    }
+
+    /// <summary>
+    /// todo: it may be better to turn this into a class so that we can put Marshal.FreeCoTaskMem on the members
+    /// </summary>
+    public readonly struct PidlSplitResult
+    {
+        public PidlSplitResult(IntPtr shortenedPidl, IntPtr lastElementPidl)
+        {
+            ShortenedPidl = shortenedPidl;
+            LastElementPidl = lastElementPidl;
+        }
+
+        public IntPtr ShortenedPidl { get; }
+        public IntPtr LastElementPidl { get; }
     }
 }

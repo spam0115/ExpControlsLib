@@ -1,7 +1,9 @@
 ﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 using static WindowsApiLib.Shell.ShellAPI;
+using static WindowsApiLib.SystemImageListManager;
 
 namespace WindowsApiLib.Shell
 {
@@ -158,15 +160,18 @@ namespace WindowsApiLib.Shell
                         // Item Changes
                         case SHCNE.CREATE:
                             {
-                                IntPtr parent, realRel;
-                                IntPtr child = IntPtr.Zero;
-                                parent = CPidl.TrimPidl(shNotify.dwItem1, ref child);
-                                var parentItem = CShellItem.FindCShItem(parent);
+                                //IntPtr parent;
+                                IntPtr realRel;
+                                //IntPtr child = IntPtr.Zero;
+                                //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
+                                var splitPidl = CPidl.SplitPidl(shNotify.dwItem1);
+
+                                var parentItem = CShellItem.FindCShItem(splitPidl.ShortenedPidl);
                                 if (!(parentItem == null))
                                 {
                                     if (parentItem.FilesInitialized && !parentItem.FileList.Contains(shNotify.dwItem1))
                                     {
-                                        if (SHGetRealIDL(parentItem.Folder, child, out realRel) == S_OK)
+                                        if (SHGetRealIDL(parentItem.Folder, splitPidl.LastElementPidl, out realRel) == S_OK)
                                         {
                                             var newItem = new CShellItem(realRel, parentItem);
                                             if (newItem is not null)
@@ -185,15 +190,19 @@ namespace WindowsApiLib.Shell
                                     // Debug.WriteLine(vbTab & "Parent not found")
                                     // DumpPidl(parent)
                                 }
-                                Marshal.FreeCoTaskMem(parent);
-                                Marshal.FreeCoTaskMem(child);
+                                //Marshal.FreeCoTaskMem(parent);
+                                //Marshal.FreeCoTaskMem(child);
+                                Marshal.FreeCoTaskMem(splitPidl.ShortenedPidl);
+                                Marshal.FreeCoTaskMem(splitPidl.LastElementPidl);
+
                                 break;
                             }
 
                         case SHCNE.DELETE:
                             {
-                                IntPtr parent, child = IntPtr.Zero;
-                                parent = CPidl.TrimPidl(shNotify.dwItem1, ref child);
+                                //IntPtr parent, child = IntPtr.Zero;
+                                //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
+                                var parent = CPidl.TrimPidl(shNotify.dwItem1);
                                 CShellItem parentItem;
                                 parentItem = CShellItem.FindCShItem(parent);
                                 if (!(parentItem == null))
@@ -205,7 +214,6 @@ namespace WindowsApiLib.Shell
                                     }
                                 }
                                 Marshal.FreeCoTaskMem(parent);
-                                Marshal.FreeCoTaskMem(child);
                                 break;
                             }
 
@@ -241,14 +249,16 @@ namespace WindowsApiLib.Shell
                         case SHCNE.DRIVEADD:
                             {
                                 // Make Directory
-                                IntPtr parent, realRel, child = IntPtr.Zero;
-                                parent = CPidl.TrimPidl(shNotify.dwItem1, ref child);
-                                var parentItem = CShellItem.FindCShItem(parent);
+                                //IntPtr parent, child = IntPtr.Zero;
+                                //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
+                                var splitPidls = CPidl.SplitPidl(shNotify.dwItem1);
+                                var parentItem = CShellItem.FindCShItem(splitPidls.ShortenedPidl);
                                 if (parentItem is not null)
                                 {
                                     if (parentItem.FoldersInitialized && !parentItem.DirectoryList.Contains(shNotify.dwItem1))
                                     {
-                                        if (SHGetRealIDL(parentItem.Folder, child, out realRel) == S_OK)
+                                        IntPtr realRel;
+                                        if (SHGetRealIDL(parentItem.Folder, splitPidls.LastElementPidl, out realRel) == S_OK)
                                         {
                                             var newItem = new CShellItem(realRel, parentItem);
                                             if (newItem is not null)
@@ -272,8 +282,8 @@ namespace WindowsApiLib.Shell
                                 {
                                     Debug.WriteLine("***MKDIR - Parent Not Found");
                                 }     // 6/30/2012
-                                Marshal.FreeCoTaskMem(child);
-                                Marshal.FreeCoTaskMem(parent);
+                                Marshal.FreeCoTaskMem(splitPidls.ShortenedPidl);
+                                Marshal.FreeCoTaskMem(splitPidls.LastElementPidl);
                                 break;
                             }
 
@@ -297,8 +307,9 @@ namespace WindowsApiLib.Shell
                         case SHCNE.DRIVEREMOVED:
                             {
                                 // Removed Directory
-                                IntPtr parent, child = IntPtr.Zero;
-                                parent = CPidl.TrimPidl(shNotify.dwItem1, ref child);
+                                //IntPtr parent, child = IntPtr.Zero;
+                                //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
+                                var parent = CPidl.TrimPidl(shNotify.dwItem1);
 
                                 var parentItem = CShellItem.FindCShItem(parent);
                                 if (parentItem is not null)
@@ -318,7 +329,7 @@ namespace WindowsApiLib.Shell
                                         parentItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
                                     }
                                 }
-                                Marshal.FreeCoTaskMem(child);
+                                //Marshal.FreeCoTaskMem(child);
                                 Marshal.FreeCoTaskMem(parent);
                                 break;
                             }

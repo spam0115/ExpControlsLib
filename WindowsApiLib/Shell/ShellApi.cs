@@ -516,13 +516,25 @@ namespace WindowsApiLib.Shell
 
         [DllImport("shell32", EntryPoint = "#16", CharSet = CharSet.Auto)]
         public static extern IntPtr ILFindLastID(IntPtr pidl);
-        [DllImport("shell32", EntryPoint = "#17", CharSet = CharSet.Auto)]
-        public static extern bool ILRemoveLastID([In()] ref IntPtr pidl);
+
+        //[DllImport("shell32", EntryPoint = "#17", CharSet = CharSet.Auto)]
+        //public static extern bool ILRemoveLastID([In()] ref IntPtr pidl);
+
+        [DllImport("shell32.dll", ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ILRemoveLastID(IntPtr pidl);
+
         [DllImport("shell32", CharSet = CharSet.Auto)]
         public static extern IntPtr ILGetNext(IntPtr pidl);
 
         [DllImport("shell32.dll", ExactSpelling = true)]
         public static extern uint ILGetSize(IntPtr pidl);
+
+        [DllImport("shell32.dll", ExactSpelling = true)]
+        internal static extern IntPtr ILClone(IntPtr pidl);
+
+        [DllImport("shell32.dll", ExactSpelling = true)]
+        internal static extern void ILFree(IntPtr pidl);
 
         #endregion
 

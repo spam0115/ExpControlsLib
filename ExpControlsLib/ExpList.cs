@@ -1712,7 +1712,7 @@ namespace ExpControlsLib
                         break;
                     default:
                         // Handle commands from the "New" submenu.
-                        if (WinSDK.VistaOrAbove) cmdID -= 1;
+                        cmdID -= 1;
                         cmi.lpVerb = (IntPtr)cmdID;
                         cmi.lpVerbW = (IntPtr)cmdID;
                         m_CreateNew = true;

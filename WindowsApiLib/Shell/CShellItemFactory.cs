@@ -160,7 +160,7 @@ namespace WindowsApiLib.Shell
                                            // two item PIDL, which correctly reflects the location of the corresponding Folder in the directory tree.
                                            // Because of this, in Vista and above, I must use PERSONAL as the lookup CSIDL to obtain MYDOCUMENTS.
 
-            if (ID == CSIDL.MYDOCUMENTS && WinSDK.VistaOrAbove)
+            if (ID == CSIDL.MYDOCUMENTS)
                 ID = CSIDL.PERSONAL; // added 11/28/2010
             if (ID == CSIDL.MYDOCUMENTS)  // original code - retain
             {
@@ -570,14 +570,7 @@ namespace WindowsApiLib.Shell
             var aPidl = new IntPtr[1];
             aPidl[0] = ptr;
             csi.Folder.GetAttributesOf(1, aPidl, ref attrFlag);
-            if (!WinSDK.XPorAbove)
-            {
-                if ((attrFlag & SFGAO.FOLDER) != 0) // is folder
-                {
-                    IsFolderRelRet = true;
-                }
-            }
-            else if (((attrFlag & SFGAO.FOLDER) != 0) && !((attrFlag & SFGAO.STREAM) != 0))         // XP or above
+            if (((attrFlag & SFGAO.FOLDER) != 0) && !((attrFlag & SFGAO.STREAM) != 0))         // XP or above
             {
                 IsFolderRelRet = true;
             }
