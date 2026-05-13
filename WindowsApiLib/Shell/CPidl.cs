@@ -343,14 +343,8 @@ namespace WindowsApiLib
         /// <remarks></remarks>
         public static bool IsEqual(IntPtr Pidl1, IntPtr Pidl2)
         {
-            if (WinSDK.Win2KOrAbove)
-            {
-                return ILIsEqual(Pidl1, Pidl2);
-            }
-            else // do hard way, may not work for some files/folders on XP
-            {
-                return AreBytesEqual(Pidl1, Pidl2);
-            }
+            if (Pidl1 == Pidl2) return true;
+            return ILIsEqual(Pidl1, Pidl2);
         }
 
         /// <summary>
@@ -370,39 +364,40 @@ namespace WindowsApiLib
         /// Caller must free the returned Pidl when no longer needed.</remarks>
         public static IntPtr ConcatPidls(IntPtr pidl1, IntPtr pidl2)
         {
-            if (WinSDK.Win2KOrAbove)
-            {
-                return ILCombine(pidl1, pidl2);
-            }
-            else
-            {
-                int cb1;
-                int cb2;
-                cb1 = ItemIDListSize(pidl1);
-                cb2 = ItemIDListSize(pidl2);
-                int rawCnt = cb1 + cb2;
-                if (rawCnt > 0)
-                {
-                    var b = new byte[rawCnt + 1 + 1];
-                    if (cb1 > 0)
-                    {
-                        Marshal.Copy(pidl1, b, 0, cb1);
-                    }
-                    if (cb2 > 0)
-                    {
-                        Marshal.Copy(pidl2, b, cb1, cb2);
-                    }
-                    var rVal = Marshal.AllocCoTaskMem(cb1 + cb2 + 2);
-                    b[rawCnt] = 0;
-                    b[rawCnt + 1] = 0;
-                    Marshal.Copy(b, 0, rVal, rawCnt + 2);
-                    return rVal;
-                }
-                else
-                {
-                    return IntPtr.Zero;
-                }
-            }
+            return ILCombine(pidl1, pidl2);
+            //if (WinSDK.Win2KOrAbove)
+            //{
+            //    return ILCombine(pidl1, pidl2);
+            //}
+            //else
+            //{
+            //    int cb1;
+            //    int cb2;
+            //    cb1 = ItemIDListSize(pidl1);
+            //    cb2 = ItemIDListSize(pidl2);
+            //    int rawCnt = cb1 + cb2;
+            //    if (rawCnt > 0)
+            //    {
+            //        var b = new byte[rawCnt + 1 + 1];
+            //        if (cb1 > 0)
+            //        {
+            //            Marshal.Copy(pidl1, b, 0, cb1);
+            //        }
+            //        if (cb2 > 0)
+            //        {
+            //            Marshal.Copy(pidl2, b, cb1, cb2);
+            //        }
+            //        var rVal = Marshal.AllocCoTaskMem(cb1 + cb2 + 2);
+            //        b[rawCnt] = 0;
+            //        b[rawCnt + 1] = 0;
+            //        Marshal.Copy(b, 0, rVal, rawCnt + 2);
+            //        return rVal;
+            //    }
+            //    else
+            //    {
+            //        return IntPtr.Zero;
+            //    }
+            //}
         }
 
         /// <summary>
@@ -462,23 +457,24 @@ namespace WindowsApiLib
         /// computes the same thing.</remarks>
         public static IntPtr ILFindLastID(IntPtr pidl)
         {
-            if (WinSDK.Win2KOrAbove)
-            {
-                return ShellAPI.ILFindLastID(pidl);
-            }
-            else
-            {
-                int prev = 0;
-                int i = 0;
-                int b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
-                while (b > 0)
-                {
-                    prev = i;
-                    i += b;
-                    b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
-                }
-                return new IntPtr(pidl.ToInt64() + prev);
-            }  // 6/8/2012 - ToInt64 works on both 32 & 64 bit systems (though code is never executed on 64 bit systems)
+            return ShellAPI.ILFindLastID(pidl);
+            //if (WinSDK.Win2KOrAbove)
+            //{
+            //    return ShellAPI.ILFindLastID(pidl);
+            //}
+            //else
+            //{
+            //    int prev = 0;
+            //    int i = 0;
+            //    int b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
+            //    while (b > 0)
+            //    {
+            //        prev = i;
+            //        i += b;
+            //        b = Marshal.ReadByte(pidl, i) + Marshal.ReadByte(pidl, i + 1) * 256;
+            //    }
+            //    return new IntPtr(pidl.ToInt64() + prev);
+            //}  // 6/8/2012 - ToInt64 works on both 32 & 64 bit systems (though code is never executed on 64 bit systems)
         }
 
         /// <summary>It is impossible to validate a PIDL completely since its contents

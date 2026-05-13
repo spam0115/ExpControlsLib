@@ -1099,7 +1099,6 @@ namespace ExpControlsLib
                 }
             } //end for
 
-            lvi.Tag = item;
         }
 
         /// <summary>
@@ -1200,7 +1199,11 @@ namespace ExpControlsLib
 
         private void ExpFileList_Click(object sender, EventArgs e)
         {
-            if (_ListView.SelectedItems.Count <= 0) return;
+            ListView listView = (ListView)sender;
+
+            if (listView.SelectedItems.Count == 0) return;
+
+
 
             var csi = (CShellItem)_ListView.SelectedItems[0].Tag;
             _selectedItem = csi; // ← keep in sync

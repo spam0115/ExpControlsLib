@@ -727,14 +727,16 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// BrowseTo locates the desired item and places it in its proper location on the internal tree.
         /// Any and all sub-directories that need to be populated in the tree in order to properly place
-        /// the desired item, are populated. This is the programatic equivalent of Browsing to a node in <code>ExpTree's</code> TreeView.<br />
+        /// the desired item, are populated. This is the programatic equivalent of Browsing to a node in 
+        /// <code>ExpTree's</code> TreeView.<br /> 
         /// BrowseTo also returns the Parent CShellItem. 
         /// If the desired CShellItem does not exist, the returned Parent is the CShellItem that would be the
         /// Immediate ancestor (containing CShellItem or Parent) of the desired item should it be created.
         /// </summary>
         /// <param name="absPidl">A Absolute PIDL whose CShellItem is to be found</param>
         /// <param name="Parent">Output parameter -- Immediate Ancestor CShellItem of the found item OR 
-        /// the CShellItem that would contain the item if it existed OR Nothing if NO Immediate ancestor found in the Shell namespace. </param>
+        /// the CShellItem that would contain the item if it existed OR Nothing if NO Immediate ancestor found 
+        /// in the Shell namespace. </param>
         /// <returns>The desired CShellItem or, if not found, Nothing.</returns>
         /// <remarks>A by-product of this search is that any sub-dirs of the tree along the path will be 
         /// populated with their sub directories.
@@ -829,39 +831,6 @@ namespace WindowsApiLib.Shell
 
             return BrowseToRet;
         }
-
-        /// <summary>Given an IntPtr representation of a PIDL,
-        /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.
-        /// The tree is expanded (filled in) as necessary to locate the CShellItem or to locate the proper
-        /// placement of a new Item. The assumption is that the Folder system actually contains the item
-        /// that is requested -- File or Directory.Exists equivalent. Returns Nothing on errors such as
-        /// non-existant item.
-        /// </summary>
-        /// <param name="pidl">Absolute (Full) Pidl of item to be Found or Created</param>
-        /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        internal static CShellItem GetCShItem(IntPtr pidl)
-        {
-            CShellItem GetCShItemRet = default;
-            CShellItem Parent = null;
-            GetCShItemRet = BrowseTo(pidl, out Parent);
-            if (GetCShItemRet == null)
-            {
-                if (!(Parent == null))
-                {
-                    try
-                    {
-                        GetCShItemRet = new CShellItem(ILFindLastID(pidl), Parent);
-                    }
-                    catch
-                    {
-                        GetCShItemRet = null;
-                    }
-                }
-            }
-
-            return GetCShItemRet;
-        }
-
 
         #endregion
 
@@ -984,6 +953,40 @@ namespace WindowsApiLib.Shell
                 GetCShItemRet = null; // last minute failsafe
             return GetCShItemRet;
         }
+
+
+        /// <summary>Given an IntPtr representation of a PIDL,
+        /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.
+        /// The tree is expanded (filled in) as necessary to locate the CShellItem or to locate the proper
+        /// placement of a new Item. The assumption is that the Folder system actually contains the item
+        /// that is requested -- File or Directory.Exists equivalent. Returns Nothing on errors such as
+        /// non-existant item.
+        /// </summary>
+        /// <param name="pidl">Absolute (Full) Pidl of item to be Found or Created</param>
+        /// <returns>A CShellItem or, in case of error, Nothing</returns>
+        internal static CShellItem GetCShItem(IntPtr pidl)
+        {
+            CShellItem GetCShItemRet = default;
+            CShellItem Parent = null;
+            GetCShItemRet = BrowseTo(pidl, out Parent);
+            if (GetCShItemRet == null)
+            {
+                if (!(Parent == null))
+                {
+                    try
+                    {
+                        GetCShItemRet = new CShellItem(ILFindLastID(pidl), Parent);
+                    }
+                    catch
+                    {
+                        GetCShItemRet = null;
+                    }
+                }
+            }
+
+            return GetCShItemRet;
+        }
+
 
         #region        FindCShItem --- various signatures of FindCShItem
         /// <summary>
@@ -1961,15 +1964,15 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>True if parameter "ancestor" is an ancestor of parameter "current" 
-    /// </summary>
-    /// <returns>IsAncestorOf returns True if input CShellItem ancestor is an ancestor of input CShellItem current</returns>
-    /// <remarks>if OS is Win2K or above, uses the ILIsParent API, otherwise uses the
-    /// cPidl function StartsWith.  This is necessary since ILIsParent in only available
-    /// in Win2K or above systems AND StartsWith fails on some folders on XP systems (most
-    /// obviously some Network Folder Shortcuts, but also Control Panel. Note, StartsWith
-    /// always works on systems prior to XP.<br />
-    /// NOTE: if ancestor and current reference the same Item, both
-    /// methods return True</remarks>
+        /// </summary>
+        /// <returns>IsAncestorOf returns True if input CShellItem ancestor is an ancestor of input CShellItem current</returns>
+        /// <remarks>if OS is Win2K or above, uses the ILIsParent API, otherwise uses the
+        /// cPidl function StartsWith.  This is necessary since ILIsParent in only available
+        /// in Win2K or above systems AND StartsWith fails on some folders on XP systems (most
+        /// obviously some Network Folder Shortcuts, but also Control Panel. Note, StartsWith
+        /// always works on systems prior to XP.<br />
+        /// NOTE: if ancestor and current reference the same Item, both
+        /// methods return True</remarks>
         public static bool IsAncestorOf(CShellItem ancestor, CShellItem current, bool fParent = false)
         {
             return IsAncestorOf(ancestor.PIDL, current.PIDL, fParent);
@@ -2602,6 +2605,7 @@ namespace WindowsApiLib.Shell
                         var oldPidls = new IntPtr[tmpItems.Count];          // working list of relative pidls of known items
                         for (int i = 0, loopTo = tmpItems.Count - 1; i <= loopTo; i++)
                             oldPidls[i] = ILFindLastID(tmpItems[i].PIDL);
+
                         for (int iold = 0, loopTo1 = oldPidls.Length - 1; iold <= loopTo1; iold++)
                         {
                             for (int icur = tmpCurrent.Count - 1; icur >= 0; icur -= 1) // 5/21/2012 changed to bottom-up loop
