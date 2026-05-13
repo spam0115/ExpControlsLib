@@ -1236,6 +1236,7 @@ namespace ExpControlsLib
         private void Tv1_AfterLabelEdit(object sender, NodeLabelEditEventArgs e)
         {
             CShellItem item = (CShellItem)e.Node.Tag;
+            if (string.IsNullOrWhiteSpace(e.Label)) return;
             var NewName = default(string);
 
             try

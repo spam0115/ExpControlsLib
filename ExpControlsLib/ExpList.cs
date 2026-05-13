@@ -730,7 +730,7 @@ namespace ExpControlsLib
 
 #if DEBUG
                 Console.WriteLine("Getting thumbnail for item: " + item.Text);
-                string? readable = ShellPidl.PidlToString(((CShellItem)item.Tag).PIDL);
+                string? readable = CPidl.PidlToString(((CShellItem)item.Tag).PIDL);
 #endif
                 if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
                 {
@@ -1990,12 +1990,12 @@ namespace ExpControlsLib
                         return;
                     }
 #if DEBUG
-                    var path = ShellPidl.PidlToString(pidls[0]);
+                    var path = CPidl.PidlToString(pidls[0]);
 #endif
                 }
 
 #if DEBUG
-                var path2 = ShellPidl.PidlToString(pidls[0]);
+                var path2 = CPidl.PidlToString(pidls[0]);
 #endif
                 // Get IContextMenu interface from the shell folder
                 if (pidls == null || pidls.Length == 0)
