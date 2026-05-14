@@ -1,22 +1,22 @@
-﻿using System.Collections;
-using System.Runtime.InteropServices;
+using System.Collections;
+using System.Collections.Generic;
 
 namespace WindowsApiLib.Shell
 {
     /// <summary>
-    /// Provides a Synchronized wrapper for a Strongly Typed Arraylist of CShItems. 
+    /// Provides a Synchronized wrapper for a Strongly Typed List of CShItems. 
     /// </summary>
     /// <remarks></remarks>
-    public class CShellItemCollection : IEnumerable, ICollection
+    public class CShellItemCollection : IEnumerable<CShellItem>, ICollection
     {
-        private readonly ArrayList m_items;
+        private readonly List<CShellItem> m_items;
         private readonly CShellItem m_item;
+        private readonly object m_syncRoot = new object();
 
         public CShellItemCollection(CShellItem item)
         {
             m_item = item;
-            var m_tmp = new ArrayList();
-            m_items = ArrayList.Synchronized(m_tmp);
+            m_items = new List<CShellItem>();
         }
 
         public CShellItem CShellItem
@@ -31,7 +31,7 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                return m_items.SyncRoot;
+                return m_syncRoot;
             }
         }
 
@@ -39,7 +39,7 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                return m_items.IsSynchronized;
+                return true;
             }
         }
 
@@ -53,7 +53,8 @@ namespace WindowsApiLib.Shell
 
         public void Sort()
         {
-            m_items.Sort();
+            lock (m_syncRoot)
+                m_items.Sort();
         }
 
         internal int Add(CShellItem value)
@@ -62,12 +63,29 @@ namespace WindowsApiLib.Shell
             {
                 value.SetParent(m_item);
             }
-            return m_items.Add(value);
+            lock (m_syncRoot)
+            {
+                m_items.Add(value);
+                return m_items.Count - 1;
+            }
+        }
+
+        internal void AddRange(IEnumerable<CShellItem> value)
+        {
+            lock (m_syncRoot)
+                m_items.AddRange(value);
         }
 
         internal void AddRange(ICollection value)
         {
-            m_items.AddRange(value);
+            lock (m_syncRoot)
+            {
+                foreach (object item in value)
+                {
+                    if (item is CShellItem csi)
+                        m_items.Add(csi);
+                }
+            }
         }
 
         internal void Clear()
@@ -82,7 +100,7 @@ namespace WindowsApiLib.Shell
 
         public bool Contains(string name)
         {
-            foreach (CShellItem itm in this)
+            foreach (CShellItem itm in m_items)
             {
                 if (string.Compare(itm.GetFileName(), name, true) == 0)
                 {
@@ -94,16 +112,11 @@ namespace WindowsApiLib.Shell
 
         public bool Contains(IntPtr pidl)
         {
-            // DumpPidl(pidl)
-            foreach (CShellItem itm in this)
+            foreach (CShellItem itm in m_items)
             {
                 if (CPidl.IsEqual(itm.PIDL, pidl))
                 {
                     return true;
-                }
-                else
-                {
-                    // DumpPidl(itm.PIDL)
                 }
             }
             return false;
@@ -116,11 +129,9 @@ namespace WindowsApiLib.Shell
 
         public int IndexOf(string name)
         {
-            int i;
-            var loopTo = m_items.Count - 1;
-            for (i = 0; i <= loopTo; i++)
+            for (int i = 0; i < m_items.Count; i++)
             {
-                if (string.Compare(((CShellItem)m_items[i]).GetFileName(), name, true) == 0)
+                if (string.Compare(m_items[i].GetFileName(), name, true) == 0)
                 {
                     return i;
                 }
@@ -130,11 +141,9 @@ namespace WindowsApiLib.Shell
 
         public int IndexOf(IntPtr pidl)
         {
-            int i;
-            var loopTo = m_items.Count - 1;
-            for (i = 0; i <= loopTo; i++)
+            for (int i = 0; i < m_items.Count; i++)
             {
-                if (CPidl.IsEqual(((CShellItem)m_items[i]).PIDL, pidl))
+                if (CPidl.IsEqual(m_items[i].PIDL, pidl))
                 {
                     return i;
                 }
@@ -144,34 +153,39 @@ namespace WindowsApiLib.Shell
 
         internal void Insert(int index, CShellItem value)
         {
-            m_items.Insert(index, value);
+            lock (m_syncRoot)
+                m_items.Insert(index, value);
         }
 
         internal void Remove(CShellItem value)
         {
-            m_items.Remove(value);
+            lock (m_syncRoot)
+                m_items.Remove(value);
         }
 
         internal void Remove(string name)
         {
-            int index = IndexOf(name);
-
-            if (index > -1)
+            lock (m_syncRoot)
             {
-                RemoveAt(index);
+                int index = IndexOf(name);
+                if (index > -1)
+                {
+                    m_items.RemoveAt(index);
+                }
             }
         }
 
         internal void RemoveAt(int index)
         {
-            m_items.RemoveAt(index);
+            lock (m_syncRoot)
+                m_items.RemoveAt(index);
         }
 
         public CShellItem this[int index]
         {
             get
             {
-                return (CShellItem)m_items[index];
+                return m_items[index];
             }
         }
 
@@ -180,21 +194,17 @@ namespace WindowsApiLib.Shell
             get
             {
                 int index = IndexOf(name);
-                if (index > -1)
-                {
-                    return (CShellItem)m_items[index];
-                }
-                else
-                {
-                    return null;
-                }
+                return index > -1 ? m_items[index] : null;
             }
             set
             {
-                int index = IndexOf(name);
-                if (index > -1)
+                lock (m_syncRoot)
                 {
-                    m_items[index] = value;
+                    int index = IndexOf(name);
+                    if (index > -1)
+                    {
+                        m_items[index] = value;
+                    }
                 }
             }
         }
@@ -204,14 +214,7 @@ namespace WindowsApiLib.Shell
             get
             {
                 int index = IndexOf(pidl);
-                if (index > -1)
-                {
-                    return (CShellItem)m_items[index];
-                }
-                else
-                {
-                    return null;
-                }
+                return index > -1 ? m_items[index] : null;
             }
             set
             {
@@ -223,31 +226,27 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        public IEnumerator GetEnumerator()
+        public IEnumerator<CShellItem> GetEnumerator()
         {
-            return m_items.GetEnumerator();
+            lock (m_syncRoot)
+                return new List<CShellItem>(m_items).GetEnumerator();
         }
-        /// <summary>
-    /// Copys all CShItems contained in this instance to an Array (of CShItems), starting at the supplied
-    /// index into the Array.
-    /// </summary>
-    /// <param name="array">CShellItem Array to copy to.</param>
-    /// <param name="index">Index into array to copy the first instance of CShellItem.</param>
-    /// <remarks>Is Thread save.</remarks>
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
         public void CopyTo(Array array, int index)
         {
-            lock (m_items.SyncRoot)
-                m_items.CopyTo(array, index);
+            lock (m_syncRoot)
+                ((ICollection)m_items).CopyTo(array, index);
         }
-        /// <summary>
-    /// Returns all CShItems contained in this instance.
-    /// </summary>
-    /// <returns>An Array of CShItems</returns>
-    /// <remarks>Is Thread safe.</remarks>
+
         public CShellItem[] ToArray()
         {
-            lock (m_items.SyncRoot)
-                return (CShellItem[])m_items.ToArray(typeof(CShellItem));
+            lock (m_syncRoot)
+                return m_items.ToArray();
         }
     }
 }
