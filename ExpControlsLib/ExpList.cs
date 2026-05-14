@@ -353,7 +353,7 @@ namespace ExpControlsLib
                     if (value == _CurrentPath && _currentFolderCsi != null) return;
                     try
                     {
-                        CShellItem csi = CShellItem.GetCShItem(value);
+                        CShellItem csi = CShellItemFactory.GetCShItem(value);
                         if (csi != null && csi.IsFolder)
                         {
                             DisplayFiles(value, csi, true);
@@ -588,10 +588,10 @@ namespace ExpControlsLib
 
             if (csi == null)
             {
-                csi = CShellItem.GetCShItem(pathName);
+                csi = CShellItemFactory.GetCShItem(pathName);
             }
             if (includeFolder) dirList.AddRange(csi.Directories);
-            if (!csi.DisplayName.Equals(CShellItem.StrMyComputer)) fileList.AddRange(csi.Files);
+            if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(csi.Files);
 
             if ((dirList.Count + fileList.Count) > 0)
             {
@@ -1296,7 +1296,7 @@ namespace ExpControlsLib
 
             var item = (CShellItem)_ListView.Items[e.Item].Tag;
             if ((!item.IsFileSystem) || item.IsDisk ||
-                item.FullPath == CShellItem.GetCShItem(CSIDL.MYDOCUMENTS).FullPath ||
+                item.FullPath == CShellItemFactory.GetCShItem(CSIDL.MYDOCUMENTS).FullPath ||
                 !item.CanRename)
             {
                 System.Media.SystemSounds.Beep.Play();
@@ -1447,7 +1447,7 @@ namespace ExpControlsLib
                         }
                         else
                         {
-                            string strPath = itms[0].Parent == CShellItem.GetDeskTop()
+                            string strPath = itms[0].Parent == CShellItemFactory.DesktopCSI
                                 ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
                                 : itms[0].Parent.FullPath;
 
@@ -1584,7 +1584,7 @@ namespace ExpControlsLib
                 // The "New" submenu is managed by m_WindowsContextMenu.SetUpNewMenu(),
                 // which adds file creation options for the selected folder.
                 if (_currentFolderCsi.IsFolder &&
-                    ((!_currentFolderCsi.FullPath.StartsWith("::")) || _currentFolderCsi == CShellItem.GetDeskTop()))
+                    ((!_currentFolderCsi.FullPath.StartsWith("::")) || _currentFolderCsi == CShellItemFactory.DesktopCSI))
                 {
                     int xIndex = GetMenuItemCount(comContextMenu.ToInt32());
                     m_WindowsContextMenu.SetUpNewMenu(_currentFolderCsi, comContextMenu, xIndex);
@@ -1729,7 +1729,7 @@ namespace ExpControlsLib
                     int prgf = 0;
                     IntPtr iunk = IntPtr.Zero;
 
-                    IShellFolder folder = _currentFolderCsi == CShellItem.GetDeskTop()
+                    IShellFolder folder = _currentFolderCsi == CShellItemFactory.DesktopCSI
                         ? _currentFolderCsi.Folder
                         : _currentFolderCsi.Parent.Folder;
 
@@ -1901,7 +1901,7 @@ namespace ExpControlsLib
                     // Get the target folder for paste operation
                     try
                     {
-                        folder = _currentFolderCsi == CShellItem.GetDeskTop()
+                        folder = _currentFolderCsi == CShellItemFactory.DesktopCSI
                             ? _currentFolderCsi.Folder
                             : _currentFolderCsi.Parent?.Folder;
 

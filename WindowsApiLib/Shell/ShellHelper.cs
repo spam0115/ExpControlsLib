@@ -164,7 +164,7 @@ namespace WindowsApiLib.Shell
             if (parent == null)
                 parent = item;
             IShellFolder folder;
-            if (ReferenceEquals(item, CShellItem.GetDeskTop()))
+            if (ReferenceEquals(item, CShellItemFactory.DesktopCSI))
             {
                 folder = item.Folder;
             }
@@ -478,7 +478,7 @@ namespace WindowsApiLib.Shell
                 bool isOK = true;
                 try   // if GetCShitem returns Nothing(it's failure marker) then catch it
                 {
-                    MakeDragListFromPtrRet.Add(CShellItem.GetCShItem((byte[])bArrays[0], (byte[])bArrays[i]));
+                    MakeDragListFromPtrRet.Add(CShellItemFactory.GetCShItem((byte[])bArrays[0], (byte[])bArrays[i]));
                 }
                 catch (Exception ex)
                 {
@@ -748,17 +748,17 @@ namespace WindowsApiLib.Shell
         public static IShellFolder MakeFolderFromBytes(byte[] b)
         {
             IShellFolder MakeFolderFromBytesRet = default;
-            CShellItem.GetDeskTop();                        // ensure we are initialized
+            //CShellItemFactory.DesktopCSI;                        // ensure we are initialized
                                                  // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
             if (!CPidl.IsValidPidl(b))
                 return null;
             if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
             {
-                return CShellItem.GetDeskTop().Folder;
+                return CShellItemFactory.DesktopCSI.Folder;
             }
             else if (b.Length == 0)   // Also indicates the desktop
             {
-                return CShellItem.GetDeskTop().Folder;
+                return CShellItemFactory.DesktopCSI.Folder;
             }
             else
             {
@@ -767,7 +767,7 @@ namespace WindowsApiLib.Shell
                     return null;
                 Marshal.Copy(b, 0, ptr, b.Length);
                 // the next statement assigns a IshellFolder object to the function return, or has an error
-                MakeFolderFromBytesRet = GetFolder(CShellItem.GetDeskTop(), ptr);
+                MakeFolderFromBytesRet = GetFolder(CShellItemFactory.DesktopCSI, ptr);
                 Marshal.FreeCoTaskMem(ptr);
             }
 
@@ -783,7 +783,7 @@ namespace WindowsApiLib.Shell
         public static ArrayList AllFolderWalk()
         {
             var rVal = new ArrayList();
-            var desktop = CShellItem.GetDeskTop();
+            var desktop = CShellItemFactory.DesktopCSI;
             rVal.Add(desktop);
             WalkHelper(desktop, rVal);
             return rVal;

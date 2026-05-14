@@ -298,7 +298,7 @@ namespace ExpControlsLib
             {
                 if (Root is null || Root.Tag is null)  // 11/05/2013
                 {
-                    return CShellItem.GetDeskTop();                       // 11/05/2013
+                    return CShellItemFactory.DesktopCSI;                       // 11/05/2013
                 }
                 else                                                // 11/05/2013
                 {
@@ -504,7 +504,7 @@ namespace ExpControlsLib
             CShellItem newItem;
             try
             {
-                newItem = CShellItem.GetCShItem(newPath);
+                newItem = CShellItemFactory.GetCShItem(newPath);
                 if (newItem is null)
                     return ExpandANodeRet;
                 if (!newItem.IsFolder)
@@ -609,7 +609,7 @@ namespace ExpControlsLib
             _TreeView.BeginUpdate();
             ClearTree();
             CShellItem special;
-            special = CShellItem.GetCShItem((CSIDL)newVal);
+            special = CShellItemFactory.GetCShItem((CSIDL)newVal);
             Root = new TreeNode(special.DisplayName)
             {
                 Tag = special,
@@ -698,7 +698,7 @@ namespace ExpControlsLib
             // 2. Skip slow devices (Network, Removable) and virtual locations (other than the root).
             
             bool performAccurateCheck = false;
-            if (ReferenceEquals(item, RootItem) || ReferenceEquals(item, CShellItem.GetDeskTop()))
+            if (ReferenceEquals(item, RootItem) || ReferenceEquals(item, CShellItemFactory.DesktopCSI))
             {
                 performAccurateCheck = true;
             }
@@ -1219,7 +1219,9 @@ namespace ExpControlsLib
             // item.Path = CShellItem.GetCShItem(CSIDL.MYDOCUMENTS).Path Or _
             // Not (item.CanRename) Then
             // Changed 11/28/2010
-            if (item.FullPath.StartsWith("::") || item.IsDisk || !m_allowFolderRename || (item.FullPath ?? "") == (CShellItem.GetCShItem(CSIDL.MYDOCUMENTS).FullPath ?? "") || !item.CanRename)
+            if (item.FullPath.StartsWith("::") || item.IsDisk || !m_allowFolderRename 
+                || (item.FullPath ?? "") == (CShellItemFactory.GetCShItem(CSIDL.MYDOCUMENTS).FullPath ?? "") 
+                || !item.CanRename)
             {
                 System.Media.SystemSounds.Beep.Play();
                 e.CancelEdit = true;
@@ -1337,7 +1339,7 @@ namespace ExpControlsLib
                         else
                         {
                             string strPath;
-                            if (ReferenceEquals(itms[0], CShellItem.GetDeskTop()))
+                            if (ReferenceEquals(itms[0], CShellItemFactory.DesktopCSI))
                             {
                                 strPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
                             }
@@ -1603,7 +1605,7 @@ namespace ExpControlsLib
         {
             var pathList = new List<CShellItem>();
             if (shellItem is null)
-                shellItem = CShellItem.GetDeskTop(); // 6/18/2012
+                shellItem = CShellItemFactory.DesktopCSI; // 6/18/2012
 
             while (shellItem.Parent is not null)
             {
@@ -1822,7 +1824,7 @@ namespace ExpControlsLib
                 int prgf = 0;
                 var iunk = IntPtr.Zero;
                 IShellFolder folder = null;
-                if (ReferenceEquals(CSI, CShellItem.GetDeskTop()))
+                if (ReferenceEquals(CSI, CShellItemFactory.DesktopCSI))
                 {
                     folder = CSI.Folder;
                 }

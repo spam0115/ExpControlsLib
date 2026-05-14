@@ -190,7 +190,7 @@ namespace ExpControlsLib
                         }
                         else            // only Desktop lacks a parent
                         {
-                            m_ParentItem = CShellItem.GetDeskTop();
+                            m_ParentItem = CShellItemFactory.DesktopCSI;
                         }
                     }
                     else if (!ReferenceEquals(m_ParentItem, csi.Parent))    // multiple parents 

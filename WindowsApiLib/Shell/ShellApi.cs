@@ -594,6 +594,22 @@ namespace WindowsApiLib.Shell
         // </param>
         [DllImport("shell32", CharSet = CharSet.Auto)]
         public static extern int SHGetDesktopFolder(ref IShellFolder ppshf);
+
+        /// <summary>
+        /// Get's the pidl of special shell namespace locations
+        /// </summary>
+        /// <param name="rfid"></param>
+        /// <param name="dwFlags"></param>
+        /// <param name="hToken"></param>
+        /// <param name="ppidl"></param>
+        /// <returns></returns>
+        [DllImport("shell32.dll")]
+        public static extern int SHGetKnownFolderIDList(
+        [MarshalAs(UnmanagedType.LPStruct)] Guid rfid,
+        uint dwFlags,
+        IntPtr hToken,
+        out IntPtr ppidl);
+
         #endregion
 
         #region        SHGetFileInfo

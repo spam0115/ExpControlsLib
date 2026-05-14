@@ -62,7 +62,7 @@ namespace ExpControlsLib
             IntPtr[] pidls = new IntPtr[items.Length];
             IShellFolder folder = null;
 
-            if (items[0] == CShellItem.GetDeskTop())
+            if (items[0] == CShellItemFactory.DesktopCSI)
             {
                 folder = items[0].Folder;
             }

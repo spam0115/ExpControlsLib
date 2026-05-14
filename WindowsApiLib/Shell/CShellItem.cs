@@ -34,24 +34,24 @@ namespace WindowsApiLib.Shell
         // corresponds to "System Folder" on the current machine
         // Sub New() depends on the existance of My Computer(CSIDL.DRIVES),
         // to determine what the equivalent string is
-        private static string m_strSystemFolder;
+        //private static string m_strSystemFolder;
 
         // My Computer is also commonly used (though not internally),
         // so save & expose its name on the current machine
-        private static string m_strMyComputer;
+        //private static string m_strMyComputer;
 
         // To get My Documents sorted first, we need to know the Locale 
         // specific name of that folder.
-        private static string m_strMyDocuments;
+        //private static string m_strMyDocuments;
 
-        // The DesktopBase is set up via Sub New() (one time only) and
-        // disposed of only when DesktopBase is finally disposed of
-        private static CShellItem DesktopBase;
+        //// The DesktopBase is set up via Sub New() (one time only) and
+        //// disposed of only when DesktopBase is finally disposed of
+        //private static CShellItem DesktopBase;
 
         // DragDrop, possibly among others, needs to know the Path of
         // the DeskTopDirectory in addition to the Desktop itself
         // Also need the actual CShellItem for the DeskTopDirectory, so get it
-        private static CShellItem m_DeskTopDirectory;
+        //private static CShellItem m_DeskTopDirectory;
 
         /// <summary>
         /// The CShellItem of the Recycle Bin. Set in New() (the Desktop creator)
@@ -59,10 +59,10 @@ namespace WindowsApiLib.Shell
         /// Als used to prevent normal UPDATEDIR on Desktop from processing the
         /// Recycle Bin which would cause an effectively endless loop.
         /// </summary>
-        private static CShellItem m_Recycle;            // 6/21/2012
+        //private static CShellItem m_Recycle;            // 6/21/2012
 
         // Keep the local System Name for IsRemote testing
-        private static string SystemName;                              // 4/14/2012
+        // private static string SystemName;                              // 4/14/2012
                                                                        // Keep list of Drives and their DriveType for IsRemote testing
         private static readonly Dictionary<string, bool> DriveDict = new Dictionary<string, bool>();   // 4/16/2012
 
@@ -80,53 +80,54 @@ namespace WindowsApiLib.Shell
         /// <remarks></remarks>
         private static readonly object LockObj = new object();
 
+        internal static bool _Initialized = false;
+
         #endregion
 
 
         #region    Instance Private Fields
         // m_Folder and m_Pidl must be released/freed at Dispose time
-        private IShellFolder m_Folder;    // if item is a folder, contains the Folder interface for this instance
+        internal IShellFolder m_Folder;    // if item is a folder, contains the Folder interface for this instance
         private IntPtr m_Pidl;            // The Absolute PIDL for this item (not retained for files)
         private string m_DisplayName = "";
-        private string m_Path;
-        private string m_TypeName;
+        internal string m_Path;
+        internal string m_TypeName;
         private CShellItem m_Parent;
-        private int m_IconIndexNormal = -1;        // index into the SystemImageListManager list for Normal icon
-        private int m_IconIndexOpen = -1;          // index into the SystemImageListManager list for Open icon
+        internal int m_IconIndexNormal = -1;        // index into the SystemImageListManager list for Normal icon
+        internal int m_IconIndexOpen = -1;          // index into the SystemImageListManager list for Open icon
         private int m_IconIndexNormalOrig = -1;    // index into the System Image list for Normal icon
         private int m_IconIndexOpenOrig = -1;      // index into the SystemImage list for Open icon
-        private bool m_IsBrowsable;
+        internal bool m_IsBrowsable;
         private bool m_IsFileSystem;
-        private bool m_IsFolder;
-        private bool m_HasSubFolders;
+        internal bool m_IsFolder;
+        internal bool m_HasSubFolders;
         private bool m_IsLink;
         private bool m_IsDisk;
         private bool m_IsShared;
         private bool m_IsHidden;
         private bool m_IsNetWorkDrive;
         private bool m_IsRemovable;
-        private bool m_IsReadOnly;
+        internal bool m_IsReadOnly;
         // Properties of interest to Drag Operations
         private bool m_CanMove;
         private bool m_CanCopy;
         private bool m_CanDelete;
         private bool m_CanLink;
-        private bool m_IsDropTarget;
         private bool m_CanRename;
 
         private CShellItemCollection m_Directories;
         private CShellItemCollection m_Files;
 
-        private SFGAO m_SFGAO_Attributes;     // the original, returned from GetAttributesOf Added 10/09/2011 
-        private bool m_IsRemote;           // 4/14/2012
+        private FileAttributes m_Attributes;  // True FileAttributes from FileInfo
+        private SFGAO m_SFGAO_Attributes;
+        private bool m_IsRemote;
 
-        private object m_Tag;                 // Added 10/09/2011
-        private W32Find_Data m_W32Data;       // 4/24/2012
+        private W32Find_Data m_W32Data;
 
         private int m_SortFlag;       // Used in comparisons
 
         // For shell events 
-        private CShellItemUpdater m_updater;
+        internal CShellItemUpdater m_updater;
 
         // The following elements are only filled in on demand
         private bool m_XtrInfo;
@@ -134,13 +135,12 @@ namespace WindowsApiLib.Shell
         private DateTime m_CreationTime;
         private DateTime m_LastAccessTime;
         private long m_Length;
-        private FileAttributes m_Attributes;  // Added 10/09/2011 'True FileAttributes from FileInfo
 
         // Indicates whether DisplayName, TypeName, SortFlag have been set up
-        private bool m_HasDispType;
+        internal bool m_HasDispType;
 
         // Indicates whether IsReadOnly has been set up
-        private bool m_IsReadOnlySetup; // 
+        internal bool m_IsReadOnlySetup;
 
         // m_UpdateFolder is True is the IShellFolder (m_Folder) must be refetched
         private bool m_UpdateFolder;
@@ -181,67 +181,6 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        private void GetSize()
-        {
-            // Split the file size into bytes, kb, MB and GB
-            if (!IsFolder & IsFileSystem | IsDisk)
-            {
-                if (Length >= 1048576 * 1024)
-                {
-                    m_size = $"{Length / (double)(1048576 * 1024):#,##0.#} GB";
-                }
-                else if (Length >= 1048576L)
-                {
-                    m_size = $"{Length / 1048576d:#,##0.#} MB";
-                }
-                else if (Length >= 1024L)
-                {
-                    m_size = $"{Length / 1024d:#,##0} KB";
-                }
-                else if (!(IsRemovable & Length == 0L)) // Don't show a CD-ROM's size if it doesn't have a disk in it
-                {
-                    m_size = $"{Length:#,##0} Bytes";
-                }
-                else
-                {
-                    m_size = "";
-                } // Empty CD-ROM
-            }
-            else
-            {
-                m_size = "";
-            }
-        }
-
-        /// <summary>
-        /// Sets DisplayName, TypeName, and SortFlag when actually needed
-        /// </summary>
-        private void SetDispType()
-        {
-            // Get Displayname, TypeName
-            var shfi = new SHFILEINFO();
-            var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
-            int dwAttr = 0;
-            if (m_IsFileSystem & !m_IsFolder)
-            {
-                dwflag = dwflag | SHGFI.USEFILEATTRIBUTES;
-                dwAttr = FILE_ATTRIBUTE_NORMAL;
-            }
-            var H = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
-            m_DisplayName = shfi.szDisplayName;
-            m_TypeName = shfi.szTypeName;
-            // fix DisplayName
-            if (m_DisplayName.Equals(""))
-            {
-                m_DisplayName = FullPath;
-            }
-            // Fix TypeName
-            // If m_IsFolder And m_TypeName.Equals("File") Then
-            // m_TypeName = "File Folder"
-            // End If
-            m_SortFlag = ComputeSortFlag();
-            m_HasDispType = true;
-        }
 
         private int SortFlag
         {
@@ -332,100 +271,105 @@ namespace WindowsApiLib.Shell
         /// </summary>
         private CShellItem()           // only used when desktopfolder has not been intialized
         {
-            if (!(DesktopBase == null))
-            {
-                throw new Exception("Attempt to initialize CShellItem for second time");
-            }
+            Initialize();
+        }
 
-            int HR;
+        private void Initialize()
+        {
+            if (_Initialized) return;
+
+            //int HR;
             // firstly determine what the local machine calls a "System Folder" and "My Computer"
-            IntPtr tmpPidl = IntPtr.Zero;
-            HR = SHGetSpecialFolderLocation(0, (int)CSIDL.DRIVES, ref tmpPidl);
-            var shfi = new SHFILEINFO();
-            var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
-            int dwAttr = 0;
-            SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
-            m_strSystemFolder = shfi.szTypeName;
-            m_strMyComputer = shfi.szDisplayName;
-            Marshal.FreeCoTaskMem(tmpPidl);
+            //IntPtr tmpPidl = IntPtr.Zero;
+            //HR = SHGetSpecialFolderLocation(0, (int)CSIDL.DRIVES, ref tmpPidl);
+            //var shfi = new SHFILEINFO();
+            //var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
+            //int dwAttr = 0;
+            //SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+            //m_strSystemFolder = shfi.szTypeName;
+            //m_strMyComputer = shfi.szDisplayName;
+            //Marshal.FreeCoTaskMem(tmpPidl);
 
             // With That done, now set up Desktop CShellItem
-            m_Path = "::{" + DesktopGUID.ToString() + "}";
-            m_IsFolder = true;
-            m_HasSubFolders = true;
-            m_IsBrowsable = false;
-            HR = SHGetDesktopFolder(ref m_Folder);
-            // m_Pidl = GetSpecialFolderLocation(IntPtr.Zero, (int)CSIDL.DESKTOP);
-            // Force m_Pidl to be the virtual root PIDL (empty)
-            m_Pidl = Marshal.AllocCoTaskMem(2);
-            Marshal.WriteInt16(m_Pidl, 0, 0);
+            //m_Path = "::{" + DesktopGUID.ToString() + "}";
+            //m_IsFolder = true;
+            //m_HasSubFolders = true;
+            //m_IsBrowsable = false;
+            //HR = SHGetDesktopFolder(ref m_Folder);
+            //// m_Pidl = GetSpecialFolderLocation(IntPtr.Zero, (int)CSIDL.DESKTOP);
+            //// Force m_Pidl to be the virtual root PIDL (empty)
+            //m_Pidl = Marshal.AllocCoTaskMem(2);
+            //Marshal.WriteInt16(m_Pidl, 0, 0);
 
-            dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.SYSICONINDEX | SHGFI.PIDL;
-            dwAttr = 0;
-            var desktop = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+            //dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.SYSICONINDEX | SHGFI.PIDL;
+            //dwAttr = 0;
+            //var desktop = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
 
-            m_DisplayName = shfi.szDisplayName;
-            m_TypeName = StrSystemFolder;   // not returned correctly by SHGetFileInfo
-            m_IconIndexNormal = shfi.iIcon;
-            m_IconIndexOpen = shfi.iIcon;
-            m_HasDispType = true;
-            m_IsDropTarget = true;
-            m_IsReadOnly = false;
-            m_IsReadOnlySetup = true;
+            //m_DisplayName = shfi.szDisplayName;
+            //m_TypeName = StrSystemFolder;   // not returned correctly by SHGetFileInfo
+            //m_IconIndexNormal = shfi.iIcon;
+            //m_IconIndexOpen = shfi.iIcon;
+            //m_HasDispType = true;
+            ////m_IsDropTarget = true;
+            //m_IsReadOnly = false;
+            //m_IsReadOnlySetup = true;
 
-            // also get local name for "My Documents"
-            var pchEaten = default(int);
-            tmpPidl = IntPtr.Zero;
-            int argpdwAttributes = default;
-            HR = Folder.ParseDisplayName(default, default, "::{450d8fba-ad25-11d0-98a8-0800361b1103}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
-            shfi = new SHFILEINFO();
-            dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
-            dwAttr = 0;
-            SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
-            m_strMyDocuments = shfi.szDisplayName;
-            Marshal.FreeCoTaskMem(tmpPidl);
+            //// also get local name for "My Documents"
+            //var pchEaten = default(int);
+            //tmpPidl = IntPtr.Zero;
+            //int argpdwAttributes = default;
+            //HR = Folder.ParseDisplayName(default, default, "::{450d8fba-ad25-11d0-98a8-0800361b1103}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
+            //shfi = new SHFILEINFO();
+            //dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
+            //dwAttr = 0;
+            //SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+            //m_strMyDocuments = shfi.szDisplayName;
+            //Marshal.FreeCoTaskMem(tmpPidl);
+
             // this must be done after getting "My Documents" string
-            m_SortFlag = ComputeSortFlag();
+            // m_SortFlag = ComputeSortFlag();
             // Set DesktopBase
-            DesktopBase = this;
+            //DesktopBase = this;
+
             // Get the SystemName for Remote item testing
-            SystemName = Environment.MachineName;    // 4/14/2012
-                                                     // Get the Path and CShellItem of the DesktopDirectory
-            m_DeskTopDirectory = GetCShItem(CSIDL.DESKTOPDIRECTORY);
-            // Get the CShellItem for the Recycle Bin   6/21/2012
-            m_Recycle = GetCShItem(CSIDL.BITBUCKET); // 6/21/2012
-                                                     // Start the Notification Process
-            m_updater = new CShellItemUpdater(this);
+            //SystemName = Environment.MachineName;    // 4/14/2012
+            //                                         // Get the Path and CShellItem of the DesktopDirectory
+            //                                         //m_DeskTopDirectory = GetCShItem(CSIDL.DESKTOPDIRECTORY);
+            //                                         // Get the CShellItem for the Recycle Bin   6/21/2012
+            //m_Recycle = CShellItemFactory.GetCShItem(CSIDL.BITBUCKET); // 6/21/2012
+            
+            // Start the Notification Process
+            //m_updater = new CShellItemUpdater(this);
+
+            //_Initialized = true;
         }
 
         internal CShellItem(IntPtr pidl, CShellItem parent = null)
         {
-            if (DesktopBase == null)
-            {
-                DesktopBase = new CShellItem(); // This initializes the Desktop folder
-            }
+            Initialize();
+
+            // Set unfetched value for IconIndex....
+            m_IconIndexNormal = -1;
+            m_IconIndexOpen = -1;
+
             m_Parent = parent;
             if (parent == null)
             {
                 m_Pidl = pidl;
                 // Get some attributes
-                SHGetDesktopFolder(ref m_Folder);
+                //SHGetDesktopFolder(ref m_Folder);
 
-                SetUpAttributes(m_Folder, pidl);
+                SetUpAttributes(CShellItemFactory.Desktop, pidl);
             }
-            else 
+            else
             {
                 m_Pidl = CPidl.ConcatPidls(parent.PIDL, pidl);
                 // Get some attributes
                 SetUpAttributes(parent.Folder, pidl);
             }
 
-
-            // Set unfetched value for IconIndex....
-            m_IconIndexNormal = -1;
-            m_IconIndexOpen = -1;
             // finally, set up my Folder
-            if (m_IsFolder)
+            if (m_IsFolder && parent != null)
             {
                 m_Folder = ShellHelper.GetFolder(parent, pidl);
                 // m_Folder may be returned as Nothing. This is handled in GetContents
@@ -509,17 +453,17 @@ namespace WindowsApiLib.Shell
         public static IShellFolder MakeFolderFromBytes(byte[] b)
         {
             IShellFolder MakeFolderFromBytesRet = default;
-            GetDeskTop();                        // ensure we are initialized
-                                                 // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
+            //GetDeskTop();                        // ensure we are initialized
+            // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
             if (!CPidl.IsValidPidl(b))
                 return null;
             if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
             {
-                return DesktopBase.Folder;
+                return CShellItemFactory.DesktopCSI.Folder;
             }
             else if (b.Length == 0)   // Also indicates the desktop
             {
-                return DesktopBase.Folder;
+                return CShellItemFactory.DesktopCSI.Folder;
             }
             else
             {
@@ -528,7 +472,7 @@ namespace WindowsApiLib.Shell
                     return null;
                 Marshal.Copy(b, 0, ptr, b.Length);
                 // the next statement assigns a IshellFolder object to the function return, or has an error
-                MakeFolderFromBytesRet = ShellHelper.GetFolder(DesktopBase, ptr);
+                MakeFolderFromBytesRet = ShellHelper.GetFolder(CShellItemFactory.DesktopCSI, ptr);
                 Marshal.FreeCoTaskMem(ptr);
             }
 
@@ -578,7 +522,7 @@ namespace WindowsApiLib.Shell
             m_CanDelete = (attrFlag & SFGAO.CANDELETE) != 0;
             m_CanLink = (attrFlag & SFGAO.CANLINK) != 0;
             m_CanMove = (attrFlag & SFGAO.CANMOVE) != 0;
-            m_IsDropTarget = (attrFlag & SFGAO.DROPTARGET) != 0;
+            IsDropTarget = (attrFlag & SFGAO.DROPTARGET) != 0;
             m_CanRename = (attrFlag & SFGAO.CANRENAME) != 0;
 
             // Get the Path
@@ -637,7 +581,7 @@ namespace WindowsApiLib.Shell
                 if (m_Path.StartsWith(@"\\"))
                 {
                     string[] tmp = m_Path.Split(new char[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
-                    if (tmp.Length > 0 && tmp[0].Equals(SystemName, StringComparison.InvariantCultureIgnoreCase))
+                    if (tmp.Length > 0 && tmp[0].Equals(CShellItemFactory.SystemName, StringComparison.InvariantCultureIgnoreCase))
                     {
                         m_IsRemote = false;
                     }
@@ -723,272 +667,9 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
-        #region Shared private functions
-        /// <summary>
-        /// BrowseTo locates the desired item and places it in its proper location on the internal tree.
-        /// Any and all sub-directories that need to be populated in the tree in order to properly place
-        /// the desired item, are populated. This is the programatic equivalent of Browsing to a node in 
-        /// <code>ExpTree's</code> TreeView.<br /> 
-        /// BrowseTo also returns the Parent CShellItem. 
-        /// If the desired CShellItem does not exist, the returned Parent is the CShellItem that would be the
-        /// Immediate ancestor (containing CShellItem or Parent) of the desired item should it be created.
-        /// </summary>
-        /// <param name="absPidl">A Absolute PIDL whose CShellItem is to be found</param>
-        /// <param name="Parent">Output parameter -- Immediate Ancestor CShellItem of the found item OR 
-        /// the CShellItem that would contain the item if it existed OR Nothing if NO Immediate ancestor found 
-        /// in the Shell namespace. </param>
-        /// <returns>The desired CShellItem or, if not found, Nothing.</returns>
-        /// <remarks>A by-product of this search is that any sub-dirs of the tree along the path will be 
-        /// populated with their sub directories.
-        /// It is logically possible that NO Immediate ancestor can be found.
-        /// For Example: GetCShItem(Path) may be given a string specifying a non-existant directory.
-        /// (eg -- C:\Test\NonExistant\junk.txt). 
-        /// In that case, and that case only, Parent may be returned as Nothing.</remarks>
-        internal static CShellItem BrowseTo(IntPtr absPidl, out CShellItem Parent)
-        {
-            CShellItem BrowseToRet = default;
-            BrowseToRet = null;     // avoid VB2005 Warning
-            Parent = default;
-            var BaseItem = GetDeskTop();
-
-            CShellItem CSI;
-            bool FoundIt = false;      // True if we found item or an ancestor
-                                       // Dim FirstWithThisBase As Boolean = True     '6/30/2012 Flag to prevent infinite loop
-            while (!FoundIt)
-            {
-                foreach (var currentCSI in BaseItem.Directories)
-                {
-                    CSI = currentCSI;    // 7/2/2012 should use Directories here
-                    if (CPidl.IsAncestorOf(CSI.PIDL, absPidl))
-                    {
-                        if (CPidl.IsEqual(CSI.PIDL, absPidl))  // we found the desired item
-                        {
-                            Parent = BaseItem;
-                            return CSI;
-                        }
-                        else            // Found an ancestor
-                        {
-                            BaseItem = CSI;
-                            Parent = CSI;
-                            FoundIt = true;
-                            break;
-                        }
-                    }
-                }
-                if (!FoundIt)
-                {
-                    // UPDATE: Check for files in the desktop
-                    foreach (var currentCSI1 in DesktopBase.Files)
-                    {
-                        CSI = currentCSI1;           // Files will do an UpdateRefresh in case of missing a CREATE
-                        if (CPidl.IsEqual(CSI.PIDL, absPidl))
-                        {
-                            Parent = DesktopBase;
-                            return CSI;
-                        }
-                    }
-                    // The next block of code is to deal with a rare case of missing a MKDIR - 6/30/2012
-                    // No longer necessary since BaseItem.Directories above will do an UpdateRefresh
-                    // If FirstWithThisBase Then
-                    // FirstWithThisBase = False
-                    // Debug.WriteLine("***Bingo")
-                    // BaseItem.UpdateRefresh(False, True)
-                    // Continue Do
-                    // End If
-                    Parent = null;        // didn't find an ancestor
-                    return null;
-                }
-                // The complication is that the desired item may not be a directory
-                if (!CPidl.IsAncestorOf(BaseItem.PIDL, absPidl, true))  // Don't have immediate ancestor
-                {
-                    // FirstWithThisBase = True    '6/30/2012
-                    FoundIt = false;     // go around again
-                }
-                else
-                {
-                    Parent = BaseItem;
-                    foreach (var currentCSI2 in BaseItem.Directories)
-                    {
-                        CSI = currentCSI2;        // 6/6/2012 modified 7/2/2012 Directories needed here
-                        if (CPidl.IsEqual(CSI.PIDL, absPidl))
-                        {
-                            return CSI;
-                        }
-                    }
-                    // Not in Dirs, so look in Files 6/6/2012 fix
-                    foreach (var currentCSI3 in BaseItem.Files)
-                    {
-                        CSI = currentCSI3;              // Files will do an UpdateRefresh in case of missing a CREATE
-                        if (CPidl.IsEqual(CSI.PIDL, absPidl))
-                        {
-                            return CSI;
-                        }
-                    }
-                    // fall thru here means it doesn't exist or we can't find it because of funny PIDL from SHParseDisplayName
-                    return null;
-                }
-            }
-
-            return BrowseToRet;
-        }
-
-        #endregion
-
 
         #region Shared public functions
 
-
-        /// <summary>Given a Full Path in a String,
-        /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.
-        /// The tree is expanded (filled in) as necessary to locate the CShellItem or to locate the proper
-        /// placement of a new Item. The assumption is that the Folder system actually contains the item
-        /// that is requested -- File or Directory.Exists equivalent. Returns Nothing on errors such as
-        /// non-existant item.
-        /// </summary>
-        /// <param name="path">The Full Path of the desired CShellItem</param>
-        /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem GetCShItem(string path)
-        {
-            CShellItem GetCShItemRet = default;
-            GetCShItemRet = null;    // assume failure
-            int HR;
-            IntPtr tmpPidl = IntPtr.Zero;
-            int argpchEaten = 0;
-            int argpdwAttributes = 0;
-            HR = GetDeskTop().Folder.ParseDisplayName(0, IntPtr.Zero, path, ref argpchEaten, ref tmpPidl, ref argpdwAttributes);
-            if (HR == 0)
-            {
-                GetCShItemRet = GetCShItem(tmpPidl);
-            }
-            if (!tmpPidl.Equals(IntPtr.Zero))
-            {
-                Marshal.FreeCoTaskMem(tmpPidl);
-            }
-
-            return GetCShItemRet;
-        }
-
-        /// <summary>Given a CSIDL,
-        /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.
-        /// The tree is expanded (filled in) as necessary to locate the CShellItem or to locate the proper
-        /// placement of a new Item. The assumption is that the Folder system actually contains the item
-        /// that is requested -- File or Directory.Exists equivalent. Returns Nothing on errors such as
-        /// non-existant item.
-        /// </summary>
-        /// <param name="ID"></param>
-        /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem GetCShItem(CSIDL ID)
-        {
-            CShellItem GetCShItemRet = default;
-            GetCShItemRet = null;      // avoid VB2005 Warning
-            if (ID == CSIDL.DESKTOP)
-            {
-                return GetDeskTop();
-            }
-            int HR;
-            IntPtr tmpPidl = IntPtr.Zero;  // original code - retain
-                                           // MYDOCUMENTS - the saga continues
-                                           // In Vista and above, My Documents does not live immediately under the Desktop
-                                           // (is not a member of DesktopBase.Directories)
-                                           // Therefore, without special handling, this rtn will return Nothing as the 
-                                           // CShellItem when CSIDL.MYDOCUMENTS is requested.
-                                           // MS Documentation states that in Shell32.dll version 6.0 and above CSIDL_MYDOCUMENTS is 
-                                           // Equivalent to CSIDL_PERSONAL. (6.0 = XP, 6.01 = Vista, 6.1 = Win7)
-                                           // In XP, the PIDLs of PERSONAL and MYDOCUMENTS are Identical. In Vista and Win7, they are not.
-                                           // In all OSes, the PIDL for MYDOCUMENTS has 1 item. In Vista and Win7, the PIDL for PERSONAL is a 
-                                           // two item PIDL, which correctly reflects the location of the corresponding Folder in the directory tree.
-                                           // Because of this, in Vista and above, I must use PERSONAL as the lookup CSIDL to obtain MYDOCUMENTS.
-
-            if (ID == CSIDL.MYDOCUMENTS)
-                ID = CSIDL.PERSONAL; // added 11/28/2010
-            if (ID == CSIDL.MYDOCUMENTS)  // original code - retain
-            {
-                var pchEaten = default(int);
-                int argpdwAttributes = default;
-                HR = GetDeskTop().Folder.ParseDisplayName(default, default, "::{450d8fba-ad25-11d0-98a8-0800361b1103}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
-            }
-            else
-            {
-                HR = SHGetSpecialFolderLocation(0, (int)ID, ref tmpPidl);
-            }
-            if (HR == NOERROR)
-            {
-                GetCShItemRet = GetCShItem(tmpPidl);
-            }
-            if (!tmpPidl.Equals(IntPtr.Zero))
-            {
-                Marshal.FreeCoTaskMem(tmpPidl);
-            }
-
-            return GetCShItemRet;
-        }
-
-        /// <summary>Given a Byte() containing the PIDL of a Folder and a Byte() containing the relative PIDL of the desired item,
-        /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.
-        /// The tree is expanded (filled in) as necessary to locate the CShellItem or to locate the proper
-        /// placement of a new Item. The assumption is that the Folder system actually contains the item
-        /// that is requested -- File or Directory.Exists equivalent. Returns Nothing on errors such as
-        /// non-existant item.
-        /// </summary>
-        /// <param name="FoldBytes"></param>
-        /// <param name="ItemBytes"></param>
-        /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem GetCShItem(byte[] FoldBytes, byte[] ItemBytes)
-        {
-            CShellItem GetCShItemRet = default;
-            GetCShItemRet = null;    // assume failure
-            byte[] b = CPidl.JoinPidlBytes(FoldBytes, ItemBytes);
-            if (b == null)
-                return GetCShItemRet; // can do no more with invalid pidls
-
-            var thisPidl = Marshal.AllocCoTaskMem(b.Length);
-            if (thisPidl.Equals(IntPtr.Zero))
-                return null;
-            Marshal.Copy(b, 0, thisPidl, b.Length);
-            // Dim Parent As CShellItem = Nothing
-            GetCShItemRet = GetCShItem(thisPidl);
-            if (!thisPidl.Equals(IntPtr.Zero))
-                Marshal.FreeCoTaskMem(thisPidl);
-            if (GetCShItemRet.PIDL.Equals(IntPtr.Zero))
-                GetCShItemRet = null; // last minute failsafe
-            return GetCShItemRet;
-        }
-
-
-        /// <summary>Given an IntPtr representation of a PIDL,
-        /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.
-        /// The tree is expanded (filled in) as necessary to locate the CShellItem or to locate the proper
-        /// placement of a new Item. The assumption is that the Folder system actually contains the item
-        /// that is requested -- File or Directory.Exists equivalent. Returns Nothing on errors such as
-        /// non-existant item.
-        /// </summary>
-        /// <param name="pidl">Absolute (Full) Pidl of item to be Found or Created</param>
-        /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        internal static CShellItem GetCShItem(IntPtr pidl)
-        {
-            CShellItem GetCShItemRet = default;
-            CShellItem Parent = null;
-            GetCShItemRet = BrowseTo(pidl, out Parent);
-            if (GetCShItemRet == null)
-            {
-                if (!(Parent == null))
-                {
-                    try
-                    {
-                        GetCShItemRet = new CShellItem(ILFindLastID(pidl), Parent);
-                    }
-                    catch
-                    {
-                        GetCShItemRet = null;
-                    }
-                }
-            }
-
-            return GetCShItemRet;
-        }
-
-
-        #region        FindCShItem --- various signatures of FindCShItem
         /// <summary>
         /// FindCShItem attempts to locate a CShellItem in the internal tree. It will NOT expand the Tree during the
         /// search. If the Item identified by the Absolute PIDL parameter is not ALREADY in the internal tree, then
@@ -999,7 +680,7 @@ namespace WindowsApiLib.Shell
         /// <remarks> 5/31/2012 - most code in this function replaced by a call to FindCShItem(BaseItem as CShellItem, Abs as IntPtr)</remarks>
         public static CShellItem FindCShItem(IntPtr ptr)
         {
-            return FindCShItem(GetDeskTop(), ptr);
+            return FindCShItem(CShellItemFactory.DesktopCSI, ptr);
         }
 
         /// <summary>
@@ -1075,12 +756,13 @@ namespace WindowsApiLib.Shell
             int rVal = 0;
             if (m_IsDisk)
                 rVal = 0x100000;
-            if (m_TypeName.Equals(StrSystemFolder))
+
+            if (m_TypeName.Equals(CShellItemFactory.StrSystemFolder))
             {
                 if (!m_IsBrowsable)
                 {
                     rVal = rVal | 0x10000;
-                    if (m_strMyDocuments.Equals(m_DisplayName))
+                    if (CShellItemFactory.StrMyDocuments.Equals(m_DisplayName))
                     {
                         rVal = rVal | 0x1;
                     }
@@ -1380,7 +1062,6 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
-        #endregion
 
 
         #region Public Properties
@@ -1487,6 +1168,7 @@ namespace WindowsApiLib.Shell
                     SetDispType();
                 return m_TypeName;
             }
+            set;
         }
 
         /// <summary>
@@ -1886,6 +1568,7 @@ namespace WindowsApiLib.Shell
                 }
                 return m_IconIndexOpen;
             }
+            set;
         }
 
         #region        Drag Ops Properties
@@ -1918,7 +1601,7 @@ namespace WindowsApiLib.Shell
         /// Returns True if instance can be a Drop Target, False otherwise
         /// </summary>
         /// <returns>True if instance can be a Drop Target, False otherwise</returns>
-        public bool IsDropTarget => m_IsDropTarget;
+        public bool IsDropTarget { get; set; }
 
         #endregion
 
@@ -1926,18 +1609,18 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Contains a String with the Local representation of "My Computer"
         /// </summary>
-        public static string StrMyComputer => m_strMyComputer;
+        //public static string StrMyComputer => m_strMyComputer;
         /// <summary>
         /// Contains a String with the Local representation of "System Folder".
         /// </summary>
-        public static string StrSystemFolder => m_strSystemFolder;
+        //public static string StrSystemFolder => m_strSystemFolder;
         /// <summary>
         /// Contains a String with the Full Path of the Desktop Directory
         /// </summary>
         /// <value></value>
         /// <returns></returns>
         /// <remarks></remarks>
-        public static string DesktopDirectoryPath => m_DeskTopDirectory?.FullPath;
+        //public static string DesktopDirectoryPath => m_DeskTopDirectory?.FullPath;
 
         #endregion
 
@@ -1947,21 +1630,6 @@ namespace WindowsApiLib.Shell
         #region    Public Methods
 
         #region    Shared Public Methods
-
-
-        /// <summary>
-        /// If not initialized, then build DesktopBase
-        /// once done, or if initialized already, returns DestopBase
-        /// </summary>
-        /// <returns>The DesktopBase CShellItem representing the desktop</returns>
-        public static CShellItem GetDeskTop()
-        {
-            if (DesktopBase == null)
-            {
-                DesktopBase = new CShellItem();
-            }
-            return DesktopBase;
-        }
 
         /// <summary>True if parameter "ancestor" is an ancestor of parameter "current" 
         /// </summary>
@@ -2162,7 +1830,7 @@ namespace WindowsApiLib.Shell
         {
             bool StopGlobalNotificationRet = default;
             StopGlobalNotificationRet = false;        // assume failure
-            if (!ReferenceEquals(this, DesktopBase))
+            if (!ReferenceEquals(this, CShellItemFactory.DesktopCSI))
                 return StopGlobalNotificationRet;
             if (m_updater is null)
             {
@@ -2185,7 +1853,7 @@ namespace WindowsApiLib.Shell
         {
             bool StartGlobalNotificationRet = default;
             StartGlobalNotificationRet = false;       // assume failure
-            if (!ReferenceEquals(this, DesktopBase))
+            if (!ReferenceEquals(this, CShellItemFactory.DesktopCSI))
                 return StartGlobalNotificationRet;
             if (m_updater is not null)
             {
@@ -2442,7 +2110,7 @@ namespace WindowsApiLib.Shell
             Debug.WriteLine("\tIsFileSystem= " + m_IsFileSystem);
             Debug.WriteLine("\tIsFolder    = " + m_IsFolder);
             Debug.WriteLine("\tIsLink    = " + m_IsLink);
-            Debug.WriteLine("\tIsDropTarget = " + m_IsDropTarget);
+            Debug.WriteLine("\tIsDropTarget = " + IsDropTarget);
             Debug.WriteLine("\tIsReadOnly   = " + IsReadOnly);
             Debug.WriteLine("\tCanCopy = " + CanCopy);
             Debug.WriteLine("\tCanLink = " + CanLink);
@@ -2592,7 +2260,7 @@ namespace WindowsApiLib.Shell
                                     int icur = matches[iMatch];
                                     if (CPidl.IsEqual(oldPidls[iold], tmpCurrent[icur]))    // found the same item
                                     {
-                                        if (!ReferenceEquals(this, m_Recycle) && !CPidl.AreBytesEqual(oldPidls[iold], tmpCurrent[icur]))
+                                        if (!ReferenceEquals(this, CShellItemFactory.RecycleBin) && !CPidl.AreBytesEqual(oldPidls[iold], tmpCurrent[icur]))
                                         {
                                             var UpdCSI = tmpItems[iold];
                                             UpdCSI.ResetInfo();
@@ -2645,7 +2313,7 @@ namespace WindowsApiLib.Shell
                     {
                         if (Parent is null)
                         {
-                            CShItemUpdate?.Invoke(GetDeskTop(), new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
+                            CShItemUpdate?.Invoke(CShellItemFactory.DesktopCSI, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
                         }
                         else
                         {
@@ -2872,7 +2540,7 @@ namespace WindowsApiLib.Shell
 
         private void DoUpdateDir(CShellItem CSI)     // 5/21/2012
         {
-            if (ReferenceEquals(CSI, m_Recycle))
+            if (ReferenceEquals(CSI, CShellItemFactory.RecycleBin))
                 return; // 6/21/2012
             CSI.UpdateRefresh();
         }
@@ -3101,6 +2769,68 @@ namespace WindowsApiLib.Shell
             goto NORMAL;
         }
 
+
+        private void GetSize()
+        {
+            // Split the file size into bytes, kb, MB and GB
+            if (!IsFolder & IsFileSystem | IsDisk)
+            {
+                if (Length >= 1048576 * 1024)
+                {
+                    m_size = $"{Length / (double)(1048576 * 1024):#,##0.#} GB";
+                }
+                else if (Length >= 1048576L)
+                {
+                    m_size = $"{Length / 1048576d:#,##0.#} MB";
+                }
+                else if (Length >= 1024L)
+                {
+                    m_size = $"{Length / 1024d:#,##0} KB";
+                }
+                else if (!(IsRemovable & Length == 0L)) // Don't show a CD-ROM's size if it doesn't have a disk in it
+                {
+                    m_size = $"{Length:#,##0} Bytes";
+                }
+                else
+                {
+                    m_size = "";
+                } // Empty CD-ROM
+            }
+            else
+            {
+                m_size = "";
+            }
+        }
+
+        /// <summary>
+        /// Sets DisplayName, TypeName, and SortFlag when actually needed
+        /// </summary>
+        internal void SetDispType()
+        {
+            // Get Displayname, TypeName
+            var shfi = new SHFILEINFO();
+            var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
+            int dwAttr = 0;
+            if (m_IsFileSystem & !m_IsFolder)
+            {
+                dwflag = dwflag | SHGFI.USEFILEATTRIBUTES;
+                dwAttr = FILE_ATTRIBUTE_NORMAL;
+            }
+            var H = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+            m_DisplayName = shfi.szDisplayName;
+            m_TypeName = shfi.szTypeName;
+            // fix DisplayName
+            if (m_DisplayName.Equals(""))
+            {
+                m_DisplayName = FullPath;
+            }
+            // Fix TypeName
+            // If m_IsFolder And m_TypeName.Equals("File") Then
+            // m_TypeName = "File Folder"
+            // End If
+            m_SortFlag = ComputeSortFlag();
+            m_HasDispType = true;
+        }
 
         #endregion
 

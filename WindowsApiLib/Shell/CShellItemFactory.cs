@@ -16,10 +16,15 @@ namespace WindowsApiLib.Shell
         public static CShellItemFactory Instance { get; } = new CShellItemFactory();
 
 
+        /// <summary>
+        /// Contains the IShellFolder Interface of the instance if it is a Folder.
+        /// </summary>
+        /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
+        public static IShellFolder Desktop { get; private set; }
+
         // The DesktopBase is set up via Sub New() (one time only) and
         // disposed of only when DesktopBase is finally disposed of
-        private static CShellItem? DesktopCSI = null;
-
+        public static CShellItem? DesktopCSI { get; private set; }
 
         /// <summary>
         /// Contains a String with the Local representation of "My Computer"
@@ -42,58 +47,74 @@ namespace WindowsApiLib.Shell
         /// <remarks></remarks>
         public static string? DesktopDirectoryPath { get; private set; }
 
-        /// <summary>
-        /// Contains the IShellFolder Interface of the instance if it is a Folder.
-        /// </summary>
-        /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
-        public IShellFolder DeskTop { get; private set; }
-        public string SystemName { get; }
+        public static IntPtr EmptyPidl { get; private set; }
+        public static IntPtr DesktopPidl { get; private set; }
 
-        private readonly object m_DeskTopDirectory;
-        private readonly object m_Recycle;
+        public static string SystemName { get; private set; }
+        public static CShellItem RecycleBin { get; private set; }
+        public static CShellItem DeskTopDirectory { get; private set; }
+
 
         private CShellItemFactory() {
-            if (DesktopCSI == null)
-            {
-                int HR;
-                // firstly determine what the local machine calls a "System Folder" and "My Computer"
-                IntPtr tmpPidl = IntPtr.Zero;
-                HR = SHGetSpecialFolderLocation(0, (int)CSIDL.DRIVES, ref tmpPidl);
-                var shfi = new SHFILEINFO();
-                var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
-                int dwAttr = 0;
-                SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
-                StrSystemFolder = shfi.szTypeName;
-                StrMyComputer = shfi.szDisplayName;
-                Marshal.FreeCoTaskMem(tmpPidl);
 
-                // With That done, now set up Desktop CShellItem
-                IShellFolder m_Folder = null;
-                HR = SHGetDesktopFolder(ref m_Folder);
-                DeskTop = m_Folder;
-                var m_Pidl = Marshal.AllocCoTaskMem(2);
-                Marshal.WriteInt16(m_Pidl, 0, 0);
+            EmptyPidl = CreateEmptyPidl();
+            DesktopPidl = GetShellNamespacePidl(ShellNamespaceGuids.DesktopFileSystem);
 
-                var csi = new CShellItem(m_Pidl);
-                DesktopCSI = csi;
+            int HR;
+            // firstly determine what the local machine calls a "System Folder" and "My Computer"
+            IntPtr tmpPidl = IntPtr.Zero;
+            HR = SHGetSpecialFolderLocation(0, (int)CSIDL.DRIVES, ref tmpPidl);
+            var shfi = new SHFILEINFO();
+            var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
+            int dwAttr = 0;
+            SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+            StrSystemFolder = shfi.szTypeName;
+            StrMyComputer = shfi.szDisplayName;
+            Marshal.FreeCoTaskMem(tmpPidl);
 
-                // also get local name for "My Documents"
-                var pchEaten = default(int);
-                tmpPidl = IntPtr.Zero;
-                int argpdwAttributes = default;
-                HR = DeskTop.ParseDisplayName(default, default, "::{" + ShellNamespaceGuids.Documents.ToString() + "}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
-                shfi = new SHFILEINFO();
-                dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
-                dwAttr = 0;
+            // With That done, now set up Desktop CShellItem
+            IShellFolder m_Folder = null;
+            HR = SHGetDesktopFolder(ref m_Folder);
+            Desktop = m_Folder;
 
-                SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
-                StrMyDocuments = shfi.szDisplayName;
-                Marshal.FreeCoTaskMem(tmpPidl);
+            var csi = new CShellItem(DesktopPidl);
+            DesktopCSI = csi;
+            csi.m_Folder = Desktop;
+            csi.m_Path = "::{" + DesktopGUID.ToString() + "}";
+            csi.m_IsFolder = true;
+            csi.m_HasSubFolders = true;
+            csi.m_IsBrowsable = false;
+            csi.m_TypeName = StrSystemFolder;   // not returned correctly by SHGetFileInfo
+            csi.m_IconIndexNormal = shfi.iIcon;
+            csi.m_IconIndexOpen = shfi.iIcon;
+            csi.m_HasDispType = true;
+            csi.IsDropTarget = true;
+            csi.m_IsReadOnly = false;
+            csi.m_IsReadOnlySetup = true;
+            csi.SetDispType();
 
-                // Get the SystemName for Remote item testing
-                SystemName = Environment.MachineName; 
-            }
+            csi.m_updater = new CShellItemUpdater(csi); // Start the Notification Process
+            CShellItem._Initialized = true;
 
+            DeskTopDirectory = GetCShItem(CSIDL.DESKTOPDIRECTORY);
+
+            // also get local name for "My Documents"
+            var pchEaten = default(int);
+            tmpPidl = IntPtr.Zero;
+            int argpdwAttributes = default;
+            HR = Desktop.ParseDisplayName(default, default, "::{" + ShellNamespaceGuids.Documents.ToString() + "}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
+            shfi = new SHFILEINFO();
+            dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
+            dwAttr = 0;
+
+            SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+            StrMyDocuments = shfi.szDisplayName;
+            Marshal.FreeCoTaskMem(tmpPidl);
+
+            // Get the SystemName for Remote item testing
+            SystemName = Environment.MachineName;
+
+            RecycleBin = GetCShItem(CSIDL.BITBUCKET);
 
         }
 
@@ -166,7 +187,7 @@ namespace WindowsApiLib.Shell
             {
                 var pchEaten = default(int);
                 int argpdwAttributes = default;
-                HR = DesktopCSI.Folder.ParseDisplayName(default, default, "::{450d8fba-ad25-11d0-98a8-0800361b1103}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
+                HR = DesktopCSI.Folder.ParseDisplayName(default, default, $"::{ShellNamespaceGuids.Documents.ToString()}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
             }
             else
             {
@@ -346,6 +367,24 @@ namespace WindowsApiLib.Shell
             return rVal;
         }
 
+        public static IntPtr GetShellNamespacePidl(Guid shellLocationGuid)
+        {
+            int hr = SHGetKnownFolderIDList(shellLocationGuid, 0, IntPtr.Zero, out IntPtr pidl);
+            if (hr < 0) Marshal.ThrowExceptionForHR(hr);
+            return pidl; // caller owns memory
+        }
+
+        /// <summary>
+        /// Creates an empty PIDL (just the 2-byte terminator: SHITEMID.cb == 0).
+        /// Caller must free with FreeEmptyPidl.
+        /// </summary>
+        public static IntPtr CreateEmptyPidl()
+        {
+            // Empty PIDL is exactly 2 bytes: terminating USHORT 0
+            IntPtr pidl = Marshal.AllocCoTaskMem(2);
+            Marshal.WriteInt16(pidl, 0); // terminator
+            return pidl;
+        }
 
         #region Private methods
 
