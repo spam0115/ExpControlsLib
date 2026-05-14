@@ -752,6 +752,7 @@ namespace WindowsApiLib
             }
         }
 
+
         private static bool IsDefinitelyVirtualNamespace(string parsingName)
         {
             // Common virtual forms
@@ -865,12 +866,111 @@ namespace WindowsApiLib
             SB.Append(h);
             return SB.ToString();
         }
+
+        /// <summary>
+        /// Fast hash tuned for PIDLs that share the same parent path.
+        /// Non-last segments are sampled; last segment is hashed fully.
+        /// </summary>
+        /// <param name="pidl"></param>
+        /// <returns></returns>
+
+        public static unsafe uint HashPidlFastLastFull(IntPtr pidl)
+        {
+            if (pidl == IntPtr.Zero)
+                return 0;
+
+            const uint offset = 2166136261u; // FNV-1a offset basis
+            const uint prime = 16777619u;   // FNV-1a prime
+
+            uint h = offset;
+
+            byte* start = (byte*)pidl;
+            byte* p = start;
+
+            byte* lastItem = null;
+            ushort lastCb = 0;
+
+            uint itemCount = 0;
+            uint totalBytes = 0;
+
+            // Pass 1: hash structure + sampled bytes for each segment,
+            // and remember where the last segment is.
+            while (true)
+            {
+                ushort cb = *(ushort*)p;
+
+                if (cb == 0)
+                {
+                    totalBytes += 2; // terminator USHORT
+                    h ^= 0xFFFFu;
+                    h *= prime;
+                    break;
+                }
+
+                if (cb < 2)
+                    return 0; // invalid PIDL guard
+
+                itemCount++;
+                totalBytes += cb;
+
+                // Mix length for every segment
+                h ^= cb;
+                h *= prime;
+
+                int payloadLen = cb - 2;
+                byte* d = p + 2;
+
+                // Fast sampling for this segment
+                if (payloadLen > 0)
+                {
+                    h ^= d[0]; h *= prime;                   // first
+                    h ^= d[payloadLen - 1]; h *= prime;     // last
+                }
+                if (payloadLen > 2)
+                {
+                    h ^= d[payloadLen >> 1]; h *= prime;    // middle
+                }
+
+                // Track last real segment
+                lastItem = p;
+                lastCb = cb;
+
+                p += cb;
+            }
+
+            // Pass 2: hash FULL payload of last segment
+            if (lastItem != null && lastCb > 2)
+            {
+                byte* d = lastItem + 2;
+                int payloadLen = lastCb - 2;
+
+                // Include marker so "full-last" contribution is explicit
+                h ^= 0xA5A5A5A5u;
+                h *= prime;
+
+                for (int i = 0; i < payloadLen; i++)
+                {
+                    h ^= d[i];
+                    h *= prime;
+                }
+            }
+
+            // Final mixing
+            h ^= itemCount + 0x9E3779B9u;
+            h *= prime;
+            h ^= totalBytes + 0x85EBCA6Bu;
+            h *= prime;
+            h ^= (h >> 16);
+
+            return h;
+        }
+
         #endregion
 
 
         #endregion
 
-        #region        Public methods
+        #region        Public instance methods
 
         /// <summary>Returns true if the CPidl input parameter exactly matches the
         /// beginning of this instance of CPidl</summary>
