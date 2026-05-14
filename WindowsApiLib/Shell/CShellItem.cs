@@ -2271,7 +2271,6 @@ namespace WindowsApiLib.Shell
                             for (int i = 0; i < newPidls.Count; i++)
                             {
                                 IntPtr newPidl = newPidls[i];
-                                bool addNew = false;
                                 uint hash = CPidl.HashPidlFastLastFull(newPidl);
 
                                 if (oldCsiDic.TryGetValue(hash, out CShellItem oldCsi))
@@ -2292,17 +2291,8 @@ namespace WindowsApiLib.Shell
 
                                         continue;
                                     }
-                                    {
-                                        //same hash but different item
-                                        addNew = true;
-                                    }
                                 }
                                 else
-                                {
-                                    addNew = true;
-                                }
-
-                                if (addNew)
                                 {
                                     if (newPidl == IntPtr.Zero) continue;
                                     UpdateRefreshRet = true;

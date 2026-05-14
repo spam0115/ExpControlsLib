@@ -334,9 +334,8 @@ namespace WindowsApiLib
         /// <summary>
         /// IsEqual compares two ItemIDLists. On Win2K and above systems, it uses the ILIsEqual API, which only
         /// compares portions of each ItemID. On such systems, the other portions of the ItemID may differ in a 
-        /// few bytes -- typically this is desired behavior, but not in UPDATEDIR cases which do a Byte comparison in addition to IsEqual.
-        /// On Pre-Win2K systems, it performs a binary comparison of the entire content of the ItemIDLists, this
-        /// is OK behavior on such systems.
+        /// few bytes -- typically this is desired behavior, but not in UPDATEDIR cases which do a Byte 
+        /// comparison in addition to IsEqual.
         /// </summary>
         /// <param name="Pidl1">IntPtr pointing to an ItemIDList.</param>
         /// <param name="Pidl2">IntPtr pointing to an ItemIDList.</param>
