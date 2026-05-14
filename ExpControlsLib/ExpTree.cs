@@ -769,7 +769,7 @@ namespace ExpControlsLib
                 // Try to expand the node
                 if (!ExpandANode(SelCSI))
                 {
-                    var nodeList = new ArrayList();
+                    var nodeList = new List<TreeNode>();
                     while (!(Selnode.Parent == null))
                     {
                         nodeList.Add(Selnode.Parent);
@@ -818,14 +818,14 @@ namespace ExpControlsLib
         {
             CShellItem CSI = (CShellItem)NodeToFill.Tag;
             // 02/12/2014 - Setting of D changed at suggestion of Michael Ruby
-            ArrayList D;
+            List<CShellItem> D;
             if (CSI.DirectoryList is null)
             {
-                D = new ArrayList(CSI.Directories);
+                D = new List<CShellItem>(CSI.Directories);
             }
             else
             {
-                D = new ArrayList(CSI.DirectoryList);
+                D = new List<CShellItem>(CSI.DirectoryList);
             }
             if (D.Count > 0)
             {

@@ -504,15 +504,16 @@ namespace WindowsApiLib.Shell
 
 
         /// <summary>
-        /// Returns the requested Items of this Folder as an ArrayList of relative PIDLs 
+        /// Returns the requested Items of this Folder as a List of relative PIDLs 
         /// (caller must free the pidls after use).
         /// </summary>
+        /// <param name="csi">The CShellItem of the Folder to be enumerated</param>
         /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
-        /// <returns>On error, returns an empty (count=0) ArrayList. Otherwise, returns the relative PIDLs of
+        /// <returns>On error, returns an empty (count=0) List. Otherwise, returns the relative PIDLs of
         /// the requested (via flags param) items in this Folder.</returns>
-        private ArrayList GetContentPtrs(CShellItem csi, SHCONTF flags)
+        private List<IntPtr> GetContentPtrs(CShellItem csi, SHCONTF flags)
         {
-            var rVal = new ArrayList();
+            var rVal = new List<IntPtr>();
             int HR;
             IEnumIDList IEnum = null;
             // UPDATE: Vista and above strictly respect the SHCONTF flags. The "flags" param is now used only to determine what user wants
@@ -589,7 +590,7 @@ namespace WindowsApiLib.Shell
             // If Not IsNothing(IEnum) Then Marshal.ReleaseComObject(IEnum)
             // Marshal.ThrowExceptionForHR(HR)
 #endif
-            rVal = new ArrayList(); // sometimes it is a non-fatal error,ignored
+            rVal = new List<IntPtr>(); // sometimes it is a non-fatal error,ignored
             goto NORMAL;
         }
 

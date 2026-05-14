@@ -582,8 +582,8 @@ namespace ExpControlsLib
             _selectedItem = null; //new folder loaded, no item selected yet
             _CurrentPath = pathName;
 
-            var dirList = new ArrayList();
-            var fileList = new ArrayList();
+            var dirList = new List<CShellItem>();
+            var fileList = new List<CShellItem>();
             int totalItems;
 
             if (csi == null)
@@ -606,7 +606,7 @@ namespace ExpControlsLib
                 }
                 fileList.Sort();
 
-                var combList = new ArrayList(totalItems);
+                var combList = new List<CShellItem>(totalItems);
                 if (includeFolder) combList.AddRange(dirList);
                 combList.AddRange(fileList);
 
@@ -627,7 +627,7 @@ namespace ExpControlsLib
                     ListViewItem lvi = MakeLVItem(item);
                     _itemIndex[item.FullPath] = lvi;
                     if (firstLoad.Count < initialFillLim)
-                        lvi.ImageIndex = SystemImageListManager.GetIconIndex((CShellItem)lvi.Tag, false);
+                        lvi.ImageIndex = SystemImageListManager.GetIconIndex(item, false);
                     firstLoad.Add(lvi);
                 }
 

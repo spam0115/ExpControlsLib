@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -377,7 +378,7 @@ namespace WindowsApiLib.Shell
         /// and the Absolute PIDLs for the Items (all such Absolute PIDLS ar 
         /// relative to the Desktop.
         /// </summary>
-        /// <param name="CSIList">An ArrayList of CShItems to be included in the CIDA MemoryStream</param>
+        /// <param name="CSIList">A List of CShItems to be included in the CIDA MemoryStream</param>
         /// <returns>A MemoryStream which contains a CIDA containing the PIDLs of all Items in CSIList</returns>
         /// <remark>
         /// <para>The overall concept and much code taken from</para>
@@ -389,24 +390,15 @@ namespace WindowsApiLib.Shell
         /// </remark>
         /// 
         [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
-        public static System.IO.MemoryStream MakeShellIDArray(ArrayList CSIList)
+        public static System.IO.MemoryStream MakeShellIDArray(List<CShellItem> CSIList)
         {
             System.IO.MemoryStream MakeShellIDArrayRet = default;
-            // ensure that we have an arraylist of only CShItems
-            var AllowedType = typeof(CShellItem);
-            foreach (var oCSI in CSIList)
-            {
-                if (!AllowedType.Equals(oCSI.GetType()))
-                {
-                    return null;
-                }
-            }
             // ensure at least one item
             if (CSIList.Count < 1)
                 return null;
 
             // bArrays is an Array of Byte() each containing the bytes of a PIDL
-            var bArrays = new object[CSIList.Count];
+            var bArrays = new byte[CSIList.Count][];
             int i = 0;
             foreach (CShellItem CSI in CSIList)
             {
@@ -432,7 +424,7 @@ namespace WindowsApiLib.Shell
             for (i = 0; i <= loopTo; i++)
             {
                 BW.Write(Convert.ToUInt32(Offset));
-                Offset += ((byte[])bArrays[i]).Length;
+                Offset += bArrays[i].Length;
             }
             // done with the array of offsets, write the parent pidl (0 0) = Desktop
 
@@ -464,7 +456,7 @@ namespace WindowsApiLib.Shell
             var loopTo = offsets.Length - 2;
             for (i = 0; i <= loopTo; i++)
                 offsets[i] = BR.ReadInt32();
-            var bArrays = new object[offsets.Length - 2 + 1];   // my objects are byte()
+            var bArrays = new byte[offsets.Length - 2 + 1][];   // my objects are byte()
             var loopTo1 = bArrays.Length - 1;
             for (i = 0; i <= loopTo1; i++)
             {
@@ -478,7 +470,7 @@ namespace WindowsApiLib.Shell
                 bool isOK = true;
                 try   // if GetCShitem returns Nothing(it's failure marker) then catch it
                 {
-                    MakeDragListFromPtrRet.Add(CShellItemFactory.GetCShItem((byte[])bArrays[0], (byte[])bArrays[i]));
+                    MakeDragListFromPtrRet.Add(CShellItemFactory.GetCShItem(bArrays[0], bArrays[i]));
                 }
                 catch (Exception ex)
                 {
@@ -520,14 +512,14 @@ namespace WindowsApiLib.Shell
                 curB += 4;
             }
             var pidlLen = default(int);
-            var pidlobjs = new object[nrItems + 1];
+            var pidlobjs = new byte[nrItems + 1][];
             var loopTo1 = nrItems;
             for (i = 0; i <= loopTo1; i++)
             {
                 var ipt = new IntPtr(ptr.ToInt32() + offsets[i]);
                 var cp = new CPidl(ipt);
                 pidlobjs[i] = cp.PidlBytes;
-                pidlLen += ((byte[])pidlobjs[i]).Length;
+                pidlLen += pidlobjs[i].Length;
             }
             MakeStreamFromCIDARet = new System.IO.MemoryStream(pidlLen + 4 * offsets.Length + 4);
             var BW = new System.IO.BinaryWriter(MakeStreamFromCIDARet);
@@ -537,7 +529,7 @@ namespace WindowsApiLib.Shell
                 BW.Write(offsets[i]);
             var loopTo3 = nrItems;
             for (i = 0; i <= loopTo3; i++)
-                BW.Write((byte[])pidlobjs[i]);
+                BW.Write(pidlobjs[i]);
             // DumpHex(MakeStreamFromCIDA.ToArray)
             MakeStreamFromCIDARet.Seek(0L, System.IO.SeekOrigin.Begin);
             return MakeStreamFromCIDARet;
@@ -776,20 +768,20 @@ namespace WindowsApiLib.Shell
 
 
         /// <summary>
-        /// Returns an ArrayList containing the CShItems of all Folders in the entire internal tree.
+        /// Returns a List containing the CShItems of all Folders in the entire internal tree.
         /// </summary>
-        /// <returns>An ArrayList containing the CShItems of all Folders in the entire internal tree.</returns>
+        /// <returns>A List containing the CShItems of all Folders in the entire internal tree.</returns>
         /// <remarks>The sort order is determined by standard tree traversal (Depth First).</remarks>
-        public static ArrayList AllFolderWalk()
+        public static List<CShellItem> AllFolderWalk()
         {
-            var rVal = new ArrayList();
+            var rVal = new List<CShellItem>();
             var desktop = CShellItemFactory.DesktopCSI;
             rVal.Add(desktop);
             WalkHelper(desktop, rVal);
             return rVal;
         }
 
-        private static void WalkHelper(CShellItem item, ArrayList list)
+        private static void WalkHelper(CShellItem item, List<CShellItem> list)
         {
             if (item.FoldersInitialized)
             {

@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -1889,51 +1890,46 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Returns the sub-directories of the current instance, if the current instance is a
         /// Folder. Similar to to Property Directories except that it returns the Directories
-        /// as an ArrayList.
+        /// as a List of CShellItem.
         /// </summary>
-        /// <returns>If the current instance is a Folder, returns its sub-directories as an 
-        /// ArrayList containing the CShItems of its sub-directories. Returns an empty list if
+        /// <returns>If the current instance is a Folder, returns its sub-directories as a 
+        /// List containing the CShItems of its sub-directories. Returns an empty list if
         /// there are no sub-directories. Returns Nothing if the current instance is not a Folder.</returns>
         /// <remarks></remarks>
-        public ArrayList GetDirectories()
+        public List<CShellItem> GetDirectories()
         {
             CShellItem[] D = Directories;         // 7/2/2012 OK to use Directories in this case
             if (D is null)
                 return null;
-            var AL = new ArrayList();
-            AL.AddRange(D);
-            return AL;
+            return new List<CShellItem>(D);
         }
 
         /// <summary>
-        /// If the current instance is a Folder then returns an ArrayList of the CShItems of Files 
+        /// If the current instance is a Folder then returns a List of the CShItems of Files 
         /// contained in the current instance. Otherwise returns Nothing.
         /// </summary>
-        /// <returns>An ArrayList of the CShItems of the Files in the current instance. If the 
+        /// <returns>A List of the CShItems of the Files in the current instance. If the 
         /// current instance is not a Folder, returns Nothing. If there are no Files in the 
-        /// current instance, returns an empty ArrayList.</returns>
+        /// current instance, returns an empty List.</returns>
         /// <remarks></remarks>
-        public ArrayList GetFiles()
+        public List<CShellItem> GetFiles()
         {
             CShellItem[] F = Files;
             if (F is null)
                 return null;
-            var AF = new ArrayList();
-            AF.AddRange(F);
-            return AF;
+            return new List<CShellItem>(F);
         }
 
         /// <summary>
-        /// Returns the Files of this sub-folder, filtered by a filtering string, as an
-        ///   ArrayList of CShitems
+        /// Returns the Files of this sub-folder, filtered by a filtering string, as a
+        ///   List of CShitems
         /// </summary>
         /// <param name="Filter">A filter string (for example: *.Doc)</param>
-        /// <returns>An ArrayList of CShItems. May return an empty ArrayList if there are none.</returns>
+        /// <returns>A List of CShItems. May return an empty List if there are none.</returns>
         /// <remarks>Added 8/22/2012</remarks>
-        public ArrayList GetFiles(string Filter)
+        public List<CShellItem> GetFiles(string Filter)
         {
-            ArrayList GetFilesRet = default;
-            GetFilesRet = new ArrayList();
+            var GetFilesRet = new List<CShellItem>();
             if (m_IsFolder)
             {
                 Filter = Filter.ToLower();
@@ -1951,14 +1947,13 @@ namespace WindowsApiLib.Shell
 
         /// <summary>
         /// Returns the Directories and Files of this sub-folder as a sorted
-        ///   ArrayList of CShitems
+        ///   List of CShitems
         /// </summary>
-        /// <returns>An ArrayList of CShItems. May return an empty ArrayList if there are none.</returns>
+        /// <returns>A List of CShItems. May return an empty List if there are none.</returns>
         /// <remarks>This version is the Optimized version added after any distribution of v2.14</remarks>
-        public ArrayList GetItems()
+        public List<CShellItem> GetItems()
         {
-            ArrayList GetItemsRet = default;
-            var rVal = new ArrayList();
+            var rVal = new List<CShellItem>();
             if (m_IsFolder)
             {
                 var Flags = SHCONTF.INCLUDEHIDDEN;
@@ -1972,9 +1967,8 @@ namespace WindowsApiLib.Shell
                     if (Flags != SHCONTF.INCLUDEHIDDEN) // if already have both already, just report what we have
                     {
                         var Items = GetContents(Flags);
-                        GetItemsRet = new ArrayList(Items.Count);       // Actual expected return
-                        var Dirs = new ArrayList(Items.Count);      // trade space for time - capacity set to max possible
-                        var Files = new ArrayList(Items.Count);     // trade space for time - capacity set to max possible
+                        var Dirs = new List<CShellItem>(Items.Count);      // trade space for time - capacity set to max possible
+                        var FilesList = new List<CShellItem>(Items.Count);     // trade space for time - capacity set to max possible
                         foreach (CShellItem Item in Items)
                         {
                             if (Item.IsFolder)
@@ -1983,7 +1977,7 @@ namespace WindowsApiLib.Shell
                             }
                             else
                             {
-                                Files.Add(Item);
+                                FilesList.Add(Item);
                             }
                         }
                         if (m_Directories is null)
@@ -1994,7 +1988,7 @@ namespace WindowsApiLib.Shell
                         if (m_Files is null)
                         {
                             m_Files = new CShellItemCollection(this);         // First time we even asked
-                            m_Files.AddRange(Files);
+                            m_Files.AddRange(FilesList);
                         }
                     }
                     rVal.AddRange(m_Directories);    // 7/14/2012 - trust in SyncLock
@@ -2696,11 +2690,11 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-        /// Returns the requested Items of this Folder as an ArrayList of relative PIDLs 
+        /// Returns the requested Items of this Folder as a List of relative PIDLs 
         /// (caller must free the pidls after use).
         /// </summary>
         /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
-        /// <returns>On error, returns an empty (count=0) ArrayList. Otherwise, returns the relative PIDLs of
+        /// <returns>On error, returns an empty (count=0) List. Otherwise, returns the relative PIDLs of
         /// the requested (via flags param) items in this Folder.</returns>
         private List<IntPtr> GetPidlsOfCurrentFolder(SHCONTF flags)
         {

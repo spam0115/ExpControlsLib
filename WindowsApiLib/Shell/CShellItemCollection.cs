@@ -47,7 +47,8 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                return m_items.Count;
+                lock (m_syncRoot)
+                    return m_items.Count;
             }
         }
 
@@ -76,35 +77,28 @@ namespace WindowsApiLib.Shell
                 m_items.AddRange(value);
         }
 
-        internal void AddRange(ICollection value)
-        {
-            lock (m_syncRoot)
-            {
-                foreach (object item in value)
-                {
-                    if (item is CShellItem csi)
-                        m_items.Add(csi);
-                }
-            }
-        }
-
         internal void Clear()
         {
-            m_items.Clear();
+            lock (m_syncRoot)
+                m_items.Clear();
         }
 
         public bool Contains(CShellItem value)
         {
-            return m_items.Contains(value);
+            lock (m_syncRoot)
+                return m_items.Contains(value);
         }
 
         public bool Contains(string name)
         {
-            foreach (CShellItem itm in m_items)
+            lock (m_syncRoot)
             {
-                if (string.Compare(itm.GetFileName(), name, true) == 0)
+                foreach (CShellItem itm in m_items)
                 {
-                    return true;
+                    if (string.Compare(itm.GetFileName(), name, true) == 0)
+                    {
+                        return true;
+                    }
                 }
             }
             return false;
@@ -112,11 +106,14 @@ namespace WindowsApiLib.Shell
 
         public bool Contains(IntPtr pidl)
         {
-            foreach (CShellItem itm in m_items)
+            lock (m_syncRoot)
             {
-                if (CPidl.IsEqual(itm.PIDL, pidl))
+                foreach (CShellItem itm in m_items)
                 {
-                    return true;
+                    if (CPidl.IsEqual(itm.PIDL, pidl))
+                    {
+                        return true;
+                    }
                 }
             }
             return false;
@@ -124,16 +121,20 @@ namespace WindowsApiLib.Shell
 
         public int IndexOf(CShellItem value)
         {
-            return m_items.IndexOf(value);
+            lock (m_syncRoot)
+                return m_items.IndexOf(value);
         }
 
         public int IndexOf(string name)
         {
-            for (int i = 0; i < m_items.Count; i++)
+            lock (m_syncRoot)
             {
-                if (string.Compare(m_items[i].GetFileName(), name, true) == 0)
+                for (int i = 0; i < m_items.Count; i++)
                 {
-                    return i;
+                    if (string.Compare(m_items[i].GetFileName(), name, true) == 0)
+                    {
+                        return i;
+                    }
                 }
             }
             return -1;
@@ -141,11 +142,14 @@ namespace WindowsApiLib.Shell
 
         public int IndexOf(IntPtr pidl)
         {
-            for (int i = 0; i < m_items.Count; i++)
+            lock (m_syncRoot)
             {
-                if (CPidl.IsEqual(m_items[i].PIDL, pidl))
+                for (int i = 0; i < m_items.Count; i++)
                 {
-                    return i;
+                    if (CPidl.IsEqual(m_items[i].PIDL, pidl))
+                    {
+                        return i;
+                    }
                 }
             }
             return -1;
@@ -185,7 +189,8 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                return m_items[index];
+                lock (m_syncRoot)
+                    return m_items[index];
             }
         }
 
@@ -193,8 +198,11 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                int index = IndexOf(name);
-                return index > -1 ? m_items[index] : null;
+                lock (m_syncRoot)
+                {
+                    int index = IndexOf(name);
+                    return index > -1 ? m_items[index] : null;
+                }
             }
             set
             {
@@ -213,15 +221,21 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                int index = IndexOf(pidl);
-                return index > -1 ? m_items[index] : null;
+                lock (m_syncRoot)
+                {
+                    int index = IndexOf(pidl);
+                    return index > -1 ? m_items[index] : null;
+                }
             }
             set
             {
-                int index = IndexOf(pidl);
-                if (index > -1)
+                lock (m_syncRoot)
                 {
-                    m_items[index] = value;
+                    int index = IndexOf(pidl);
+                    if (index > -1)
+                    {
+                        m_items[index] = value;
+                    }
                 }
             }
         }
