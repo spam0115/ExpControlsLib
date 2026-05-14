@@ -2232,114 +2232,113 @@ namespace WindowsApiLib.Shell
 
                 lock (LockObj)
                 {
-                    var InvalidItems = new List<CShellItem>();              // Holds CShItems no longer present
-                    var newPidls = GetContentPtrs(attrFlag);                // Relative PIDLs of current content
-                    //var tmpCurrent = new List<IntPtr>((IEnumerable<IntPtr>)curPidls.ToArray(typeof(IntPtr)));  // working list of current content
-                    if (newPidls.Count < 1)                                 // no items currently in Folder, so mark any previously known as invalid
-                    {
-                        if (m_Files is not null && UpdateFiles)
-                            InvalidItems.AddRange(m_Files.ToArray());
-                        if (m_Directories is not null && UpdateFolders)
-                            InvalidItems.AddRange(m_Directories.ToArray());
+                    var newPidls = GetPidlsOfCurrentFolder(attrFlag); // Relative PIDLs of current content
 
-                        // any not found should be removed from my collections (raising event)
-                        if (InvalidItems.Count > 0)
+                    try {
+                        if (newPidls.Count < 1) // no items currently in Folder, so mark any previously known as invalid
                         {
-                            UpdateRefreshRet = true;
-                            foreach (var csi in InvalidItems)
-                                RemoveItem(csi);
-                        }
-                    }
-                    else            // there are currently some items of interest in Me.Folder
-                    {
-                        var oldCsiItems = new List<CShellItem>();              // working list of old known items
-                        if (m_Directories is not null && UpdateFolders)
-                            oldCsiItems.AddRange(m_Directories.ToArray());
-                        if (m_Files is not null && UpdateFiles)
-                            oldCsiItems.AddRange(m_Files.ToArray());
+                            var invalidItems = new List<CShellItem>(); // Holds CShItems no longer present
 
-                        var oldPidls = new IntPtr[oldCsiItems.Count];          // working list of relative pidls of known items
-                        for (int i = 0, loopTo = oldCsiItems.Count - 1; i <= loopTo; i++)
-                            oldPidls[i] = ILFindLastID(oldCsiItems[i].PIDL);
+                            if (m_Files is not null && UpdateFiles)
+                                invalidItems.AddRange(m_Files.ToArray());
+                            if (m_Directories is not null && UpdateFolders)
+                                invalidItems.AddRange(m_Directories.ToArray());
 
-
-                        // Optimization: Use a dictionary to avoid O(N*M) complexity.
-                        // PIDL size is a fast, safe hash for grouping potential matches.
-                        var oldCsiDic = new Dictionary<uint, CShellItem>();
-                        foreach (var item in oldCsiItems)
-                        {
-                            oldCsiDic.Add(CPidl.HashPidlFastLastFull(item.LastPIDL), item); //might want to save this dic between calls
-                        }
-
-                        //find matches
-                        for (int i = 0; i < newPidls.Count; i++)
-                        {
-                            IntPtr newPidl = newPidls[i];
-                            bool addNew = false;
-                            uint hash = CPidl.HashPidlFastLastFull(newPidl);
-
-                            if (oldCsiDic.TryGetValue(hash, out CShellItem oldCsi))
+                            // any not found should be removed from my collections (raising event)
+                            if (invalidItems.Count > 0)
                             {
-                                // found the same item
-                                if (CPidl.IsEqual(oldCsi.LastPIDL, newPidl))    
-                                {
-                                    if (!ReferenceEquals(this, CShellItemFactory.RecycleBin))// && !CPidl.AreBytesEqual(oldPidl, newPidl))
-                                    {
-                                        oldCsi.ResetInfo();
-                                        if (oldCsi.IsFolder) oldCsi.ResetChildren();
-                                        CShItemUpdate?.Invoke(oldCsi.Parent, new ShellItemUpdateEventArgs(oldCsi, CShItemUpdateType.Updated));
-                                        UpdateRefreshRet = true;
-                                    }
-                                    
-                                    newPidls[i] = IntPtr.Zero; // Mark as processed
-                                    oldCsiDic.Remove(hash);
+                                UpdateRefreshRet = true;
+                                foreach (var csi in invalidItems)
+                                    RemoveItem(csi);
+                            }
+                        }
+                        else // there are currently some items of interest in Me.Folder
+                        {
+                            var oldCsiItems = new List<CShellItem>();              // working list of old known items
+                            if (m_Directories is not null && UpdateFolders)
+                                oldCsiItems.AddRange(m_Directories.ToArray());
+                            if (m_Files is not null && UpdateFiles)
+                                oldCsiItems.AddRange(m_Files.ToArray());
 
-                                    continue;
-                                }
+                            // Optimization: Use a dictionary to avoid O(N*M) search complexity.
+                            var oldCsiDic = new Dictionary<uint, CShellItem>();
+                            foreach (var item in oldCsiItems)
+                            {
+                                oldCsiDic.Add(CPidl.HashPidlFastLastFull(item.LastPIDL), item); //might want to save this dic between calls
+                            }
+
+                            //find matches
+                            for (int i = 0; i < newPidls.Count; i++)
+                            {
+                                IntPtr newPidl = newPidls[i];
+                                bool addNew = false;
+                                uint hash = CPidl.HashPidlFastLastFull(newPidl);
+
+                                if (oldCsiDic.TryGetValue(hash, out CShellItem oldCsi))
                                 {
-                                    //same hash but different item
+                                    // found the same item
+                                    if (CPidl.IsEqual(oldCsi.LastPIDL, newPidl))
+                                    {
+                                        if (!ReferenceEquals(this, CShellItemFactory.RecycleBin))// && !CPidl.AreBytesEqual(oldPidl, newPidl))
+                                        {
+                                            oldCsi.ResetInfo();
+                                            if (oldCsi.IsFolder) oldCsi.ResetChildren();
+                                            CShItemUpdate?.Invoke(oldCsi.Parent, new ShellItemUpdateEventArgs(oldCsi, CShItemUpdateType.Updated));
+                                            UpdateRefreshRet = true;
+                                        }
+
+                                        newPidls[i] = IntPtr.Zero; // Mark as processed
+                                        oldCsiDic.Remove(hash);
+
+                                        continue;
+                                    }
+                                    {
+                                        //same hash but different item
+                                        addNew = true;
+                                    }
+                                }
+                                else
+                                {
                                     addNew = true;
                                 }
-                            }
-                            else
-                            {
-                                addNew = true;
+
+                                if (addNew)
+                                {
+                                    if (newPidl == IntPtr.Zero) continue;
+                                    UpdateRefreshRet = true;
+                                    try
+                                    {
+                                        var NewItem = new CShellItem(newPidl, this);
+                                        AddItem(NewItem);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Debug.WriteLine("ERROR - Failed to add new CShellItem to internal tree.  : " + ex.ToString());
+                                        // ASUS Fix - modified 11/13/2013 was only looking for InvalidCastExcepton
+                                    }
+                                }
                             }
 
-                            if (addNew)
+                            //any items remaining in the dictionary have no match with the current state of the folder.  Remove.
+                            if (oldCsiDic.Count > 0)
                             {
-                                if (newPidl == IntPtr.Zero) continue;
                                 UpdateRefreshRet = true;
-                                try
-                                {
-                                    var NewItem = new CShellItem(newPidl, this);
-                                    AddItem(NewItem);
-                                }
-                                catch (Exception ex) 
-                                {
-                                    Debug.WriteLine("ERROR - Failed to add new CShellItem to internal tree.  : " + ex.ToString());
-                                    // ASUS Fix - modified 11/13/2013 was only looking for InvalidCastExcepton
-                                }
+                                foreach (var csi in oldCsiDic.Values)
+                                    RemoveItem(csi);
                             }
-                        }
-
-                        //any items remaining in the dictionary have no match with the current state of the folder.  Remove.
-                        if (oldCsiDic.Count > 0)
-                        {
-                            UpdateRefreshRet = true;
-                            foreach (var csi in oldCsiDic.Values)
-                                RemoveItem(csi);
                         }
                     }
+                    finally
+                    {
+                        foreach (IntPtr itm in newPidls)
+                            Marshal.FreeCoTaskMem(itm);
+                    }
 
-                    // we obtained some new relative PIDLs in curPidls, so free them
-                    foreach (IntPtr itm in newPidls)
-                        Marshal.FreeCoTaskMem(itm);
                 } //end lock
 
-                  // 6/18/2012 - If something changed in this Folder, then Raise an Updated Event AFTER all Adds, Deletes, etc have been posted
-                  // 6/18/2012 - One was previously Raised when working down the Tree from Me's Parent, but Adds, Deletes, etc details had not been posted
-                  // 6/18/2012 - at that time. The App did not know HOW this Folder had changed (except for attributes)
+                // 6/18/2012 - If something changed in this Folder, then Raise an Updated Event AFTER all Adds, Deletes, etc have been posted
+                // 6/18/2012 - One was previously Raised when working down the Tree from Me's Parent, but Adds, Deletes, etc details had not been posted
+                // 6/18/2012 - at that time. The App did not know HOW this Folder had changed (except for attributes)
                 if (UpdateRefreshRet && IsFolder)
                 {
                     if (Parent is null)
@@ -2647,7 +2646,7 @@ namespace WindowsApiLib.Shell
             // Debug.WriteLine("GPtrRel " & Now().Subtract(StTime).TotalMilliseconds.ToString & " ms")
             // StTime = Now()
             // For Each ptr In content
-            foreach (IntPtr ptr in GetContentPtrs(flags))
+            foreach (IntPtr ptr in GetPidlsOfCurrentFolder(flags))
             {
                 if (ptr == IntPtr.Zero)                                               // 11/09/2013 - Investigate other
                 {
@@ -2713,7 +2712,7 @@ namespace WindowsApiLib.Shell
         /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
         /// <returns>On error, returns an empty (count=0) ArrayList. Otherwise, returns the relative PIDLs of
         /// the requested (via flags param) items in this Folder.</returns>
-        private List<IntPtr> GetContentPtrs(SHCONTF flags)
+        private List<IntPtr> GetPidlsOfCurrentFolder(SHCONTF flags)
         {
             List<IntPtr> rVal= new List<nint>(0);
             int HR;
