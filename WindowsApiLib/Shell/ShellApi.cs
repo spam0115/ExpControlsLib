@@ -559,29 +559,18 @@ namespace WindowsApiLib.Shell
         [DllImport("shell32", EntryPoint = "#2", CharSet = CharSet.Auto)]
         public static extern int SHChangeNotifyRegister(IntPtr hwnd, SHCNRF fSources, SHCNE fEvents, WM wMsg, int cEntries, [MarshalAs(UnmanagedType.LPArray)] SHChangeNotifyEntry[] pfsne);
 
-
-
-
-
-
-
         // Unregisters the client's window process from receiving SHChangeNotify
         [DllImport("shell32", EntryPoint = "#4", CharSet = CharSet.Auto)]
         public static extern bool SHChangeNotifyDeregister(int hNotify);
 
-
         [DllImport("shell32", CharSet = CharSet.Auto)]
         public static extern IntPtr SHChangeNotification_Lock(IntPtr hChange, uint dwProcId, ref IntPtr pppidl, ref SHCNE plEvent);
-
-
 
         [DllImport("shell32", CharSet = CharSet.Auto)]
         public static extern int SHChangeNotification_Unlock(IntPtr hLock);
 
         [DllImport("shell32", CharSet = CharSet.Auto)]
         public static extern void SHChangeNotify(int wEventId, int uFlags, IntPtr dwItem1, IntPtr dwItem2);
-
-
 
         #endregion
 

@@ -146,7 +146,7 @@ namespace WindowsApiLib.Shell
                 shNotify = (SHNOTIFYSTRUCT)Marshal.PtrToStructure(ppidl, shNotify.GetType());
 
                 #if DEBUG
-                    var UArgs = new CShItemUpdateEventArgs(shNotify, msgID, ref counter);
+                    // var UArgs = new CShItemUpdateEventArgs(shNotify, msgID, ref counter);
                     // Debug.WriteLine("Enter WndProc -- Counter = " & UArgs.Tag & " - " & [Enum].GetName(GetType(SHCNE), CType(msgid, SHCNE)))
                     // EventDump("Enter WndProc", shNotify, UArgs, msgID)
                 #endif
@@ -160,10 +160,7 @@ namespace WindowsApiLib.Shell
                         // Item Changes
                         case SHCNE.CREATE:
                             {
-                                //IntPtr parent;
                                 IntPtr realRel;
-                                //IntPtr child = IntPtr.Zero;
-                                //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
                                 var splitPidl = CPidl.Split(shNotify.dwItem1);
 
                                 var parentItem = CShellItem.FindCShItem(splitPidl.ShortenedPidl);
@@ -179,19 +176,7 @@ namespace WindowsApiLib.Shell
                                         }
                                         Marshal.FreeCoTaskMem(realRel);
                                     }
-                                    else
-                                    {
-                                        // Debug.WriteLine(vbTab & "Files not init or already in")
-                                        // DumpPidl(parent)
-                                    }
                                 }
-                                else
-                                {
-                                    // Debug.WriteLine(vbTab & "Parent not found")
-                                    // DumpPidl(parent)
-                                }
-                                //Marshal.FreeCoTaskMem(parent);
-                                //Marshal.FreeCoTaskMem(child);
                                 Marshal.FreeCoTaskMem(splitPidl.ShortenedPidl);
                                 Marshal.FreeCoTaskMem(splitPidl.LastElementPidl);
 
@@ -200,8 +185,6 @@ namespace WindowsApiLib.Shell
 
                         case SHCNE.DELETE:
                             {
-                                //IntPtr parent, child = IntPtr.Zero;
-                                //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
                                 var parent = CPidl.TrimLast(shNotify.dwItem1);
                                 CShellItem parentItem;
                                 parentItem = CShellItem.FindCShItem(parent);

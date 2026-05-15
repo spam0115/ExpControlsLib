@@ -1790,12 +1790,6 @@ namespace ExpControlsLib
                 }
             }
 
-            //if (e.KeyCode == Keys.Delete)
-            //{
-            //    WinMenu("delete");
-            //    if (_ListView.SelectedItems.Count > 150) _currentFolderCsi?.UpdateRefresh();
-            //}
-
             if (e.KeyCode == Keys.F2 && _ListView.SelectedItems.Count > 0)
                 _ListView.SelectedItems[0].BeginEdit();
 
@@ -1930,13 +1924,9 @@ namespace ExpControlsLib
                         return;
                     }
                 }
-                else
+                else // Handle cut, copy, delete operations
                 {
-                    // Handle cut, copy, delete operations
-                    if (_ListView.SelectedItems.Count <= 0)
-                    {
-                        return;
-                    }
+                    if (_ListView.SelectedItems.Count <= 0) return;
 
                     try
                     {
