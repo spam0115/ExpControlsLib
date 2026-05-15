@@ -79,7 +79,7 @@ namespace WindowsApiLib.Shell
         /// This is a bit funky, but is at least made predictible by the SyncLock.
         /// </summary>
         /// <remarks></remarks>
-        private static readonly object LockObj = new object();
+        private static readonly object _itemTreeLock = new object();
 
         #endregion
 
@@ -1671,7 +1671,7 @@ namespace WindowsApiLib.Shell
         internal void AddItem(CShellItem item)
         {
             bool Changed = false;
-            lock (LockObj)
+            lock (_itemTreeLock)
             {
                 try
                 {
@@ -1707,7 +1707,7 @@ namespace WindowsApiLib.Shell
         internal void RemoveItem(CShellItem item)
         {
             bool Changed = false;
-            lock (LockObj)
+            lock (_itemTreeLock)
             {
                 try
                 {
@@ -1746,7 +1746,7 @@ namespace WindowsApiLib.Shell
         /// the GUI.</remarks>
         public void ClearItems(bool ClearFiles, bool ClearDirectories = false)
         {
-            lock (LockObj)
+            lock (_itemTreeLock)
             {
                 if (ClearFiles && m_Files is not null)
                 {
@@ -1883,7 +1883,7 @@ namespace WindowsApiLib.Shell
             {
                 var Flags = SHCONTF.INCLUDEHIDDEN;
 
-                lock (LockObj)
+                lock (_itemTreeLock)
                 {
                     if (m_Directories is null)
                         Flags = Flags | SHCONTF.FOLDERS;
@@ -2149,7 +2149,7 @@ namespace WindowsApiLib.Shell
                 if (attrFlag == SHCONTF.INCLUDEHIDDEN)
                     return UpdateRefreshRet; // nothing expanded therefore no change
 
-                lock (LockObj)
+                lock (_itemTreeLock)
                 {
                     var newPidls = GetPidlsOfCurrentFolder(attrFlag); // Relative PIDLs of current content
 

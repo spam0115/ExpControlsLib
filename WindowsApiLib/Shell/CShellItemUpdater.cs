@@ -141,227 +141,229 @@ namespace WindowsApiLib.Shell
             var msgID = default(SHCNE);
             SHNOTIFYSTRUCT shNotify = default;
             var hLock = SHChangeNotification_Lock(m.WParam, (uint)m.LParam, ref ppidl, ref msgID);
-            if (hLock != IntPtr.Zero && IsItemNotificationEvent(msgID))
+            if (hLock != IntPtr.Zero)
             {
-                shNotify = (SHNOTIFYSTRUCT)Marshal.PtrToStructure(ppidl, shNotify.GetType());
-
-                #if DEBUG
-                    // var UArgs = new CShItemUpdateEventArgs(shNotify, msgID, ref counter);
-                    // Debug.WriteLine("Enter WndProc -- Counter = " & UArgs.Tag & " - " & [Enum].GetName(GetType(SHCNE), CType(msgid, SHCNE)))
-                    // EventDump("Enter WndProc", shNotify, UArgs, msgID)
-                #endif
-
-                // In the below test, only UPDATEDIR will ever give me just the Desktop's PIDL - which will appear as an Empty PIDL to IsPidlEmpty
-                // If (Not CShellItem.IsPidlEmpty(shNotify.dwItem1)) OrElse (msgID = SHCNE.UPDATEDIR AndAlso shNotify.dwItem1 <> IntPtr.Zero) Then '5/21/2012
-                if (shNotify.dwItem1 != IntPtr.Zero)
+                try
                 {
-                    switch (msgID)
+                    if (IsItemNotificationEvent(msgID))
                     {
-                        // Item Changes
-                        case SHCNE.CREATE:
+                        msgID &= SHCNE.ALLEVENTS;
+                        shNotify = (SHNOTIFYSTRUCT)Marshal.PtrToStructure(ppidl, shNotify.GetType());
+
+                        #if DEBUG
+                            // var UArgs = new CShItemUpdateEventArgs(shNotify, msgID, ref counter);
+                            // Debug.WriteLine("Enter WndProc -- Counter = " & UArgs.Tag & " - " & [Enum].GetName(GetType(SHCNE), CType(msgid, SHCNE)))
+                            // EventDump("Enter WndProc", shNotify, UArgs, msgID)
+                        #endif
+
+                        // In the below test, only UPDATEDIR will ever give me just the Desktop's PIDL - which will appear as an Empty PIDL to IsPidlEmpty
+                        // If (Not CShellItem.IsPidlEmpty(shNotify.dwItem1)) OrElse (msgID = SHCNE.UPDATEDIR AndAlso shNotify.dwItem1 <> IntPtr.Zero) Then '5/21/2012
+                        if (shNotify.dwItem1 != IntPtr.Zero)
+                        {
+                            switch (msgID)
                             {
-                                IntPtr realRel;
-                                var splitPidl = CPidl.Split(shNotify.dwItem1);
-
-                                var parentItem = CShellItem.FindCShItem(splitPidl.ShortenedPidl);
-                                if (!(parentItem == null))
-                                {
-                                    if (parentItem.FilesInitialized && !parentItem.FileList.Contains(shNotify.dwItem1))
-                                    {
-                                        if (SHGetRealIDL(parentItem.Folder, splitPidl.LastElementPidl, out realRel) == S_OK)
-                                        {
-                                            var newItem = new CShellItem(realRel, parentItem);
-                                            if (newItem is not null)
-                                                parentItem.AddItem(newItem);
-                                        }
-                                        Marshal.FreeCoTaskMem(realRel);
-                                    }
-                                }
-                                Marshal.FreeCoTaskMem(splitPidl.ShortenedPidl);
-                                Marshal.FreeCoTaskMem(splitPidl.LastElementPidl);
-
-                                break;
-                            }
-
-                        case SHCNE.DELETE:
-                            {
-                                var parent = CPidl.TrimLast(shNotify.dwItem1);
-                                CShellItem parentItem;
-                                parentItem = CShellItem.FindCShItem(parent);
-                                if (!(parentItem == null))
-                                {
-                                    if (parentItem.FilesInitialized && parentItem.FileList.Contains(shNotify.dwItem1))
-                                    {
-                                        var childItem = parentItem.FileList[shNotify.dwItem1];
-                                        parentItem.RemoveItem(childItem);
-                                    }
-                                }
-                                Marshal.FreeCoTaskMem(parent);
-                                break;
-                            }
-
-                        case SHCNE.RENAMEITEM:
-                            {
-                                if (shNotify.dwItem2 != IntPtr.Zero)     // 5/26/2012
-                                {
-                                    var item = CShellItem.FindCShItem(shNotify.dwItem1);
-                                    if (item is not null)
-                                    {
-                                        item.Update(shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
-                                    }
-                                }
-
-                                break;
-                            }
-
-                        case SHCNE.UPDATEITEM:
-                            {
-                                var item = CShellItem.FindCShItem(shNotify.dwItem1);
-                                if (item is not null)
-                                {
-                                    // Debug.WriteLine("Item: " & item.ToString) 'Change made 9/21/2010
-                                    item.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
-                                    // item.Update(IntPtr.Zero, CShItemUpdateType.IconChange)
-                                }
-
-                                break;
-                            }
-
-                        // Folder Changes
-                        case SHCNE.MKDIR:
-                        case SHCNE.DRIVEADD:
-                            {
-                                // Make Directory
-                                //IntPtr parent, child = IntPtr.Zero;
-                                //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
-                                var splitPidls = CPidl.Split(shNotify.dwItem1);
-                                var parentItem = CShellItem.FindCShItem(splitPidls.ShortenedPidl);
-                                if (parentItem is not null)
-                                {
-                                    if (parentItem.FoldersInitialized && !parentItem.DirectoryList.Contains(shNotify.dwItem1))
+                                // Item Changes
+                                case SHCNE.CREATE:
                                     {
                                         IntPtr realRel;
-                                        if (SHGetRealIDL(parentItem.Folder, splitPidls.LastElementPidl, out realRel) == S_OK)
+                                        var splitPidl = CPidl.Split(shNotify.dwItem1);
+
+                                        var parentItem = CShellItem.FindCShItem(splitPidl.ShortenedPidl);
+                                        if (!(parentItem == null))
                                         {
-                                            var newItem = new CShellItem(realRel, parentItem);
-                                            if (newItem is not null)
+                                            if (parentItem.FilesInitialized && !parentItem.FileList.Contains(shNotify.dwItem1))
                                             {
-                                                parentItem.AddItem(newItem);
-                                                // Debug.WriteLine("MKDIR: " & newItem.Path)
+                                                if (SHGetRealIDL(parentItem.Folder, splitPidl.LastElementPidl, out realRel) == S_OK)
+                                                {
+                                                    var newItem = new CShellItem(realRel, parentItem);
+                                                    if (newItem is not null)
+                                                        parentItem.AddItem(newItem);
+                                                }
+                                                Marshal.FreeCoTaskMem(realRel);
+                                            }
+                                        }
+                                        Marshal.FreeCoTaskMem(splitPidl.ShortenedPidl);
+                                        Marshal.FreeCoTaskMem(splitPidl.LastElementPidl);
+
+                                        break;
+                                    }
+
+                                case SHCNE.DELETE:
+                                    {
+                                        var parent = CPidl.TrimLast(shNotify.dwItem1);
+                                        CShellItem parentItem;
+                                        parentItem = CShellItem.FindCShItem(parent);
+                                        if (!(parentItem == null))
+                                        {
+                                            if (parentItem.FilesInitialized && parentItem.FileList.Contains(shNotify.dwItem1))
+                                            {
+                                                var childItem = parentItem.FileList[shNotify.dwItem1];
+                                                parentItem.RemoveItem(childItem);
+                                            }
+                                        }
+                                        Marshal.FreeCoTaskMem(parent);
+                                        break;
+                                    }
+
+                                case SHCNE.RENAMEITEM:
+                                    {
+                                        if (shNotify.dwItem2 != IntPtr.Zero)     // 5/26/2012
+                                        {
+                                            var item = CShellItem.FindCShItem(shNotify.dwItem1);
+                                            if (item is not null)
+                                            {
+                                                item.Update(shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
+                                            }
+                                        }
+
+                                        break;
+                                    }
+
+                                case SHCNE.UPDATEITEM:
+                                    {
+                                        var item = CShellItem.FindCShItem(shNotify.dwItem1);
+                                        if (item is not null)
+                                        {
+                                            // Debug.WriteLine("Item: " & item.ToString) 'Change made 9/21/2010
+                                            item.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
+                                            // item.Update(IntPtr.Zero, CShItemUpdateType.IconChange)
+                                        }
+
+                                        break;
+                                    }
+
+                                // Folder Changes
+                                case SHCNE.MKDIR:
+                                case SHCNE.DRIVEADD:
+                                    {
+                                        // Make Directory
+                                        //IntPtr parent, child = IntPtr.Zero;
+                                        //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
+                                        var splitPidls = CPidl.Split(shNotify.dwItem1);
+                                        var parentItem = CShellItem.FindCShItem(splitPidls.ShortenedPidl);
+                                        if (parentItem is not null)
+                                        {
+                                            if (parentItem.FoldersInitialized && !parentItem.DirectoryList.Contains(shNotify.dwItem1))
+                                            {
+                                                IntPtr realRel;
+                                                if (SHGetRealIDL(parentItem.Folder, splitPidls.LastElementPidl, out realRel) == S_OK)
+                                                {
+                                                    var newItem = new CShellItem(realRel, parentItem);
+                                                    if (newItem is not null)
+                                                    {
+                                                        parentItem.AddItem(newItem);
+                                                        // Debug.WriteLine("MKDIR: " & newItem.Path)
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    Debug.WriteLine("***MKDIR - Failed on SHGetRealIDL " + parentItem.DisplayName);
+                                                }     // 6/30/2012
+                                                Marshal.FreeCoTaskMem(realRel);
+                                            }
+                                            else if (!IsVistaOrAbove())  // 6/27/2012 - XP will not send an UPDATEITEM for Parent in this case, so we have to
+                                            {
+                                                parentItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
                                             }
                                         }
                                         else
                                         {
-                                            Debug.WriteLine("***MKDIR - Failed on SHGetRealIDL " + parentItem.DisplayName);
+                                            Debug.WriteLine("***MKDIR - Parent Not Found");
                                         }     // 6/30/2012
-                                        Marshal.FreeCoTaskMem(realRel);
+                                        Marshal.FreeCoTaskMem(splitPidls.ShortenedPidl);
+                                        Marshal.FreeCoTaskMem(splitPidls.LastElementPidl);
+                                        break;
                                     }
-                                    else if (!IsVistaOrAbove())  // 6/27/2012 - XP will not send an UPDATEITEM for Parent in this case, so we have to
+
+                                case SHCNE.RENAMEFOLDER:
                                     {
-                                        parentItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
-                                    }
-                                }
-                                else
-                                {
-                                    Debug.WriteLine("***MKDIR - Parent Not Found");
-                                }     // 6/30/2012
-                                Marshal.FreeCoTaskMem(splitPidls.ShortenedPidl);
-                                Marshal.FreeCoTaskMem(splitPidls.LastElementPidl);
-                                break;
-                            }
-
-                        case SHCNE.RENAMEFOLDER:
-                            {
-                                // Renamed Directory
-                                // If Not shNotify.dwItem2 <> IntPtr.Zero Then     '5/26/2012 - Old Code
-                                if (shNotify.dwItem2 != IntPtr.Zero)          // 6/11/2012 - New Code
-                                {
-                                    var item = CShellItem.FindCShItem(shNotify.dwItem1);
-                                    if (item is not null)
-                                    {
-                                        item.Update(shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
-                                    }
-                                }
-
-                                break;
-                            }
-
-                        case SHCNE.RMDIR:
-                        case SHCNE.DRIVEREMOVED:
-                            {
-                                // Removed Directory
-                                //IntPtr parent, child = IntPtr.Zero;
-                                //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
-                                var parent = CPidl.TrimLast(shNotify.dwItem1);
-
-                                var parentItem = CShellItem.FindCShItem(parent);
-                                if (parentItem is not null)
-                                {
-                                    // From Calum...sometimes when deleting a folder in My Documents 
-                                    // parentItem.DirectoryList was Nothing...
-                                    if (parentItem.DirectoryList is not null) // Added code from Calum
-                                    {
-                                        int indx = parentItem.DirectoryList.IndexOf(shNotify.dwItem1);
-                                        if (indx > -1)
+                                        // Renamed Directory
+                                        // If Not shNotify.dwItem2 <> IntPtr.Zero Then     '5/26/2012 - Old Code
+                                        if (shNotify.dwItem2 != IntPtr.Zero)          // 6/11/2012 - New Code
                                         {
-                                            parentItem.RemoveItem(parentItem.DirectoryList[indx]);   // 7/2/2012 - incorrectly used Directories
+                                            var item = CShellItem.FindCShItem(shNotify.dwItem1);
+                                            if (item is not null)
+                                            {
+                                                item.Update(shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
+                                            }
                                         }
+
+                                        break;
                                     }
-                                    else if (!IsVistaOrAbove())  // 6/27/2012 - XP will not send an UPDATEITEM for Parent in this case, so we have to
+
+                                case SHCNE.RMDIR:
+                                case SHCNE.DRIVEREMOVED:
                                     {
-                                        parentItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
+                                        // Removed Directory
+                                        //IntPtr parent, child = IntPtr.Zero;
+                                        //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
+                                        var parent = CPidl.TrimLast(shNotify.dwItem1);
+
+                                        var parentItem = CShellItem.FindCShItem(parent);
+                                        if (parentItem is not null)
+                                        {
+                                            // From Calum...sometimes when deleting a folder in My Documents 
+                                            // parentItem.DirectoryList was Nothing...
+                                            if (parentItem.DirectoryList is not null) // Added code from Calum
+                                            {
+                                                int indx = parentItem.DirectoryList.IndexOf(shNotify.dwItem1);
+                                                if (indx > -1)
+                                                {
+                                                    parentItem.RemoveItem(parentItem.DirectoryList[indx]);   // 7/2/2012 - incorrectly used Directories
+                                                }
+                                            }
+                                            else if (!IsVistaOrAbove())  // 6/27/2012 - XP will not send an UPDATEITEM for Parent in this case, so we have to
+                                            {
+                                                parentItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
+                                            }
+                                        }
+                                        //Marshal.FreeCoTaskMem(child);
+                                        Marshal.FreeCoTaskMem(parent);
+                                        break;
                                     }
-                                }
-                                //Marshal.FreeCoTaskMem(child);
-                                Marshal.FreeCoTaskMem(parent);
-                                break;
-                            }
 
-                        case SHCNE.UPDATEDIR:
-                            {
-                                var upCSI = CShellItem.FindCShItem(shNotify.dwItem1);
-                                if (upCSI is not null)
-                                {
-                                    upCSI.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
-                                }
+                                case SHCNE.UPDATEDIR:
+                                    {
+                                        var upCSI = CShellItem.FindCShItem(shNotify.dwItem1);
+                                        if (upCSI is not null)
+                                        {
+                                            upCSI.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
+                                        }
 
-                                break;
-                            }
-                        case SHCNE.MEDIAINSERTED:
-                        case SHCNE.MEDIAREMOVED:
-                            {
-                                var mediaCSI = CShellItem.FindCShItem(shNotify.dwItem1);
-                                if (mediaCSI is not null)
-                                {
-                                    mediaCSI.Update(default, CShellItem.CShItemUpdateType.MediaChange);
-                                }
+                                        break;
+                                    }
+                                case SHCNE.MEDIAINSERTED:
+                                case SHCNE.MEDIAREMOVED:
+                                    {
+                                        var mediaCSI = CShellItem.FindCShItem(shNotify.dwItem1);
+                                        if (mediaCSI is not null)
+                                        {
+                                            mediaCSI.Update(default, CShellItem.CShItemUpdateType.MediaChange);
+                                        }
 
-                                break;
-                            }
-                        case SHCNE.UPDATEIMAGE:
-                            {
-                                var imgCSI = CShellItem.FindCShItem(shNotify.dwItem1);
-                                if (imgCSI is not null)
-                                {
-                                    imgCSI.Update(default, CShellItem.CShItemUpdateType.IconChange);
-                                }
+                                        break;
+                                    }
+                                case SHCNE.UPDATEIMAGE:
+                                    {
+                                        var imgCSI = CShellItem.FindCShItem(shNotify.dwItem1);
+                                        if (imgCSI is not null)
+                                        {
+                                            imgCSI.Update(default, CShellItem.CShItemUpdateType.IconChange);
+                                        }
 
-                                break;
+                                        break;
+                                    }
                             }
+                        }
                     }
                 }
-
-            XIT:
-                ;
-
-                #if DEBUG
-                    // Debug.WriteLine("Leave WndProc -- Counter = " & UArgs.Tag)
-                    // EventDump("Leave WndProc", shNotify, UArgs, m)
-                #endif
-                bool tst = SHChangeNotification_Unlock(hLock) > 0;
-                if (!tst)
+                finally
                 {
-                    Debug.WriteLine("UnLock Failed " + hLock.ToString());
+                    bool result = SHChangeNotification_Unlock(hLock) > 0;
+                    if (!result)
+                    {
+                        Debug.WriteLine("UnLock Failed " + hLock.ToString());
+                    }
                 }
             }
             base.WndProc(ref m);

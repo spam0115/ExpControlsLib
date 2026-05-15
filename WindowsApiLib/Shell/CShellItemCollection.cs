@@ -1,5 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection.Metadata.Ecma335;
+using System.Windows.Forms.VisualStyles;
 
 namespace WindowsApiLib.Shell
 {
@@ -43,14 +45,8 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        public int Count
-        {
-            get
-            {
-                lock (m_syncRoot)
-                    return m_items.Count;
-            }
-        }
+        public int Count => m_items.Count;
+        
 
         public void Sort()
         {
@@ -85,20 +81,16 @@ namespace WindowsApiLib.Shell
 
         public bool Contains(CShellItem value)
         {
-            lock (m_syncRoot)
-                return m_items.Contains(value);
+            return m_items.Contains(value);
         }
 
         public bool Contains(string name)
         {
-            lock (m_syncRoot)
+            foreach (CShellItem itm in m_items)
             {
-                foreach (CShellItem itm in m_items)
+                if (string.Compare(itm.GetFileName(), name, true) == 0)
                 {
-                    if (string.Compare(itm.GetFileName(), name, true) == 0)
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
             return false;
@@ -106,14 +98,11 @@ namespace WindowsApiLib.Shell
 
         public bool Contains(IntPtr pidl)
         {
-            lock (m_syncRoot)
+            foreach (CShellItem itm in m_items)
             {
-                foreach (CShellItem itm in m_items)
+                if (CPidl.IsEqual(itm.PIDL, pidl))
                 {
-                    if (CPidl.IsEqual(itm.PIDL, pidl))
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
             return false;
@@ -121,20 +110,16 @@ namespace WindowsApiLib.Shell
 
         public int IndexOf(CShellItem value)
         {
-            lock (m_syncRoot)
-                return m_items.IndexOf(value);
+            return m_items.IndexOf(value);
         }
 
         public int IndexOf(string name)
         {
-            lock (m_syncRoot)
+            for (int i = 0; i < m_items.Count; i++)
             {
-                for (int i = 0; i < m_items.Count; i++)
+                if (string.Compare(m_items[i].GetFileName(), name, true) == 0)
                 {
-                    if (string.Compare(m_items[i].GetFileName(), name, true) == 0)
-                    {
-                        return i;
-                    }
+                    return i;
                 }
             }
             return -1;
@@ -142,14 +127,11 @@ namespace WindowsApiLib.Shell
 
         public int IndexOf(IntPtr pidl)
         {
-            lock (m_syncRoot)
+            for (int i = 0; i < m_items.Count; i++)
             {
-                for (int i = 0; i < m_items.Count; i++)
+                if (CPidl.IsEqual(m_items[i].PIDL, pidl))
                 {
-                    if (CPidl.IsEqual(m_items[i].PIDL, pidl))
-                    {
-                        return i;
-                    }
+                    return i;
                 }
             }
             return -1;
@@ -189,8 +171,7 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                lock (m_syncRoot)
-                    return m_items[index];
+                return m_items[index];
             }
         }
 
@@ -198,21 +179,15 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                lock (m_syncRoot)
-                {
-                    int index = IndexOf(name);
-                    return index > -1 ? m_items[index] : null;
-                }
+                int index = IndexOf(name);
+                return index > -1 ? m_items[index] : null;
             }
             set
             {
-                lock (m_syncRoot)
+                int index = IndexOf(name);
+                if (index > -1)
                 {
-                    int index = IndexOf(name);
-                    if (index > -1)
-                    {
-                        m_items[index] = value;
-                    }
+                    m_items[index] = value;
                 }
             }
         }
@@ -221,21 +196,15 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                lock (m_syncRoot)
-                {
-                    int index = IndexOf(pidl);
-                    return index > -1 ? m_items[index] : null;
-                }
+                int index = IndexOf(pidl);
+                return index > -1 ? m_items[index] : null;
             }
             set
             {
-                lock (m_syncRoot)
+                int index = IndexOf(pidl);
+                if (index > -1)
                 {
-                    int index = IndexOf(pidl);
-                    if (index > -1)
-                    {
-                        m_items[index] = value;
-                    }
+                    m_items[index] = value;
                 }
             }
         }
