@@ -164,7 +164,7 @@ namespace WindowsApiLib.Shell
                                 IntPtr realRel;
                                 //IntPtr child = IntPtr.Zero;
                                 //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
-                                var splitPidl = CPidl.SplitPidl(shNotify.dwItem1);
+                                var splitPidl = CPidl.Split(shNotify.dwItem1);
 
                                 var parentItem = CShellItem.FindCShItem(splitPidl.ShortenedPidl);
                                 if (!(parentItem == null))
@@ -202,7 +202,7 @@ namespace WindowsApiLib.Shell
                             {
                                 //IntPtr parent, child = IntPtr.Zero;
                                 //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
-                                var parent = CPidl.TrimPidl(shNotify.dwItem1);
+                                var parent = CPidl.TrimLast(shNotify.dwItem1);
                                 CShellItem parentItem;
                                 parentItem = CShellItem.FindCShItem(parent);
                                 if (!(parentItem == null))
@@ -251,7 +251,7 @@ namespace WindowsApiLib.Shell
                                 // Make Directory
                                 //IntPtr parent, child = IntPtr.Zero;
                                 //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
-                                var splitPidls = CPidl.SplitPidl(shNotify.dwItem1);
+                                var splitPidls = CPidl.Split(shNotify.dwItem1);
                                 var parentItem = CShellItem.FindCShItem(splitPidls.ShortenedPidl);
                                 if (parentItem is not null)
                                 {
@@ -309,7 +309,7 @@ namespace WindowsApiLib.Shell
                                 // Removed Directory
                                 //IntPtr parent, child = IntPtr.Zero;
                                 //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
-                                var parent = CPidl.TrimPidl(shNotify.dwItem1);
+                                var parent = CPidl.TrimLast(shNotify.dwItem1);
 
                                 var parentItem = CShellItem.FindCShItem(parent);
                                 if (parentItem is not null)

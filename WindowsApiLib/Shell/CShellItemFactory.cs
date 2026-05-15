@@ -94,7 +94,6 @@ namespace WindowsApiLib.Shell
             csi.SetDispType();
 
             csi.m_updater = new CShellItemUpdater(csi); // Start the Notification Process
-            CShellItem._Initialized = true;
 
             DeskTopDirectory = GetCShItem(CSIDL.DESKTOPDIRECTORY);
 
@@ -308,7 +307,7 @@ namespace WindowsApiLib.Shell
                 if (ptr != IntPtr.Zero)
                     Marshal.Release(ptr); // Added Code (12/12/09)
 #if DEBUG
-                CPidl.DumpPidl(relPidl);
+                CPidl.Dump(relPidl);
                 Marshal.ThrowExceptionForHR(HR);
 #endif
             }    // Removed 10/22/2011 - restored 11/13/2013

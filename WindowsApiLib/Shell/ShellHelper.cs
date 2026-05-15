@@ -716,7 +716,7 @@ namespace WindowsApiLib.Shell
                 if (ptr != IntPtr.Zero)
                     Marshal.Release(ptr); // Added Code (12/12/09)
 #if DEBUG
-                CPidl.DumpPidl(relPidl);
+                CPidl.Dump(relPidl);
                 Marshal.ThrowExceptionForHR(HR);
 #endif
             }    // Removed 10/22/2011 - restored 11/13/2013
@@ -742,7 +742,7 @@ namespace WindowsApiLib.Shell
             IShellFolder MakeFolderFromBytesRet = default;
             //CShellItemFactory.DesktopCSI;                        // ensure we are initialized
                                                  // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
-            if (!CPidl.IsValidPidl(b))
+            if (!CPidl.IsValid(b))
                 return null;
             if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
             {

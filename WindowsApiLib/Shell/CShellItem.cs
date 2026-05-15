@@ -81,8 +81,6 @@ namespace WindowsApiLib.Shell
         /// <remarks></remarks>
         private static readonly object LockObj = new object();
 
-        internal static bool _Initialized = false;
-
         #endregion
 
 
@@ -272,83 +270,10 @@ namespace WindowsApiLib.Shell
         /// </summary>
         private CShellItem()           // only used when desktopfolder has not been intialized
         {
-            Initialize();
-        }
-
-        private void Initialize()
-        {
-            if (_Initialized) return;
-
-            //int HR;
-            // firstly determine what the local machine calls a "System Folder" and "My Computer"
-            //IntPtr tmpPidl = IntPtr.Zero;
-            //HR = SHGetSpecialFolderLocation(0, (int)CSIDL.DRIVES, ref tmpPidl);
-            //var shfi = new SHFILEINFO();
-            //var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
-            //int dwAttr = 0;
-            //SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
-            //m_strSystemFolder = shfi.szTypeName;
-            //m_strMyComputer = shfi.szDisplayName;
-            //Marshal.FreeCoTaskMem(tmpPidl);
-
-            // With That done, now set up Desktop CShellItem
-            //m_Path = "::{" + DesktopGUID.ToString() + "}";
-            //m_IsFolder = true;
-            //m_HasSubFolders = true;
-            //m_IsBrowsable = false;
-            //HR = SHGetDesktopFolder(ref m_Folder);
-            //// m_Pidl = GetSpecialFolderLocation(IntPtr.Zero, (int)CSIDL.DESKTOP);
-            //// Force m_Pidl to be the virtual root PIDL (empty)
-            //m_Pidl = Marshal.AllocCoTaskMem(2);
-            //Marshal.WriteInt16(m_Pidl, 0, 0);
-
-            //dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.SYSICONINDEX | SHGFI.PIDL;
-            //dwAttr = 0;
-            //var desktop = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
-
-            //m_DisplayName = shfi.szDisplayName;
-            //m_TypeName = StrSystemFolder;   // not returned correctly by SHGetFileInfo
-            //m_IconIndexNormal = shfi.iIcon;
-            //m_IconIndexOpen = shfi.iIcon;
-            //m_HasDispType = true;
-            ////m_IsDropTarget = true;
-            //m_IsReadOnly = false;
-            //m_IsReadOnlySetup = true;
-
-            //// also get local name for "My Documents"
-            //var pchEaten = default(int);
-            //tmpPidl = IntPtr.Zero;
-            //int argpdwAttributes = default;
-            //HR = Folder.ParseDisplayName(default, default, "::{450d8fba-ad25-11d0-98a8-0800361b1103}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
-            //shfi = new SHFILEINFO();
-            //dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
-            //dwAttr = 0;
-            //SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
-            //m_strMyDocuments = shfi.szDisplayName;
-            //Marshal.FreeCoTaskMem(tmpPidl);
-
-            // this must be done after getting "My Documents" string
-            // m_SortFlag = ComputeSortFlag();
-            // Set DesktopBase
-            //DesktopBase = this;
-
-            // Get the SystemName for Remote item testing
-            //SystemName = Environment.MachineName;    // 4/14/2012
-            //                                         // Get the Path and CShellItem of the DesktopDirectory
-            //                                         //m_DeskTopDirectory = GetCShItem(CSIDL.DESKTOPDIRECTORY);
-            //                                         // Get the CShellItem for the Recycle Bin   6/21/2012
-            //m_Recycle = CShellItemFactory.GetCShItem(CSIDL.BITBUCKET); // 6/21/2012
-            
-            // Start the Notification Process
-            //m_updater = new CShellItemUpdater(this);
-
-            //_Initialized = true;
         }
 
         internal CShellItem(IntPtr pidl, CShellItem parent = null)
         {
-            Initialize();
-
             // Set unfetched value for IconIndex....
             m_IconIndexNormal = -1;
             m_IconIndexOpen = -1;
@@ -364,7 +289,7 @@ namespace WindowsApiLib.Shell
             }
             else
             {
-                m_Pidl = CPidl.ConcatPidls(parent.PIDL, pidl);
+                m_Pidl = CPidl.Concatenate(parent.PIDL, pidl);
                 // Get some attributes
                 SetUpAttributes(parent.Folder, pidl);
             }
@@ -456,7 +381,7 @@ namespace WindowsApiLib.Shell
             IShellFolder MakeFolderFromBytesRet = default;
             //GetDeskTop();                        // ensure we are initialized
             // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
-            if (!CPidl.IsValidPidl(b))
+            if (!CPidl.IsValid(b))
                 return null;
             if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
             {
@@ -734,7 +659,7 @@ namespace WindowsApiLib.Shell
         public static CShellItem FindCShItem(byte[] b)
         {
             CShellItem FindCShItemRet = default;
-            if (!CPidl.IsValidPidl(b))
+            if (!CPidl.IsValid(b))
                 return null;
             var thisPidl = Marshal.AllocCoTaskMem(b.Length);
             if (thisPidl.Equals(IntPtr.Zero))
@@ -2228,6 +2153,21 @@ namespace WindowsApiLib.Shell
                 {
                     var newPidls = GetPidlsOfCurrentFolder(attrFlag); // Relative PIDLs of current content
 
+#if DEBUG
+                    var counts = newPidls
+                        .Select(p => new { length = CPidl.SegmentCount(p) })
+                        .GroupBy(o => o.length)          // SQL GROUP BY column
+                        .Select(g => new
+                        {
+                            Key = g.Key,
+                            Count = g.Count()
+                        }).ToList();
+
+                    foreach (var count in counts) {
+                        Debug.WriteLine($"new pidls - Length=={count.Key}: {count.Count}");
+                    }
+#endif
+
                     try {
                         if (newPidls.Count < 1) // no items currently in Folder, so mark any previously known as invalid
                         {
@@ -2261,7 +2201,24 @@ namespace WindowsApiLib.Shell
                                 oldCsiDic.Add(CPidl.HashPidlFastLastFull(item.LastPIDL), item); //might want to save this dic between calls
                             }
 
-                            //find matches
+#if DEBUG
+                            Debug.WriteLine("oldCsiDic size: " + oldCsiDic.Count());
+                            Debug.WriteLine("newPidls size: " + newPidls.Count());
+
+                            counts = oldCsiItems
+                                .Select(p => new { length = CPidl.SegmentCount(p.PIDL) })
+                                .GroupBy(o => o.length)          // SQL GROUP BY column
+                                .Select(g => new
+                                {
+                                    Key = g.Key,
+                                    Count = g.Count()
+                                }).ToList();
+
+                            foreach (var count in counts)
+                            {
+                                Debug.WriteLine($"old pidls - Length=={count.Key}: {count.Count}");
+                            }
+#endif
                             for (int i = 0; i < newPidls.Count; i++)
                             {
                                 IntPtr newPidl = newPidls[i];
@@ -2280,13 +2237,14 @@ namespace WindowsApiLib.Shell
                                             UpdateRefreshRet = true;
                                         }
 
+                                        Marshal.FreeCoTaskMem(newPidl);
                                         newPidls[i] = IntPtr.Zero; // Mark as processed
                                         oldCsiDic.Remove(hash);
 
                                         continue;
                                     }
                                 }
-                                else
+                                else //new item
                                 {
                                     if (newPidl == IntPtr.Zero) continue;
                                     UpdateRefreshRet = true;
@@ -2307,29 +2265,30 @@ namespace WindowsApiLib.Shell
                             if (oldCsiDic.Count > 0)
                             {
                                 UpdateRefreshRet = true;
-                                foreach (var csi in oldCsiDic.Values)
+                                foreach (var csi in oldCsiDic.Values) 
+                                {
                                     RemoveItem(csi);
+                                }
                             }
                         }
                     }
                     finally
                     {
-                        foreach (IntPtr itm in newPidls)
-                            Marshal.FreeCoTaskMem(itm);
+                        //foreach (IntPtr itm in newPidls)
+                        //    Marshal.FreeCoTaskMem(itm);
                     }
 
+                    // 6/18/2012 - If something changed in this Folder, then Raise an Updated Event AFTER all Adds, Deletes, etc have been posted
+                    // 6/18/2012 - One was previously Raised when working down the Tree from Me's Parent, but Adds, Deletes, etc details had not been posted
+                    // 6/18/2012 - at that time. The App did not know HOW this Folder had changed (except for attributes)
+                    if (UpdateRefreshRet && IsFolder) //these invokes MUST be within the lock or else you will get delete all items in the folder from memory for unknown reasons
+                    {
+                        if (Parent is null)
+                            CShItemUpdate?.Invoke(CShellItemFactory.DesktopCSI, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
+                        else
+                            CShItemUpdate?.Invoke(Parent, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
+                    }
                 } //end lock
-
-                // 6/18/2012 - If something changed in this Folder, then Raise an Updated Event AFTER all Adds, Deletes, etc have been posted
-                // 6/18/2012 - One was previously Raised when working down the Tree from Me's Parent, but Adds, Deletes, etc details had not been posted
-                // 6/18/2012 - at that time. The App did not know HOW this Folder had changed (except for attributes)
-                if (UpdateRefreshRet && IsFolder)
-                {
-                    if (Parent is null)
-                        CShItemUpdate?.Invoke(CShellItemFactory.DesktopCSI, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
-                    else
-                        CShItemUpdate?.Invoke(Parent, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
-                }
 
             }
 
@@ -2391,7 +2350,7 @@ namespace WindowsApiLib.Shell
         {
             m_Path = string.Empty;             // will update when needed
             IntPtr newPidl;
-            newPidl = CPidl.ConcatPidls(Parent.PIDL, ILFindLastID(PIDL));
+            newPidl = CPidl.Concatenate(Parent.PIDL, ILFindLastID(PIDL));
             Marshal.FreeCoTaskMem(m_Pidl);
             m_Pidl = newPidl;
             if (IsFolder)
@@ -2432,7 +2391,7 @@ namespace WindowsApiLib.Shell
                         //newParent = CPidl.SplitPidl(newPidl, ref newPidlRel);
 
                         IntPtr PidlRel = IntPtr.Zero, newFolderPtr = IntPtr.Zero;
-                        var splitPidl = CPidl.SplitPidl(changedPidl);
+                        var splitPidl = CPidl.Split(changedPidl);
                         var oldParentItem = Parent;    // Save in case "renamed" to a new directory
                         var newParentItem = FindCShItem(splitPidl.ShortenedPidl); // newParent);
                         if (newParentItem is null)            // renamed to a dir that is not yet in internal tree
@@ -2443,7 +2402,7 @@ namespace WindowsApiLib.Shell
                         else if (SHGetRealIDL(newParentItem.Folder, splitPidl.LastElementPidl, out PidlRel) == S_OK)            // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
                         {
                             Marshal.FreeCoTaskMem(m_Pidl);
-                            m_Pidl = CPidl.ConcatPidls(splitPidl.ShortenedPidl, PidlRel);  // we use PidlRel because newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID
+                            m_Pidl = CPidl.Concatenate(splitPidl.ShortenedPidl, PidlRel);  // we use PidlRel because newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID
                             if (IsFolder)            // deal with potential "Move" to a new dir
                             {
                                 if (!ReferenceEquals(newParentItem, Parent))

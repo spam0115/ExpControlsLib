@@ -549,7 +549,7 @@ namespace ExpControlsLib
 
             CShellItem baseItem = (CShellItem)baseNode.Tag;
             IntPtr basePidl = baseItem.PIDL;
-            int lim = CPidl.PidlCount(newItem.PIDL) - CPidl.PidlCount(basePidl);
+            int lim = CPidl.SegmentCount(newItem.PIDL) - CPidl.SegmentCount(basePidl);
 
             // TODO: Test ExpandARow again on XP to ensure that the CP problem is fixed
             while (lim > 0)

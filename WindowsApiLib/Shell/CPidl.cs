@@ -39,7 +39,7 @@ namespace WindowsApiLib
                // ensure nulnul
             m_bytes[m_bytes.Length - 2] = 0;
             m_bytes[m_bytes.Length - 1] = 0;
-            m_ItemCount = PidlCount(Pidl);
+            m_ItemCount = SegmentCount(Pidl);
         }
         #endregion
 
@@ -148,12 +148,12 @@ namespace WindowsApiLib
         /// <remarks>Both Byte() must be properly terminated (nulnul)</remarks>
         public static byte[] JoinPidlBytes(byte[] b1, byte[] b2)
         {
-            if (IsValidPidl(b1) & IsValidPidl(b2))
+            if (IsValid(b1) & IsValid(b2))
             {
                 var b = new byte[b1.Length + b2.Length - 3 + 1]; // allow for leaving off first nulnul
                 Array.Copy(b1, b, b1.Length - 2);
                 Array.Copy(b2, 0, b, b1.Length - 2, b2.Length);
-                if (IsValidPidl(b))
+                if (IsValid(b))
                 {
                     return b;
                 }
@@ -180,7 +180,7 @@ namespace WindowsApiLib
         {
             IntPtr BytesToPidlRet = default;
             BytesToPidlRet = IntPtr.Zero;       // assume failure
-            if (IsValidPidl(b))
+            if (IsValid(b))
             {
                 int bLen = b.Length;
                 BytesToPidlRet = Marshal.AllocCoTaskMem(bLen);
@@ -237,7 +237,7 @@ namespace WindowsApiLib
         /// </summary>
         /// <param name="pidl">The pidl to obtain the count for</param>
         /// <returns> Returns the count of SHItems pointed to by pidl</returns>
-        public static int PidlCount(IntPtr pidl)
+        public static int SegmentCount(IntPtr pidl)
         {
             if (!pidl.Equals(IntPtr.Zero))
             {
@@ -265,10 +265,10 @@ namespace WindowsApiLib
         /// <param name="pidl">The PIDL to be Factored</param>
         /// <returns>An Array of PIDL, each a Single Relative PIDL</returns>
         /// <remarks>The returned PIDLs must be Released when no longer needed by calling PIDLFree.</remarks>
-        public static IntPtr[] DecomposePIDL(IntPtr pidl)
+        public static IntPtr[] Decompose(IntPtr pidl)
         {
             int lim = (int)ItemIDListSize(pidl);
-            var PIDLs = new IntPtr[(PidlCount(pidl))];
+            var PIDLs = new IntPtr[(SegmentCount(pidl))];
             int i = 0;
             var curB = default(int);
             int offSet;
@@ -362,7 +362,7 @@ namespace WindowsApiLib
         /// <remarks>On Win2k or above systems, will use the API function ILCombine, otherwise performs
         /// byte array manipulation to accomplish the same thing.
         /// Caller must free the returned Pidl when no longer needed.</remarks>
-        public static IntPtr ConcatPidls(IntPtr pidl1, IntPtr pidl2)
+        public static IntPtr Concatenate(IntPtr pidl1, IntPtr pidl2)
         {
             return ILCombine(pidl1, pidl2);
             //if (WinSDK.Win2KOrAbove)
@@ -405,7 +405,7 @@ namespace WindowsApiLib
         /// </summary>
         /// <param name="pidl"></param>
         /// <returns></returns>
-        public static IntPtr TrimPidl(IntPtr pidl)
+        public static IntPtr TrimLast(IntPtr pidl)
         {
             IntPtr pidlCopy = ILClone(pidl);
             ILRemoveLastID(pidlCopy);
@@ -428,42 +428,7 @@ namespace WindowsApiLib
         /// <remarks>Caller must Free BOTH the returned, Trimmed PIDL and the 
         /// returned relPidl.
         /// </remarks>
-        //public static IntPtr SplitPidl(IntPtr pidl, ref IntPtr relPidl)
-        //{
-        //    IntPtr pidlCopy = ILClone(pidl);
-        //    ILRemoveLastID(pidlCopy);
-
-        //    int cb = ItemIDListSize(pidl);
-        //    var b = new byte[cb + 1 + 1];
-        //    Marshal.Copy(pidl, b, 0, cb);
-        //    int prev = 0;
-        //    int i = b[0] + b[1] * 256;
-        //    while (i > 0 && i < cb) //bugged, infinite loop
-        //    {
-        //        prev = i;
-        //        i += b[i] + b[i + 1] * 256;
-        //    }
-        //    if (prev + 1 < cb)
-        //    {
-        //        // first set up the relative pidl
-        //        b[cb] = 0;
-        //        b[cb + 1] = 0;
-        //        int cb1 = b[prev] + b[prev + 1] * 256;
-        //        relPidl = Marshal.AllocCoTaskMem(cb1 + 2);
-        //        Marshal.Copy(b, prev, relPidl, cb1 + 2);
-        //        b[prev] = 0;
-        //        b[prev + 1] = 0;
-        //        var rVal = Marshal.AllocCoTaskMem(prev + 2);
-        //        Marshal.Copy(b, 0, rVal, prev + 2);
-        //        return rVal;
-        //    }
-        //    else
-        //    {
-        //        return IntPtr.Zero;
-        //    }
-        //}
-
-        public static PidlSplitResult SplitPidl(IntPtr pidl)
+        public static PidlSplitResult Split(IntPtr pidl)
         {
             if (pidl == IntPtr.Zero)
                 throw new ArgumentNullException(nameof(pidl));
@@ -579,7 +544,7 @@ namespace WindowsApiLib
         /// are arbitrarily defined by the creating Shell Namespace.  However, it
         /// is possible to validate the structure of a PIDL.</summary>
         /// <returns>True if input Byte() contains a valid PIDL structure, False Otherwise</returns>
-        public static bool IsValidPidl(byte[] b)
+        public static bool IsValid(byte[] b)
         {
             bool IsValidPidlRet = default;
             IsValidPidlRet = false;     // assume failure
@@ -628,7 +593,7 @@ namespace WindowsApiLib
         /// Tries parsing name first, then falls back to normal display name.
         /// Returns null if conversion fails.
         /// </summary>
-        public static string? PidlToString(IntPtr pidl)
+        public static string? ToString(IntPtr pidl)
         {
             if (pidl == IntPtr.Zero)
                 throw new ArgumentNullException(nameof(pidl));
@@ -770,7 +735,7 @@ namespace WindowsApiLib
         /// a PIDL. Depends on the internal structure of a PIDL
         /// </summary>
         /// <param name="pidl">The IntPtr(a PIDL) pointing to the block to dump</param>
-        public static void DumpPidl(IntPtr pidl)
+        public static void Dump(IntPtr pidl)
         {
             int cb = ItemIDListSize(pidl);
             Debug.WriteLine("PIDL " + pidl.ToString() + " contains " + cb + " bytes");
@@ -997,7 +962,7 @@ namespace WindowsApiLib
         /// <param name="RelPidl2">Second Relative PIDL to compare.</param>
         /// <returns>True if Equal, False otherwise.</returns>
         /// <remarks></remarks>
-        public bool PidlsEqual(IShellFolder folder, IntPtr RelPidl1, IntPtr RelPidl2)
+        public bool AreEqual(IShellFolder folder, IntPtr RelPidl1, IntPtr RelPidl2)
         {
             bool PidlsEqualRet = default;
             if (folder is null)
