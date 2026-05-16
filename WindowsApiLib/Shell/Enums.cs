@@ -748,6 +748,8 @@ namespace WindowsApiLib.Shell
             SHOWNOACTIVATE = 4
         }
 
+
+        [Flags()]
         public enum TPM
         {
             CENTERALIGN = 0x4,
@@ -762,6 +764,8 @@ namespace WindowsApiLib.Shell
             RIGHTBUTTON = 0x2
         }
 
+
+        [Flags()]
         public enum CMF
         {
             NORMAL = 0x0,
@@ -782,6 +786,8 @@ namespace WindowsApiLib.Shell
             RESERVED = unchecked((int)0xFFFF0000)
         }
 
+
+        [Flags()]
         public enum GCS
         {
             VERBA = 0,
@@ -792,6 +798,8 @@ namespace WindowsApiLib.Shell
             VALIDATEW = 6
         }
 
+
+        [Flags()]
         public enum MFT
         {
             GRAYED = 0x3,
@@ -809,6 +817,8 @@ namespace WindowsApiLib.Shell
             POPUP = 0x10
         }
 
+
+        [Flags()]
         public enum MIIM
         {
             BITMAP = 0x80,
@@ -823,7 +833,7 @@ namespace WindowsApiLib.Shell
         }
 
         [Flags()]
-        public enum SHCNE : int
+        public enum SHCNE : uint
         {
             RENAMEITEM = 0x1,
             CREATE = 0x2,
@@ -846,12 +856,14 @@ namespace WindowsApiLib.Shell
             FREESPACE = 0x40000,
             EXTENDED_EVENT = 0x4000000,
             ASSOCCHANGED = 0x8000000,
+            INTERRUPT = 0x80000000,
             DISKEVENTS = 0x2381F,
             GLOBALEVENTS = 0xC0581E0,
             ALLEVENTS = 0x7FFFFFFF,
-            INTERRUPT = unchecked((int)0x80000000)
         }
 
+
+        [Flags()]
         public enum SHCNF
         {
             IDLIST = 0x0,
@@ -859,7 +871,7 @@ namespace WindowsApiLib.Shell
         }
 
         [Flags()]
-        public enum SHCNRF
+        public enum SHCNRF : uint
         {
             InterruptLevel = 0x1,
             ShellLevel = 0x2,

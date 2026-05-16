@@ -125,8 +125,8 @@ namespace WindowsApiLib.Shell
 
         private int m_SortFlag;       // Used in comparisons
 
-        // For shell events 
-        internal CShellItemUpdater m_updater;
+        //// For shell events 
+        //internal CShellItemUpdater m_updater;
 
         // The following elements are only filled in on demand
         private bool m_XtrInfo;
@@ -159,26 +159,14 @@ namespace WindowsApiLib.Shell
 
         private bool UpdateFolder
         {
-            get
-            {
-                return m_UpdateFolder;
-            }
-            set
-            {
-                m_UpdateFolder = value;
-            }
+            get => m_UpdateFolder;
+            set => m_UpdateFolder = value;
         }
 
         /// <summary>
         /// For internal use only
         /// </summary>
-        internal CShellItemCollection FileList
-        {
-            get
-            {
-                return m_Files;
-            }
-        }
+        internal CShellItemCollection FileList => m_Files;
 
 
         private int SortFlag
@@ -282,10 +270,6 @@ namespace WindowsApiLib.Shell
             if (parent == null)
             {
                 m_Pidl = pidl;
-                // Get some attributes
-                //SHGetDesktopFolder(ref m_Folder);
-
-                SetUpAttributes(CShellItemFactory.Desktop, pidl);
             }
             else
             {
@@ -385,11 +369,11 @@ namespace WindowsApiLib.Shell
                 return null;
             if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
             {
-                return CShellItemFactory.DesktopCSI.Folder;
+                return ShellController.DesktopCSI.Folder;
             }
             else if (b.Length == 0)   // Also indicates the desktop
             {
-                return CShellItemFactory.DesktopCSI.Folder;
+                return ShellController.DesktopCSI.Folder;
             }
             else
             {
@@ -398,20 +382,17 @@ namespace WindowsApiLib.Shell
                     return null;
                 Marshal.Copy(b, 0, ptr, b.Length);
                 // the next statement assigns a IshellFolder object to the function return, or has an error
-                MakeFolderFromBytesRet = ShellHelper.GetFolder(CShellItemFactory.DesktopCSI, ptr);
+                MakeFolderFromBytesRet = ShellHelper.GetFolder(ShellController.DesktopCSI, ptr);
                 Marshal.FreeCoTaskMem(ptr);
             }
 
             return MakeFolderFromBytesRet;
         }
 
-
-
-
         /// <summary>Get the base attributes of the folder/file that this CShellItem represents</summary>
         /// <param name="folder">Parent Folder of this Item</param>
         /// <param name="pidl">Relative Pidl of this Item.</param>
-        private void SetUpAttributes(IShellFolder folder, IntPtr pidl)
+        internal void SetUpAttributes(IShellFolder folder, IntPtr pidl)
         {
             SFGAO attrFlag;
             attrFlag = SFGAO.BROWSABLE;                 // D
@@ -606,7 +587,7 @@ namespace WindowsApiLib.Shell
         /// <remarks> 5/31/2012 - most code in this function replaced by a call to FindCShItem(BaseItem as CShellItem, Abs as IntPtr)</remarks>
         public static CShellItem FindCShItem(IntPtr ptr)
         {
-            return FindCShItem(CShellItemFactory.DesktopCSI, ptr);
+            return FindCShItem(ShellController.DesktopCSI, ptr);
         }
 
         /// <summary>
@@ -1108,7 +1089,7 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        private IntPtr m_lpidl = IntPtr.Zero;
+        private IntPtr m_lastPidl = IntPtr.Zero;
         /// <summary>
         /// Contains the final SHITEMID from the PIDL property
         /// </summary>
@@ -1117,12 +1098,12 @@ namespace WindowsApiLib.Shell
             get
             {
                 if (m_Pidl == IntPtr.Zero) return IntPtr.Zero;
-                if (m_lpidl == IntPtr.Zero)
+                if (m_lastPidl == IntPtr.Zero)
                 {
-                    m_lpidl = CPidl.ILFindLastID(m_Pidl);
+                    m_lastPidl = CPidl.ILFindLastID(m_Pidl);
                 }
                 
-                return m_lpidl;
+                return m_lastPidl;
             }
         }
 
@@ -1762,55 +1743,55 @@ namespace WindowsApiLib.Shell
         }
 
 
-        /// <summary>
-        /// Stops monitoring of changes to the File System.
-        /// </summary>
-        /// <returns>True if Successful, False otherwise</returns>
-        /// <remarks>Global Change Notification is started by default. Call this function to turn it off.
-        ///          Only turn Notification Off under rare, well understood circumstances. If turned off, NO
-        ///          changes, including those made by the application will be noticed.</remarks>
-        public bool StopGlobalNotification()
-        {
-            bool StopGlobalNotificationRet = default;
-            StopGlobalNotificationRet = false;        // assume failure
-            if (!ReferenceEquals(this, CShellItemFactory.DesktopCSI))
-                return StopGlobalNotificationRet;
-            if (m_updater is null)
-            {
-                StopGlobalNotificationRet = true;     // Already stopped
-                return StopGlobalNotificationRet;
-            }
-            m_updater.Dispose();
-            m_updater = null;
-            StopGlobalNotificationRet = true;
-            return StopGlobalNotificationRet;
-        }
+        ///// <summary>
+        ///// Stops monitoring of changes to the File System.
+        ///// </summary>
+        ///// <returns>True if Successful, False otherwise</returns>
+        ///// <remarks>Global Change Notification is started by default. Call this function to turn it off.
+        /////          Only turn Notification Off under rare, well understood circumstances. If turned off, NO
+        /////          changes, including those made by the application will be noticed.</remarks>
+        //public bool StopGlobalNotification()
+        //{
+        //    bool StopGlobalNotificationRet = default;
+        //    StopGlobalNotificationRet = false;        // assume failure
+        //    if (!ReferenceEquals(this, CShellItemFactory.DesktopCSI))
+        //        return StopGlobalNotificationRet;
+        //    if (m_updater is null)
+        //    {
+        //        StopGlobalNotificationRet = true;     // Already stopped
+        //        return StopGlobalNotificationRet;
+        //    }
+        //    m_updater.Dispose();
+        //    m_updater = null;
+        //    StopGlobalNotificationRet = true;
+        //    return StopGlobalNotificationRet;
+        //}
 
-        /// <summary>
-        /// Restarts the Dynamic Update listening for Windows Notify messages
-        /// </summary>
-        /// <returns>True if successful, False otherwise</returns>
-        /// <remarks>Resumesthe detection of changes to the FileSystem after a StopGlobalNotification call.
-        ///          Changes between that call and a restart will be lost.</remarks>
-        public bool StartGlobalNotification()
-        {
-            bool StartGlobalNotificationRet = default;
-            StartGlobalNotificationRet = false;       // assume failure
-            if (!ReferenceEquals(this, CShellItemFactory.DesktopCSI))
-                return StartGlobalNotificationRet;
-            if (m_updater is not null)
-            {
-                StartGlobalNotificationRet = true;        // Already started
-                return StartGlobalNotificationRet;
-            }
-            m_updater = new CShellItemUpdater(this);
-            if (m_updater is not null)
-            {
-                StartGlobalNotificationRet = true;
-            }
+        ///// <summary>
+        ///// Restarts the Dynamic Update listening for Windows Notify messages
+        ///// </summary>
+        ///// <returns>True if successful, False otherwise</returns>
+        ///// <remarks>Resumesthe detection of changes to the FileSystem after a StopGlobalNotification call.
+        /////          Changes between that call and a restart will be lost.</remarks>
+        //public bool StartGlobalNotification()
+        //{
+        //    bool StartGlobalNotificationRet = default;
+        //    StartGlobalNotificationRet = false;       // assume failure
+        //    if (!ReferenceEquals(this, CShellItemFactory.DesktopCSI))
+        //        return StartGlobalNotificationRet;
+        //    if (m_updater is not null)
+        //    {
+        //        StartGlobalNotificationRet = true;        // Already started
+        //        return StartGlobalNotificationRet;
+        //    }
+        //    m_updater = new CShellItemUpdater(this, (uint)SHCNE.DISKEVENTS);
+        //    if (m_updater is not null)
+        //    {
+        //        StartGlobalNotificationRet = true;
+        //    }
 
-            return StartGlobalNotificationRet;
-        }
+        //    return StartGlobalNotificationRet;
+        //}
 
         /// <summary>
         /// Returns the sub-directories of the current instance, if the current instance is a
@@ -2284,7 +2265,7 @@ namespace WindowsApiLib.Shell
                     if (UpdateRefreshRet && IsFolder) //these invokes MUST be within the lock or else you will get delete all items in the folder from memory for unknown reasons
                     {
                         if (Parent is null)
-                            CShItemUpdate?.Invoke(CShellItemFactory.DesktopCSI, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
+                            CShItemUpdate?.Invoke(ShellController.DesktopCSI, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
                         else
                             CShItemUpdate?.Invoke(Parent, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
                     }

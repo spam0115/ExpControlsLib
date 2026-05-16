@@ -13,10 +13,4 @@
     <PackageReference Include="System.Management" Version="10.0.7" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Update="Shell\CShellItemUpdater.cs">
-      <SubType>Component</SubType>
-    </Compile>
-  </ItemGroup>
-
 </Project>

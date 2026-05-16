@@ -4,6 +4,7 @@ using System.Runtime.Versioning;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.SystemImageListManager;
+using System.ComponentModel;
 
 namespace WindowsApiLib.Shell
 {
@@ -16,20 +17,47 @@ namespace WindowsApiLib.Shell
     /// 
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
 
-    internal class CShellItemUpdater : Control, IDisposable
+    public class CShellItemUpdater : NativeWindow, IDisposable
     {
+        private readonly CShellItemHierachyManager _hierachyManager;
         private readonly int m_notifyId;
+        private uint _eventFlags = 0;
 
-        internal CShellItemUpdater(CShellItem itm)
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public bool DoUpdates { get; set; }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="root"></param>
+        /// <param name="SHCNE_flags"></param>
+        public CShellItemUpdater(CShellItemHierachyManager hierachyManager, uint SHCNE_flags)
         {
-            base.CreateHandle();
+            _hierachyManager = hierachyManager;
+            _eventFlags = SHCNE_flags;
+            DoUpdates = false;
+
+            // Create a message-only window (HWND_MESSAGE = -3)
+            CreateParams cp = new CreateParams();
+            cp.Caption = "CShellItemUpdaterMsgWindow";
+            cp.ClassName = "Static"; // Use the standard Static window class - always registered
+            cp.Parent = new IntPtr(-3); // HWND_MESSAGE - message-only window
+            cp.Style = 0;
+            cp.ExStyle = 0;
+            cp.X = 0;
+            cp.Y = 0;
+            cp.Width = 0;
+            cp.Height = 0;
+            CreateHandle(cp);
+
             // Subscribe to windows events        
             var entry = new SHChangeNotifyEntry()
             {
-                pIdl = itm.PIDL,
+                pIdl = _hierachyManager.Root.PIDL,
                 Recursively = true
             };
-            m_notifyId = SHChangeNotifyRegister(Handle, SHCNRF.InterruptLevel | SHCNRF.ShellLevel | SHCNRF.NewDelivery, SHCNE.ALLEVENTS, (WM)((long)WM.USER + 200L), 1, new SHChangeNotifyEntry[] { entry });
+            m_notifyId = SHChangeNotifyRegister(Handle, SHCNRF.InterruptLevel | SHCNRF.ShellLevel | SHCNRF.NewDelivery
+                , (SHCNE)_eventFlags, (WM)((long)WM.USER + 200L), 1, new SHChangeNotifyEntry[] { entry });
         }
 
         public new void Dispose()
@@ -37,9 +65,12 @@ namespace WindowsApiLib.Shell
             if (m_notifyId > 0)
             {
                 SHChangeNotifyDeregister(m_notifyId);
-                base.Dispose();
-                GC.SuppressFinalize(this);
             }
+            if (Handle != IntPtr.Zero)
+            {
+                DestroyHandle();
+            }
+            GC.SuppressFinalize(this);
         }
 
         #if DEBUG
@@ -103,8 +134,10 @@ namespace WindowsApiLib.Shell
             return EventDumpRet;
 
         }
-        #endif
-        
+#endif
+
+
+
         private bool IsItemNotificationEvent(SHCNE lEvent)
         {
             return !(
@@ -129,9 +162,20 @@ namespace WindowsApiLib.Shell
         /// <remarks>The use of SHGetRealIDL appears non-essential and wasteful. It is NOT.
         /// SHGetRealIDL appears specifically designed for use in this situation, returning an 
         /// Absolute real PIDL in CoTaskMemory. The pidls given in dwItem1 and dwItem2 are owned and
-        /// released by the Message Class. </remarks>
+        /// released by the Message Class. 
+        /// The entire shell messaging system in windows is retarded and lame.  You will get nonsense events
+        /// and events that didn't happen.  It will duplicate events.  It will drop events.  It will coalesce 
+        /// events.  It will send events under the wrong category.  It will send events in the wrong order.
+        /// It will send arguments that are incomplete.
+        /// 
+        /// </remarks>
         protected override void WndProc(ref Message m)
         {
+            if (!DoUpdates) { 
+                base.WndProc(ref m); //the handle in the constructor can't be created unless this is called before exiting this wndproc
+                return;
+            }
+
             if (m.Msg != (long)WM.USER + 200L)
             {
                 base.WndProc(ref m);
@@ -160,6 +204,7 @@ namespace WindowsApiLib.Shell
                         // If (Not CShellItem.IsPidlEmpty(shNotify.dwItem1)) OrElse (msgID = SHCNE.UPDATEDIR AndAlso shNotify.dwItem1 <> IntPtr.Zero) Then '5/21/2012
                         if (shNotify.dwItem1 != IntPtr.Zero)
                         {
+                            Debug.WriteLine("msgID: " + msgID.ToString());
                             switch (msgID)
                             {
                                 // Item Changes
@@ -219,14 +264,55 @@ namespace WindowsApiLib.Shell
                                         break;
                                     }
 
-                                case SHCNE.UPDATEITEM:
+                                case SHCNE.UPDATEDIR:
                                     {
-                                        var item = CShellItem.FindCShItem(shNotify.dwItem1);
-                                        if (item is not null)
+                                        if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0)
                                         {
-                                            // Debug.WriteLine("Item: " & item.ToString) 'Change made 9/21/2010
-                                            item.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
-                                            // item.Update(IntPtr.Zero, CShItemUpdateType.IconChange)
+                                            Debug.WriteLine("Empty pidl received from UPDATEDIR event");
+                                        }
+                                        else if (CPidl.SegmentCount(shNotify.dwItem1) == 1) 
+                                        {
+                                            if (_hierachyManager.CurrentFolder != null && CPidl.IsEqual(_hierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
+                                            {
+                                                Debug.WriteLine("updating dir from updatedir event");
+                                                _hierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            var upCSI = CShellItem.FindCShItem(shNotify.dwItem1);
+                                            if (upCSI is not null)
+                                            {
+                                                upCSI.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            }
+                                        }
+
+                                        break;
+                                    }
+                                case SHCNE.UPDATEITEM: //this is supposed to be items but that include directories
+                                    {
+                                        if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0)
+                                        {
+                                            throw new Exception("empty pidl received");
+                                        }
+                                        else if (CPidl.SegmentCount(shNotify.dwItem1) == 1)
+                                        {
+                                            if (_hierachyManager.CurrentFolder != null && CPidl.IsEqual(_hierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
+                                            {
+                                                Debug.WriteLine("updating dir from updateitem event");
+                                                _hierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            var item = CShellItem.FindCShItem(shNotify.dwItem1);
+                                            if (item is not null)
+                                            {
+                                                // Debug.WriteLine("Item: " & item.ToString) 'Change made 9/21/2010
+                                                item.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
+                                                // item.Update(IntPtr.Zero, CShItemUpdateType.IconChange)
+                                                //todo: update thumbnail for item
+                                            }
                                         }
 
                                         break;
@@ -319,17 +405,6 @@ namespace WindowsApiLib.Shell
                                         }
                                         //Marshal.FreeCoTaskMem(child);
                                         Marshal.FreeCoTaskMem(parent);
-                                        break;
-                                    }
-
-                                case SHCNE.UPDATEDIR:
-                                    {
-                                        var upCSI = CShellItem.FindCShItem(shNotify.dwItem1);
-                                        if (upCSI is not null)
-                                        {
-                                            upCSI.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
-                                        }
-
                                         break;
                                     }
                                 case SHCNE.MEDIAINSERTED:

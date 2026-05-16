@@ -1447,7 +1447,7 @@ namespace ExpControlsLib
                         }
                         else
                         {
-                            string strPath = itms[0].Parent == CShellItemFactory.DesktopCSI
+                            string strPath = itms[0].Parent == ShellController.DesktopCSI
                                 ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
                                 : itms[0].Parent.FullPath;
 
@@ -1584,7 +1584,7 @@ namespace ExpControlsLib
                 // The "New" submenu is managed by m_WindowsContextMenu.SetUpNewMenu(),
                 // which adds file creation options for the selected folder.
                 if (_currentFolderCsi.IsFolder &&
-                    ((!_currentFolderCsi.FullPath.StartsWith("::")) || _currentFolderCsi == CShellItemFactory.DesktopCSI))
+                    ((!_currentFolderCsi.FullPath.StartsWith("::")) || _currentFolderCsi == ShellController.DesktopCSI))
                 {
                     int xIndex = GetMenuItemCount(comContextMenu.ToInt32());
                     m_WindowsContextMenu.SetUpNewMenu(_currentFolderCsi, comContextMenu, xIndex);
@@ -1729,7 +1729,7 @@ namespace ExpControlsLib
                     int prgf = 0;
                     IntPtr iunk = IntPtr.Zero;
 
-                    IShellFolder folder = _currentFolderCsi == CShellItemFactory.DesktopCSI
+                    IShellFolder folder = _currentFolderCsi == ShellController.DesktopCSI
                         ? _currentFolderCsi.Folder
                         : _currentFolderCsi.Parent.Folder;
 
@@ -1895,7 +1895,7 @@ namespace ExpControlsLib
                     // Get the target folder for paste operation
                     try
                     {
-                        folder = _currentFolderCsi == CShellItemFactory.DesktopCSI
+                        folder = _currentFolderCsi == ShellController.DesktopCSI
                             ? _currentFolderCsi.Folder
                             : _currentFolderCsi.Parent?.Folder;
 

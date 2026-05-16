@@ -298,7 +298,7 @@ namespace ExpControlsLib
             {
                 if (Root is null || Root.Tag is null)  // 11/05/2013
                 {
-                    return CShellItemFactory.DesktopCSI;                       // 11/05/2013
+                    return ShellController.DesktopCSI;                       // 11/05/2013
                 }
                 else                                                // 11/05/2013
                 {
@@ -698,7 +698,7 @@ namespace ExpControlsLib
             // 2. Skip slow devices (Network, Removable) and virtual locations (other than the root).
             
             bool performAccurateCheck = false;
-            if (ReferenceEquals(item, RootItem) || ReferenceEquals(item, CShellItemFactory.DesktopCSI))
+            if (ReferenceEquals(item, RootItem) || ReferenceEquals(item, ShellController.DesktopCSI))
             {
                 performAccurateCheck = true;
             }
@@ -1339,7 +1339,7 @@ namespace ExpControlsLib
                         else
                         {
                             string strPath;
-                            if (ReferenceEquals(itms[0], CShellItemFactory.DesktopCSI))
+                            if (ReferenceEquals(itms[0], ShellController.DesktopCSI))
                             {
                                 strPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
                             }
@@ -1605,7 +1605,7 @@ namespace ExpControlsLib
         {
             var pathList = new List<CShellItem>();
             if (shellItem is null)
-                shellItem = CShellItemFactory.DesktopCSI; // 6/18/2012
+                shellItem = ShellController.DesktopCSI;
 
             while (shellItem.Parent is not null)
             {
@@ -1824,7 +1824,7 @@ namespace ExpControlsLib
                 int prgf = 0;
                 var iunk = IntPtr.Zero;
                 IShellFolder folder = null;
-                if (ReferenceEquals(CSI, CShellItemFactory.DesktopCSI))
+                if (ReferenceEquals(CSI, ShellController.DesktopCSI))
                 {
                     folder = CSI.Folder;
                 }

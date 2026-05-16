@@ -165,7 +165,7 @@ namespace WindowsApiLib.Shell
             if (parent == null)
                 parent = item;
             IShellFolder folder;
-            if (ReferenceEquals(item, CShellItemFactory.DesktopCSI))
+            if (ReferenceEquals(item, ShellController.DesktopCSI))
             {
                 folder = item.Folder;
             }
@@ -746,11 +746,11 @@ namespace WindowsApiLib.Shell
                 return null;
             if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
             {
-                return CShellItemFactory.DesktopCSI.Folder;
+                return ShellController.DesktopCSI.Folder;
             }
             else if (b.Length == 0)   // Also indicates the desktop
             {
-                return CShellItemFactory.DesktopCSI.Folder;
+                return ShellController.DesktopCSI.Folder;
             }
             else
             {
@@ -759,7 +759,7 @@ namespace WindowsApiLib.Shell
                     return null;
                 Marshal.Copy(b, 0, ptr, b.Length);
                 // the next statement assigns a IshellFolder object to the function return, or has an error
-                MakeFolderFromBytesRet = GetFolder(CShellItemFactory.DesktopCSI, ptr);
+                MakeFolderFromBytesRet = GetFolder(ShellController.DesktopCSI, ptr);
                 Marshal.FreeCoTaskMem(ptr);
             }
 
@@ -775,7 +775,7 @@ namespace WindowsApiLib.Shell
         public static List<CShellItem> AllFolderWalk()
         {
             var rVal = new List<CShellItem>();
-            var desktop = CShellItemFactory.DesktopCSI;
+            var desktop = ShellController.DesktopCSI;
             rVal.Add(desktop);
             WalkHelper(desktop, rVal);
             return rVal;

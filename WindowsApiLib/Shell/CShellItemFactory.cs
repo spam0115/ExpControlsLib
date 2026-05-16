@@ -20,11 +20,12 @@ namespace WindowsApiLib.Shell
         /// Contains the IShellFolder Interface of the instance if it is a Folder.
         /// </summary>
         /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
-        public static IShellFolder Desktop { get; private set; }
+        private static IShellFolder Desktop { get; set; }
 
-        // The DesktopBase is set up via Sub New() (one time only) and
-        // disposed of only when DesktopBase is finally disposed of
-        public static CShellItem? DesktopCSI { get; private set; }
+        /// <summary>
+        /// 
+        /// </summary>
+        private static CShellItem? DesktopCSI { get; set; }
 
         /// <summary>
         /// Contains a String with the Local representation of "My Computer"
@@ -47,6 +48,7 @@ namespace WindowsApiLib.Shell
         /// <remarks></remarks>
         public static string? DesktopDirectoryPath { get; private set; }
 
+
         public static IntPtr EmptyPidl { get; private set; }
         public static IntPtr DesktopPidl { get; private set; }
 
@@ -59,6 +61,19 @@ namespace WindowsApiLib.Shell
 
             EmptyPidl = CreateEmptyPidl();
             DesktopPidl = GetShellNamespacePidl(ShellNamespaceGuids.DesktopFileSystem);
+
+            // Get the SystemName for Remote item testing
+            SystemName = Environment.MachineName;
+
+            (CShellItemFactory.Desktop, CShellItemFactory.DesktopCSI) = GetDesktopRoot();
+
+            RecycleBin = GetCShItem(CSIDL.BITBUCKET);
+
+        }
+
+        public static (IShellFolder, CShellItem) GetDesktopRoot()
+        {
+            if (DesktopCSI != null) return (Desktop, DesktopCSI);
 
             int HR;
             // firstly determine what the local machine calls a "System Folder" and "My Computer"
@@ -78,7 +93,6 @@ namespace WindowsApiLib.Shell
             Desktop = m_Folder;
 
             var csi = new CShellItem(DesktopPidl);
-            DesktopCSI = csi;
             csi.m_Folder = Desktop;
             csi.m_Path = "::{" + DesktopGUID.ToString() + "}";
             csi.m_IsFolder = true;
@@ -91,9 +105,9 @@ namespace WindowsApiLib.Shell
             csi.IsDropTarget = true;
             csi.m_IsReadOnly = false;
             csi.m_IsReadOnlySetup = true;
+            DesktopCSI = csi;
             csi.SetDispType();
-
-            csi.m_updater = new CShellItemUpdater(csi); // Start the Notification Process
+            csi.SetUpAttributes(Desktop, DesktopPidl);
 
             DeskTopDirectory = GetCShItem(CSIDL.DESKTOPDIRECTORY);
 
@@ -110,14 +124,8 @@ namespace WindowsApiLib.Shell
             StrMyDocuments = shfi.szDisplayName;
             Marshal.FreeCoTaskMem(tmpPidl);
 
-            // Get the SystemName for Remote item testing
-            SystemName = Environment.MachineName;
-
-            RecycleBin = GetCShItem(CSIDL.BITBUCKET);
-
+            return (Desktop, DesktopCSI);
         }
-
-
 
         /// <summary>Given a Full Path in a String,
         /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.
