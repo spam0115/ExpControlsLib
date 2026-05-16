@@ -86,12 +86,12 @@ namespace WindowsApiLib.Shell
 
         #region    Instance Private Fields
         // m_Folder and m_Pidl must be released/freed at Dispose time
-        internal IShellFolder m_Folder;    // if item is a folder, contains the Folder interface for this instance
-        private IntPtr m_Pidl;            // The Absolute PIDL for this item (not retained for files)
-        private string m_DisplayName = "";
+        internal IShellFolder m_IShellFolder;    // if item is a folder, contains the Folder interface for this instance
+        internal IntPtr m_Pidl;            // The Absolute PIDL for this item (not retained for files)
+        internal string m_DisplayName = "";
         internal string m_Path;
         internal string m_TypeName;
-        private CShellItem m_Parent;
+        internal CShellItem m_Parent;
         internal int m_IconIndexNormal = -1;        // index into the SystemImageListManager list for Normal icon
         internal int m_IconIndexOpen = -1;          // index into the SystemImageListManager list for Open icon
         private int m_IconIndexNormalOrig = -1;    // index into the System Image list for Normal icon
@@ -260,6 +260,11 @@ namespace WindowsApiLib.Shell
         {
         }
 
+        public CShellItem(string path)
+        {
+            CShellItemFactory.PopulateCsiFromPath(this, path);
+        }
+
         public CShellItem(IntPtr pidl, CShellItem parent = null)
         {
             // Set unfetched value for IconIndex....
@@ -281,14 +286,12 @@ namespace WindowsApiLib.Shell
             // finally, set up my Folder
             if (m_IsFolder && parent != null)
             {
-                m_Folder = ShellHelper.GetFolder(parent, pidl);
+                m_IShellFolder = ShellHelper.GetFolder(parent, pidl);
                 // m_Folder may be returned as Nothing. This is handled in GetContents
             }
         }
 
-        public CShellItem(string path)
-        {
-        }
+
 
         /// <summary>
         /// Summary of Dispose.
@@ -321,10 +324,10 @@ namespace WindowsApiLib.Shell
                 }
                 // Release unmanaged resources. If disposing is false,
                 // only the following code is executed. 
-                if (!(m_Folder == null))
+                if (!(m_IShellFolder == null))
                 {
-                    Marshal.ReleaseComObject(m_Folder);
-                    m_Folder = null;
+                    Marshal.ReleaseComObject(m_IShellFolder);
+                    m_IShellFolder = null;
                 }
                 if (!m_Pidl.Equals(IntPtr.Zero))
                 {
@@ -393,6 +396,7 @@ namespace WindowsApiLib.Shell
             return MakeFolderFromBytesRet;
         }
 
+        //todo: is it really necessary to have the parent to get the attributes?
         /// <summary>Get the base attributes of the folder/file that this CShellItem represents</summary>
         /// <param name="folder">Parent Folder of this Item</param>
         /// <param name="pidl">Relative Pidl of this Item.</param>
@@ -1083,7 +1087,7 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-        /// Contains the PIDL for the current instance as an IntPtr
+        /// Contains the full PIDL for the current instance as an IntPtr
         /// </summary>
         public IntPtr PIDL
         {
@@ -1120,16 +1124,16 @@ namespace WindowsApiLib.Shell
             get
             {
 #if DEBUG
-                var name = ShellHelper.GetShellFolderDisplayName(m_Folder);
+                var name = ShellHelper.GetShellFolderDisplayName(m_IShellFolder);
 #endif
                 if (m_UpdateFolder)
                 {
-                    if (m_Folder is not null)
-                        Marshal.ReleaseComObject(m_Folder);
-                    m_Folder = ShellHelper.GetFolder(Parent, ILFindLastID(m_Pidl));
+                    if (m_IShellFolder is not null)
+                        Marshal.ReleaseComObject(m_IShellFolder);
+                    m_IShellFolder = ShellHelper.GetFolder(Parent, ILFindLastID(m_Pidl));
                     m_UpdateFolder = false;
                 }
-                return m_Folder;
+                return m_IShellFolder;
             }
         }
 
@@ -1282,7 +1286,12 @@ namespace WindowsApiLib.Shell
         {
             get
             {
+                if (m_Parent is null)
+                {
+                    m_Parent = CShellItemFactory.GetCShItem(CPidl.TrimLast(m_Pidl));
+                }
                 return m_Parent;
+
             }
         }
 
@@ -2380,16 +2389,16 @@ namespace WindowsApiLib.Shell
                         IntPtr PidlRel = IntPtr.Zero, newFolderPtr = IntPtr.Zero;
                         var splitPidl = CPidl.Split(changedPidl);
                         var oldParentItem = Parent;    // Save in case "renamed" to a new directory
-                        var newParentItem = FindCShItem(splitPidl.ShortenedPidl); // newParent);
+                        var newParentItem = FindCShItem(splitPidl.ParentPidl); // newParent);
                         if (newParentItem is null)            // renamed to a dir that is not yet in internal tree
                         {
                             Parent.RemoveItem(this);                // no longer in this Folder
                             m_Parent = null;                      // and therefore no longer in tree
                         }
-                        else if (SHGetRealIDL(newParentItem.Folder, splitPidl.LastElementPidl, out PidlRel) == S_OK)            // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
+                        else if (SHGetRealIDL(newParentItem.Folder, splitPidl.ChildPidl, out PidlRel) == S_OK)            // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
                         {
                             Marshal.FreeCoTaskMem(m_Pidl);
-                            m_Pidl = CPidl.Concatenate(splitPidl.ShortenedPidl, PidlRel);  // we use PidlRel because newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID
+                            m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, PidlRel);  // we use PidlRel because newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID
                             if (IsFolder)            // deal with potential "Move" to a new dir
                             {
                                 if (!ReferenceEquals(newParentItem, Parent))
@@ -2402,7 +2411,7 @@ namespace WindowsApiLib.Shell
                                 if (newParentItem.Folder.BindToObject(PidlRel, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref newFolderPtr) == S_OK)
                                 {
                                     Marshal.ReleaseComObject(Folder);
-                                    m_Folder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newFolderPtr, typeof(IShellFolder));
+                                    m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newFolderPtr, typeof(IShellFolder));
                                     Marshal.Release(newFolderPtr);
                                     if (m_Files is not null)
                                     {
@@ -2448,8 +2457,8 @@ namespace WindowsApiLib.Shell
                         Marshal.FreeCoTaskMem(PidlRel);
                         //Marshal.FreeCoTaskMem(newParent);
                         //Marshal.FreeCoTaskMem(newPidlRel);
-                        Marshal.FreeCoTaskMem(splitPidl.LastElementPidl);
-                        Marshal.FreeCoTaskMem(splitPidl.ShortenedPidl);
+                        Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
+                        Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
                         CShItemUpdate?.Invoke(oldParentItem, new ShellItemUpdateEventArgs(this, changeType));
                         break;
                     }

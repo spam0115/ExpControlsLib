@@ -536,6 +536,21 @@ namespace WindowsApiLib.Shell
         [DllImport("shell32.dll", ExactSpelling = true)]
         internal static extern void ILFree(IntPtr pidl);
 
+        /// <summary>
+        /// Creates an absolute PIDL (pointer to an item identifier list) from a file system path.
+        /// </summary>
+        /// <param name="pszPath">
+        /// The null-terminated Unicode path to a file system object (for example, <c>C:\Temp\File.txt</c>).
+        /// </param>
+        /// <returns>
+        /// A pointer to the resulting absolute PIDL if successful; otherwise <see cref="IntPtr.Zero"/>.
+        /// </returns>
+        /// <remarks>
+        /// The returned PIDL must be released with <c>ILFree</c>.
+        /// </remarks>
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        internal static extern IntPtr ILCreateFromPathW([MarshalAs(UnmanagedType.LPWStr)] string pszPath);
+
         #endregion
 
         #region        Notification Declarations

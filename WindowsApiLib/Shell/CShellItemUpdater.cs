@@ -213,12 +213,12 @@ namespace WindowsApiLib.Shell
                                         IntPtr realRel;
                                         var splitPidl = CPidl.Split(shNotify.dwItem1);
 
-                                        var parentItem = CShellItem.FindCShItem(splitPidl.ShortenedPidl);
+                                        var parentItem = CShellItem.FindCShItem(splitPidl.ParentPidl);
                                         if (!(parentItem == null))
                                         {
                                             if (parentItem.FilesInitialized && !parentItem.FileList.Contains(shNotify.dwItem1))
                                             {
-                                                if (SHGetRealIDL(parentItem.Folder, splitPidl.LastElementPidl, out realRel) == S_OK)
+                                                if (SHGetRealIDL(parentItem.Folder, splitPidl.ChildPidl, out realRel) == S_OK)
                                                 {
                                                     var newItem = new CShellItem(realRel, parentItem);
                                                     if (newItem is not null)
@@ -227,8 +227,8 @@ namespace WindowsApiLib.Shell
                                                 Marshal.FreeCoTaskMem(realRel);
                                             }
                                         }
-                                        Marshal.FreeCoTaskMem(splitPidl.ShortenedPidl);
-                                        Marshal.FreeCoTaskMem(splitPidl.LastElementPidl);
+                                        Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
+                                        Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
 
                                         break;
                                     }
@@ -326,13 +326,13 @@ namespace WindowsApiLib.Shell
                                         //IntPtr parent, child = IntPtr.Zero;
                                         //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
                                         var splitPidls = CPidl.Split(shNotify.dwItem1);
-                                        var parentItem = CShellItem.FindCShItem(splitPidls.ShortenedPidl);
+                                        var parentItem = CShellItem.FindCShItem(splitPidls.ParentPidl);
                                         if (parentItem is not null)
                                         {
                                             if (parentItem.FoldersInitialized && !parentItem.DirectoryList.Contains(shNotify.dwItem1))
                                             {
                                                 IntPtr realRel;
-                                                if (SHGetRealIDL(parentItem.Folder, splitPidls.LastElementPidl, out realRel) == S_OK)
+                                                if (SHGetRealIDL(parentItem.Folder, splitPidls.ChildPidl, out realRel) == S_OK)
                                                 {
                                                     var newItem = new CShellItem(realRel, parentItem);
                                                     if (newItem is not null)
@@ -356,8 +356,8 @@ namespace WindowsApiLib.Shell
                                         {
                                             Debug.WriteLine("***MKDIR - Parent Not Found");
                                         }     // 6/30/2012
-                                        Marshal.FreeCoTaskMem(splitPidls.ShortenedPidl);
-                                        Marshal.FreeCoTaskMem(splitPidls.LastElementPidl);
+                                        Marshal.FreeCoTaskMem(splitPidls.ParentPidl);
+                                        Marshal.FreeCoTaskMem(splitPidls.ChildPidl);
                                         break;
                                     }
 

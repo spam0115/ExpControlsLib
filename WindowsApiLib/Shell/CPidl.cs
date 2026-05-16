@@ -401,7 +401,7 @@ namespace WindowsApiLib
         }
 
         /// <summary>
-        /// Trim the last path item from a pidl
+        /// Trim the last path item from a pidl and return the parent.
         /// </summary>
         /// <param name="pidl"></param>
         /// <returns></returns>
@@ -716,6 +716,24 @@ namespace WindowsApiLib
             }
         }
 
+        /// <summary>
+        /// Returns true if the PIDL represents the root of the Shell namespace (Desktop root).
+        /// </summary>
+        /// <param name="pidl">Pointer to an absolute PIDL.</param>
+        /// <returns>
+        /// True if the PIDL is root (empty list terminator as first SHITEMID); otherwise false.
+        /// </returns>
+        public static bool IsShellNamespaceRoot(nint pidl)
+        {
+            // Some code paths treat null like "desktop/root"; adjust if you prefer strict behavior.
+            if (pidl == 0)
+                return true;
+
+            // ITEMIDLIST starts with SHITEMID.cb (USHORT).
+            // Root PIDL is "empty": first cb == 0.
+            short cb = Marshal.ReadInt16(pidl);
+            return cb == 0;
+        }
 
         private static bool IsDefinitelyVirtualNamespace(string parsingName)
         {
@@ -1206,11 +1224,11 @@ namespace WindowsApiLib
     {
         public PidlSplitResult(IntPtr shortenedPidl, IntPtr lastElementPidl)
         {
-            ShortenedPidl = shortenedPidl;
-            LastElementPidl = lastElementPidl;
+            ParentPidl = shortenedPidl;
+            ChildPidl = lastElementPidl;
         }
 
-        public IntPtr ShortenedPidl { get; }
-        public IntPtr LastElementPidl { get; }
+        public IntPtr ParentPidl { get; }
+        public IntPtr ChildPidl { get; }
     }
 }

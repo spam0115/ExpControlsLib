@@ -20,7 +20,7 @@ namespace WindowsApiLib.Shell
         /// Contains the IShellFolder Interface of the instance if it is a Folder.
         /// </summary>
         /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
-        private static IShellFolder Desktop { get; set; }
+        private static IShellFolder DesktopShellFolder { get; set; }
 
         /// <summary>
         /// 
@@ -65,57 +65,63 @@ namespace WindowsApiLib.Shell
             // Get the SystemName for Remote item testing
             SystemName = Environment.MachineName;
 
-            (CShellItemFactory.Desktop, CShellItemFactory.DesktopCSI) = GetDesktopRoot();
+            (CShellItemFactory.DesktopShellFolder, CShellItemFactory.DesktopCSI) = GetDesktopRoot();
 
             RecycleBin = GetCShItem(CSIDL.BITBUCKET);
+
+
+            // firstly determine what the local machine calls a "System Folder" and "My Computer"
+            StrSystemFolder = DesktopCSI.m_TypeName;
+            StrMyComputer = DesktopCSI.m_DisplayName;
+            DeskTopDirectory = GetCShItem(CSIDL.DESKTOPDIRECTORY);
 
         }
 
         public static (IShellFolder, CShellItem) GetDesktopRoot()
         {
-            if (DesktopCSI != null) return (Desktop, DesktopCSI);
+            if (DesktopCSI != null) return (DesktopShellFolder, DesktopCSI);
 
+            var csi = new CShellItem(DesktopPidl);
+
+            return PopulateDesktopCShellItem(csi);
+        }
+
+        private static (IShellFolder, CShellItem) PopulateDesktopCShellItem(CShellItem csi)
+        {
             int HR;
-            // firstly determine what the local machine calls a "System Folder" and "My Computer"
             IntPtr tmpPidl = IntPtr.Zero;
             HR = SHGetSpecialFolderLocation(0, (int)CSIDL.DRIVES, ref tmpPidl);
             var shfi = new SHFILEINFO();
             var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
             int dwAttr = 0;
             SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
-            StrSystemFolder = shfi.szTypeName;
-            StrMyComputer = shfi.szDisplayName;
             Marshal.FreeCoTaskMem(tmpPidl);
 
             // With That done, now set up Desktop CShellItem
             IShellFolder m_Folder = null;
             HR = SHGetDesktopFolder(ref m_Folder);
-            Desktop = m_Folder;
 
-            var csi = new CShellItem(DesktopPidl);
-            csi.m_Folder = Desktop;
+            csi.m_IShellFolder = DesktopShellFolder;
+            csi.m_DisplayName = shfi.szDisplayName;
             csi.m_Path = "::{" + DesktopGUID.ToString() + "}";
             csi.m_IsFolder = true;
             csi.m_HasSubFolders = true;
             csi.m_IsBrowsable = false;
-            csi.m_TypeName = StrSystemFolder;   // not returned correctly by SHGetFileInfo
+            csi.m_TypeName = shfi.szTypeName;   // not returned correctly by SHGetFileInfo
             csi.m_IconIndexNormal = shfi.iIcon;
             csi.m_IconIndexOpen = shfi.iIcon;
             csi.m_HasDispType = true;
             csi.IsDropTarget = true;
             csi.m_IsReadOnly = false;
             csi.m_IsReadOnlySetup = true;
-            DesktopCSI = csi;
             csi.SetDispType();
-            csi.SetUpAttributes(Desktop, DesktopPidl);
-
-            DeskTopDirectory = GetCShItem(CSIDL.DESKTOPDIRECTORY);
+            csi.SetUpAttributes(m_Folder, DesktopPidl);
 
             // also get local name for "My Documents"
             var pchEaten = default(int);
             tmpPidl = IntPtr.Zero;
             int argpdwAttributes = default;
-            HR = Desktop.ParseDisplayName(default, default, "::{" + ShellNamespaceGuids.Documents.ToString() + "}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
+            HR = DesktopShellFolder.ParseDisplayName(default, default, "::{" + ShellNamespaceGuids.Documents.ToString() + "}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
             shfi = new SHFILEINFO();
             dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
             dwAttr = 0;
@@ -124,7 +130,7 @@ namespace WindowsApiLib.Shell
             StrMyDocuments = shfi.szDisplayName;
             Marshal.FreeCoTaskMem(tmpPidl);
 
-            return (Desktop, DesktopCSI);
+            return (m_Folder, csi);
         }
 
         /// <summary>Given a Full Path in a String,
@@ -138,24 +144,67 @@ namespace WindowsApiLib.Shell
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
         public static CShellItem GetCShItem(string path)
         {
-            CShellItem GetCShItemRet = default;
-            GetCShItemRet = null;    // assume failure
-            int HR;
-            IntPtr tmpPidl = IntPtr.Zero;
-            int argpchEaten = 0;
-            int argpdwAttributes = 0;
-            HR = DesktopCSI.Folder.ParseDisplayName(0, IntPtr.Zero, path, ref argpchEaten, ref tmpPidl, ref argpdwAttributes);
-            if (HR == 0)
-            {
-                GetCShItemRet = GetCShItem(tmpPidl);
-            }
-            if (!tmpPidl.Equals(IntPtr.Zero))
-            {
-                Marshal.FreeCoTaskMem(tmpPidl);
-            }
-
-            return GetCShItemRet;
+            var csi = new CShellItem();
+            return PopulateCsiFromPath(csi, path);
         }
+
+        public static CShellItem PopulateCsiFromPath(CShellItem csi, string path)
+        {
+            IntPtr pidl = ILCreateFromPathW(path);
+
+            PopulateCsi(csi, pidl);
+
+            return csi;
+        }
+
+        internal static void PopulateCsi(CShellItem csi, IntPtr pidl)
+        {
+            // Set unfetched value for IconIndex....
+            csi.m_IconIndexNormal = -1;
+            csi.m_IconIndexOpen = -1;
+
+            if (CPidl.IsShellNamespaceRoot(pidl)) 
+            {
+                (_, _) = PopulateDesktopCShellItem(csi);
+                return;
+            }
+            else
+            {
+                csi.m_Pidl = pidl;
+                var splitted = CPidl.Split(pidl);
+
+                //todo: change this to lazy load
+                csi.m_Parent = CShellItemFactory.GetCShItem(splitted.ParentPidl);
+                // Get some attributes
+                csi.SetUpAttributes(csi.m_Parent.Folder, splitted.ChildPidl);
+
+                if (csi.m_IsFolder)
+                {
+                    csi.m_IShellFolder = ShellHelper.GetFolder(csi.m_Parent, pidl); // get IShellFolder
+                }
+            }
+        }
+
+        //public static CShellItem GetCShItem(string path)
+        //{
+        //    CShellItem csi = default;
+        //    csi = null;    // assume failure
+        //    int HR;
+        //    IntPtr tmpPidl = IntPtr.Zero;
+        //    int argpchEaten = 0;
+        //    int argpdwAttributes = 0;
+        //    HR = DesktopCSI.Folder.ParseDisplayName(0, IntPtr.Zero, path, ref argpchEaten, ref tmpPidl, ref argpdwAttributes);
+        //    if (HR == 0)
+        //    {
+        //        csi = GetCShItem(tmpPidl);
+        //    }
+        //    if (!tmpPidl.Equals(IntPtr.Zero))
+        //    {
+        //        Marshal.FreeCoTaskMem(tmpPidl);
+        //    }
+
+        //    return csi;
+        //}
 
         /// <summary>Given a CSIDL,
         /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.

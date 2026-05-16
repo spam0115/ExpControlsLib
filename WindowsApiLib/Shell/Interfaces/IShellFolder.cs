@@ -11,6 +11,39 @@ namespace WindowsApiLib.Shell
     [Guid("000214E6-0000-0000-C000-000000000046")]
     public interface IShellFolder
     {
+        /// <summary>
+        /// Converts a display name (such as a file system path or Shell namespace path)
+        /// into an item identifier list (PIDL) relative to this folder.
+        /// </summary>
+        /// <param name="hwnd">
+        /// Optional owner window handle used for any UI the Shell might display during parsing.
+        /// Pass <see cref="IntPtr.Zero"/> if no UI is needed.
+        /// </param>
+        /// <param name="pbc">
+        /// Optional bind context that provides parameters used during parsing.
+        /// Can be <see langword="null"/>.
+        /// </param>
+        /// <param name="pszDisplayName">
+        /// The null-terminated display name to parse.
+        /// </param>
+        /// <param name="pchEaten">
+        /// On return, receives the number of characters consumed from <paramref name="pszDisplayName"/>.
+        /// </param>
+        /// <param name="ppidl">
+        /// On success, receives a pointer to the resulting relative PIDL.
+        /// The caller is responsible for freeing this PIDL with the Shell allocator (for example, <c>CoTaskMemFree</c>).
+        /// </param>
+        /// <param name="pdwAttributes">
+        /// Input/output SFGAO flags. On input, specifies requested attributes; on output, receives the attributes for the parsed item.
+        /// Can be <see langword="null"/> if attributes are not required.
+        /// </param>
+        /// <returns>
+        /// Returns an HRESULT:
+        /// <list type="bullet">
+        /// <item><description><c>S_OK</c> if parsing succeeds.</description></item>
+        /// <item><description>An error HRESULT (for example <c>E_INVALIDARG</c> or Shell-specific failure codes) if parsing fails.</description></item>
+        /// </list>
+        /// </returns>
         [PreserveSig()]
         int ParseDisplayName(int hwndOwner, IntPtr pbcReserved, [MarshalAs(UnmanagedType.LPWStr)] string lpszDisplayName, ref int pchEaten, ref IntPtr ppidl, ref int pdwAttributes);
 
