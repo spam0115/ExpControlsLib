@@ -256,11 +256,11 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Private Constructor. Creates CShellItem of the Desktop
         /// </summary>
-        private CShellItem()           // only used when desktopfolder has not been intialized
+        public CShellItem()
         {
         }
 
-        internal CShellItem(IntPtr pidl, CShellItem parent = null)
+        public CShellItem(IntPtr pidl, CShellItem parent = null)
         {
             // Set unfetched value for IconIndex....
             m_IconIndexNormal = -1;
@@ -284,6 +284,10 @@ namespace WindowsApiLib.Shell
                 m_Folder = ShellHelper.GetFolder(parent, pidl);
                 // m_Folder may be returned as Nothing. This is handled in GetContents
             }
+        }
+
+        public CShellItem(string path)
+        {
         }
 
         /// <summary>
@@ -1429,6 +1433,8 @@ namespace WindowsApiLib.Shell
         public bool CanRename => m_CanRename;
 
         private string m_size = "[]";
+        private string currentPath;
+
         /// <summary>
         /// A Formatted String representation of the Item's FileSize
         /// </summary>

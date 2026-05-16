@@ -293,7 +293,7 @@ namespace WindowsApiLib.Shell
                                     {
                                         if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0)
                                         {
-                                            throw new Exception("empty pidl received");
+                                            Debug.WriteLine("Empty pidl received from UPDATEITEM event");
                                         }
                                         else if (CPidl.SegmentCount(shNotify.dwItem1) == 1)
                                         {
