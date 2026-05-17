@@ -246,7 +246,7 @@ namespace ExpControlsLib
         {
             if (pidl == IntPtr.Zero) return null;
 
-            IntPtr factoryPtr = IntPtr.Zero;
+            IntPtr shellItemImageFactory = IntPtr.Zero;
 
             try
             {
@@ -255,16 +255,16 @@ namespace ExpControlsLib
                 Console.WriteLine("\tRequesting thumbnail from OS: " + name);
 #endif
                 Guid iid = ShellAPI.IID_IShellItemImageFactory;
-                int hr = ShellAPI.SHCreateItemFromIDList(pidl, ref iid, out factoryPtr);
-                if (hr != 0 || factoryPtr == null) return null;
+                int hr = ShellAPI.SHCreateItemFromIDList(pidl, ref iid, out shellItemImageFactory);
+                if (hr != 0 || shellItemImageFactory == IntPtr.Zero) return null;
 
-                var factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(factoryPtr);
+                var factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(shellItemImageFactory);
 
                 return GetThumbnailFromOsBase(factory, size);
             }
             finally
             {
-                if (factoryPtr != IntPtr.Zero) Marshal.Release(factoryPtr);
+                if (shellItemImageFactory != IntPtr.Zero) Marshal.ReleaseComObject(shellItemImageFactory);
             }
         }
 

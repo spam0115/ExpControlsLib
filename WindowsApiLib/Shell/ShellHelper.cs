@@ -470,7 +470,7 @@ namespace WindowsApiLib.Shell
                 bool isOK = true;
                 try   // if GetCShitem returns Nothing(it's failure marker) then catch it
                 {
-                    MakeDragListFromPtrRet.Add(CShellItemFactory.GetCShItem(bArrays[0], bArrays[i]));
+                    MakeDragListFromPtrRet.Add(CShellItemFactory.CreateCShItem(bArrays[0], bArrays[i]));
                 }
                 catch (Exception ex)
                 {
@@ -687,7 +687,7 @@ namespace WindowsApiLib.Shell
         /// <param name="relPidl">The relative Pidl of the folder for which the interface is desired.</param>
         /// <returns>The desired interface or Nothing if error.</returns>
         /// <remarks></remarks>
-        public static IShellFolder GetFolder(CShellItem parent, IntPtr relPidl)
+        public static IShellFolder GetIShellFolder(CShellItem parent, IntPtr relPidl)
         {
             IntPtr ptr = IntPtr.Zero;
             IShellFolder rVal = null;
@@ -759,7 +759,7 @@ namespace WindowsApiLib.Shell
                     return null;
                 Marshal.Copy(b, 0, ptr, b.Length);
                 // the next statement assigns a IshellFolder object to the function return, or has an error
-                MakeFolderFromBytesRet = GetFolder(ShellController.DesktopCSI, ptr);
+                MakeFolderFromBytesRet = GetIShellFolder(ShellController.DesktopCSI, ptr);
                 Marshal.FreeCoTaskMem(ptr);
             }
 

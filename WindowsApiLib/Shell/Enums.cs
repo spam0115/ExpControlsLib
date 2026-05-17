@@ -335,7 +335,7 @@ namespace WindowsApiLib.Shell
 
         #region    SFGAO
         [Flags()]
-        public enum SFGAO
+        public enum SFGAO : uint
         {
             CANCOPY = 0x1,                    // Objects can be copied    
             CANMOVE = 0x2,                    // Objects can be moved     
@@ -351,14 +351,14 @@ namespace WindowsApiLib.Shell
             GHOSTED = 0x8000,                 // ghosted icon
             LINK = 0x10000,                   // Shortcut (link)
             SHARE = 0x20000,                  // shared
-            RDONLY = 0x40000,               // read-only
+            READONLY = 0x40000,               // read-only
             HIDDEN = 0x80000,                 // hidden object
             DISPLAYATTRMASK = 0xFC000,        // This flag is a mask for the display attributes.
             FILESYSANCESTOR = 0x10000000,     // may contain children with FILESYSTEM
             FOLDER = 0x20000000,              // support BindToObject(IID_IShellFolder)
             FILESYSTEM = 0x40000000,          // is a win32 file system object (file/folder/root)
-            HASSUBFOLDER = unchecked((int)0x80000000),        // may contain children with FOLDER
-            CONTENTSMASK = unchecked((int)0x80000000),        // This flag is a mask for the contents attributes.
+            HASSUBFOLDER = 0x80000000,        // may contain children with FOLDER
+            CONTENTSMASK = 0x80000000,        // This flag is a mask for the contents attributes.
             VALIDATE = 0x1000000,             // invalidate cached information
             REMOVABLE = 0x2000000,            // is this removeable media?
             COMPRESSED = 0x4000000,           // Object is compressed (use alt color)
@@ -369,7 +369,8 @@ namespace WindowsApiLib.Shell
             HASSTORAGE = 0x400000,            // defunct
             STREAM = 0x400000,                // supports BindToObject(IID_IStream)
             STORAGEANCESTOR = 0x800000,       // may contain children with STORAGE or STREAM
-            STORAGECAPMASK = 0x70C50008      // for determining storage capabilities ie for open/save semantics
+            STORAGECAPMASK = 0x70C50008,      // for determining storage capabilities ie for open/save semantics
+            PKEYSFGAOMASK = 0x81044000        // Mask of attributes obtainable via PKEYs
         }
 
         [Flags]

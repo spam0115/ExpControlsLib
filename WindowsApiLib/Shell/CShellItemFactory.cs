@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.DirectoryServices;
 using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -13,20 +14,25 @@ namespace WindowsApiLib.Shell
 {
     public class CShellItemFactory
     {
-        public static CShellItemFactory Instance { get; } = new CShellItemFactory();
-
-
-        /// <summary>
+                /// <summary>
         /// Contains the IShellFolder Interface of the instance if it is a Folder.
         /// </summary>
         /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
         private static IShellFolder DesktopShellFolder { get; set; }
 
         /// <summary>
+        /// Keep list of Drives and their DriveType for IsRemote testing
+        /// </summary>
+        private static readonly Dictionary<string, bool> DriveDict = new Dictionary<string, bool>();
+
+
+        /// <summary>
         /// 
         /// </summary>
         private static CShellItem? DesktopCSI { get; set; }
 
+        public static CShellItemFactory Instance { get; } = new CShellItemFactory();
+        
         /// <summary>
         /// Contains a String with the Local representation of "My Computer"
         /// </summary>
@@ -67,13 +73,13 @@ namespace WindowsApiLib.Shell
 
             (CShellItemFactory.DesktopShellFolder, CShellItemFactory.DesktopCSI) = GetDesktopRoot();
 
-            RecycleBin = GetCShItem(CSIDL.BITBUCKET);
+            RecycleBin = CreateCShItem(CSIDL.BITBUCKET);
 
 
             // firstly determine what the local machine calls a "System Folder" and "My Computer"
             StrSystemFolder = DesktopCSI.m_TypeName;
             StrMyComputer = DesktopCSI.m_DisplayName;
-            DeskTopDirectory = GetCShItem(CSIDL.DESKTOPDIRECTORY);
+            DeskTopDirectory = CreateCShItem(CSIDL.DESKTOPDIRECTORY);
 
         }
 
@@ -81,7 +87,7 @@ namespace WindowsApiLib.Shell
         {
             if (DesktopCSI != null) return (DesktopShellFolder, DesktopCSI);
 
-            var csi = new CShellItem(DesktopPidl);
+            var csi = new CShellItem();
 
             return PopulateDesktopCShellItem(csi);
         }
@@ -90,23 +96,22 @@ namespace WindowsApiLib.Shell
         {
             int HR;
             IntPtr tmpPidl = IntPtr.Zero;
-            HR = SHGetSpecialFolderLocation(0, (int)CSIDL.DRIVES, ref tmpPidl);
+            HR = SHGetSpecialFolderLocation(0, (int)CSIDL.DESKTOP, ref tmpPidl);
             var shfi = new SHFILEINFO();
             var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
             int dwAttr = 0;
             SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
-            Marshal.FreeCoTaskMem(tmpPidl);
 
-            // With That done, now set up Desktop CShellItem
-            IShellFolder m_Folder = null;
-            HR = SHGetDesktopFolder(ref m_Folder);
 
-            csi.m_IShellFolder = DesktopShellFolder;
+            IShellFolder iShellFolder = null;
+            HR = SHGetDesktopFolder(ref iShellFolder);
+            csi.m_Pidl = tmpPidl; //do we even need to populate this here since SetUpAttributes will do it?
+            csi.m_IShellFolder = iShellFolder;
             csi.m_DisplayName = shfi.szDisplayName;
             csi.m_Path = "::{" + DesktopGUID.ToString() + "}";
             csi.m_IsFolder = true;
             csi.m_HasSubFolders = true;
-            csi.m_IsBrowsable = false;
+            csi.m_IsBrowsable = true;
             csi.m_TypeName = shfi.szTypeName;   // not returned correctly by SHGetFileInfo
             csi.m_IconIndexNormal = shfi.iIcon;
             csi.m_IconIndexOpen = shfi.iIcon;
@@ -115,22 +120,16 @@ namespace WindowsApiLib.Shell
             csi.m_IsReadOnly = false;
             csi.m_IsReadOnlySetup = true;
             csi.SetDispType();
-            csi.SetUpAttributes(m_Folder, DesktopPidl);
+            SetUpAttributes(csi, DesktopPidl);
 
             // also get local name for "My Documents"
             var pchEaten = default(int);
-            tmpPidl = IntPtr.Zero;
             int argpdwAttributes = default;
-            HR = DesktopShellFolder.ParseDisplayName(default, default, "::{" + ShellNamespaceGuids.Documents.ToString() + "}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
-            shfi = new SHFILEINFO();
-            dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
-            dwAttr = 0;
+            HR = iShellFolder.ParseDisplayName(default, default, "::{" + ShellNamespaceGuids.Documents.ToString() + "}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
 
-            SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
             StrMyDocuments = shfi.szDisplayName;
-            Marshal.FreeCoTaskMem(tmpPidl);
 
-            return (m_Folder, csi);
+            return (iShellFolder, csi);
         }
 
         /// <summary>Given a Full Path in a String,
@@ -142,69 +141,12 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <param name="path">The Full Path of the desired CShellItem</param>
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem GetCShItem(string path)
+        public static CShellItem CreateCShItem(string path)
         {
             var csi = new CShellItem();
             return PopulateCsiFromPath(csi, path);
         }
 
-        public static CShellItem PopulateCsiFromPath(CShellItem csi, string path)
-        {
-            IntPtr pidl = ILCreateFromPathW(path);
-
-            PopulateCsi(csi, pidl);
-
-            return csi;
-        }
-
-        internal static void PopulateCsi(CShellItem csi, IntPtr pidl)
-        {
-            // Set unfetched value for IconIndex....
-            csi.m_IconIndexNormal = -1;
-            csi.m_IconIndexOpen = -1;
-
-            if (CPidl.IsShellNamespaceRoot(pidl)) 
-            {
-                (_, _) = PopulateDesktopCShellItem(csi);
-                return;
-            }
-            else
-            {
-                csi.m_Pidl = pidl;
-                var splitted = CPidl.Split(pidl);
-
-                //todo: change this to lazy load
-                csi.m_Parent = CShellItemFactory.GetCShItem(splitted.ParentPidl);
-                // Get some attributes
-                csi.SetUpAttributes(csi.m_Parent.Folder, splitted.ChildPidl);
-
-                if (csi.m_IsFolder)
-                {
-                    csi.m_IShellFolder = ShellHelper.GetFolder(csi.m_Parent, pidl); // get IShellFolder
-                }
-            }
-        }
-
-        //public static CShellItem GetCShItem(string path)
-        //{
-        //    CShellItem csi = default;
-        //    csi = null;    // assume failure
-        //    int HR;
-        //    IntPtr tmpPidl = IntPtr.Zero;
-        //    int argpchEaten = 0;
-        //    int argpdwAttributes = 0;
-        //    HR = DesktopCSI.Folder.ParseDisplayName(0, IntPtr.Zero, path, ref argpchEaten, ref tmpPidl, ref argpdwAttributes);
-        //    if (HR == 0)
-        //    {
-        //        csi = GetCShItem(tmpPidl);
-        //    }
-        //    if (!tmpPidl.Equals(IntPtr.Zero))
-        //    {
-        //        Marshal.FreeCoTaskMem(tmpPidl);
-        //    }
-
-        //    return csi;
-        //}
 
         /// <summary>Given a CSIDL,
         /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.
@@ -215,7 +157,7 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <param name="ID"></param>
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem GetCShItem(CSIDL ID)
+        public static CShellItem CreateCShItem(CSIDL ID)
         {
             CShellItem GetCShItemRet = default;
             GetCShItemRet = null;      // avoid VB2005 Warning
@@ -249,9 +191,10 @@ namespace WindowsApiLib.Shell
             {
                 HR = SHGetSpecialFolderLocation(0, (int)ID, ref tmpPidl);
             }
+
             if (HR == NOERROR)
             {
-                GetCShItemRet = GetCShItem(tmpPidl);
+                GetCShItemRet = GetOrCreateCShItem(tmpPidl);
             }
             if (!tmpPidl.Equals(IntPtr.Zero))
             {
@@ -271,7 +214,7 @@ namespace WindowsApiLib.Shell
         /// <param name="FoldBytes"></param>
         /// <param name="ItemBytes"></param>
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem GetCShItem(byte[] FoldBytes, byte[] ItemBytes)
+        public static CShellItem CreateCShItem(byte[] FoldBytes, byte[] ItemBytes)
         {
             CShellItem GetCShItemRet = default;
             GetCShItemRet = null;    // assume failure
@@ -284,7 +227,7 @@ namespace WindowsApiLib.Shell
                 return null;
             Marshal.Copy(b, 0, thisPidl, b.Length);
             // Dim Parent As CShellItem = Nothing
-            GetCShItemRet = GetCShItem(thisPidl);
+            GetCShItemRet = GetOrCreateCShItem(thisPidl);
             if (!thisPidl.Equals(IntPtr.Zero))
                 Marshal.FreeCoTaskMem(thisPidl);
             if (GetCShItemRet.PIDL.Equals(IntPtr.Zero))
@@ -292,6 +235,57 @@ namespace WindowsApiLib.Shell
             return GetCShItemRet;
         }
 
+
+        public static CShellItem CreateCShItem(IntPtr pidl, CShellItem parent = null)
+        {
+            var csi = new CShellItem();
+
+            IntPtr fullPidl;
+
+            if (CPidl.SegmentCount(pidl) <= 1)
+            { //relative pidl or desktop root
+                if (CPidl.IsShellNamespaceRoot(pidl))
+                {
+                    PopulateCsi(csi, pidl);
+                    csi.m_Parent = null;
+                    return csi;
+                }
+                else
+                {
+                    if (parent is null) throw new ArgumentException("parent can't be null when pidl is not absolute.");
+                    fullPidl = CPidl.Concatenate(parent.PIDL, pidl);
+                }
+            }
+            else
+            {
+                if (parent is null) throw new ArgumentException("parent can't be null when pidl is not absolute.");
+                fullPidl = pidl;
+            }
+
+            PopulateCsi(csi, fullPidl, parent);
+
+            return csi;
+
+            //if (parent != null)
+            //{
+            //    csi.m_Parent = parent;
+            //    return csi;
+            //}
+
+            //var splitted = CPidl.Split(fullPidl);
+
+            ////todo: change this to lazy load
+            ////csi.m_Parent = CShellItemFactory.GetOrCreateCShItem(splitted.ParentPidl);
+            //CShellItemFactory.BrowseTo(splitted.ParentPidl, out parent);
+            //if (parent == null)
+            //{
+            //    parent = CreateCShItem(splitted.ParentPidl);
+            //}
+
+            //csi.m_Parent = parent;
+            //return csi;
+
+        }
 
         /// <summary>Given an IntPtr representation of a PIDL,
         /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.
@@ -302,29 +296,83 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <param name="pidl">Absolute (Full) Pidl of item to be Found or Created</param>
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem GetCShItem(IntPtr pidl)
+        public static CShellItem GetOrCreateCShItem(IntPtr pidl)
         {
-            CShellItem GetCShItemRet = default;
+            CShellItem csi = default;
             CShellItem Parent = null;
-            GetCShItemRet = BrowseTo(pidl, out Parent);
-            if (GetCShItemRet == null)
+            csi = BrowseTo(pidl, out Parent);
+            if (csi == null)
             {
                 if (!(Parent == null))
                 {
                     try
                     {
-                        GetCShItemRet = new CShellItem(ILFindLastID(pidl), Parent);
+                        csi = CreateCShItem(pidl, Parent);
                     }
                     catch
                     {
-                        GetCShItemRet = null;
+                        csi = null;
                     }
                 }
             }
 
-            return GetCShItemRet;
+            return csi;
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="csi">the CShellItem to populate</param>
+        /// <param name="pidl">A full pidl</param>
+        internal static void PopulateCsi(CShellItem csi, IntPtr pidl, CShellItem parentCsi = null)
+        {
+            // Set unfetched value for IconIndex....
+            csi.m_IconIndexNormal = -1;
+            csi.m_IconIndexOpen = -1;
+
+            if (CPidl.IsShellNamespaceRoot(pidl))
+            {
+                (_, _) = PopulateDesktopCShellItem(csi);
+                return;
+            }
+            else
+            {
+                csi.m_Pidl = pidl;
+                var splitted = CPidl.Split(pidl);
+
+                //todo: change this so it is only loaded if someone adds the cshellitem to the hierachy manager
+                if (parentCsi == null)
+                {
+                    CShellItemFactory.BrowseTo(splitted.ParentPidl, out parentCsi);
+                    if (parentCsi != null)
+                    {
+                        csi.m_Parent = parentCsi;
+                        return;
+                    }
+
+                    parentCsi = CreateCShItem(splitted.ParentPidl);
+                }
+                
+                csi.m_Parent = parentCsi;
+
+                // Get some attributes
+                SetUpAttributes(csi, pidl);
+
+                if (csi.m_IsFolder)
+                {
+                    csi.m_IShellFolder = ShellHelper.GetIShellFolder(csi.m_Parent, pidl); // get IShellFolder
+                }
+            }
+        }
+
+        public static CShellItem PopulateCsiFromPath(CShellItem csi, string path)
+        {
+            IntPtr pidl = ILCreateFromPathW(path);
+
+            PopulateCsi(csi, pidl);
+
+            return csi;
+        }
 
         /// <summary>
         /// GetFolder returns the IShellFolder interface of the Folder designated by the input Parent and 
@@ -400,7 +448,7 @@ namespace WindowsApiLib.Shell
                 {
                     try                                         // ASUS Fix 'mod 06/27/09 First fix added
                     {
-                        itm = new CShellItem(ptr, csi);
+                        itm = CreateCShItem(ptr, csi);
                         rVal.Add(itm);
                     }
                     // Catch ex As InvalidCastException             'ASUS Fix - superceeded 11/13/2013
@@ -444,6 +492,7 @@ namespace WindowsApiLib.Shell
 
         #region Private methods
 
+        //todo: move this browsing functionality to the hierarchy manager
         /// <summary>
         /// This is the "engine" that maintains the hierarchical relationship between items.
         /// - Method: internal static CShellItem BrowseTo(IntPtr absPidl, out CShellItem Parent)
@@ -473,13 +522,13 @@ namespace WindowsApiLib.Shell
         internal static CShellItem BrowseTo(IntPtr absPidl, out CShellItem Parent)
         {
             CShellItem csi;
-            var baseItem = DesktopCSI;
             CShellItem browseToRet = default;
-            browseToRet = null;     // avoid VB2005 Warning
+            browseToRet = null;
             Parent = default;
 
+            var baseItem = DesktopCSI;
+            
             bool FoundIt = false;      // True if we found item or an ancestor
-                                       // Dim FirstWithThisBase As Boolean = True     '6/30/2012 Flag to prevent infinite loop
             while (!FoundIt)
             {
                 foreach (var currentCSI in baseItem.Directories)
@@ -556,7 +605,7 @@ namespace WindowsApiLib.Shell
             }
 
             return browseToRet;
-        }
+        } 
 
 
         /// <summary>
@@ -709,5 +758,230 @@ namespace WindowsApiLib.Shell
 
 
         #endregion
+
+        //todo: is it really necessary to have the parent to get the attributes?
+        /// <summary>Get the base attributes of the folder/file that this CShellItem represents</summary>
+        /// <param name="folder">Parent Folder of this Item</param>
+        /// <param name="pidl">Relative Pidl of this Item.</param>
+        private static void SetUpAttributes(CShellItem csi, IShellFolder parentIFolder, IntPtr pidl)
+        {
+            SFGAO attrFlag;
+            attrFlag = SFGAO.BROWSABLE | SFGAO.FILESYSTEM | SFGAO.FOLDER | SFGAO.LINK | SFGAO.SHARE
+             | SFGAO.HIDDEN | SFGAO.REMOVABLE | SFGAO.CANCOPY | SFGAO.CANDELETE | SFGAO.CANLINK 
+             | SFGAO.CANMOVE | SFGAO.DROPTARGET | SFGAO.CANRENAME | SFGAO.STREAM;
+            // SFGAO.RDONLY   'made into an on-demand attribute
+            // SFGAO.HASSUBFOLDER   'made into an on-demand attribute
+
+            parentIFolder.GetAttributesOf(1, [pidl], ref attrFlag); //it's useless to call IShellFolder.GetAttributesOf for one pidl.  It is only useful to call it for multiple pidls
+            csi.m_SFGAO_Attributes = attrFlag;
+            csi.m_IsBrowsable = (attrFlag & SFGAO.BROWSABLE) != 0;
+            if (pidl == DesktopPidl) { //todo: remove this since the root doesn't have a parent ishellfolder
+                csi.m_IsFileSystem = false;
+                csi.m_Path = "::{" + DesktopGUID.ToString() + "}";
+            }
+            else {
+                csi.m_IsFileSystem = (attrFlag & SFGAO.FILESYSTEM) != 0;
+                csi.m_Path = CShellItemFactory.GetFullPath(csi);
+            }
+            // m_HasSubFolders = (attrFlag & SFGAO.HASSUBFOLDER) != 0;  'made into an on-demand attribute
+            csi.m_IsFolder = (attrFlag & SFGAO.FOLDER) != 0;
+            csi.m_IsLink = (attrFlag & SFGAO.LINK) != 0;
+            csi.m_IsShared = (attrFlag & SFGAO.SHARE) != 0;
+            csi.m_IsHidden = (attrFlag & SFGAO.HIDDEN) != 0;
+            csi.m_IsRemovable = (attrFlag & SFGAO.REMOVABLE) != 0;
+            // m_IsReadOnly = (attrFlag & SFGAO.RDONLY) != 0;      'made into an on-demand attribute
+            csi.m_CanCopy = (attrFlag & SFGAO.CANCOPY) != 0;
+            csi.m_CanDelete = (attrFlag & SFGAO.CANDELETE) != 0;
+            csi.m_CanLink = (attrFlag & SFGAO.CANLINK) != 0;
+            csi.m_CanMove = (attrFlag & SFGAO.CANMOVE) != 0;
+            csi.IsDropTarget = (attrFlag & SFGAO.DROPTARGET) != 0;
+            csi.m_CanRename = (attrFlag & SFGAO.CANRENAME) != 0;
+
+            // check for zip file = folder on xp, leave it a file
+            if (csi.m_IsFolder && csi.m_IsFileSystem)
+            {
+                // If (m_Attributes = (m_Attributes And SFGAO.STREAM)) Then
+                if ((attrFlag & SFGAO.STREAM) != 0)   // in this case, it is not a Folder, but a .zip or .cab or etc
+                    csi.m_IsFolder = false;
+            }
+
+            if (csi.m_IsFolder && csi.m_Path.Length == 3 && csi.m_Path.Substring(1).Equals(@":\"))
+            {
+                csi.m_IsDisk = true;
+                try // 04/16/2012 Entire Try Block
+                {
+                    var disk = new System.Management.ManagementObject("win32_logicaldisk.deviceid=\"" + csi.FullPath.Substring(0, 2) + "\"");
+                    csi.m_Length = Convert.ToInt64(disk["Size"]);
+                    if ((Convert.ToUInt32(disk["DriveType"]).ToString() ?? "") == (4.ToString() ?? ""))
+                    {
+                        csi.m_IsNetWorkDrive = true;
+                        csi.m_IsRemote = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Disconnected Network Drives etc. will generate 
+                    // an error here, just assume that it is a network
+                    // drive
+                    csi.m_IsNetWorkDrive = true;
+                    csi.m_IsRemote = true;
+                }
+                finally
+                {
+                    csi.m_XtrInfo = true;
+                    if (!DriveDict.ContainsKey(csi.m_Path))
+                    {
+                        DriveDict.Add(csi.m_Path, csi.m_IsRemote);
+                    }
+                }
+            }
+
+            // Setup IsRemote             '4/14/2012
+            // Reworked 5/15/2012 when testing discovered that contrary to the Docs, IO.Path.GetPathRoot(m_Path)
+            // will throw an exception when presented with a long path that GetDisplayNameOf made legal by
+            // using 8.3 names for some of the directories! IO.Path.GetPathRoot is not supposed to do anything to
+            // reference the actual components of the Path. It should be strictly String manipulation!
+            // Error on Path = "C:\Testing\XXXXXA~1\YYYYYY~1\ABCDEF~1\ZZZZZZ~1\abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890123456789012345678901234.txt"
+            // which is only 138 chars long.
+            if (!(csi.m_IsDisk || csi.m_Path.StartsWith("::")))
+            {
+                if (csi.m_Path.StartsWith(@"\\"))
+                {
+                    string[] tmp = csi.m_Path.Split(new char[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (tmp.Length > 0 && tmp[0].Equals(CShellItemFactory.SystemName, StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        csi.m_IsRemote = false;
+                    }
+                    else
+                    {
+                        csi.m_IsRemote = true;
+                    }
+                }
+                else if (csi.m_Path.Length > 2 && csi.m_Path.Substring(1, 2).Equals(@":\"))
+                {
+                    string itemroot = csi.m_Path.Substring(0, 3);
+                    if (DriveDict.ContainsKey(itemroot) && DriveDict[itemroot])
+                        csi.m_IsRemote = true;
+                }
+            }
+        }
+
+        private static void SetUpAttributes(CShellItem csi, IntPtr pidl)
+        {
+            SFGAO attrFlag;
+            attrFlag = SFGAO.BROWSABLE | SFGAO.FILESYSTEM | SFGAO.FOLDER | SFGAO.LINK | SFGAO.SHARE
+             | SFGAO.HIDDEN | SFGAO.REMOVABLE | SFGAO.CANCOPY | SFGAO.CANDELETE | SFGAO.CANLINK
+             | SFGAO.CANMOVE | SFGAO.DROPTARGET | SFGAO.CANRENAME | SFGAO.STREAM;
+            // SFGAO.RDONLY   'made into an on-demand attribute
+            // SFGAO.HASSUBFOLDER   'made into an on-demand attribute
+
+            var iid = typeof(IShellItem).GUID;
+            SHCreateItemFromIDList(pidl, ref iid, out IntPtr item);
+            IShellItem shellItem = (IShellItem)Marshal.GetObjectForIUnknown(item);
+            shellItem.GetAttributes((uint)attrFlag, out uint attrs);
+            Marshal.ReleaseComObject(shellItem);
+
+            attrFlag = (SFGAO)attrs;
+            csi.m_SFGAO_Attributes = attrFlag;
+            csi.m_IsBrowsable = (attrFlag & SFGAO.BROWSABLE) != 0;
+            csi.m_IsFolder = (attrFlag & SFGAO.FOLDER) != 0;
+            csi.m_IsLink = (attrFlag & SFGAO.LINK) != 0;
+            csi.m_IsShared = (attrFlag & SFGAO.SHARE) != 0;
+            csi.m_IsHidden = (attrFlag & SFGAO.HIDDEN) != 0;
+            csi.m_IsRemovable = (attrFlag & SFGAO.REMOVABLE) != 0;
+            csi.m_CanCopy = (attrFlag & SFGAO.CANCOPY) != 0;
+            csi.m_CanDelete = (attrFlag & SFGAO.CANDELETE) != 0;
+            csi.m_CanLink = (attrFlag & SFGAO.CANLINK) != 0;
+            csi.m_CanMove = (attrFlag & SFGAO.CANMOVE) != 0;
+            csi.IsDropTarget = (attrFlag & SFGAO.DROPTARGET) != 0;
+            csi.m_CanRename = (attrFlag & SFGAO.CANRENAME) != 0;
+            if (pidl == DesktopPidl)
+            {
+                csi.m_IsFileSystem = false;
+                csi.m_Path = "::{" + DesktopGUID.ToString() + "}";
+            }
+            else
+            {
+                csi.m_IsFileSystem = (attrFlag & SFGAO.FILESYSTEM) != 0;
+                csi.m_Path = CShellItemFactory.GetFullPath(csi);
+            }
+            // m_IsReadOnly = (attrFlag & SFGAO.RDONLY) != 0;      'made into an on-demand attribute
+            // m_HasSubFolders = (attrFlag & SFGAO.HASSUBFOLDER) != 0;  'made into an on-demand attribute
+
+            // check for zip file = folder on xp, leave it a file
+            if (csi.m_IsFolder && csi.m_IsFileSystem)
+            {
+                // If (m_Attributes = (m_Attributes And SFGAO.STREAM)) Then
+                if ((attrFlag & SFGAO.STREAM) != 0)   // in this case, it is not a Folder, but a .zip or .cab or etc
+                    csi.m_IsFolder = false;
+            }
+
+            if (csi.m_IsFolder && csi.m_Path.Length == 3 && csi.m_Path.Substring(1).Equals(@":\"))
+            {
+                csi.m_IsDisk = true;
+                try // 04/16/2012 Entire Try Block
+                {
+                    var disk = new System.Management.ManagementObject("win32_logicaldisk.deviceid=\"" + csi.FullPath.Substring(0, 2) + "\"");
+                    csi.m_Length = Convert.ToInt64(disk["Size"]);
+                    if ((Convert.ToUInt32(disk["DriveType"]).ToString() ?? "") == (4.ToString() ?? ""))
+                    {
+                        csi.m_IsNetWorkDrive = true;
+                        csi.m_IsRemote = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Disconnected Network Drives etc. will generate 
+                    // an error here, just assume that it is a network
+                    // drive
+                    csi.m_IsNetWorkDrive = true;
+                    csi.m_IsRemote = true;
+                }
+                finally
+                {
+                    csi.m_XtrInfo = true;
+                    if (!DriveDict.ContainsKey(csi.m_Path))
+                    {
+                        DriveDict.Add(csi.m_Path, csi.m_IsRemote);
+                    }
+                }
+            }
+
+            // Setup IsRemote             '4/14/2012
+            // Reworked 5/15/2012 when testing discovered that contrary to the Docs, IO.Path.GetPathRoot(m_Path)
+            // will throw an exception when presented with a long path that GetDisplayNameOf made legal by
+            // using 8.3 names for some of the directories! IO.Path.GetPathRoot is not supposed to do anything to
+            // reference the actual components of the Path. It should be strictly String manipulation!
+            // Error on Path = "C:\Testing\XXXXXA~1\YYYYYY~1\ABCDEF~1\ZZZZZZ~1\abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890123456789012345678901234.txt"
+            // which is only 138 chars long.
+            if (!(csi.m_IsDisk || csi.m_Path.StartsWith("::")))
+            {
+                if (csi.m_Path.StartsWith(@"\\"))
+                {
+                    string[] tmp = csi.m_Path.Split(new char[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (tmp.Length > 0 && tmp[0].Equals(CShellItemFactory.SystemName, StringComparison.InvariantCultureIgnoreCase))
+                        csi.m_IsRemote = false;
+                    else
+                        csi.m_IsRemote = true;
+                }
+                else if (csi.m_Path.Length > 2 && csi.m_Path.Substring(1, 2).Equals(@":\"))
+                {
+                    string itemroot = csi.m_Path.Substring(0, 3);
+                    if (DriveDict.ContainsKey(itemroot) && DriveDict[itemroot])
+                        csi.m_IsRemote = true;
+                }
+            }
+        }
+
+
+        public static string? GetFullPath(CShellItem csi)
+        {
+            var pidl = csi.PIDL;
+            if (pidl == IntPtr.Zero) throw new ArgumentNullException(nameof(pidl));
+
+            if (csi.m_IsFileSystem)
+                return CPidl.GetFileSystemPath(pidl);
+            else return CPidl.GetParsingPath(pidl);
+        }
     }
 }

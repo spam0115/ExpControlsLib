@@ -220,7 +220,7 @@ namespace WindowsApiLib.Shell
                                             {
                                                 if (SHGetRealIDL(parentItem.Folder, splitPidl.ChildPidl, out realRel) == S_OK)
                                                 {
-                                                    var newItem = new CShellItem(realRel, parentItem);
+                                                    var newItem = CShellItemFactory.CreateCShItem(realRel, parentItem);
                                                     if (newItem is not null)
                                                         parentItem.AddItem(newItem);
                                                 }
@@ -334,7 +334,7 @@ namespace WindowsApiLib.Shell
                                                 IntPtr realRel;
                                                 if (SHGetRealIDL(parentItem.Folder, splitPidls.ChildPidl, out realRel) == S_OK)
                                                 {
-                                                    var newItem = new CShellItem(realRel, parentItem);
+                                                    var newItem = CShellItemFactory.CreateCShItem(realRel, parentItem);
                                                     if (newItem is not null)
                                                     {
                                                         parentItem.AddItem(newItem);

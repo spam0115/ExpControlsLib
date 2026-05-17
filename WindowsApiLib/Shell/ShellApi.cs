@@ -725,7 +725,7 @@ namespace WindowsApiLib.Shell
         public static extern bool SHGetPathFromIDList(IntPtr pidl, StringBuilder Path);
 
         [DllImport("shell32.dll", ExactSpelling = true)]
-        public static extern int SHCreateItemFromIDList(IntPtr pidl, [In] ref Guid riid, out IntPtr ppv);
+        public static extern int SHCreateItemFromIDList(IntPtr pidl, ref Guid riid, out IntPtr ppv);
 
         /// <summary>
         /// Creates an IShellItem from a file path

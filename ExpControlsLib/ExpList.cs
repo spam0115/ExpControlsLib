@@ -144,6 +144,18 @@ namespace ExpControlsLib
         public event ExpListFolderChangedEventHandler ExpListFolderChanged;
 
         /// <summary>
+        /// Delegate for the <see cref="ExpListPathChanged"/> event.
+        /// </summary>
+        /// <param name="Path">The new path of the ExpList.</param>
+        public delegate void ExpListPathChangedEventHandler(string Path);
+        /// <summary>
+        /// Occurs when the <see cref="CurrentPath"/> has changed.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires when the CurrentPath property has changed")]
+        public event ExpListPathChangedEventHandler ExpListPathChanged;
+
+        /// <summary>
         /// Delegate for the <see cref="ExpListItemsChanged"/> event.
         /// </summary>
         /// <param name="SelPath">The path of the item.</param>
@@ -343,6 +355,9 @@ namespace ExpControlsLib
                         _currentFolderCsi = null;
                         ExpListFolderChanged?.Invoke(null);
                     }
+                    
+                    ExpListPathChanged?.Invoke(_CurrentPath);
+
                     if (needsUpdate)
                     {
                         _ListView.EndUpdate();
@@ -353,7 +368,7 @@ namespace ExpControlsLib
                     if (value == _CurrentPath && _currentFolderCsi != null) return;
                     try
                     {
-                        CShellItem csi = CShellItemFactory.GetCShItem(value);
+                        CShellItem csi = CShellItemFactory.CreateCShItem(value);
                         if (csi != null && csi.IsFolder)
                         {
                             DisplayFiles(value, csi, true);
@@ -361,11 +376,13 @@ namespace ExpControlsLib
                         else
                         {
                             _CurrentPath = value;
+                            ExpListPathChanged?.Invoke(_CurrentPath);
                         }
                     }
                     catch
                     {
                         _CurrentPath = value;
+                        ExpListPathChanged?.Invoke(_CurrentPath);
                     }
                 }
             }
@@ -588,7 +605,7 @@ namespace ExpControlsLib
 
             if (csi == null)
             {
-                csi = CShellItemFactory.GetCShItem(pathName);
+                csi = CShellItemFactory.CreateCShItem(pathName);
             }
             if (includeFolder) dirList.AddRange(csi.Directories);
             if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(csi.Files);
@@ -664,6 +681,7 @@ namespace ExpControlsLib
             }
 
             ExpListFolderChanged?.Invoke(_currentFolderCsi);
+            ExpListPathChanged?.Invoke(_CurrentPath);
         }
 
         #endregion
@@ -1296,7 +1314,7 @@ namespace ExpControlsLib
 
             var item = (CShellItem)_ListView.Items[e.Item].Tag;
             if ((!item.IsFileSystem) || item.IsDisk ||
-                item.FullPath == CShellItemFactory.GetCShItem(CSIDL.MYDOCUMENTS).FullPath ||
+                item.FullPath == CShellItemFactory.CreateCShItem(CSIDL.MYDOCUMENTS).FullPath ||
                 !item.CanRename)
             {
                 System.Media.SystemSounds.Beep.Play();

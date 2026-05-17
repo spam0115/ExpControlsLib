@@ -511,6 +511,17 @@
             Occurs after the currently loaded folder has changed.
             </summary>
         </member>
+        <member name="T:ExpControlsLib.ExpList.ExpListPathChangedEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListPathChanged"/> event.
+            </summary>
+            <param name="Path">The new path of the ExpList.</param>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.ExpListPathChanged">
+            <summary>
+            Occurs when the <see cref="P:ExpControlsLib.ExpList.CurrentPath"/> has changed.
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.ExpList.ExpListItemsChangedEventHandler">
             <summary>
             Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListItemsChanged"/> event.

@@ -307,6 +307,8 @@ namespace ExpControlsLib
             }
             set
             {
+                if (value is null) return;
+
                 if (value.IsFolder)
                 {
                     _TreeView.BeginUpdate();
@@ -504,7 +506,7 @@ namespace ExpControlsLib
             CShellItem newItem;
             try
             {
-                newItem = CShellItemFactory.GetCShItem(newPath);
+                newItem = CShellItemFactory.CreateCShItem(newPath);
                 if (newItem is null)
                     return ExpandANodeRet;
                 if (!newItem.IsFolder)
@@ -557,7 +559,7 @@ namespace ExpControlsLib
                 bool continueDo = false;
                 foreach (TreeNode testNode in baseNode.Nodes)
                 {
-                    if (CShellItem.IsAncestorOf((CShellItem)testNode.Tag, newItem, false))
+                    if (CPidl.IsAncestorOf((CShellItem)testNode.Tag, newItem, false))
                     {
                         baseNode = testNode;
                         // RefreshNode(baseNode)   'ensure up-to-date
@@ -609,7 +611,7 @@ namespace ExpControlsLib
             _TreeView.BeginUpdate();
             ClearTree();
             CShellItem special;
-            special = CShellItemFactory.GetCShItem((CSIDL)newVal);
+            special = CShellItemFactory.CreateCShItem((CSIDL)newVal);
             Root = new TreeNode(special.DisplayName)
             {
                 Tag = special,
@@ -821,11 +823,11 @@ namespace ExpControlsLib
             List<CShellItem> D;
             if (CSI.DirectoryList is null)
             {
-                D = new List<CShellItem>(CSI.Directories);
+                D = new List<CShellItem>(CSI.Directories); //todo: remove this conversion
             }
             else
             {
-                D = new List<CShellItem>(CSI.DirectoryList);
+                D = new List<CShellItem>(CSI.DirectoryList);  //todo: remove this conversion
             }
             if (D.Count > 0)
             {
@@ -1220,7 +1222,7 @@ namespace ExpControlsLib
             // Not (item.CanRename) Then
             // Changed 11/28/2010
             if (item.FullPath.StartsWith("::") || item.IsDisk || !m_allowFolderRename 
-                || (item.FullPath ?? "") == (CShellItemFactory.GetCShItem(CSIDL.MYDOCUMENTS).FullPath ?? "") 
+                || (item.FullPath ?? "") == (CShellItemFactory.CreateCShItem(CSIDL.MYDOCUMENTS).FullPath ?? "") 
                 || !item.CanRename)
             {
                 System.Media.SystemSounds.Beep.Play();

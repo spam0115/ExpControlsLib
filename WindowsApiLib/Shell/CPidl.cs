@@ -589,6 +589,56 @@ namespace WindowsApiLib
 
 
         /// <summary>
+        /// Returns the filesystem path for a PIDL, or null if it isn't a filesystem item.
+        /// </summary>
+        public static string? GetFileSystemPath(IntPtr pidl)
+        {
+            if (pidl == IntPtr.Zero) throw new ArgumentNullException(nameof(pidl));
+
+            // Preferred modern call — works for long paths too.
+            IntPtr psz = IntPtr.Zero;
+            try
+            {
+                if (SHGetNameFromIDList(pidl, SIGDN.FILESYSPATH, out psz) >= 0 && psz != IntPtr.Zero)
+                    return Marshal.PtrToStringUni(psz);
+            }
+            finally
+            {
+                if (psz != IntPtr.Zero) Marshal.FreeCoTaskMem(psz);
+            }
+
+            // Fallback: classic API (MAX_PATH limit).
+            char[] buffer = new char[WinSDK.MAX_PATH];
+            if (!SHGetPathFromIDListW(pidl, buffer))
+                return null;
+
+            // Trim at the first null terminator.
+            int len = Array.IndexOf(buffer, '\0');
+            return new string(buffer, 0, len < 0 ? buffer.Length : len);
+        }
+
+        /// <summary>
+        /// Returns a parsing name path even for virtual items (e.g. "::{GUID}\..."), useful when
+        /// the PIDL isn't a real filesystem object.
+        /// </summary>
+        public static string? GetParsingPath(IntPtr pidl)
+        {
+            if (pidl == IntPtr.Zero) throw new ArgumentNullException(nameof(pidl));
+
+            IntPtr psz = IntPtr.Zero;
+            try
+            {
+                if (SHGetNameFromIDList(pidl, SIGDN.DESKTOPABSOLUTEPARSING, out psz) >= 0 && psz != IntPtr.Zero)
+                    return Marshal.PtrToStringUni(psz);
+                return null;
+            }
+            finally
+            {
+                if (psz != IntPtr.Zero) Marshal.FreeCoTaskMem(psz);
+            }
+        }
+
+        /// <summary>
         /// Converts a PIDL to a readable string.
         /// Tries parsing name first, then falls back to normal display name.
         /// Returns null if conversion fails.
@@ -599,9 +649,10 @@ namespace WindowsApiLib
                 throw new ArgumentNullException(nameof(pidl));
 
             // 1) Try full parsing name (often path-like).
-            string? s = TryGetName(pidl, SIGDN.NORMALDISPLAY);
+            string? s = TryGetName(pidl, SIGDN.DESKTOPABSOLUTEPARSING);
             if (!string.IsNullOrEmpty(s))
                 return s;
+
             // 2) Fallback to friendly display name.
             return TryGetName(pidl, SIGDN.NORMALDISPLAY);
         }
