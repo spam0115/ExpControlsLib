@@ -1811,7 +1811,7 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <returns>A List of CShItems. May return an empty List if there are none.</returns>
         /// <remarks>This version is the Optimized version added after any distribution of v2.14</remarks>
-        public List<CShellItem> GetItems()
+        public List<CShellItem> GetChildItems()
         {
             var rVal = new List<CShellItem>();
             if (m_IsFolder)
@@ -1826,29 +1826,25 @@ namespace WindowsApiLib.Shell
                         Flags = Flags | SHCONTF.NONFOLDERS;
                     if (Flags != SHCONTF.INCLUDEHIDDEN) // if already have both already, just report what we have
                     {
-                        var Items = GetContents(Flags);
-                        var Dirs = new List<CShellItem>(Items.Count);      // trade space for time - capacity set to max possible
-                        var FilesList = new List<CShellItem>(Items.Count);     // trade space for time - capacity set to max possible
-                        foreach (CShellItem Item in Items)
+                        var items = GetContents(Flags);
+                        var dirs = new List<CShellItem>(items.Count);      // trade space for time - capacity set to max possible
+                        var filesList = new List<CShellItem>(items.Count);     // trade space for time - capacity set to max possible
+                        foreach (CShellItem Item in items)
                         {
                             if (Item.IsFolder)
-                            {
-                                Dirs.Add(Item);
-                            }
+                                dirs.Add(Item);
                             else
-                            {
-                                FilesList.Add(Item);
-                            }
+                                filesList.Add(Item);
                         }
                         if (m_Directories is null)
                         {
                             m_Directories = new CShellItemCollection(this);   // First time we even asked
-                            m_Directories.AddRange(Dirs);
+                            m_Directories.AddRange(dirs);
                         }
                         if (m_Files is null)
                         {
                             m_Files = new CShellItemCollection(this);         // First time we even asked
-                            m_Files.AddRange(FilesList);
+                            m_Files.AddRange(filesList);
                         }
                     }
                     rVal.AddRange(m_Directories);    // 7/14/2012 - trust in SyncLock
@@ -2514,11 +2510,11 @@ namespace WindowsApiLib.Shell
         /// Returns the requested Items of this Folder as a CShitemCollection
         /// </summary>
         /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
-        private CShellItemCollection GetContents(SHCONTF flags)
+        internal CShellItemCollection GetContents(SHCONTF flags) //move: to shellcontroller
         {
-            var rVal = new CShellItemCollection(this);
+            var items = new CShellItemCollection(this);
             if (Folder is null)
-                return rVal; // Added 10/22/2011 to deal with certain Virtual Folders
+                return items; // Added 10/22/2011 to deal with certain Virtual Folders
             CShellItem itm;
             // Debug.WriteLine("GContent " & Me.Path)
             // Dim StTime As DateTime = Now()
@@ -2541,26 +2537,21 @@ namespace WindowsApiLib.Shell
                     {
                         //todo: use IFolder.GetAttributesOf to get file attributes in bulk
                         itm = CShellItemFactory.CreateCShItem(pidl, this);
-                        rVal.Add(itm);
+                        items.Add(itm);
                     }
                     // Catch ex As InvalidCastException             'ASUS Fix - superceeded 11/13/2013
                     // Debug.WriteLine("GetContents - InvCast") 'ASUS Fix
                     // Debug.WriteLine("GetContents - Exception: " & ex.Message)   '11/09/2013 - Investigate other
                     // Debug.WriteLine("Processing " & Me.Path)                    '11/09/2013 - Investigate other
                     // DumpPidl(ptr)                                               '11/09/2013 - Investigate other
-                    catch (Exception ex)                                           // 11/09/2013 - Investigate other
-                                                                                   // ASUS Fix
-                    {
-                    }
                     finally
                     {
-                        Marshal.FreeCoTaskMem(pidl);
+                        //Marshal.FreeCoTaskMem(pidl);
                     }
-                }           // ASUS Fix
-                            // 11/09/2013 - Investigate other
+                }
             }
-            // Debug.WriteLine("BuildItems " & Now().Subtract(StTime).TotalMilliseconds.ToString & " ms")
-            return rVal;
+            // .WriteLine("BuildItems " & Now().Subtract(StTime).TotalMilliseconds.ToString & " ms")
+            return items;
         }
 
         /// <summary>
@@ -2600,7 +2591,7 @@ namespace WindowsApiLib.Shell
             int HR;
             IEnumIDList IEnum = null;
             // UPDATE: Vista and above strictly respect the SHCONTF flags. The "flags" param is now used only to determine what user wants
-            HR = Folder.EnumObjects(0, SHCONTF.INCLUDEHIDDEN | SHCONTF.FOLDERS | SHCONTF.NONFOLDERS, ref IEnum);     // new code (12/11/09)
+            HR = Folder.EnumObjects(0, flags, ref IEnum);     // new code (12/11/09)
 
             if (HR == NOERROR)
             {

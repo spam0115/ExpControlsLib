@@ -24,13 +24,33 @@ namespace WindowsApiLib.Shell
 
         public ShellController() {
 
-            var CShellItem_Factory =  CShellItemFactory.Instance; //force the constructor to run
+            HierachyManager = new CShellItemHierachyManager();
+            CShellItemFactory.Initialize(HierachyManager); //force the constructor to run
             (Desktop, DesktopCSI) = CShellItemFactory.GetDesktopRoot();
 
-            HierachyManager = new CShellItemHierachyManager(DesktopCSI);
+            HierachyManager.Root = DesktopCSI;
             ShellUpdater = new CShellItemUpdater(HierachyManager, (uint)SHCNE.DISKEVENTS);
+            CShellItemFactory.HierachyManager = HierachyManager;    
+
             //ShellUpdater = new CShellItemUpdater(HierachyManager.Root);
 
         }
+
+        public static void LoadFolderContents(CShellItem csi) //move: to shellcontroller
+        {
+            var contents = csi.GetContents(SHCONTF.INCLUDEHIDDEN | SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
+
+            if (csi.m_Directories is null) csi.m_Directories = new CShellItemCollection(csi);
+            if (csi.m_Files is null) csi.m_Files = new CShellItemCollection(csi);
+
+            foreach (var item in contents.Items)
+            {
+                if (item.IsFolder)
+                    csi.m_Directories.Add(item);
+                else
+                    csi.m_Files.Add(item);
+            }
+        }
+
     }
 }

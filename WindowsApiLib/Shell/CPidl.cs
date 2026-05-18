@@ -141,7 +141,7 @@ namespace WindowsApiLib
 
         #region        Public Static Methods
 
-        /// <summary> Join two byte arrays containing PIDLS. 
+        /// <summary> Join two byte arrays containing PIDLS into a managed (non-com) array. 
         /// Returns NOTHING if error
         /// </summary>
         /// <returns>A Byte() containing the resultant ITEMIDLIST.</returns>

@@ -58,3 +58,5 @@ The CShellItem class is currently acting as a "God Object," combining identity, 
    * Hierarchy: ShellHierarchy, ShellItemRegistry
    * Infrastructure: ShellWatcherService, ShellOperationProvider
    * UI Integration: ShellItemUIExtensions (to hold LVItem/TNode)
+
+Items are double created.  First in Treeview and then in listview.

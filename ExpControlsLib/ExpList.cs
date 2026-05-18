@@ -607,6 +607,8 @@ namespace ExpControlsLib
             {
                 csi = CShellItemFactory.CreateCShItem(pathName);
             }
+
+            if (csi.Directories is null && csi.Files is null) ShellController.LoadFolderContents(csi);
             if (includeFolder) dirList.AddRange(csi.Directories);
             if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(csi.Files);
 

@@ -6,6 +6,7 @@ using System.DirectoryServices;
 using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Text;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
@@ -14,7 +15,9 @@ namespace WindowsApiLib.Shell
 {
     public class CShellItemFactory
     {
-                /// <summary>
+        private static readonly object _lock = new();
+
+        /// <summary>
         /// Contains the IShellFolder Interface of the instance if it is a Folder.
         /// </summary>
         /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
@@ -31,7 +34,7 @@ namespace WindowsApiLib.Shell
         /// </summary>
         private static CShellItem? DesktopCSI { get; set; }
 
-        public static CShellItemFactory Instance { get; } = new CShellItemFactory();
+        public static CShellItemFactory Instance { get; private set; }
         
         /// <summary>
         /// Contains a String with the Local representation of "My Computer"
@@ -62,9 +65,11 @@ namespace WindowsApiLib.Shell
         public static CShellItem RecycleBin { get; private set; }
         public static CShellItem DeskTopDirectory { get; private set; }
 
+        public static CShellItemHierachyManager? HierachyManager { get; internal set; }
 
-        private CShellItemFactory() {
-
+        private CShellItemFactory(CShellItemHierachyManager? hierachyManager = null) 
+        {
+            HierachyManager = hierachyManager;
             EmptyPidl = CreateEmptyPidl();
             DesktopPidl = GetShellNamespacePidl(ShellNamespaceGuids.DesktopFileSystem);
 
@@ -80,7 +85,17 @@ namespace WindowsApiLib.Shell
             StrSystemFolder = DesktopCSI.m_TypeName;
             StrMyComputer = DesktopCSI.m_DisplayName;
             DeskTopDirectory = CreateCShItem(CSIDL.DESKTOPDIRECTORY);
+        }
 
+        // Call once at startup
+        public static void Initialize(CShellItemHierachyManager? hierachyManager = null)
+        {
+            lock (_lock)
+            {
+                if (Instance is not null) return;
+
+                Instance = new CShellItemFactory(hierachyManager);
+            }
         }
 
         public static (IShellFolder, CShellItem) GetDesktopRoot()
@@ -101,7 +116,6 @@ namespace WindowsApiLib.Shell
             var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
             int dwAttr = 0;
             SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
-
 
             IShellFolder iShellFolder = null;
             HR = SHGetDesktopFolder(ref iShellFolder);
@@ -159,26 +173,24 @@ namespace WindowsApiLib.Shell
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
         public static CShellItem CreateCShItem(CSIDL ID)
         {
-            CShellItem GetCShItemRet = default;
-            GetCShItemRet = null;      // avoid VB2005 Warning
-            if (ID == CSIDL.DESKTOP)
-            {
-                return DesktopCSI;
-            }
+            CShellItem csi = null;
+            if (ID == CSIDL.DESKTOP) return DesktopCSI;
+
+            /* MYDOCUMENTS - the saga continues
+             * In Vista and above, My Documents does not live immediately under the Desktop
+             * (is not a member of DesktopBase.Directories)
+             * Therefore, without special handling, this rtn will return Nothing as the 
+             * CShellItem when CSIDL.MYDOCUMENTS is requested.
+             * MS Documentation states that in Shell32.dll version 6.0 and above CSIDL_MYDOCUMENTS is 
+             * Equivalent to CSIDL_PERSONAL. (6.0 = XP, 6.01 = Vista, 6.1 = Win7)
+             * In XP, the PIDLs of PERSONAL and MYDOCUMENTS are Identical. In Vista and Win7, they are not.
+             * In all OSes, the PIDL for MYDOCUMENTS has 1 item. In Vista and Win7, the PIDL for PERSONAL is a 
+             * two item PIDL, which correctly reflects the location of the corresponding Folder in the directory tree.
+             * Because of this, in Vista and above, I must use PERSONAL as the lookup CSIDL to obtain MYDOCUMENTS.
+             */
             int HR;
             IntPtr tmpPidl = IntPtr.Zero;  // original code - retain
-                                           // MYDOCUMENTS - the saga continues
-                                           // In Vista and above, My Documents does not live immediately under the Desktop
-                                           // (is not a member of DesktopBase.Directories)
-                                           // Therefore, without special handling, this rtn will return Nothing as the 
-                                           // CShellItem when CSIDL.MYDOCUMENTS is requested.
-                                           // MS Documentation states that in Shell32.dll version 6.0 and above CSIDL_MYDOCUMENTS is 
-                                           // Equivalent to CSIDL_PERSONAL. (6.0 = XP, 6.01 = Vista, 6.1 = Win7)
-                                           // In XP, the PIDLs of PERSONAL and MYDOCUMENTS are Identical. In Vista and Win7, they are not.
-                                           // In all OSes, the PIDL for MYDOCUMENTS has 1 item. In Vista and Win7, the PIDL for PERSONAL is a 
-                                           // two item PIDL, which correctly reflects the location of the corresponding Folder in the directory tree.
-                                           // Because of this, in Vista and above, I must use PERSONAL as the lookup CSIDL to obtain MYDOCUMENTS.
-
+                                           
             if (ID == CSIDL.MYDOCUMENTS)
                 ID = CSIDL.PERSONAL; // added 11/28/2010
             if (ID == CSIDL.MYDOCUMENTS)  // original code - retain
@@ -194,14 +206,14 @@ namespace WindowsApiLib.Shell
 
             if (HR == NOERROR)
             {
-                GetCShItemRet = GetOrCreateCShItem(tmpPidl);
+                csi = CreateCShItem(tmpPidl, DesktopCSI);
             }
             if (!tmpPidl.Equals(IntPtr.Zero))
             {
                 Marshal.FreeCoTaskMem(tmpPidl);
             }
 
-            return GetCShItemRet;
+            return csi;
         }
 
         /// <summary>Given a Byte() containing the PIDL of a Folder and a Byte() containing the relative PIDL of the desired item,
@@ -211,28 +223,58 @@ namespace WindowsApiLib.Shell
         /// that is requested -- File or Directory.Exists equivalent. Returns Nothing on errors such as
         /// non-existant item.
         /// </summary>
-        /// <param name="FoldBytes"></param>
-        /// <param name="ItemBytes"></param>
+        /// <param name="pidlFolder"></param>
+        /// <param name="pidlItem"></param>
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem CreateCShItem(byte[] FoldBytes, byte[] ItemBytes)
+        public static CShellItem CreateCShItem(byte[] pidlFolder, byte[] pidlItem)
         {
-            CShellItem GetCShItemRet = default;
-            GetCShItemRet = null;    // assume failure
-            byte[] b = CPidl.JoinPidlBytes(FoldBytes, ItemBytes);
-            if (b == null)
-                return GetCShItemRet; // can do no more with invalid pidls
+            CShellItem csi = null;    // assume failure
 
-            var thisPidl = Marshal.AllocCoTaskMem(b.Length);
-            if (thisPidl.Equals(IntPtr.Zero))
-                return null;
-            Marshal.Copy(b, 0, thisPidl, b.Length);
-            // Dim Parent As CShellItem = Nothing
-            GetCShItemRet = GetOrCreateCShItem(thisPidl);
-            if (!thisPidl.Equals(IntPtr.Zero))
-                Marshal.FreeCoTaskMem(thisPidl);
-            if (GetCShItemRet.PIDL.Equals(IntPtr.Zero))
-                GetCShItemRet = null; // last minute failsafe
-            return GetCShItemRet;
+            if (pidlFolder == null && pidlItem == null)
+                return csi; // can do no more with invalid pidls
+
+            IntPtr fullPidl;
+
+            GCHandle handle = GCHandle.Alloc(pidlFolder, GCHandleType.Pinned);
+            GCHandle handle2 = GCHandle.Alloc(pidlFolder, GCHandleType.Pinned);
+            try
+            {
+                fullPidl = CPidl.Concatenate(handle.AddrOfPinnedObject(), handle2.AddrOfPinnedObject());
+            }
+            finally
+            {
+                handle.Free();
+                handle2.Free();
+            }
+
+            csi = GetOrCreateCShItem(fullPidl);
+
+            if (!fullPidl.Equals(IntPtr.Zero))
+                Marshal.FreeCoTaskMem(fullPidl);
+            if (csi.PIDL.Equals(IntPtr.Zero))
+                csi = null; // last minute failsafe
+
+            //byte[] fullPidl = CPidl.JoinPidlBytes(pidlFolder, pidlItem);
+
+            //if (fullPidl == null)
+            //    return csi; // can do no more with invalid pidls
+
+            //var thisPidl = Marshal.AllocCoTaskMem(fullPidl.Length);
+            //if (thisPidl.Equals(IntPtr.Zero))
+            //    return null;
+
+            //CPidl.PIDLClone(fullPidl);
+            //Marshal.Copy(fullPidl, 0, thisPidl, fullPidl.Length);
+
+            //csi = GetOrCreateCShItem(thisPidl);
+
+            //if (!thisPidl.Equals(IntPtr.Zero))
+            //    Marshal.FreeCoTaskMem(thisPidl);
+            //if (csi.PIDL.Equals(IntPtr.Zero))
+            //    csi = null; // last minute failsafe
+
+
+            return csi;
         }
 
 
@@ -300,19 +342,21 @@ namespace WindowsApiLib.Shell
         {
             CShellItem csi = default;
             CShellItem Parent = null;
-            csi = BrowseTo(pidl, out Parent);
-            if (csi == null)
+
+            if (HierachyManager is null)
             {
-                if (!(Parent == null))
+                csi = new CShellItem();
+                PopulateCsi(csi, pidl);
+            }
+            else
+            {
+                csi = FindOrAddToHierarchy(pidl, out Parent);
+                if (csi == null)
                 {
-                    try
-                    {
+                    if (!(Parent == null))
                         csi = CreateCShItem(pidl, Parent);
-                    }
-                    catch
-                    {
-                        csi = null;
-                    }
+                    else
+                        csi = CreateCShItem(pidl);
                 }
             }
 
@@ -341,9 +385,9 @@ namespace WindowsApiLib.Shell
                 var splitted = CPidl.Split(pidl);
 
                 //todo: change this so it is only loaded if someone adds the cshellitem to the hierachy manager
-                if (parentCsi == null)
+                if (parentCsi == null && HierachyManager is not null)
                 {
-                    CShellItemFactory.BrowseTo(splitted.ParentPidl, out parentCsi);
+                    CShellItemFactory.FindOrAddToHierarchy(splitted.ParentPidl, out parentCsi);
                     if (parentCsi != null)
                     {
                         csi.m_Parent = parentCsi;
@@ -354,13 +398,13 @@ namespace WindowsApiLib.Shell
                 }
                 
                 csi.m_Parent = parentCsi;
-
+                
                 // Get some attributes
                 SetUpAttributes(csi, pidl);
 
                 if (csi.m_IsFolder)
                 {
-                    csi.m_IShellFolder = ShellHelper.GetIShellFolder(csi.m_Parent, pidl); // get IShellFolder
+                    csi.m_IShellFolder = ShellHelper.GetIShellFolder(csi.m_Parent, splitted.ChildPidl); // get IShellFolder
                 }
             }
         }
@@ -413,7 +457,9 @@ namespace WindowsApiLib.Shell
                     Marshal.Release(ptr); // Added Code (12/12/09)
 #if DEBUG
                 CPidl.Dump(relPidl);
-                Marshal.ThrowExceptionForHR(HR);
+                var ex = Marshal.GetExceptionForHR(HR);
+                Debug.WriteLine($"{ex.Message}");
+
 #endif
             }    // Removed 10/22/2011 - restored 11/13/2013
             return rVal;
@@ -519,7 +565,7 @@ namespace WindowsApiLib.Shell
         /// For Example: GetCShItem(Path) may be given a string specifying a non-existant directory.
         /// (eg -- C:\Test\NonExistant\junk.txt). 
         /// In that case, and that case only, Parent may be returned as Nothing.</remarks>
-        internal static CShellItem BrowseTo(IntPtr absPidl, out CShellItem Parent)
+        internal static CShellItem FindOrAddToHierarchy(IntPtr absPidl, out CShellItem Parent)
         {
             CShellItem csi;
             CShellItem browseToRet = default;
@@ -533,7 +579,7 @@ namespace WindowsApiLib.Shell
             {
                 foreach (var currentCSI in baseItem.Directories)
                 {
-                    csi = currentCSI;    // 7/2/2012 should use Directories here
+                    csi = currentCSI;
                     if (IsAncestorOf(csi.PIDL, absPidl))
                     {
                         if (CPidl.IsEqual(csi.PIDL, absPidl))  // we found the desired item
@@ -541,7 +587,7 @@ namespace WindowsApiLib.Shell
                             Parent = baseItem;
                             return csi;
                         }
-                        else            // Found an ancestor
+                        else // Found an ancestor and must delve into it
                         {
                             baseItem = csi;
                             Parent = csi;
@@ -753,7 +799,6 @@ namespace WindowsApiLib.Shell
             bool IsAncestorOfRet = default;
             return ILIsParent(AncestorPidl, ChildPidl, fParent);
         }
-
 
 
 
@@ -983,5 +1028,6 @@ namespace WindowsApiLib.Shell
                 return CPidl.GetFileSystemPath(pidl);
             else return CPidl.GetParsingPath(pidl);
         }
+
     }
 }

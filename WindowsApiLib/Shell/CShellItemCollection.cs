@@ -47,7 +47,7 @@ namespace WindowsApiLib.Shell
 
         public int Count => m_items.Count;
 
-        public List<CShellItem> Items() => m_items;
+        public List<CShellItem> Items => m_items;
 
         public void Sort()
         {

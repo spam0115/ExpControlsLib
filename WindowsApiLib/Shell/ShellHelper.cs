@@ -690,37 +690,39 @@ namespace WindowsApiLib.Shell
         public static IShellFolder GetIShellFolder(CShellItem parent, IntPtr relPidl)
         {
             IntPtr ptr = IntPtr.Zero;
-            IShellFolder rVal = null;
+            IShellFolder iShFolder = null;
             int HR = parent.Folder.BindToObject(relPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref ptr);
             if (HR >= S_OK && ptr != IntPtr.Zero)   // New code (12/12/09)
             {
                 // The ASUS fix is slightly modified from its' original as per a suggestion from Calum 4/8/2010
-                try                                                     // ASUS Fix
+                try 
                 {
-                    rVal = (IShellFolder)Marshal.GetTypedObjectForIUnknown(ptr, typeof(IShellFolder));
+                    iShFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(ptr, typeof(IShellFolder));
                 }
-                catch (Exception ex)                                   // ASUS Fix - modified 11/13/2013 - was InvalidCastException
+                catch (Exception ex)
                 {
 #if DEBUG
-                    Debug.WriteLine("GetFolder: " + ex.Message);         // ASUS Fix
-                    throw;                                            // ASUS Fix
+                    Debug.WriteLine("GetFolder: " + ex.Message);
+                    throw;
 #endif
                 }
                 finally
                 {
                     Marshal.Release(ptr); // Must do this in all cases
-                }                                                 // ASUS Fix
+                }
             }
             else
             {
                 if (ptr != IntPtr.Zero)
-                    Marshal.Release(ptr); // Added Code (12/12/09)
+                    Marshal.Release(ptr);
 #if DEBUG
                 CPidl.Dump(relPidl);
-                Marshal.ThrowExceptionForHR(HR);
+                Debug.WriteLine($"pidl path = '{ CPidl.ToString(relPidl) }'");
+                HResultLogger.LogHResult(HR);
 #endif
-            }    // Removed 10/22/2011 - restored 11/13/2013
-            return rVal;
+                return null;
+            }
+            return iShFolder;
         }
 
         #region        Shell Navigation and PIDL Utilities

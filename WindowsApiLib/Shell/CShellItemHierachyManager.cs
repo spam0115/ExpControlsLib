@@ -14,14 +14,14 @@ namespace WindowsApiLib.Shell
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
     public class CShellItemHierachyManager
     {
-        public CShellItem Root {  get; set; }
+        public CShellItem? Root {  get; set; }
         public CShellItem? CurrentFolder { get; set; }
         public string? CurrentPath { get {
                 if (CurrentFolder?.PIDL == null) return string.Empty;
                 return CPidl.ToString(CurrentFolder.PIDL);
             } }
 
-        public CShellItemHierachyManager(CShellItem root) {
+        public CShellItemHierachyManager(CShellItem? root = null) {
             this.Root = root;
 
             //todo: move the item hierarchy code from cshellitem to over here.

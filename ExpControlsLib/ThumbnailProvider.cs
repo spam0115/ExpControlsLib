@@ -264,7 +264,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                if (shellItemImageFactory != IntPtr.Zero) Marshal.ReleaseComObject(shellItemImageFactory);
+                if (shellItemImageFactory != IntPtr.Zero) Marshal.Release(shellItemImageFactory);
             }
         }
 
