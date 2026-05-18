@@ -19,7 +19,7 @@ namespace WindowsApiLib.Shell
 
     public class CShellItemUpdater : NativeWindow, IDisposable
     {
-        private readonly CShellItemHierachyManager _hierachyManager;
+        private readonly CShellItemHierachyManager HierachyManager;
         private readonly int m_notifyId;
         private uint _eventFlags = 0;
 
@@ -33,7 +33,7 @@ namespace WindowsApiLib.Shell
         /// <param name="SHCNE_flags"></param>
         public CShellItemUpdater(CShellItemHierachyManager hierachyManager, uint SHCNE_flags)
         {
-            _hierachyManager = hierachyManager;
+            HierachyManager = hierachyManager;
             _eventFlags = SHCNE_flags;
             DoUpdates = false;
 
@@ -53,7 +53,7 @@ namespace WindowsApiLib.Shell
             // Subscribe to windows events        
             var entry = new SHChangeNotifyEntry()
             {
-                pIdl = _hierachyManager.Root.PIDL,
+                pIdl = HierachyManager.Root.PIDL,
                 Recursively = true
             };
             m_notifyId = SHChangeNotifyRegister(Handle, SHCNRF.InterruptLevel | SHCNRF.ShellLevel | SHCNRF.NewDelivery
@@ -135,8 +135,6 @@ namespace WindowsApiLib.Shell
 
         }
 #endif
-
-
 
         private bool IsItemNotificationEvent(SHCNE lEvent)
         {
@@ -272,10 +270,10 @@ namespace WindowsApiLib.Shell
                                         }
                                         else if (CPidl.SegmentCount(shNotify.dwItem1) == 1) 
                                         {
-                                            if (_hierachyManager.CurrentFolder != null && CPidl.IsEqual(_hierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
+                                            if (HierachyManager.CurrentFolder != null && CPidl.IsEqual(HierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
                                             {
                                                 Debug.WriteLine("updating dir from updatedir event");
-                                                _hierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
+                                                HierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
                                             }
                                         }
                                         else
@@ -297,15 +295,15 @@ namespace WindowsApiLib.Shell
                                         }
                                         else if (CPidl.SegmentCount(shNotify.dwItem1) == 1)
                                         {
-                                            if (_hierachyManager.CurrentFolder != null && CPidl.IsEqual(_hierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
+                                            if (HierachyManager.CurrentFolder != null && CPidl.IsEqual(HierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
                                             {
                                                 Debug.WriteLine("updating dir from updateitem event");
-                                                _hierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
+                                                HierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
                                             }
                                         }
                                         else
                                         {
-                                            var item = CShellItem.FindCShItem(shNotify.dwItem1);
+                                            var item = HierachyManager.FindInShellHierarchy(shNotify.dwItem1, out CShellItem parent);
                                             if (item is not null)
                                             {
                                                 // Debug.WriteLine("Item: " & item.ToString) 'Change made 9/21/2010

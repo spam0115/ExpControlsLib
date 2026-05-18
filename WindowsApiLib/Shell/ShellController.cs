@@ -30,26 +30,36 @@ namespace WindowsApiLib.Shell
 
             HierachyManager.Root = DesktopCSI;
             ShellUpdater = new CShellItemUpdater(HierachyManager, (uint)SHCNE.DISKEVENTS);
-            CShellItemFactory.HierachyManager = HierachyManager;    
-
-            //ShellUpdater = new CShellItemUpdater(HierachyManager.Root);
 
         }
 
-        public static void LoadFolderContents(CShellItem csi) //move: to shellcontroller
+        /// <summary>
+        /// Loads folder contents
+        /// </summary>
+        /// <remarks>
+        /// the reason this function has a return value is because the CShellItem passed in may be a duplicate of
+        /// one that already exists in the hierarchy.  In that case, the original hierarchy version will be returned.
+        /// </remarks>
+        /// <param name="csi"></param>
+        /// <returns></returns>
+        public CShellItem LoadFolderContents(CShellItem csi)
         {
-            var contents = csi.GetContents(SHCONTF.INCLUDEHIDDEN | SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
+            CShellItem target = HierachyManager.AddToHierarchy(csi); //ensure the item exists in the hierarchy
 
-            if (csi.m_Directories is null) csi.m_Directories = new CShellItemCollection(csi);
-            if (csi.m_Files is null) csi.m_Files = new CShellItemCollection(csi);
+            var contents = target.GetContents(SHCONTF.INCLUDEHIDDEN | SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
+
+            if (target.m_Directories is null) target.m_Directories = new CShellItemCollection(target);
+            if (target.m_Files is null) target.m_Files = new CShellItemCollection(target);
 
             foreach (var item in contents.Items)
             {
                 if (item.IsFolder)
-                    csi.m_Directories.Add(item);
+                    target.m_Directories.Add(item);
                 else
-                    csi.m_Files.Add(item);
+                    target.m_Files.Add(item);
             }
+
+            return target;
         }
 
     }

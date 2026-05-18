@@ -15,14 +15,16 @@ namespace WindowsApiLib
         #region        Private Fields
         private readonly byte[] m_bytes;   // The local copy of the PIDL
         private readonly int m_ItemCount;      // the # of ItemIDs in this ItemIDList (PIDL)
-                                               // Private ReadOnly m_OffsetToRelative As Integer 'the index of the start of the last itemID in m_bytes
+        private string value;
+
+        // Private ReadOnly m_OffsetToRelative As Integer 'the index of the start of the last itemID in m_bytes
         #endregion
 
         #region        Constructor
         /// <summary>
-    /// Given an IntPtr pointing to a valid PIDL, copy the bytes of that PIDL to a Byte()
-    /// </summary>
-    /// <param name="Pidl">IntPtr pointing to a valid PIDL</param>
+        /// Given an IntPtr pointing to a valid PIDL, copy the bytes of that PIDL to a Byte()
+        /// </summary>
+        /// <param name="Pidl">IntPtr pointing to a valid PIDL</param>
         public CPidl(IntPtr Pidl)
         {
             int cb = ItemIDListSize(Pidl);
@@ -31,7 +33,6 @@ namespace WindowsApiLib
                 m_bytes = new byte[cb + 1 + 1];
                 Marshal.Copy(Pidl, m_bytes, 0, cb);
             }
-            // DumpPidl(pidl)
             else
             {
                 m_bytes = new byte[2];
@@ -41,13 +42,35 @@ namespace WindowsApiLib
             m_bytes[m_bytes.Length - 1] = 0;
             m_ItemCount = SegmentCount(Pidl);
         }
+
+        public CPidl(string path)
+        {
+            IntPtr pidl = ShellAPI.ILCreateFromPathW(path);
+
+            if (pidl == IntPtr.Zero) throw new ArgumentException("Invalid path provided to CPidl.");
+                
+            int cb = ItemIDListSize(pidl);
+            if (cb > 0)
+            {
+                m_bytes = new byte[cb + 1 + 1];
+                Marshal.Copy(pidl, m_bytes, 0, cb);
+            }
+            else
+            {
+                m_bytes = new byte[2];
+            }  // This is the DeskTop (we hope)
+               // ensure nulnul
+            m_bytes[m_bytes.Length - 2] = 0;
+            m_bytes[m_bytes.Length - 1] = 0;
+            m_ItemCount = SegmentCount(pidl);
+        }
         #endregion
 
         #region        Public Properties
         /// <summary>
-    /// Returns this cPIDL's Byte() containing the Bytes of the original PIDL
-    /// </summary>
-    /// <returns>This cPIDL's Byte() containing the Bytes of the original PIDL</returns>
+        /// Returns this cPIDL's Byte() containing the Bytes of the original PIDL
+        /// </summary>
+        /// <returns>This cPIDL's Byte() containing the Bytes of the original PIDL</returns>
         public byte[] PidlBytes
         {
             get

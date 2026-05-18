@@ -874,7 +874,7 @@ namespace WindowsApiLib.Shell
             if (CPidl.IsEqual(BaseItem.PIDL, Abs))
                 return BaseItem;
 
-            if (BaseItem.FilesInitialized && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
+            if (BaseItem.FileList is not null && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
             {
                 foreach (CShellItem FItem in BaseItem.FileList)
                 {
@@ -882,7 +882,7 @@ namespace WindowsApiLib.Shell
                         return FItem;
                 }
             }
-            if (BaseItem.FoldersInitialized) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
+            if (BaseItem.DirectoryList is not null) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
             {
                 foreach (CShellItem DItem in BaseItem.DirectoryList)
                 {
@@ -892,6 +892,25 @@ namespace WindowsApiLib.Shell
                         return FindCShItem(DItem, Abs);
                 }
             }
+
+            //if (BaseItem.FilesInitialized && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
+            //{
+            //    foreach (CShellItem FItem in BaseItem.FileList)
+            //    {
+            //        if (CPidl.IsEqual(FItem.PIDL, Abs))
+            //            return FItem;
+            //    }
+            //}
+            //if (BaseItem.FoldersInitialized) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
+            //{
+            //    foreach (CShellItem DItem in BaseItem.DirectoryList)
+            //    {
+            //        if (CPidl.IsEqual(DItem.PIDL, Abs))
+            //            return DItem;
+            //        if (CPidl.IsAncestorOf(DItem.PIDL, Abs, false))
+            //            return FindCShItem(DItem, Abs);
+            //    }
+            //}
 
             return FindCShItemRet;
         }
@@ -2514,43 +2533,35 @@ namespace WindowsApiLib.Shell
         {
             var items = new CShellItemCollection(this);
             if (Folder is null)
-                return items; // Added 10/22/2011 to deal with certain Virtual Folders
+            {
+                return items; // deal with certain Virtual Folders which have no ishellfolder?
+            }
             CShellItem itm;
-            // Debug.WriteLine("GContent " & Me.Path)
-            // Dim StTime As DateTime = Now()
-            // Dim content As ArrayList = GetContentPtrs(flags)       '11/09/2013 - should have been commented out originally
-            // Debug.WriteLine("GPtrRel " & Now().Subtract(StTime).TotalMilliseconds.ToString & " ms")
-            // StTime = Now()
-            // For Each ptr In content
+
             var pidls = GetPidlsOfCurrentFolder(flags);
             foreach (IntPtr pidl in pidls)
             {
-                if (pidl == IntPtr.Zero)                                               // 11/09/2013 - Investigate other
+                if (pidl == IntPtr.Zero)                                              
                 {
-                    Debug.WriteLine("Content=IntPtr.Zero while filling " + FullPath);     // 11/09/2013 - Investigate other
-                    Marshal.FreeCoTaskMem(pidl);                                          // 11/09/2013 - Investigate other
-                    continue;                                                        // 11/09/2013 - Investigate other
+                    Debug.WriteLine("Content=IntPtr.Zero while filling " + FullPath); 
+                    Marshal.FreeCoTaskMem(pidl);                                      
+                    continue;
                 }
                 else
                 {
-                    try                                         // ASUS Fix 'mod 06/27/09 First fix added
+                    try
                     {
                         //todo: use IFolder.GetAttributesOf to get file attributes in bulk
                         itm = CShellItemFactory.CreateCShItem(pidl, this);
                         items.Add(itm);
                     }
-                    // Catch ex As InvalidCastException             'ASUS Fix - superceeded 11/13/2013
-                    // Debug.WriteLine("GetContents - InvCast") 'ASUS Fix
-                    // Debug.WriteLine("GetContents - Exception: " & ex.Message)   '11/09/2013 - Investigate other
-                    // Debug.WriteLine("Processing " & Me.Path)                    '11/09/2013 - Investigate other
-                    // DumpPidl(ptr)                                               '11/09/2013 - Investigate other
                     finally
                     {
-                        //Marshal.FreeCoTaskMem(pidl);
+                        //Marshal.FreeCoTaskMem(pidl); //the pidl is stored permantly in the new cshellitem so don't free it
                     }
                 }
             }
-            // .WriteLine("BuildItems " & Now().Subtract(StTime).TotalMilliseconds.ToString & " ms")
+
             return items;
         }
 

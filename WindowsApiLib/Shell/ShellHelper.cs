@@ -725,6 +725,33 @@ namespace WindowsApiLib.Shell
             return iShFolder;
         }
 
+        public static IShellFolder GetIShellFolder(IntPtr absPidl)
+        {
+            IShellFolder desktop = null;
+            int hr = SHGetDesktopFolder(ref desktop);
+            if (hr < 0) return null;
+
+            if (CPidl.IsShellNamespaceRoot(absPidl)) return desktop;
+
+            IntPtr ptr = IntPtr.Zero;
+            IShellFolder iShFolder = null;
+            hr = desktop.BindToObject(absPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref ptr);
+            if (hr >= S_OK && ptr != IntPtr.Zero)
+            {
+                try
+                {
+                    iShFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(ptr, typeof(IShellFolder));
+                }
+                finally
+                {
+                    Marshal.Release(ptr);
+                }
+            }
+
+            Marshal.ReleaseComObject(desktop);
+            return iShFolder;
+        }
+
         #region        Shell Navigation and PIDL Utilities
 
         /// <summary>The WalkAllCallBack delegate defines the signature of 

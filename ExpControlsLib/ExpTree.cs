@@ -113,62 +113,6 @@ namespace ExpControlsLib
         private const int TVM_FIRST = 0x1100;
         private const int TVM_GETEDITCONTROL = TVM_FIRST + 15;
 
-        /* what is the point of the following proxy?
-        internal virtual TreeView _TreeView
-        {
-            [MethodImpl(MethodImplOptions.Synchronized)]
-            get
-            {
-                return _TreeView;
-            }
-
-            //[MethodImpl(MethodImplOptions.Synchronized)]
-            //set
-            //{
-            //    if (_TreeView != null)
-            //    {
-            //        _TreeView.HandleCreated -= Tv1_HandleCreated;
-            //        _TreeView.HandleDestroyed -= Tv1_HandleDestroyed;
-            //        _TreeView.BeforeExpand -= Tv1_BeforeExpand;
-            //        _TreeView.AfterSelect -= Tv1_AfterSelect;
-            //        _TreeView.VisibleChanged -= Tv1_VisibleChanged;
-            //        _TreeView.BeforeCollapse -= Tv1_BeforeCollapse;
-            //        _TreeView.BeforeLabelEdit -= Tv1_BeforeLabelEdit;
-            //        _TreeView.AfterLabelEdit -= Tv1_AfterLabelEdit;
-            //        _TreeView.MouseUp -= ExpTree_MouseUp;
-            //        _TreeView.MouseDown -= Tv1_MouseDown;
-            //        _TreeView.MouseMove -= Tv1_MouseMove;
-            //        _TreeView.MouseEnter -= Tv1_MouseEnter;
-            //        _TreeView.MouseLeave -= Tv1_MouseLeave;
-            //        _TreeView.KeyPress -= Tv1_KeyPress;
-            //        _TreeView.KeyUp -= Tv1_KeyUp;
-            //        _TreeView.KeyDown -= Tv1_KeyDown;
-            //    }
-
-            //    _TreeView = value;
-            //    if (_TreeView != null)
-            //    {
-            //        _TreeView.HandleCreated += Tv1_HandleCreated;
-            //        _TreeView.HandleDestroyed += Tv1_HandleDestroyed;
-            //        _TreeView.BeforeExpand += Tv1_BeforeExpand;
-            //        _TreeView.AfterSelect += Tv1_AfterSelect;
-            //        _TreeView.VisibleChanged += Tv1_VisibleChanged;
-            //        _TreeView.BeforeCollapse += Tv1_BeforeCollapse;
-            //        _TreeView.BeforeLabelEdit += Tv1_BeforeLabelEdit;
-            //        _TreeView.AfterLabelEdit += Tv1_AfterLabelEdit;
-            //        _TreeView.MouseUp += ExpTree_MouseUp;
-            //        _TreeView.MouseDown += Tv1_MouseDown;
-            //        _TreeView.MouseMove += Tv1_MouseMove;
-            //        _TreeView.MouseEnter += Tv1_MouseEnter;
-            //        _TreeView.MouseLeave += Tv1_MouseLeave;
-            //        _TreeView.KeyPress += Tv1_KeyPress;
-            //        _TreeView.KeyUp += Tv1_KeyUp;
-            //        _TreeView.KeyDown += Tv1_KeyDown;
-            //    }
-            //}
-        }
-        */
-
         #region  Constructor/Destructor
 
         public ExpTree() : base()
@@ -538,8 +482,9 @@ namespace ExpControlsLib
             bool ExpandANodeRet = default;
             ExpandANodeRet = false;     // assume failure
             var baseNode = Root;
-            if (baseNode == null) return false; // 05/09/2026 - Handle uninitialized tree
+            if (baseNode == null) return false;
             _TreeView.BeginUpdate();
+
             // do the drill down -- Node to expand must be included in tree
             baseNode.Expand(); // Ensure base is filled in
 
@@ -701,13 +646,9 @@ namespace ExpControlsLib
             
             bool performAccurateCheck = false;
             if (ReferenceEquals(item, RootItem) || ReferenceEquals(item, ShellController.DesktopCSI))
-            {
                 performAccurateCheck = true;
-            }
             else if (item.IsFileSystem && !item.IsRemote && !item.IsRemovable && !item.IsNetworkDrive)
-            {
                 performAccurateCheck = true;
-            }
 
             if (performAccurateCheck)
             {

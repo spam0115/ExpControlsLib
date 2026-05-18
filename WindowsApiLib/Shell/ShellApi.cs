@@ -549,7 +549,7 @@ namespace WindowsApiLib.Shell
         /// The returned PIDL must be released with <c>ILFree</c>.
         /// </remarks>
         [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
-        internal static extern IntPtr ILCreateFromPathW([MarshalAs(UnmanagedType.LPWStr)] string pszPath);
+        public static extern IntPtr ILCreateFromPathW([MarshalAs(UnmanagedType.LPWStr)] string pszPath);
 
         #endregion
 

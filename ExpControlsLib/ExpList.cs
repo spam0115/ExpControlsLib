@@ -79,6 +79,8 @@ namespace ExpControlsLib
         private bool m_CreateNew = false; // Flag for NewMenu processing of "New" item
         private ThumbnailImageListManager _thumbnailManager; // Manager for thumbnail display modes
 
+        private ShellController _shellController = null;
+
         /// <summary>
         /// Delegate for the <see cref="ExpListItemClick"/> event.
         /// </summary>
@@ -258,6 +260,11 @@ namespace ExpControlsLib
         }
 
 
+        public void Initialize(ShellController shellController)
+        {
+            _shellController = shellController;
+        }
+
         /// <summary>
         /// Delegate for the <see cref="ExpList.ExpListGetColumnData"/> event.
         /// </summary>
@@ -368,7 +375,8 @@ namespace ExpControlsLib
                     if (value == _CurrentPath && _currentFolderCsi != null) return;
                     try
                     {
-                        CShellItem csi = CShellItemFactory.CreateCShItem(value);
+                        var csi = CShellItemFactory.CreateCShItem(value);
+
                         if (csi != null && csi.IsFolder)
                         {
                             DisplayFiles(value, csi, true);
@@ -608,8 +616,11 @@ namespace ExpControlsLib
                 csi = CShellItemFactory.CreateCShItem(pathName);
             }
 
-            if (csi.Directories is null && csi.Files is null) ShellController.LoadFolderContents(csi);
+            if (csi.Directories is null && csi.Files is null && _shellController != null) 
+                _shellController.LoadFolderContents(csi);
+            
             if (includeFolder) dirList.AddRange(csi.Directories);
+
             if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(csi.Files);
 
             if ((dirList.Count + fileList.Count) > 0)
@@ -629,7 +640,7 @@ namespace ExpControlsLib
                 if (includeFolder) combList.AddRange(dirList);
                 combList.AddRange(fileList);
 
-                _ListView.BeginUpdate(); //todo: may be better to remove this.
+                _ListView.BeginUpdate();
                 _ListView.Items.Clear();
                 _itemIndex.Clear();
 
@@ -679,7 +690,7 @@ namespace ExpControlsLib
             if (IsThumbnailViewMode())
             {
                 //LoadAndAssignThumbnails(GetThumbnailSizeForMode(DisplayMode));
-                LoadThumbnails(GetThumbnailSizeForMode(DisplayMode));
+                LoadThumbnails(GetThumbnailSizeForMode(DisplayMode)); //todo: this is already lazy load but it could be even more lazy load
             }
 
             ExpListFolderChanged?.Invoke(_currentFolderCsi);
