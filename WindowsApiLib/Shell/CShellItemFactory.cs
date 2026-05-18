@@ -330,6 +330,61 @@ namespace WindowsApiLib.Shell
 
         }
 
+        /// <summary>
+        /// Note: batch calls of GetAttributesOf() doesn't work because it doesn't give open ended results - it only gives results based on the common denominator of flags.
+        /// The only way to make this work would be to use file system querying instead of shell querying but that only works on some items.
+        /// if HierachyManager is null, then batch get
+        /// else
+        ///   see if the parent exists in the hierachy
+        ///   if it has children, don't do batch generation, iterate and return all children
+        ///   else do batch generation
+        /// </summary>
+        /// <param name="pidls"></param>
+        /// <param name="parent"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+
+        //internal static List<CShellItem> CreateCShItems(List<nint> pidls, CShellItem parent)
+        //{
+        //    if (parent is null) throw new ArgumentException("");
+
+        //    if (HierachyManager is null)
+        //    {
+        //        var results = BatchCreateCShItems(pidls, parent);
+        //        return results;
+        //    }
+        //    else
+        //    {
+        //        var parentCsi = HierachyManager.FindInShellHierarchy(parent.PIDL, out var grandParent);
+        //        if (parentCsi is not null && parentCsi.m_Files is not null)
+        //        {
+        //            var results = new List<CShellItem>(pidls.Count());
+
+        //            foreach (var pidl in pidls)
+        //            {
+        //                var newCsi = GetOrCreateCShItem(pidl);
+        //                results.Add(newCsi);
+        //            }
+        //            return results;
+        //        }
+        //        else
+        //        {
+        //            var results = BatchCreateCShItems(pidls, parentCsi);
+        //            return results;
+        //        }
+        //    }
+        //}
+
+        /// <summary>
+        /// batch calls of GetAttributesOf() doesn't work because 
+        /// </summary>
+        /// <param name="pidls"></param>
+        /// <param name="parent"></param>
+        /// <returns></returns>
+        //private static List<CShellItem> BatchCreateCShItems(List<nint> pidls, CShellItem parent)
+        //{
+        //}
+
         /// <summary>Given an IntPtr representation of a PIDL,
         /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.
         /// The tree is expanded (filled in) as necessary to locate the CShellItem or to locate the proper
@@ -652,7 +707,7 @@ namespace WindowsApiLib.Shell
             var aPidl = new IntPtr[1];
             aPidl[0] = ptr;
             csi.Folder.GetAttributesOf(1, aPidl, ref attrFlag);
-            if (((attrFlag & SFGAO.FOLDER) != 0) && !((attrFlag & SFGAO.STREAM) != 0))         // XP or above
+            if (((attrFlag & SFGAO.FOLDER) != 0) && !((attrFlag & SFGAO.STREAM) != 0))
             {
                 IsFolderRelRet = true;
             }
@@ -663,114 +718,10 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
-        //todo: is it really necessary to have the parent to get the attributes?
         /// <summary>Get the base attributes of the folder/file that this CShellItem represents</summary>
         /// <param name="folder">Parent Folder of this Item</param>
         /// <param name="pidl">Relative Pidl of this Item.</param>
-        private static void SetUpAttributes(CShellItem csi, IShellFolder parentIFolder, IntPtr pidl)
-        {
-            SFGAO attrFlag;
-            attrFlag = SFGAO.BROWSABLE | SFGAO.FILESYSTEM | SFGAO.FOLDER | SFGAO.LINK | SFGAO.SHARE
-             | SFGAO.HIDDEN | SFGAO.REMOVABLE | SFGAO.CANCOPY | SFGAO.CANDELETE | SFGAO.CANLINK 
-             | SFGAO.CANMOVE | SFGAO.DROPTARGET | SFGAO.CANRENAME | SFGAO.STREAM;
-            // SFGAO.RDONLY   'made into an on-demand attribute
-            // SFGAO.HASSUBFOLDER   'made into an on-demand attribute
-
-            parentIFolder.GetAttributesOf(1, [pidl], ref attrFlag); //it's useless to call IShellFolder.GetAttributesOf for one pidl.  It is only useful to call it for multiple pidls
-            csi.m_SFGAO_Attributes = attrFlag;
-            csi.m_IsBrowsable = (attrFlag & SFGAO.BROWSABLE) != 0;
-            if (pidl == DesktopPidl) { //todo: remove this since the root doesn't have a parent ishellfolder
-                csi.m_IsFileSystem = false;
-                csi.m_Path = "::{" + DesktopGUID.ToString() + "}";
-            }
-            else {
-                csi.m_IsFileSystem = (attrFlag & SFGAO.FILESYSTEM) != 0;
-                csi.m_Path = CShellItemFactory.GetFullPath(csi);
-            }
-            // m_HasSubFolders = (attrFlag & SFGAO.HASSUBFOLDER) != 0;  'made into an on-demand attribute
-            csi.m_IsFolder = (attrFlag & SFGAO.FOLDER) != 0;
-            csi.m_IsLink = (attrFlag & SFGAO.LINK) != 0;
-            csi.m_IsShared = (attrFlag & SFGAO.SHARE) != 0;
-            csi.m_IsHidden = (attrFlag & SFGAO.HIDDEN) != 0;
-            csi.m_IsRemovable = (attrFlag & SFGAO.REMOVABLE) != 0;
-            // m_IsReadOnly = (attrFlag & SFGAO.RDONLY) != 0;      'made into an on-demand attribute
-            csi.m_CanCopy = (attrFlag & SFGAO.CANCOPY) != 0;
-            csi.m_CanDelete = (attrFlag & SFGAO.CANDELETE) != 0;
-            csi.m_CanLink = (attrFlag & SFGAO.CANLINK) != 0;
-            csi.m_CanMove = (attrFlag & SFGAO.CANMOVE) != 0;
-            csi.IsDropTarget = (attrFlag & SFGAO.DROPTARGET) != 0;
-            csi.m_CanRename = (attrFlag & SFGAO.CANRENAME) != 0;
-
-            // check for zip file = folder on xp, leave it a file
-            if (csi.m_IsFolder && csi.m_IsFileSystem)
-            {
-                // If (m_Attributes = (m_Attributes And SFGAO.STREAM)) Then
-                if ((attrFlag & SFGAO.STREAM) != 0)   // in this case, it is not a Folder, but a .zip or .cab or etc
-                    csi.m_IsFolder = false;
-            }
-
-            if (csi.m_IsFolder && csi.m_Path.Length == 3 && csi.m_Path.Substring(1).Equals(@":\"))
-            {
-                csi.m_IsDisk = true;
-                try // 04/16/2012 Entire Try Block
-                {
-                    var disk = new System.Management.ManagementObject("win32_logicaldisk.deviceid=\"" + csi.FullPath.Substring(0, 2) + "\"");
-                    csi.m_Length = Convert.ToInt64(disk["Size"]);
-                    if ((Convert.ToUInt32(disk["DriveType"]).ToString() ?? "") == (4.ToString() ?? ""))
-                    {
-                        csi.m_IsNetWorkDrive = true;
-                        csi.m_IsRemote = true;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Disconnected Network Drives etc. will generate 
-                    // an error here, just assume that it is a network
-                    // drive
-                    csi.m_IsNetWorkDrive = true;
-                    csi.m_IsRemote = true;
-                }
-                finally
-                {
-                    csi.m_XtrInfo = true;
-                    if (!DriveDict.ContainsKey(csi.m_Path))
-                    {
-                        DriveDict.Add(csi.m_Path, csi.m_IsRemote);
-                    }
-                }
-            }
-
-            // Setup IsRemote             '4/14/2012
-            // Reworked 5/15/2012 when testing discovered that contrary to the Docs, IO.Path.GetPathRoot(m_Path)
-            // will throw an exception when presented with a long path that GetDisplayNameOf made legal by
-            // using 8.3 names for some of the directories! IO.Path.GetPathRoot is not supposed to do anything to
-            // reference the actual components of the Path. It should be strictly String manipulation!
-            // Error on Path = "C:\Testing\XXXXXA~1\YYYYYY~1\ABCDEF~1\ZZZZZZ~1\abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890123456789012345678901234.txt"
-            // which is only 138 chars long.
-            if (!(csi.m_IsDisk || csi.m_Path.StartsWith("::")))
-            {
-                if (csi.m_Path.StartsWith(@"\\"))
-                {
-                    string[] tmp = csi.m_Path.Split(new char[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
-                    if (tmp.Length > 0 && tmp[0].Equals(CShellItemFactory.SystemName, StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        csi.m_IsRemote = false;
-                    }
-                    else
-                    {
-                        csi.m_IsRemote = true;
-                    }
-                }
-                else if (csi.m_Path.Length > 2 && csi.m_Path.Substring(1, 2).Equals(@":\"))
-                {
-                    string itemroot = csi.m_Path.Substring(0, 3);
-                    if (DriveDict.ContainsKey(itemroot) && DriveDict[itemroot])
-                        csi.m_IsRemote = true;
-                }
-            }
-        }
-
-        private static void SetUpAttributes(CShellItem csi, IntPtr pidl)
+        private static void SetUpAttributes(CShellItem csiOutput, IntPtr pidl)
         {
             SFGAO attrFlag;
             attrFlag = SFGAO.BROWSABLE | SFGAO.FILESYSTEM | SFGAO.FOLDER | SFGAO.LINK | SFGAO.SHARE
@@ -786,51 +737,51 @@ namespace WindowsApiLib.Shell
             Marshal.ReleaseComObject(shellItem);
 
             attrFlag = (SFGAO)attrs;
-            csi.m_SFGAO_Attributes = attrFlag;
-            csi.m_IsBrowsable = (attrFlag & SFGAO.BROWSABLE) != 0;
-            csi.m_IsFolder = (attrFlag & SFGAO.FOLDER) != 0;
-            csi.m_IsLink = (attrFlag & SFGAO.LINK) != 0;
-            csi.m_IsShared = (attrFlag & SFGAO.SHARE) != 0;
-            csi.m_IsHidden = (attrFlag & SFGAO.HIDDEN) != 0;
-            csi.m_IsRemovable = (attrFlag & SFGAO.REMOVABLE) != 0;
-            csi.m_CanCopy = (attrFlag & SFGAO.CANCOPY) != 0;
-            csi.m_CanDelete = (attrFlag & SFGAO.CANDELETE) != 0;
-            csi.m_CanLink = (attrFlag & SFGAO.CANLINK) != 0;
-            csi.m_CanMove = (attrFlag & SFGAO.CANMOVE) != 0;
-            csi.IsDropTarget = (attrFlag & SFGAO.DROPTARGET) != 0;
-            csi.m_CanRename = (attrFlag & SFGAO.CANRENAME) != 0;
+            csiOutput.m_SFGAO_Attributes = attrFlag;
+            csiOutput.m_IsBrowsable = (attrFlag & SFGAO.BROWSABLE) != 0;
+            csiOutput.m_IsFolder = (attrFlag & SFGAO.FOLDER) != 0;
+            csiOutput.m_IsLink = (attrFlag & SFGAO.LINK) != 0;
+            csiOutput.m_IsShared = (attrFlag & SFGAO.SHARE) != 0;
+            csiOutput.m_IsHidden = (attrFlag & SFGAO.HIDDEN) != 0;
+            csiOutput.m_IsRemovable = (attrFlag & SFGAO.REMOVABLE) != 0;
+            csiOutput.m_CanCopy = (attrFlag & SFGAO.CANCOPY) != 0;
+            csiOutput.m_CanDelete = (attrFlag & SFGAO.CANDELETE) != 0;
+            csiOutput.m_CanLink = (attrFlag & SFGAO.CANLINK) != 0;
+            csiOutput.m_CanMove = (attrFlag & SFGAO.CANMOVE) != 0;
+            csiOutput.IsDropTarget = (attrFlag & SFGAO.DROPTARGET) != 0;
+            csiOutput.m_CanRename = (attrFlag & SFGAO.CANRENAME) != 0;
             if (pidl == DesktopPidl)
             {
-                csi.m_IsFileSystem = false;
-                csi.m_Path = "::{" + DesktopGUID.ToString() + "}";
+                csiOutput.m_IsFileSystem = false;
+                csiOutput.m_Path = "::{" + DesktopGUID.ToString() + "}";
             }
             else
             {
-                csi.m_IsFileSystem = (attrFlag & SFGAO.FILESYSTEM) != 0;
-                csi.m_Path = CShellItemFactory.GetFullPath(csi);
+                csiOutput.m_IsFileSystem = (attrFlag & SFGAO.FILESYSTEM) != 0;
+                csiOutput.m_Path = CShellItemFactory.GetFullPath(csiOutput);
             }
             // m_IsReadOnly = (attrFlag & SFGAO.RDONLY) != 0;      'made into an on-demand attribute
             // m_HasSubFolders = (attrFlag & SFGAO.HASSUBFOLDER) != 0;  'made into an on-demand attribute
 
             // check for zip file = folder on xp, leave it a file
-            if (csi.m_IsFolder && csi.m_IsFileSystem)
+            if (csiOutput.m_IsFolder && csiOutput.m_IsFileSystem)
             {
                 // If (m_Attributes = (m_Attributes And SFGAO.STREAM)) Then
                 if ((attrFlag & SFGAO.STREAM) != 0)   // in this case, it is not a Folder, but a .zip or .cab or etc
-                    csi.m_IsFolder = false;
+                    csiOutput.m_IsFolder = false;
             }
 
-            if (csi.m_IsFolder && csi.m_Path.Length == 3 && csi.m_Path.Substring(1).Equals(@":\"))
+            if (csiOutput.m_IsFolder && csiOutput.m_Path.Length == 3 && csiOutput.m_Path.Substring(1).Equals(@":\"))
             {
-                csi.m_IsDisk = true;
+                csiOutput.m_IsDisk = true;
                 try // 04/16/2012 Entire Try Block
                 {
-                    var disk = new System.Management.ManagementObject("win32_logicaldisk.deviceid=\"" + csi.FullPath.Substring(0, 2) + "\"");
-                    csi.m_Length = Convert.ToInt64(disk["Size"]);
+                    var disk = new System.Management.ManagementObject("win32_logicaldisk.deviceid=\"" + csiOutput.FullPath.Substring(0, 2) + "\"");
+                    csiOutput.m_Length = Convert.ToInt64(disk["Size"]);
                     if ((Convert.ToUInt32(disk["DriveType"]).ToString() ?? "") == (4.ToString() ?? ""))
                     {
-                        csi.m_IsNetWorkDrive = true;
-                        csi.m_IsRemote = true;
+                        csiOutput.m_IsNetWorkDrive = true;
+                        csiOutput.m_IsRemote = true;
                     }
                 }
                 catch (Exception ex)
@@ -838,15 +789,15 @@ namespace WindowsApiLib.Shell
                     // Disconnected Network Drives etc. will generate 
                     // an error here, just assume that it is a network
                     // drive
-                    csi.m_IsNetWorkDrive = true;
-                    csi.m_IsRemote = true;
+                    csiOutput.m_IsNetWorkDrive = true;
+                    csiOutput.m_IsRemote = true;
                 }
                 finally
                 {
-                    csi.m_XtrInfo = true;
-                    if (!DriveDict.ContainsKey(csi.m_Path))
+                    csiOutput.m_XtrInfo = true;
+                    if (!DriveDict.ContainsKey(csiOutput.m_Path))
                     {
-                        DriveDict.Add(csi.m_Path, csi.m_IsRemote);
+                        DriveDict.Add(csiOutput.m_Path, csiOutput.m_IsRemote);
                     }
                 }
             }
@@ -858,21 +809,21 @@ namespace WindowsApiLib.Shell
             // reference the actual components of the Path. It should be strictly String manipulation!
             // Error on Path = "C:\Testing\XXXXXA~1\YYYYYY~1\ABCDEF~1\ZZZZZZ~1\abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890123456789012345678901234.txt"
             // which is only 138 chars long.
-            if (!(csi.m_IsDisk || csi.m_Path.StartsWith("::")))
+            if (!(csiOutput.m_IsDisk || csiOutput.m_Path.StartsWith("::")))
             {
-                if (csi.m_Path.StartsWith(@"\\"))
+                if (csiOutput.m_Path.StartsWith(@"\\"))
                 {
-                    string[] tmp = csi.m_Path.Split(new char[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
+                    string[] tmp = csiOutput.m_Path.Split(new char[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
                     if (tmp.Length > 0 && tmp[0].Equals(CShellItemFactory.SystemName, StringComparison.InvariantCultureIgnoreCase))
-                        csi.m_IsRemote = false;
+                        csiOutput.m_IsRemote = false;
                     else
-                        csi.m_IsRemote = true;
+                        csiOutput.m_IsRemote = true;
                 }
-                else if (csi.m_Path.Length > 2 && csi.m_Path.Substring(1, 2).Equals(@":\"))
+                else if (csiOutput.m_Path.Length > 2 && csiOutput.m_Path.Substring(1, 2).Equals(@":\"))
                 {
-                    string itemroot = csi.m_Path.Substring(0, 3);
+                    string itemroot = csiOutput.m_Path.Substring(0, 3);
                     if (DriveDict.ContainsKey(itemroot) && DriveDict[itemroot])
-                        csi.m_IsRemote = true;
+                        csiOutput.m_IsRemote = true;
                 }
             }
         }
@@ -887,6 +838,7 @@ namespace WindowsApiLib.Shell
                 return CPidl.GetFileSystemPath(pidl);
             else return CPidl.GetParsingPath(pidl);
         }
+
 
     }
 }

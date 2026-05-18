@@ -258,7 +258,6 @@ namespace WindowsApiLib.Shell
                                                 item.Update(shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
                                             }
                                         }
-
                                         break;
                                     }
 
@@ -304,12 +303,14 @@ namespace WindowsApiLib.Shell
                                         else
                                         {
                                             var item = HierachyManager.FindInShellHierarchy(shNotify.dwItem1, out CShellItem parent);
-                                            if (item is not null)
+                                            if (item is null) return;
+                                            if (item.IsFolder)
                                             {
-                                                // Debug.WriteLine("Item: " & item.ToString) 'Change made 9/21/2010
+                                                item.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            }
+                                            else
+                                            {
                                                 item.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
-                                                // item.Update(IntPtr.Zero, CShItemUpdateType.IconChange)
-                                                //todo: update thumbnail for item
                                             }
                                         }
 

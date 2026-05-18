@@ -1687,7 +1687,7 @@ namespace WindowsApiLib.Shell
             }
             if (Changed)
             {
-                CShItemUpdate?.Invoke(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
+                CShItemUpdate?.Invoke(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted)); 
             }
         }
 
@@ -2206,7 +2206,6 @@ namespace WindowsApiLib.Shell
                                     catch (Exception ex)
                                     {
                                         Debug.WriteLine("ERROR - Failed to add new CShellItem to internal tree.  : " + ex.ToString());
-                                        // ASUS Fix - modified 11/13/2013 was only looking for InvalidCastExcepton
                                     }
                                 }
                             }
@@ -2224,8 +2223,6 @@ namespace WindowsApiLib.Shell
                     }
                     finally
                     {
-                        //foreach (IntPtr itm in newPidls)
-                        //    Marshal.FreeCoTaskMem(itm);
                     }
 
                     // 6/18/2012 - If something changed in this Folder, then Raise an Updated Event AFTER all Adds, Deletes, etc have been posted
@@ -2245,43 +2242,6 @@ namespace WindowsApiLib.Shell
             return UpdateRefreshRet;
         }
 
-        #endregion
-
-        #endregion
-
-
-        #endregion
-
-
-        #region    Private Methods
-
-        private void ResetInfo()
-        {
-            m_HasDispType = false;
-            m_IsReadOnlySetup = false;
-            m_XtrInfo = false;
-            m_HasSubFoldersSetup = false;
-            if (W32Data is not null && W32Data is W32Find_Data)
-                W32Data = null;
-            ResetIconIndex();
-        }
-        
-        private void ResetChildren()
-        {
-            // propogate changes to the known children
-            if (m_Files is not null)
-            {
-                foreach (CShellItem item in m_Files)
-                    item.ResetInfo();
-            }
-            if (m_Directories is not null)
-            {
-                foreach (CShellItem item in m_Directories)
-                    item.ResetInfo();
-            }
-        }
-
-        #region        UpdateRefresh
 
         /// <summary>
         /// On a Rename operation, we simply modify the existant CShellItem to reflect the new PIDL, Path, and
@@ -2321,12 +2281,14 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>For internal use only<br />
-        /// Update is called by the CShItemUpdater Class when that Class receives a WM_Notify message. The purpose of this Class is to
-        /// translate the information passed to it into the appropriate set of actions needed to maintain the internal cache and to,
-        /// directly or indirectly (thru the routines it calls), Raise CShItemUpdate events to notify the using application of changes.
+        /// Update is called by the CShItemUpdater Class when that Class receives a WM_Notify message. The purpose 
+        /// of this Class is to translate the information passed to it into the appropriate set of actions needed 
+        /// to maintain the internal cache and to, directly or indirectly (thru the routines it calls), Raise 
+        /// CShItemUpdate events to notify the using application of changes.
         /// </summary>
-        /// <param name="changedPidl">The absolute PIDL of the affected item. The definition of "affected item" varies with the type of
-        ///                       change being reported.</param>
+        /// <param name="changedPidl">The absolute PIDL of the affected item. The definition of "affected item" 
+        ///     varies with the type of change being reported.  This is only needed if the pidl changed due to 
+        ///     rename, move, etc.</param>
         /// <param name="changeType">The type of change.</param>
         /// <remarks>Serves as a bridge between CShItemUpdater and the CShellItem that should handle a change.</remarks>
         internal void Update(IntPtr changedPidl, CShItemUpdateType changeType)
@@ -2336,10 +2298,6 @@ namespace WindowsApiLib.Shell
             {
                 case CShItemUpdateType.Renamed:      // Item has been renamed or moved
                     {
-
-                        //IntPtr newParent, newPidlRel = IntPtr.Zero;
-                        //newParent = CPidl.SplitPidl(newPidl, ref newPidlRel);
-
                         IntPtr PidlRel = IntPtr.Zero, newFolderPtr = IntPtr.Zero;
                         var splitPidl = CPidl.Split(changedPidl);
                         var oldParentItem = Parent;    // Save in case "renamed" to a new directory
@@ -2360,7 +2318,7 @@ namespace WindowsApiLib.Shell
                                     Parent.RemoveItem(this);
                                     newParentItem.AddItem(this);
                                 }
-                                
+
                                 ResetInfo();
                                 m_Path = CShellItemFactory.GetFullPath(this);
 
@@ -2423,7 +2381,6 @@ namespace WindowsApiLib.Shell
                         DoUpdateDir(this); // recursively check this Folder and all known sub-Folders for change     '5/21/2012
                         break;
                     }
-
                 case CShItemUpdateType.Updated: // raised when Attributes (Item or Items under a Folder) change
                     {
                         // Debug.WriteLine("Updated for " & Me.Path)
@@ -2438,6 +2395,7 @@ namespace WindowsApiLib.Shell
                         // 'Me.UpdateRefresh()     '6/3/2012
                         // End If
                         CShItemUpdate?.Invoke(Parent, new ShellItemUpdateEventArgs(this, changeType));
+                        //todo: update thumbnail for item
                         break;
                     }
                 case CShItemUpdateType.IconChange:
@@ -2445,6 +2403,7 @@ namespace WindowsApiLib.Shell
                         // Debug.WriteLine("IconChange for " & Me.Path)
                         ResetInfo();
                         CShItemUpdate?.Invoke(Parent, new ShellItemUpdateEventArgs(this, changeType));
+                        //todo: update thumbnail for item
                         break;
                     }
                 case CShItemUpdateType.MediaChange:          // CD/DVD/External Drive/Etc Added or Removed
@@ -2461,10 +2420,47 @@ namespace WindowsApiLib.Shell
 
         private void DoUpdateDir(CShellItem CSI)
         {
-            if (ReferenceEquals(CSI, CShellItemFactory.RecycleBin))
-                return;
+            if (ReferenceEquals(CSI, CShellItemFactory.RecycleBin)) return;
+
             CSI.UpdateRefresh();
         }
+
+        #endregion
+
+        #endregion
+
+
+        #endregion
+
+
+        #region    Private Methods
+
+        private void ResetInfo()
+        {
+            m_HasDispType = false;
+            m_IsReadOnlySetup = false;
+            m_XtrInfo = false;
+            m_HasSubFoldersSetup = false;
+            if (W32Data is not null && W32Data is W32Find_Data)
+                W32Data = null;
+            ResetIconIndex();
+        }
+        
+        private void ResetChildren()
+        {
+            // propogate changes to the known children
+            if (m_Files is not null)
+            {
+                foreach (CShellItem item in m_Files)
+                    item.ResetInfo();
+            }
+            if (m_Directories is not null)
+            {
+                foreach (CShellItem item in m_Directories)
+                    item.ResetInfo();
+            }
+        }
+
 
         /// <summary>
         /// Obtains information available from FileInfo. Uses data from W32Data rather than FileInfo/DirectoryInfo if W32Data is present.
@@ -2539,26 +2535,23 @@ namespace WindowsApiLib.Shell
             CShellItem itm;
 
             var pidls = GetPidlsOfCurrentFolder(flags);
+
+            //new
+            //var cshItems = CShellItemFactory.CreateCShItems(pidls, this);
+            //endnew
+
             foreach (IntPtr pidl in pidls)
             {
-                if (pidl == IntPtr.Zero)                                              
+                if (pidl == IntPtr.Zero)
                 {
-                    Debug.WriteLine("Content=IntPtr.Zero while filling " + FullPath); 
-                    Marshal.FreeCoTaskMem(pidl);                                      
+                    Debug.WriteLine("Content=IntPtr.Zero while filling " + FullPath);
+                    Marshal.FreeCoTaskMem(pidl);
                     continue;
                 }
                 else
                 {
-                    try
-                    {
-                        //todo: use IFolder.GetAttributesOf to get file attributes in bulk
-                        itm = CShellItemFactory.CreateCShItem(pidl, this);
-                        items.Add(itm);
-                    }
-                    finally
-                    {
-                        //Marshal.FreeCoTaskMem(pidl); //the pidl is stored permantly in the new cshellitem so don't free it
-                    }
+                    itm = CShellItemFactory.CreateCShItem(pidl, this);
+                    items.Add(itm);
                 }
             }
 
@@ -2580,7 +2573,7 @@ namespace WindowsApiLib.Shell
             // Note: for GetAttributesOf, we must provide an array, in all cases with 1 element
             var aPidl = new IntPtr[1];
             aPidl[0] = ptr;
-            Folder.GetAttributesOf(1, aPidl, ref attrFlag);
+            Folder.GetAttributesOf(1, aPidl, ref attrFlag); //todo: change this to use the attributes field
             if (((attrFlag & SFGAO.FOLDER) != 0) && !((attrFlag & SFGAO.STREAM) != 0))         // XP or above
             {
                 IsFolderRelRet = true;
@@ -2742,7 +2735,6 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
-        #endregion
 
 
         /// <summary>

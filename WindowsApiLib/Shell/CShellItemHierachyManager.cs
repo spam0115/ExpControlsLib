@@ -66,7 +66,7 @@ namespace WindowsApiLib.Shell
 
             bool foundFinalExtantParentDirectory = false;
             while (!foundFinalExtantParentDirectory)
-            {
+            { //todo: I don't like how reading of folder contents is hidden inside the Directories and Files properties rather than being explicit
                 foreach (var currentCSI in currentFolder.Directories) //check directories before files because there tend to be fewer directories and there's no point checking files if we haven't delved deeply enough into the tree yet
                 {
                     if (IsAncestorOf(currentCSI.PIDL, absPidl))
