@@ -18,7 +18,7 @@ namespace ExpControlsLib
         private readonly ThumbnailProvider _thumbnailProvider;
         private readonly ListView _listView;
         private int _activeSize;
-        private int _generation;
+        private int _generation = 0;
         private readonly Dictionary<string, int> _imageIndexByKey = new Dictionary<string, int>();
 
         private sealed class ThumbnailRequestTag
@@ -124,7 +124,7 @@ namespace ExpControlsLib
             if (_listView.IsDisposed || !_listView.IsHandleCreated)
                 return;
 
-            if (_listView.InvokeRequired) //what's this for?
+            if (_listView.InvokeRequired) //todo: move all the code that touches the listview into a marshalled call and leave all the image manipulation code in this background thread
             {
                 _listView.BeginInvoke(new EventHandler<ThumbnailReadyEventArgs>(OnThumbnailReady), sender, e);
                 return;
@@ -135,7 +135,8 @@ namespace ExpControlsLib
             Console.WriteLine("\tItem: " + tag.Item.Text);
 #endif
 
-            if (tag.Generation != _generation) return;
+            if (tag.Generation != _generation) 
+                return;
             if (tag.RequestedSize != _activeSize) return;
             if (tag.Item == null || tag.Item.ListView != _listView) return;
 
@@ -163,8 +164,8 @@ namespace ExpControlsLib
                 using (var g = Graphics.FromImage(normalized))
                 {
                     g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy; // <-- key
-                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
+                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighSpeed;
                     g.DrawImage(e.Thumbnail, new Rectangle(0, 0, _activeSize, _activeSize));
                 }
 

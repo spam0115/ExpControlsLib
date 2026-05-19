@@ -575,7 +575,7 @@
         <member name="M:ExpControlsLib.ExpList.#ctor">
             <summary>
             Initializes a new instance of <see cref="T:ExpControlsLib.ExpList"/>, wires up all event handlers
-            for the control and its child <see cref="F:ExpControlsLib.ExpList._ListView"/> ListView.
+            for the control and its child <see cref="F:ExpControlsLib.ExpList._listView"/> ListView.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.ExpList_Load(System.Object,System.EventArgs)">
@@ -586,7 +586,7 @@
         </member>
         <member name="M:ExpControlsLib.ExpList.ExpFileList_HandleCreated(System.Object,System.EventArgs)">
             <summary>
-            Handles the <see cref="E:System.Windows.Forms.Control.HandleCreated"/> event of the <see cref="F:ExpControlsLib.ExpList._ListView"/> ListView.
+            Handles the <see cref="E:System.Windows.Forms.Control.HandleCreated"/> event of the <see cref="F:ExpControlsLib.ExpList._listView"/> ListView.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.ExpList_VisibleChanged(System.Object,System.EventArgs)">
@@ -723,7 +723,7 @@
             <param name="includeFolder">True to include subdirectories in the list.</param>
             <param name="reload">True to force a reload even if the same item was previously selected.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.RequestListRefresh(System.Windows.Forms.ListViewItem[])">
+        <member name="M:ExpControlsLib.ExpList.RequestListRefresh(System.Windows.Forms.ListViewItem[],System.Boolean)">
             <summary>
             This refreshes the ListView with new items.
             This function marshals execution to the ui thread.  Also prevents double updating by gatekeeping 

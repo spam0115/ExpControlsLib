@@ -39,35 +39,35 @@ namespace ExpControlsLib
         /// </summary>
         private void InitializeComponent()
         {
-            _ListView = new ListView();
+            _listView = new ListView();
             SuspendLayout();
             // 
             // _ListView
             // 
-            _ListView.BorderStyle = BorderStyle.FixedSingle;
-            _ListView.Dock = DockStyle.Fill;
-            _ListView.FullRowSelect = true;
-            _ListView.LabelEdit = true;
-            _ListView.Location = new Point(0, 0);
-            _ListView.Margin = new Padding(4, 3, 4, 3);
-            _ListView.Name = "_ListView";
-            _ListView.Size = new Size(817, 346);
-            _ListView.TabIndex = 2;
-            _ListView.UseCompatibleStateImageBehavior = false;
-            _ListView.View = View.Details;
+            _listView.BorderStyle = BorderStyle.FixedSingle;
+            _listView.Dock = DockStyle.Fill;
+            _listView.FullRowSelect = true;
+            _listView.LabelEdit = true;
+            _listView.Location = new Point(0, 0);
+            _listView.Margin = new Padding(4, 3, 4, 3);
+            _listView.Name = "_ListView";
+            _listView.Size = new Size(817, 346);
+            _listView.TabIndex = 2;
+            _listView.UseCompatibleStateImageBehavior = false;
+            _listView.View = View.Details;
             // 
             // ExpList
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            Controls.Add(_ListView);
+            Controls.Add(_listView);
             Margin = new Padding(4, 3, 4, 3);
             Name = "ExpList";
             Size = new Size(817, 346);
             ResumeLayout(false);
         }
 
-        internal ListView _ListView;
+        internal ListView _listView;
 
         #endregion
     }
