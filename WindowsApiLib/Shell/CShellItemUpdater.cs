@@ -290,6 +290,7 @@ namespace WindowsApiLib.Shell
 
                                         break;
                                     }
+
                                 case SHCNE.UPDATEITEM: //this is supposed to be items but that include directories
                                     {
                                         if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0)

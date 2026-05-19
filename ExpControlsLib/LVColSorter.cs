@@ -42,6 +42,11 @@ namespace ExpControlsLib
     public class LVColSorter : IComparer
     {
         /// <summary>
+        /// Occurs when the sort column or order has changed.
+        /// </summary>
+        public event EventHandler SortOrderChanged;
+
+        /// <summary>
         /// Compares two ListViewItems from the same ListView in accordance to the Sort rules of the Class.
         /// </summary>
         /// <param name="x">First ListViewItem to be Compared.</param>
@@ -250,6 +255,34 @@ namespace ExpControlsLib
                 }
             }
         }
+
+        /// <summary>
+        /// Sets the sort column and order without toggling the existing order.
+        /// </summary>
+        /// <param name="column">The column index.</param>
+        /// <param name="order">The sort order.</param>
+        public void SetSort(int column, SortOrder order)
+        {
+            if (column < 0 || column >= m_View.Columns.Count) return;
+
+            m_Col = column;
+            if (order == SortOrder.None)
+            {
+                m_ColOrder[m_Col] = 0;
+            }
+            else if (order == SortOrder.Ascending)
+            {
+                m_ColOrder[m_Col] = 1;
+            }
+            else
+            {
+                m_ColOrder[m_Col] = -1;
+            }
+
+            m_View.Sort();
+            ListViewSortGlyph.SetSortIcon(m_View, m_Col, order);
+            SortOrderChanged?.Invoke(this, EventArgs.Empty);
+        }
         #endregion
 
         #region    ColumnClick Handler
@@ -290,6 +323,7 @@ namespace ExpControlsLib
                 Order = SortOrder.Descending;
             }
             ListViewSortGlyph.SetSortIcon(LV, m_Col, Order);
+            SortOrderChanged?.Invoke(this, EventArgs.Empty);
         }
         #endregion
     }

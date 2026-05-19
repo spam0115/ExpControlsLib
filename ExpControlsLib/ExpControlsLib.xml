@@ -594,6 +594,11 @@
             Occurs when the <see cref="P:ExpControlsLib.ExpList.DisplayMode"/> has changed.
             </summary>
         </member>
+        <member name="E:ExpControlsLib.ExpList.SortOrderChanged">
+            <summary>
+            Occurs when the sort column or order has changed.
+            </summary>
+        </member>
         <member name="P:ExpControlsLib.ExpList.DisplayMode">
             <summary>
             Gets or sets the display mode used to present items in the list view.
@@ -666,6 +671,23 @@
             <summary>
             Gets or sets whether to show a minimal context menu by filtering out most 3rd party extensions.
             </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.SortColumn">
+            <summary>
+            Gets or sets the column to sort on.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.SortOrder">
+            <summary>
+            Gets the current sort order.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.SetSort(System.Int32,System.Windows.Forms.SortOrder)">
+            <summary>
+            Sets the sort column and order.
+            </summary>
+            <param name="column">The column index.</param>
+            <param name="order">The sort order.</param>
         </member>
         <member name="M:ExpControlsLib.ExpList.ExpList_Load(System.Object,System.EventArgs)">
             <summary>
@@ -1373,6 +1395,11 @@
             to a ListView without causing prior instances to attempt to handle ColumnClick.</para></remarks>
             
         </member>
+        <member name="E:ExpControlsLib.LVColSorter.SortOrderChanged">
+            <summary>
+            Occurs when the sort column or order has changed.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.LVColSorter.Compare(System.Object,System.Object)">
             <summary>
             Compares two ListViewItems from the same ListView in accordance to the Sort rules of the Class.
@@ -1440,6 +1467,13 @@
             The Properties OrderOfSort and SortColumn may be used if the application wishes to Draw Sort
             glyphs on the ColumnHeaders.
             </remarks>
+        </member>
+        <member name="M:ExpControlsLib.LVColSorter.SetSort(System.Int32,System.Windows.Forms.SortOrder)">
+            <summary>
+            Sets the sort column and order without toggling the existing order.
+            </summary>
+            <param name="column">The column index.</param>
+            <param name="order">The sort order.</param>
         </member>
         <member name="T:ExpControlsLib.ListViewSortGlyph">
             <summary>

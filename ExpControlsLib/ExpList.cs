@@ -16,6 +16,7 @@ using static System.Windows.Forms.ListView;
 using static WindowsApiLib.Shell.CShellItem;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
+using MethodInvoker = System.Windows.Forms.MethodInvoker;
 
 
 namespace ExpControlsLib
@@ -281,6 +282,13 @@ namespace ExpControlsLib
         [Description("Fires when the DisplayMode property has changed")]
         public event DisplayModeChangedEventHandler DisplayModeChanged;
 
+        /// <summary>
+        /// Occurs when the sort column or order has changed.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires when the sort column or order has changed")]
+        public event EventHandler SortOrderChanged;
+
         #region Public Properties
 
         /// <summary>
@@ -515,6 +523,37 @@ namespace ExpControlsLib
         [DefaultValue(false)]
         public bool MinimalContextMenu { get; set; } = false;
 
+        /// <summary>
+        /// Gets or sets the column to sort on.
+        /// </summary>
+        [Browsable(false)]
+        public int SortColumn
+        {
+            get => (_ListView.ListViewItemSorter as LVColSorter)?.SortColumn ?? 0;
+            set
+            {
+                if (_ListView.ListViewItemSorter is LVColSorter sorter)
+                    sorter.SortColumn = value;
+            }
+        }
+
+        /// <summary>
+        /// Gets the current sort order.
+        /// </summary>
+        [Browsable(false)]
+        public SortOrder SortOrder => (_ListView.ListViewItemSorter as LVColSorter)?.OrderOfSort ?? SortOrder.None;
+
+        /// <summary>
+        /// Sets the sort column and order.
+        /// </summary>
+        /// <param name="column">The column index.</param>
+        /// <param name="order">The sort order.</param>
+        public void SetSort(int column, SortOrder order)
+        {
+            if (_ListView.ListViewItemSorter is LVColSorter sorter)
+                sorter.SetSort(column, order);
+        }
+
         #endregion
 
         #region Form Load/VisibleChanged ExpFileList HandleCreated
@@ -612,10 +651,16 @@ namespace ExpControlsLib
 
             if (csi is null) throw new Exception("Failed to create new CShellItem in DisplayFiles");
 
-            if (_currentFolderCsi != null && CPidl.IsEqual(_currentFolderCsi.PIDL, csi.PIDL) && reload == false) return;
+            bool samePath;
+            if (_currentFolderCsi is null) 
+                samePath = false;
+            else 
+                samePath = CPidl.IsEqual(_currentFolderCsi.PIDL, csi.PIDL);
+
+            if (_currentFolderCsi != null && samePath && reload == false) return;
 
             // record history
-            if (!_isNavigatingHistory && _currentFolderCsi != null && !CPidl.IsEqual(_currentFolderCsi.PIDL, csi.PIDL))
+            if (!_isNavigatingHistory && _currentFolderCsi != null && !samePath)
             {
                 _backHistory.Push(_currentFolderCsi);
                 _forwardHistory.Clear();
@@ -640,10 +685,13 @@ namespace ExpControlsLib
 
             if ((dirList.Count + fileList.Count) == 0)
             {
-                _ListView.Items.Clear();
-                _itemIndex.Clear();
-                if (_currentFolderCsi != null && !ReferenceEquals(_currentFolderCsi, csi))
-                    _currentFolderCsi.ClearItems(true);
+                if (RequestListRefresh(null))
+                {
+                    _itemIndex.Clear();
+                    if (_currentFolderCsi != null && !ReferenceEquals(_currentFolderCsi, csi))
+                        _currentFolderCsi.ClearItems(true);
+                }
+                else return;
             }
             else
             {
@@ -661,7 +709,6 @@ namespace ExpControlsLib
                 if (includeFolder) combList.AddRange(dirList);
                 combList.AddRange(fileList);
 
-
                 //if (_currentFolderCsi != null && !ReferenceEquals(_currentFolderCsi, csi))
                 //    _currentFolderCsi.ClearItems(true, true);
 
@@ -676,44 +723,123 @@ namespace ExpControlsLib
                     combinedLvi.Add(lvi);
                 }
 
-                lock (_ListView)
-                {
-                    try
-                    {
-                        _ListView.BeginUpdate();
-                        _ListView.Items.Clear();
-                        _itemIndex.Clear();
-                        _ListView.Items.AddRange(combinedLvi.ToArray());
-                        _ListView.EnsureVisible(topIndex);
-                    }
-                    finally
-                    {
-                        _ListView.EndUpdate();
-                    }
-                }
+                if (!RequestListRefresh(combinedLvi.ToArray())) return;
 
-            //if (_ListView.Items.Count > 0)
-            //{
-            //    _ListView.TopItem = _ListView.Items[Math.Min(topIndex, _ListView.Items.Count)];
-            //    for (int i = topIndex; i < _ListView.Items.Count && i < topIndex + InitialLoadLimit; i++)
-            //    {
-            //        _ListView.Items[i].ImageIndex = SystemImageListManager.GetIconIndex((CShellItem)_ListView.Items[i].Tag, false);
-            //    }
-            //}
-        }
+                //lock (_ListView)
+                //{
+                //    try
+                //    {
+                //        _ListView.BeginUpdate();
+                //        _ListView.Items.Clear();
+                //        _itemIndex.Clear();
+                //        _ListView.Items.AddRange(combinedLvi.ToArray());
+                //        topIndex = topIndex > combinedLvi.Count() - 1 ? combinedLvi.Count() - 1 : topIndex;
+                //        _ListView.EnsureVisible(topIndex);
+                //    }
+                //    finally
+                //    {
+                //        _ListView.EndUpdate();
+                //    }
+                //}
 
-        _ListView.Tag = _currentFolderCsi; // For ClvDropWrapper
-
-            _ListView.ListViewItemSorter = new LVColSorter(_ListView);
-
-            if (IsThumbnailViewMode())
-            {
-                //LoadAndAssignThumbnails(GetThumbnailSizeForMode(DisplayMode));
-                LoadThumbnails(GetThumbnailSizeForMode(DisplayMode), true); //todo: this is already lazy load but could it be even more lazy load
+                //if (_ListView.Items.Count > 0)
+                //{
+                //    _ListView.TopItem = _ListView.Items[Math.Min(topIndex, _ListView.Items.Count)];
+                //    for (int i = topIndex; i < _ListView.Items.Count && i < topIndex + InitialLoadLimit; i++)
+                //    {
+                //        _ListView.Items[i].ImageIndex = SystemImageListManager.GetIconIndex((CShellItem)_ListView.Items[i].Tag, false);
+                //    }
+                //}
             }
 
             ExpListFolderChanged?.Invoke(_currentFolderCsi);
-            ExpListPathChanged?.Invoke(_CurrentPath);
+            if (!samePath) ExpListPathChanged?.Invoke(_CurrentPath);
+        }
+
+
+        private bool _refreshing = false; //This variable is prevent reentrancy problems on the ui thread
+        private bool _refreshPending = false;
+        private ListViewItem[]? _pendingItems = null;
+
+        /// <summary>
+        /// This refreshes the ListView with new items.
+        /// This function marshals execution to the ui thread.  Also prevents double updating by gatekeeping 
+        /// execution via the _refreshing boolean.  Without these precautions, we got errors with array index 
+        /// out of bounds errors on the listview items that couldn't be resolved with only a lock. 
+        /// </summary>
+        /// <param name="newItems"></param>
+        /// <returns></returns>
+        private bool RequestListRefresh(ListViewItem[] newItems)
+        {
+            if (_refreshing)
+            {
+                _refreshPending = true;
+                return false;
+            }
+
+            // Snapshot now (avoid deferred enumeration / later mutation)
+            _pendingItems = newItems;
+
+            _refreshing = true;
+            BeginInvoke(new MethodInvoker(RefreshListViewCore)); // queue, don't run inline.  Can't take arguments because of MethodInvoker unfortunately
+            return true;
+        }
+
+        private void RefreshListViewCore()
+        {
+            try
+            {
+                // snapshot old position safely
+                int topIndex = 0;
+                if (_ListView.Items.Count > 0)
+                {
+                    var firstVisible = _ListView.Items.Cast<ListViewItem>()
+                        .Where(it => _ListView.ClientRectangle.IntersectsWith(it.Bounds))
+                        .OrderBy(it => it.Bounds.Top).ThenBy(it => it.Bounds.Left)
+                        .FirstOrDefault();
+
+                    if (firstVisible != null) topIndex = firstVisible.Index;
+                }
+
+                var newItems = _pendingItems ?? Array.Empty<ListViewItem>();
+
+                _ListView.BeginUpdate();
+                try
+                {
+                    _ListView.Items.Clear();
+                    _itemIndex.Clear();
+
+                    _ListView.Items.AddRange(newItems);
+
+                    if (_ListView.Items.Count > 0)
+                    {
+                        _ListView.Tag = _currentFolderCsi; // For ClvDropWrapper
+
+                        //re-sort.  Do we even need to do this because it was already sorted before
+                        //var sorter = new LVColSorter(_ListView);
+                        //sorter.SortOrderChanged += (s, e) => SortOrderChanged?.Invoke(this, EventArgs.Empty);
+                        //_ListView.ListViewItemSorter = sorter;
+
+                        //get initial thumbnails
+                        if (IsThumbnailViewMode())
+                        {
+                            LoadThumbnails(GetThumbnailSizeForMode(DisplayMode), true);
+                        }
+
+                        topIndex = Math.Max(0, Math.Min(topIndex, _ListView.Items.Count - 1));
+                        _ListView.EnsureVisible(topIndex);
+                    }
+                }
+                finally
+                {
+                    _ListView.EndUpdate();
+                }
+            }
+            finally
+            {
+                _refreshing = false;
+                _refreshPending = false;
+            }
         }
 
         #endregion
