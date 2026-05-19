@@ -571,6 +571,11 @@ namespace ExpControlsLib
             // Initialize Thumbnail Manager
             _thumbnailManager = new ThumbnailImageListManager(_ListView);
 
+            //create sorter
+            var sorter = new LVColSorter(_ListView);
+            sorter.SortOrderChanged += (s, e) => SortOrderChanged?.Invoke(this, EventArgs.Empty);
+            _ListView.ListViewItemSorter = sorter;
+
             // Setup Change Notification
             UpdateEvent += UpdateInvoke;
             
@@ -671,8 +676,6 @@ namespace ExpControlsLib
             _selectedItem = null; //new folder loaded, no item selected yet
             _CurrentPath = pathName;
 
-            //if (csi.Directories is null && csi.Files is null && _shellController != null) 
-            //    _shellController.LoadFolderContents(csi);
             _currentFolderCsi.ClearItems(true, true);  // clears m_Directories and m_Files so DisplayFiles won't rely on the cache
             _shellController.LoadFolderContents(_currentFolderCsi);
 
@@ -724,32 +727,6 @@ namespace ExpControlsLib
                 }
 
                 if (!RequestListRefresh(combinedLvi.ToArray())) return;
-
-                //lock (_ListView)
-                //{
-                //    try
-                //    {
-                //        _ListView.BeginUpdate();
-                //        _ListView.Items.Clear();
-                //        _itemIndex.Clear();
-                //        _ListView.Items.AddRange(combinedLvi.ToArray());
-                //        topIndex = topIndex > combinedLvi.Count() - 1 ? combinedLvi.Count() - 1 : topIndex;
-                //        _ListView.EnsureVisible(topIndex);
-                //    }
-                //    finally
-                //    {
-                //        _ListView.EndUpdate();
-                //    }
-                //}
-
-                //if (_ListView.Items.Count > 0)
-                //{
-                //    _ListView.TopItem = _ListView.Items[Math.Min(topIndex, _ListView.Items.Count)];
-                //    for (int i = topIndex; i < _ListView.Items.Count && i < topIndex + InitialLoadLimit; i++)
-                //    {
-                //        _ListView.Items[i].ImageIndex = SystemImageListManager.GetIconIndex((CShellItem)_ListView.Items[i].Tag, false);
-                //    }
-                //}
             }
 
             ExpListFolderChanged?.Invoke(_currentFolderCsi);
@@ -814,11 +791,6 @@ namespace ExpControlsLib
                     if (_ListView.Items.Count > 0)
                     {
                         _ListView.Tag = _currentFolderCsi; // For ClvDropWrapper
-
-                        //re-sort.  Do we even need to do this because it was already sorted before
-                        //var sorter = new LVColSorter(_ListView);
-                        //sorter.SortOrderChanged += (s, e) => SortOrderChanged?.Invoke(this, EventArgs.Empty);
-                        //_ListView.ListViewItemSorter = sorter;
 
                         //get initial thumbnails
                         if (IsThumbnailViewMode())
@@ -1162,11 +1134,10 @@ namespace ExpControlsLib
         {
             if (lvi == null || item == null) return;
 
-            // try deferring this to lazy loading
-            //if (IsThumbnailViewMode())
-            //    _thumbnailManager.RequestThumbnail(lvi, item.FullPath, GetThumbnailSizeForMode());
-            //else
-            //    lvi.ImageIndex = SystemImageListManager.GetIconIndex(item, false);
+            if (IsThumbnailViewMode())
+                _thumbnailManager.RequestThumbnail(lvi, item.FullPath, GetThumbnailSizeForMode());
+            else
+                lvi.ImageIndex = SystemImageListManager.GetIconIndex(item, false);
 
             // Update primary text
             lvi.Text = item.DisplayName;

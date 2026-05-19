@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 
@@ -153,6 +154,11 @@ namespace ExpControlsLib
 
         private bool OKToCompare(object X, object Y)
         {
+            if (Y == null) {
+                //Debug.WriteLine("Can't compare null object.");
+                return false; 
+            }
+
             bool OKToCompareRet = default;
             if (CompareOK(X))
             {
@@ -168,8 +174,7 @@ namespace ExpControlsLib
 
         private bool CompareOK(object obj)
         {
-            bool CompareOKRet = default;
-            CompareOKRet = false;         // assume not OK
+            bool CompareOKRet = false; // assume not OK
             if (obj is null)
                 return CompareOKRet;
             Type[] IInfo = obj.GetType().GetInterfaces();
@@ -226,8 +231,10 @@ namespace ExpControlsLib
         {
             get
             {
-                if (m_ColOrder.Length == 0) return SortOrder.None;
-                return (SortOrder)m_ColOrder[m_Col];
+                if (m_ColOrder.Length == 0 || m_Col >= m_ColOrder.Length) return SortOrder.None;
+                if (m_ColOrder[m_Col] == 1) return SortOrder.Ascending;
+                if (m_ColOrder[m_Col] == -1) return SortOrder.Descending;
+                return SortOrder.None;
             }
         }
         /// <summary>

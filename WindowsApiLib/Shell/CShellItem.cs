@@ -808,7 +808,7 @@ namespace WindowsApiLib.Shell
             set;
         }
 
-        #region        Drag Ops Properties
+        #region Drag Ops Properties
 
         /// <summary>
         /// Returns True if instance may be Moved, False otherwise.
@@ -940,7 +940,7 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
-        #region            FileInfo derived Properties
+        #region FileInfo derived Properties
 
         /// <summary>
         /// Contains the LastWriteTime (Last Modified) DateTime of this instance
@@ -1016,7 +1016,7 @@ namespace WindowsApiLib.Shell
         /// <returns>The FileAttributes of this instance</returns>
         /// <remarks>This is the same information, formatted the same way, as found in FileInfo, GetAttr, etc.<br />
         ///          With other information, Filled by FillDemandInfo on first Get</remarks>
-        public FileAttributes Attributes // Added 10/09/2011
+        public FileAttributes Attributes
         {
             get
             {
@@ -1133,7 +1133,7 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
-        #region        Shared Properties
+        #region Shared Properties
         /// <summary>
         /// Contains a String with the Local representation of "My Computer"
         /// </summary>
@@ -1235,229 +1235,6 @@ namespace WindowsApiLib.Shell
 
 
         #endregion
-
-
-        #region        Utility functions
-
-        /// <summary>
-        /// Given a Byte() containing a valid PIDL of a Folder, return the IShellFolder of that Folder
-        /// </summary>
-        /// <param name="b">Byte() containing a valid PIDL of a Folder</param>
-        /// <returns>The IShellFolder for the requested PIDL. If Byte() does not contain a valid PIDL of a Folder, return Nothing</returns>
-        public static IShellFolder MakeFolderFromBytes(byte[] b)
-        {
-            IShellFolder MakeFolderFromBytesRet = default;
-            //GetDeskTop();                        // ensure we are initialized
-            // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
-            if (!CPidl.IsValid(b))
-                return null;
-            if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
-            {
-                return ShellController.DesktopCSI.Folder;
-            }
-            else if (b.Length == 0)   // Also indicates the desktop
-            {
-                return ShellController.DesktopCSI.Folder;
-            }
-            else
-            {
-                var ptr = Marshal.AllocCoTaskMem(b.Length);
-                if (ptr.Equals(IntPtr.Zero))
-                    return null;
-                Marshal.Copy(b, 0, ptr, b.Length);
-                // the next statement assigns a IshellFolder object to the function return, or has an error
-                MakeFolderFromBytesRet = ShellHelper.GetIShellFolder(ShellController.DesktopCSI, ptr);
-                Marshal.FreeCoTaskMem(ptr);
-            }
-
-            return MakeFolderFromBytesRet;
-        }
-
-        //todo: is it really necessary to have the parent to get the attributes?
-        /// <summary>Get the base attributes of the folder/file that this CShellItem represents</summary>
-        /// <param name="folder">Parent Folder of this Item</param>
-        /// <param name="pidl">Relative Pidl of this Item.</param>
-        //internal void SetUpAttributes(IShellFolder folder, IntPtr pidl)
-        //{
-        //    SFGAO attrFlag;
-        //    attrFlag = SFGAO.BROWSABLE;                 // D
-        //    attrFlag = attrFlag | SFGAO.FILESYSTEM;     // FD
-        //                                                // attrFlag = attrFlag Or SFGAO.HASSUBFOLDER   'D  'made into an on-demand attribute
-        //    attrFlag = attrFlag | SFGAO.FOLDER;
-        //    attrFlag = attrFlag | SFGAO.LINK;           // F
-        //    attrFlag = attrFlag | SFGAO.SHARE;          // FD
-        //    attrFlag = attrFlag | SFGAO.HIDDEN;         // FD
-        //    attrFlag = attrFlag | SFGAO.REMOVABLE;
-        //    // attrFlag = attrFlag Or SFGAO.RDONLY   'made into an on-demand attribute
-        //    attrFlag = attrFlag | SFGAO.CANCOPY;
-        //    attrFlag = attrFlag | SFGAO.CANDELETE;
-        //    attrFlag = attrFlag | SFGAO.CANLINK;
-        //    attrFlag = attrFlag | SFGAO.CANMOVE;
-        //    attrFlag = attrFlag | SFGAO.DROPTARGET;
-        //    attrFlag = attrFlag | SFGAO.CANRENAME;      // FD
-        //    attrFlag = attrFlag | SFGAO.STREAM;         // F
-        //                                                // Note: for GetAttributesOf, we must provide an array, in  all cases with 1 element
-        //    var aPidl = new IntPtr[1];
-        //    aPidl[0] = pidl;
-        //    folder.GetAttributesOf(1, aPidl, ref attrFlag);
-        //    m_SFGAO_Attributes = attrFlag;
-        //    m_IsBrowsable = (attrFlag & SFGAO.BROWSABLE) != 0;
-        //    m_IsFileSystem = (attrFlag & SFGAO.FILESYSTEM) != 0;
-        //    // m_HasSubFolders = (attrFlag & SFGAO.HASSUBFOLDER) != 0;  'made into an on-demand attribute
-        //    m_IsFolder = (attrFlag & SFGAO.FOLDER) != 0;
-        //    m_IsLink = (attrFlag & SFGAO.LINK) != 0;
-        //    m_IsShared = (attrFlag & SFGAO.SHARE) != 0;
-        //    m_IsHidden = (attrFlag & SFGAO.HIDDEN) != 0;
-        //    m_IsRemovable = (attrFlag & SFGAO.REMOVABLE) != 0;
-        //    // m_IsReadOnly = (attrFlag & SFGAO.RDONLY) != 0;      'made into an on-demand attribute
-        //    m_CanCopy = (attrFlag & SFGAO.CANCOPY) != 0;
-        //    m_CanDelete = (attrFlag & SFGAO.CANDELETE) != 0;
-        //    m_CanLink = (attrFlag & SFGAO.CANLINK) != 0;
-        //    m_CanMove = (attrFlag & SFGAO.CANMOVE) != 0;
-        //    IsDropTarget = (attrFlag & SFGAO.DROPTARGET) != 0;
-        //    m_CanRename = (attrFlag & SFGAO.CANRENAME) != 0;
-
-        //    // Get the Path
-        //    m_Path = CShellItemFactory.GetFullPath(this);
-
-        //    // check for zip file = folder on xp, leave it a file
-        //    if (m_IsFolder && m_IsFileSystem)
-        //    {
-        //        // If (m_Attributes = (m_Attributes And SFGAO.STREAM)) Then
-        //        if ((attrFlag & SFGAO.STREAM) != 0)   // in this case, it is not a Folder, but a .zip or .cab or etc
-        //        {
-        //            m_IsFolder = false;
-        //        }
-        //    }
-
-        //    if (m_IsFolder && m_Path.Length == 3 && m_Path.Substring(1).Equals(@":\"))
-        //    {
-        //        m_IsDisk = true;
-        //        try // 04/16/2012 Entire Try Block
-        //        {
-        //            var disk = new System.Management.ManagementObject("win32_logicaldisk.deviceid=\"" + FullPath.Substring(0, 2) + "\"");
-        //            m_Length = Convert.ToInt64(disk["Size"]);
-        //            if ((Convert.ToUInt32(disk["DriveType"]).ToString() ?? "") == (4.ToString() ?? ""))
-        //            {
-        //                m_IsNetWorkDrive = true;
-        //                m_IsRemote = true;
-        //            }
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            // Disconnected Network Drives etc. will generate 
-        //            // an error here, just assume that it is a network
-        //            // drive
-        //            m_IsNetWorkDrive = true;
-        //            m_IsRemote = true;
-        //        }
-        //        finally
-        //        {
-        //            m_XtrInfo = true;
-        //            if (!DriveDict.ContainsKey(m_Path))
-        //            {
-        //                DriveDict.Add(m_Path, m_IsRemote);
-        //            }
-        //        }
-        //    }
-
-        //    // Setup IsRemote             '4/14/2012
-        //    // Reworked 5/15/2012 when testing discovered that contrary to the Docs, IO.Path.GetPathRoot(m_Path)
-        //    // will throw an exception when presented with a long path that GetDisplayNameOf made legal by
-        //    // using 8.3 names for some of the directories! IO.Path.GetPathRoot is not supposed to do anything to
-        //    // reference the actual components of the Path. It should be strictly String manipulation!
-        //    // Error on Path = "C:\Testing\XXXXXA~1\YYYYYY~1\ABCDEF~1\ZZZZZZ~1\abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890123456789012345678901234.txt"
-        //    // which is only 138 chars long.
-        //    if (!(m_IsDisk || m_Path.StartsWith("::")))
-        //    {
-        //        if (m_Path.StartsWith(@"\\"))
-        //        {
-        //            string[] tmp = m_Path.Split(new char[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
-        //            if (tmp.Length > 0 && tmp[0].Equals(CShellItemFactory.SystemName, StringComparison.InvariantCultureIgnoreCase))
-        //            {
-        //                m_IsRemote = false;
-        //            }
-        //            else
-        //            {
-        //                m_IsRemote = true;
-        //            }
-        //        }
-        //        else if (m_Path.Length > 2 && m_Path.Substring(1, 2).Equals(@":\"))
-        //        {
-        //            string itemroot = m_Path.Substring(0, 3);
-        //            if (DriveDict.ContainsKey(itemroot) && DriveDict[itemroot])
-        //                m_IsRemote = true;
-        //        }
-        //    }
-        //}
-
-        /// <summary>
-        /// Sets m_Path to the Full Path of the current Item.
-        /// </summary>
-        /// <remarks>Reworked 11/13/3013 to deal with the case of folder.GetDisplayNameOf returning an error.<br />
-        ///          This can occur for incompletely implemented or otherwise corrupt Shell Extension Folders.<br />
-        ///          All CShellItem constructors will call SetUpAttributes which will call SetPath. Effectively all
-        ///          CShellItem constructors will be called by GetContents. 
-        ///          GetContents will deal with the exceptions that might be thrown here by simply not inserting the
-        ///          faulting CShellItem into the internal tree. Since the CShellItem is not in the tree, no change 
-        ///          notification will be called for the Item.<br />
-        ///          A Move of a file/folder from a known Folder to a faulty Folder will cause the moved item to 
-        ///          disappear from its' original location and not appear anywhere else.
-        /// </remarks>
-        //private void SetPath()
-        //{
-        //    // Get the Path
-        //    // Debug.WriteLine("SetPath:" & Me.Parent.DisplayName & " Parent Folder = " & Me.Parent.ToString & " Parent Path = " & Me.Parent.Path)
-        //    if (Parent is null)
-        //    {
-        //        m_Path = "Unknown";
-        //        return;
-        //    }
-        //    var folder = Parent.Folder;
-        //    using (var memScope = new CoTaskMemPoolScope(WinSDK.s_memPool_MaxName))
-        //    {
-        //        var strr = memScope.Block;
-        //        try
-        //        {
-        //            var pidl = ILFindLastID(m_Pidl);
-        //            Marshal.WriteInt32(strr, 0, 0); //zero out
-        //            var itemflags = SHGDN.FORPARSING;
-        //            int HR = folder.GetDisplayNameOf(pidl, itemflags, strr); //might want to change this so it get's this lazily
-        //            if (HR == S_OK)
-        //            {
-        //                var buf = new StringBuilder(WinSDK.MAX_PATH);
-        //                HR = StrRetToBuf(strr, pidl, buf, WinSDK.MAX_PATH);
-        //                if (HR == NOERROR)
-        //                {
-        //                    m_Path = buf.ToString();
-        //                }
-        //                else
-        //                {
-        //                    Marshal.ThrowExceptionForHR(HR);
-        //                }
-        //            }
-        //            else
-        //            {
-        //                Marshal.ThrowExceptionForHR(HR);
-        //            }
-        //        }
-        //        // Debug.WriteLine(m_Path)
-        //        catch (Exception ex)
-        //        {
-        //            // Debug.WriteLine("SetPath: Exception")
-        //            // Debug.WriteLine(ex.ToString)
-        //            // Debug.WriteLine("SetPath m_Pidl:")
-        //            // DumpPidl(m_Pidl)
-        //            m_Path = "Unknown";
-        //            throw;                // 11/14/2013
-        //        }
-        //    }
-        //}
-        
-
-
-        #endregion
-
 
 
 
@@ -2771,6 +2548,45 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
+
+        #region        Utility functions
+
+        /// <summary>
+        /// Given a Byte() containing a valid PIDL of a Folder, return the IShellFolder of that Folder
+        /// </summary>
+        /// <param name="b">Byte() containing a valid PIDL of a Folder</param>
+        /// <returns>The IShellFolder for the requested PIDL. If Byte() does not contain a valid PIDL of a Folder, return Nothing</returns>
+        public static IShellFolder MakeFolderFromBytes(byte[] b)
+        {
+            IShellFolder MakeFolderFromBytesRet = default;
+            //GetDeskTop();                        // ensure we are initialized
+            // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
+            if (!CPidl.IsValid(b))
+                return null;
+            if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
+            {
+                return ShellController.DesktopCSI.Folder;
+            }
+            else if (b.Length == 0)   // Also indicates the desktop
+            {
+                return ShellController.DesktopCSI.Folder;
+            }
+            else
+            {
+                var ptr = Marshal.AllocCoTaskMem(b.Length);
+                if (ptr.Equals(IntPtr.Zero))
+                    return null;
+                Marshal.Copy(b, 0, ptr, b.Length);
+                // the next statement assigns a IshellFolder object to the function return, or has an error
+                MakeFolderFromBytesRet = ShellHelper.GetIShellFolder(ShellController.DesktopCSI, ptr);
+                Marshal.FreeCoTaskMem(ptr);
+            }
+
+            return MakeFolderFromBytesRet;
+        }
+
+
+        #endregion
 
 
         /// <summary>

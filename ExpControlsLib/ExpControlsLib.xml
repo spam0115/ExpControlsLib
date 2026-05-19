@@ -721,6 +721,16 @@
             <param name="includeFolder">True to include subdirectories in the list.</param>
             <param name="reload">True to force a reload even if the same item was previously selected.</param>
         </member>
+        <member name="M:ExpControlsLib.ExpList.RequestListRefresh(System.Windows.Forms.ListViewItem[])">
+            <summary>
+            This refreshes the ListView with new items.
+            This function marshals execution to the ui thread.  Also prevents double updating by gatekeeping 
+            execution via the _refreshing boolean.  Without these precautions, we got errors with array index 
+            out of bounds errors on the listview items that couldn't be resolved with only a lock. 
+            </summary>
+            <param name="newItems"></param>
+            <returns></returns>
+        </member>
         <member name="M:ExpControlsLib.ExpList.MakeLVItem(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Creates a <see cref="T:System.Windows.Forms.ListViewItem"/> for a given <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
