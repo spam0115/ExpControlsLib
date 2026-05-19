@@ -13,7 +13,6 @@ using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static System.Windows.Forms.ListView;
-//using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using static WindowsApiLib.Shell.CShellItem;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
@@ -212,7 +211,7 @@ namespace ExpControlsLib
 
         // InitialLoadLimit is the number of ExpFileList.Items whose IconIndex will be fetched on initial load
         // the balance will be fetched AFTER ExpFileList.EndUpdate
-        private const int InitialLoadLimit = 256;
+        private const int InitialLoadLimit = 128;
 
         // For ExpFileList label text selection
         private const int EM_SETSEL = 0xB1;
@@ -520,7 +519,7 @@ namespace ExpControlsLib
             _thumbnailManager = new ThumbnailImageListManager(_ListView);
 
             // Setup Change Notification
-            CShItemUpdate += UpdateInvoke;
+            UpdateEvent += UpdateInvoke;
             
             DisplayMode = (ListViewDisplayMode)_ListView.View;
         }
@@ -594,103 +593,109 @@ namespace ExpControlsLib
         /// <param name="reload">True to force a reload even if the same item was previously selected.</param>
         public void DisplayFiles(string pathName, CShellItem csi, bool includeFolder, bool reload = false)
         {
-            if (csi is null) return;
-            if (_currentFolderCsi != null && ReferenceEquals(_currentFolderCsi, csi) && reload == false) return;
+            if (csi == null)
+                csi = CShellItemFactory.CreateCShItem(pathName);
+
+            if (csi is null) throw new Exception("Failed to create new CShellItem in DisplayFiles");
+
+            if (_currentFolderCsi != null && CPidl.IsEqual(_currentFolderCsi.PIDL, csi.PIDL) && reload == false) return;
 
             // record history
-            if (!_isNavigatingHistory && _currentFolderCsi != null)
+            if (!_isNavigatingHistory && _currentFolderCsi != null && !CPidl.IsEqual(_currentFolderCsi.PIDL, csi.PIDL))
             {
                 _backHistory.Push(_currentFolderCsi);
                 _forwardHistory.Clear();
             }
 
+            _currentFolderCsi = csi;
+            
             _selectedItem = null; //new folder loaded, no item selected yet
             _CurrentPath = pathName;
 
+            //if (csi.Directories is null && csi.Files is null && _shellController != null) 
+            //    _shellController.LoadFolderContents(csi);
+            _currentFolderCsi.ClearItems(true, true);  // clears m_Directories and m_Files so DisplayFiles won't rely on the cache
+            _shellController.LoadFolderContents(_currentFolderCsi);
+
+            //display directories separately
             var dirList = new List<CShellItem>();
             var fileList = new List<CShellItem>();
-            int totalItems;
+            if (includeFolder) dirList.AddRange(_currentFolderCsi.Directories);
 
-            if (csi == null)
+            if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(_currentFolderCsi.Files);
+
+            if ((dirList.Count + fileList.Count) == 0)
             {
-                csi = CShellItemFactory.CreateCShItem(pathName);
+                _ListView.Items.Clear();
+                _itemIndex.Clear();
+                if (_currentFolderCsi != null && !ReferenceEquals(_currentFolderCsi, csi))
+                    _currentFolderCsi.ClearItems(true);
             }
-
-            if (csi.Directories is null && csi.Files is null && _shellController != null) 
-                _shellController.LoadFolderContents(csi);
-            
-            if (includeFolder) dirList.AddRange(csi.Directories);
-
-            if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(csi.Files);
-
-            if ((dirList.Count + fileList.Count) > 0)
+            else
             {
+                int totalItems;
+
+                fileList.Sort();
+                totalItems = fileList.Count;
                 if (includeFolder)
                 {
                     dirList.Sort();
-                    totalItems = dirList.Count + fileList.Count;
+                    totalItems += dirList.Count;
                 }
-                else
-                {
-                    totalItems = fileList.Count;
-                }
-                fileList.Sort();
 
                 var combList = new List<CShellItem>(totalItems);
                 if (includeFolder) combList.AddRange(dirList);
                 combList.AddRange(fileList);
 
-                _ListView.BeginUpdate();
-                _ListView.Items.Clear();
-                _itemIndex.Clear();
 
-                if (_currentFolderCsi != null && !ReferenceEquals(_currentFolderCsi, csi))
-                    _currentFolderCsi.ClearItems(true);
-
-                _ListView.Refresh();
+                //if (_currentFolderCsi != null && !ReferenceEquals(_currentFolderCsi, csi))
+                //    _currentFolderCsi.ClearItems(true, true);
 
                 int initialFillLim = Math.Min(combList.Count, InitialLoadLimit);
-                var firstLoad = new List<ListViewItem>(combList.Count);
+                var combinedLvi = new List<ListViewItem>(combList.Count);
+                int topIndex = this.GetIndexOfFirstVisible();
 
                 foreach (CShellItem item in combList)
                 {
                     ListViewItem lvi = MakeLVItem(item);
                     _itemIndex[item.FullPath] = lvi;
-                    if (firstLoad.Count < initialFillLim)
-                        lvi.ImageIndex = SystemImageListManager.GetIconIndex(item, false);
-                    firstLoad.Add(lvi);
+                    combinedLvi.Add(lvi);
                 }
 
-                _ListView.Items.AddRange(firstLoad.ToArray());
-                _ListView.EndUpdate();
-
-                if (_ListView.Items.Count > 0)
+                lock (_ListView)
                 {
-                    for (int i = initialFillLim - 1; i <= _ListView.Items.Count - 1; i++)
+                    try
                     {
-                        if (i >= 0)
-                            _ListView.Items[i].ImageIndex =
-                                SystemImageListManager.GetIconIndex((CShellItem)_ListView.Items[i].Tag, false);
+                        _ListView.BeginUpdate();
+                        _ListView.Items.Clear();
+                        _itemIndex.Clear();
+                        _ListView.Items.AddRange(combinedLvi.ToArray());
+                        _ListView.EnsureVisible(topIndex);
+                    }
+                    finally
+                    {
+                        _ListView.EndUpdate();
                     }
                 }
-            }
-            else
-            {
-                _ListView.Items.Clear();
-                _itemIndex.Clear();
-                if (_currentFolderCsi != null && !ReferenceEquals(_currentFolderCsi, csi))
-                    _currentFolderCsi.ClearItems(true);
-            }
 
-            _currentFolderCsi = csi;
-            _ListView.Tag = _currentFolderCsi; // For ClvDropWrapper
+            //if (_ListView.Items.Count > 0)
+            //{
+            //    _ListView.TopItem = _ListView.Items[Math.Min(topIndex, _ListView.Items.Count)];
+            //    for (int i = topIndex; i < _ListView.Items.Count && i < topIndex + InitialLoadLimit; i++)
+            //    {
+            //        _ListView.Items[i].ImageIndex = SystemImageListManager.GetIconIndex((CShellItem)_ListView.Items[i].Tag, false);
+            //    }
+            //}
+        }
+
+        _ListView.Tag = _currentFolderCsi; // For ClvDropWrapper
 
             _ListView.ListViewItemSorter = new LVColSorter(_ListView);
 
             if (IsThumbnailViewMode())
             {
                 //LoadAndAssignThumbnails(GetThumbnailSizeForMode(DisplayMode));
-                LoadThumbnails(GetThumbnailSizeForMode(DisplayMode)); //todo: this is already lazy load but it could be even more lazy load
+                LoadThumbnails(GetThumbnailSizeForMode(DisplayMode), true); //todo: this is already lazy load but could it be even more lazy load
             }
 
             ExpListFolderChanged?.Invoke(_currentFolderCsi);
@@ -752,7 +757,7 @@ namespace ExpControlsLib
             }
 
             Rectangle clientRect = _ListView.ClientRectangle;
-            clientRect.Height *= 2; //we want to start loading thumbnails just before they scroll into view for greater responsiveness, so we expand the bounds by 100% in the scroll direction
+            clientRect.Height *= 2; //preload beyond visual range
             foreach (ListViewItem item in _ListView.Items)
             {
                 // If onlyVisible is true, skip items already loaded or not currently visible
@@ -867,13 +872,13 @@ namespace ExpControlsLib
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
         private void DoItemUpdate(object sender, ShellItemUpdateEventArgs e)
         {
-            var parent = (CShellItem)sender;
-            if (!ReferenceEquals(parent, _currentFolderCsi)) return;
+            if (sender is null) return;
+
+            var csi = (CShellItem)sender;
+            if (!CPidl.IsEqual(csi.PIDL, _currentFolderCsi.PIDL)) return;
 
             try
             {
-                //_ListView.BeginUpdate();
-
                 switch (e.UpdateType)
                 {
                     case CShItemUpdateType.Created:
@@ -948,6 +953,7 @@ namespace ExpControlsLib
                         }
 
                     case CShItemUpdateType.UpdateDir:
+                        DisplayFiles(_CurrentPath, _currentFolderCsi, true, reload: true);
                         break;
 
                     case CShItemUpdateType.Updated:
@@ -992,7 +998,6 @@ namespace ExpControlsLib
             }
             finally
             {
-                //_ListView.EndUpdate();
             }
         }
 
@@ -2227,6 +2232,26 @@ namespace ExpControlsLib
         }
 
         #endregion
+
+        private int GetIndexOfFirstVisible()
+        {
+            ListViewItem current;
+            if (_ListView.View == View.Details || _ListView.View == View.List)
+            {
+                current = _ListView.TopItem;   // valid here
+            }
+            else
+            {
+                current = _ListView.Items
+                    .Cast<ListViewItem>()
+                    .Where(it => _ListView.ClientRectangle.IntersectsWith(it.Bounds))
+                    .OrderBy(it => it.Bounds.Top)
+                    .ThenBy(it => it.Bounds.Left)
+                    .FirstOrDefault();
+            }
+
+            return (current?.Index == null ? 0 : current.Index);
+        }
 
     }
 }

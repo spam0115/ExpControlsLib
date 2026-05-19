@@ -265,11 +265,15 @@ namespace WindowsApiLib.Shell
                                     {
                                         if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0)
                                         {
-                                            Debug.WriteLine("Empty pidl received from UPDATEDIR event");
+                                            if (HierachyManager?.CurrentFolder != null)
+                                            {
+                                                Debug.WriteLine("Recevied updatedir message with no location specified.  Trying to update current folder if it exists.");
+                                                HierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            }
                                         }
                                         else if (CPidl.SegmentCount(shNotify.dwItem1) == 1) 
                                         {
-                                            if (HierachyManager.CurrentFolder != null && CPidl.IsEqual(HierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
+                                            if (HierachyManager?.CurrentFolder != null && CPidl.IsEqual(HierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
                                             {
                                                 Debug.WriteLine("updating dir from updatedir event");
                                                 HierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
@@ -294,7 +298,7 @@ namespace WindowsApiLib.Shell
                                         }
                                         else if (CPidl.SegmentCount(shNotify.dwItem1) == 1)
                                         {
-                                            if (HierachyManager.CurrentFolder != null && CPidl.IsEqual(HierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
+                                            if (HierachyManager?.CurrentFolder != null && CPidl.IsEqual(HierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
                                             {
                                                 Debug.WriteLine("updating dir from updateitem event");
                                                 HierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
@@ -440,6 +444,7 @@ namespace WindowsApiLib.Shell
                     }
                 }
             }
+
             base.WndProc(ref m);
         }
 
