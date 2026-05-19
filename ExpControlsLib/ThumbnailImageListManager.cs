@@ -36,6 +36,21 @@ namespace ExpControlsLib
             _thumbnailProvider.ThumbnailReady += OnThumbnailReady;
         }
 
+        public void SetImageListSize(int thumbnailSize)
+        {
+            _activeSize = thumbnailSize;
+
+            var imageList = GetImageList(thumbnailSize);
+
+            _listView.LargeImageList = imageList;
+
+            _listView.BeginUpdate();
+            foreach (ListViewItem item in _listView.Items)
+                item.ImageIndex = -1;
+            _listView.EndUpdate();
+        }
+
+
         public void BeginSession(int thumbnailSize)
         {
             _generation++;

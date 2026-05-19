@@ -28,7 +28,6 @@ namespace WindowsApiLib
     /// </remarks>
     public class SystemImageListManager
     {
-
         #region        ImageList Related Constants
         // For ImageList manipulation
         private const int LVM_FIRST = 0x1000;
@@ -79,7 +78,7 @@ namespace WindowsApiLib
         /// Summary of Initializer.
         /// </summary>
         [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
-        private static void Initializer()
+        private static void Initialize()
         {
             if (m_Initialized)
             {
@@ -211,7 +210,7 @@ namespace WindowsApiLib
         {
             if (item is null) return 0;
 
-            Initializer();
+            Initialize();
             bool HasOverlay = false;  // true if it's an overlay
             int rVal;     // The returned Index
 
@@ -250,7 +249,7 @@ namespace WindowsApiLib
                     m_Table[Key] = rVal;
                     bCnt += 1;
                 }
-                else        // don't have iconindex for an overlay, get it. 
+                else // don't have iconindex for an overlay, get it. 
                 {
                     // This is the tricky part -- add overlaid Icon to systemimagelist
                     // use of SmallImageList from Calum McLellan
@@ -268,6 +267,7 @@ namespace WindowsApiLib
                     {
                         dwflag = dwflag | SHGFI.OPENICON;
                     }
+                    //todo: i think these flags are already in CShellItem, no need to fetch them again
                     HR = SHGetFileInfo(withBlock.PIDL, dwAttr, ref shfi, cbFileInfo, dwflag);
                     HR_SMALL = SHGetFileInfo(withBlock.PIDL, dwAttr, ref shfi_small, cbFileInfo, dwflag | SHGFI.SMALLICON);
                     // m_Mutex.WaitOne()
@@ -279,22 +279,6 @@ namespace WindowsApiLib
                         rVal2 = ImageList_ReplaceIcon(m_lgImgList, -1, shfi.hIcon);
                         Debug.Assert(rVal2 > -1, "Failed to add overlaid large icon");
                         Debug.Assert(rVal == rVal2, "Small & Large IconIndices are Different");
-                        // Original Code by Calum.
-                        // If m_xlgImgList <> IntPtr.Zero Then  'Not set on Windows earlier than XP
-                        // 'UPDATE: Get XL Icon
-                        // 'There are no XL Overlays so just get the normal Icon and add it 
-                        // 'to the list again
-                        // Dim hIcon As IntPtr = IntPtr.Zero
-                        // rVal = GetNonOverlayIndex(item, GetOpenIcon)
-                        // hIcon = ImageList_GetIcon(m_xlgImgList, rVal, 0)
-                        // rVal = ImageList_ReplaceIcon(m_xlgImgList, -1, hIcon)
-                        // Debug.Assert(rVal > -1, "Failed to add overlaid xl icon")
-                        // DestroyIcon(hIcon)
-                        // Debug.Assert(rVal = rVal2, "XL & Large IconIndices are Different")
-                        // 'END UPDATE
-                        // End If
-
-                        // Jens' version 
 
                         if (m_xlgImgList != IntPtr.Zero)  // Not set on Windows earlier than XP
                         {
@@ -354,7 +338,7 @@ namespace WindowsApiLib
         [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static int GetNonOverlayIndex(ref CShellItem item, bool GetOpenIcon = false)
         {
-            Initializer();
+            Initialize();
             int rVal;     // The returned Index
 
             // build Key into HashTable for this Item
@@ -445,7 +429,7 @@ namespace WindowsApiLib
         public static Icon GetIcon(int Index, bool smallIcon = false)
 
         {
-            Initializer();
+            Initialize();
             Icon icon = null;
             IntPtr hIcon;
             // Customisation to return a small image
@@ -473,7 +457,7 @@ namespace WindowsApiLib
         [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static Icon GetXLIcon(int index)
         {
-            Initializer();
+            Initialize();
             Icon icon = null;
             if (m_xlgImgList != IntPtr.Zero)
             {
@@ -496,7 +480,7 @@ namespace WindowsApiLib
         [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static Icon GetJumboIcon(int index)
         {
-            Initializer();
+            Initialize();
             Icon icon = null;
             if (m_jumboImgList != IntPtr.Zero)
             {
@@ -522,7 +506,7 @@ namespace WindowsApiLib
         [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static void SetListViewImageList(ListView listView, bool forLargeIcons, bool forStateImages)
         {
-            Initializer();
+            Initialize();
             int wParam = LVSIL_NORMAL;
             var HImageList = m_lgImgList;
             if (!forLargeIcons)
@@ -547,7 +531,7 @@ namespace WindowsApiLib
         public static void SetListViewImageList(ListView listView, LVSIL Usage, SHIL IIlSize)
         {
 
-            Initializer();
+            Initialize();
             int wParam = (int)Usage;
             var HImageList = m_lgImgList;
             if (IIlSize == SHIL.Small)
@@ -575,7 +559,7 @@ namespace WindowsApiLib
         [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static void SetTreeViewImageList(TreeView treeView, bool forStateImages)
         {
-            Initializer();
+            Initialize();
             int wParam = LVSIL_NORMAL;
             if (forStateImages)
             {

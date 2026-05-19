@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.ComponentModel.Design;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -62,8 +63,19 @@ namespace ExpControlsLib
     public partial class ExpList
     {
 
+        #region Private fields
+
+        // InitialLoadLimit is the number of ExpFileList.Items whose IconIndex will be fetched on initial load
+        // the balance will be fetched AFTER ExpFileList.EndUpdate
+        private const int InitialLoadLimit = 128;
+
+        // For ExpFileList label text selection
+        private const int EM_SETSEL = 0xB1;
+        private const int LVM_FIRST = 0x1000;
+        private const uint LVM_GETEDITCONTROL = LVM_FIRST + 24;
+
         // Avoid Globalization problem-- an empty timevalue
-        private readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
+        private static readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
 
         private CShellItem _currentFolderCsi;
         private CShellItem _selectedItem; // The currently selected item within the list
@@ -81,6 +93,9 @@ namespace ExpControlsLib
 
         private ShellController _shellController = null;
 
+        #endregion
+
+        #region Public fields
         /// <summary>
         /// Delegate for the <see cref="ExpListItemClick"/> event.
         /// </summary>
@@ -210,14 +225,10 @@ namespace ExpControlsLib
         [Category("Action"), Description("Occurs when data for a custom column is requested.")]
         public event ExpListGetColumnDataEventHandler ExpListGetColumnData;
 
-        // InitialLoadLimit is the number of ExpFileList.Items whose IconIndex will be fetched on initial load
-        // the balance will be fetched AFTER ExpFileList.EndUpdate
-        private const int InitialLoadLimit = 128;
+        #endregion
 
-        // For ExpFileList label text selection
-        private const int EM_SETSEL = 0xB1;
-        private const int LVM_FIRST = 0x1000;
-        private const uint LVM_GETEDITCONTROL = LVM_FIRST + 24;
+
+        #region Constructor & Initialization
 
         /// <summary>
         /// Initializes a new instance of <see cref="ExpList"/>, wires up all event handlers
@@ -235,6 +246,8 @@ namespace ExpControlsLib
                 _thumbnailTimer.Stop();
                 if (IsThumbnailViewMode())
                     LoadThumbnails(GetThumbnailSizeForMode(), true);
+                else
+                    LoadIconsForVisibleItems();
             };
 
             // Converted from Handles clauses in VB
@@ -266,6 +279,58 @@ namespace ExpControlsLib
         }
 
         /// <summary>
+        /// Handles the <see cref="Control.Load"/> event of the <see cref="ExpList"/> control.
+        /// Initializes drag and drop wrappers, thumbnail manager, and shell item update notifications.
+        /// </summary>
+        private void ExpList_Load(object sender, EventArgs e)
+        {
+            // Setup Drag and Drop Wrappers
+            DW = new CDragWrapper(_ListView);
+            DropWrap = new ClvDropWrapper(_ListView);
+
+            // Initialize Thumbnail Manager
+            _thumbnailManager = new ThumbnailImageListManager(_ListView);
+
+            //create sorter
+            var sorter = new LVColSorter(_ListView);
+            sorter.SortOrderChanged += (s, e) =>
+            {
+                SortOrderChanged?.Invoke(this, EventArgs.Empty);
+                OnListViewScroll();
+            };
+            _ListView.ListViewItemSorter = sorter;
+
+            // Setup Change Notification
+            UpdateEvent += UpdateInvoke;
+
+            DisplayMode = (ListViewDisplayMode)_ListView.View;
+
+            SetAndLoadImageList(DisplayMode);
+            LoadAppropriateImages();
+
+        }
+
+        /// <summary>
+        /// Handles the <see cref="Control.HandleCreated"/> event of the <see cref="_ListView"/> ListView.
+        /// </summary>
+        private void ExpFileList_HandleCreated(object sender, EventArgs e)
+        {
+            //SystemImageListManager.SetListViewImageList(ExpFileList, false, false);
+            //SystemImageListManager.SetListViewImageList(ExpFileList, true, false);
+            _scrollHook = new ListViewScrollHook(_ListView, OnListViewScroll);
+        }
+
+        /// <summary>
+        /// Handles the <see cref="Control.VisibleChanged"/> event of the <see cref="ExpList"/> control.
+        /// Re-configures image lists for the current display mode when the control becomes visible.
+        /// </summary>
+        private void ExpList_VisibleChanged(object sender, EventArgs e) //occurs when the control become visible
+        {
+        }
+
+        #endregion
+
+        /// <summary>
         /// Delegate for the <see cref="ExpListGetColumnData"/> event.
         /// </summary>
         public delegate void ExpListGetColumnDataEventHandler(object sender, ExpListGetColumnDataEventArgs e);
@@ -293,6 +358,8 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Gets or sets the display mode used to present items in the list view.
+        /// The native ListView dates from Windows 95 and doesn't support thumbnails.  Support for thumbnails 
+        /// was a kludge introduced in XP.
         /// </summary>
         /// <remarks>Use this property to select among multiple visual representations for items,
         /// including standard views and thumbnail modes. Changing the display mode updates the appearance of the list
@@ -309,12 +376,22 @@ namespace ExpControlsLib
                 {
                     _ListView.View = (View)value;
                 }
+                else
+                {
+                    _ListView.View = View.LargeIcon; //XP kludge for thumbnail mode
+                }
                 field = value;
-                SetupImageListsForListView(value);
+
+                SetAndLoadImageList(value);
+                LoadAppropriateImages();
+
                 DisplayModeChanged?.Invoke(value);
             }
         }
 
+        private bool _smallImageListInitialized = false;
+        private bool _largeImageListInitialized = false;
+        private bool _thumbnailImageListInitialized = false;
         /// <summary>
         /// Configures the image lists bound to the ListView for the given display mode.
         /// For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
@@ -323,20 +400,58 @@ namespace ExpControlsLib
         /// <see cref="LoadThumbnails"/> is called to populate thumbnail images.
         /// </summary>
         /// <param name="value">The <see cref="ListViewDisplayMode"/> to configure for.</param>
-        private void SetupImageListsForListView(ListViewDisplayMode value)
+        private void SetAndLoadImageList(ListViewDisplayMode value)
         {
             if (value <= ListViewDisplayMode.Tile) //built-in Windows 95 Shell view modes
             {
-                if (value == ListViewDisplayMode.LargeIcon)
+                bool large = (value == ListViewDisplayMode.LargeIcon);
+
+                if (large)
                     SystemImageListManager.SetListViewImageList(_ListView, true, false);
                 else
                     SystemImageListManager.SetListViewImageList(_ListView, false, false);
 
-                // *** FIX: re-bind every item's ImageIndex to the system image list ***
-                bool large = (value == ListViewDisplayMode.LargeIcon);
-                //_ListView.BeginUpdate();
+                //if (large)
+                //    _largeImageListInitialized = true;
+                //else _smallImageListInitialized = true;
+            }
+            else //custom thumbnail view modes
+            {
+                //LoadThumbnails(GetThumbnailSizeForMode(value), true);
+                _thumbnailManager.SetImageListSize(GetThumbnailSizeForMode(value));
+            }
+        }
+
+        private void EnsureImageListsInitialized(ListViewDisplayMode? value = null)
+        {
+            value = value == null ? DisplayMode : value;
+
+            if (DisplayMode <= ListViewDisplayMode.Tile)
+            {
+                if (value == ListViewDisplayMode.LargeIcon && !_largeImageListInitialized)
+                {
+                    SetAndLoadImageList(value.Value);
+                }
+                else if (_smallImageListInitialized)
+                {
+                    SetAndLoadImageList(value.Value);
+                }
+            }
+            else if (!_thumbnailImageListInitialized)
+                SetAndLoadImageList(value.Value);
+        }
+
+        private void LoadAppropriateImages(ListViewDisplayMode? mode = null)
+        {
+            //EnsureImageListsInitialized(DisplayMode);
+            
+            mode = mode == null ? DisplayMode : mode;
+
+            if (mode <= ListViewDisplayMode.Tile) {
+                bool large = (mode == ListViewDisplayMode.LargeIcon);
                 try
                 {
+                    _ListView.BeginUpdate();
                     foreach (ListViewItem lvi in _ListView.Items)
                     {
                         if (lvi.Tag is CShellItem csi)
@@ -345,14 +460,14 @@ namespace ExpControlsLib
                             lvi.ImageIndex = -1;
                     }
                 }
-                finally { 
-                    //_ListView.EndUpdate();
+                finally
+                {
+                    _ListView.EndUpdate();
                 }
             }
-            else //custom thumbnail view modes
+            else if (!_thumbnailImageListInitialized)
             {
-                _ListView.View = View.LargeIcon;
-                LoadThumbnails(GetThumbnailSizeForMode(value));
+                LoadThumbnails( GetThumbnailSizeForMode(mode));
             }
         }
 
@@ -387,9 +502,7 @@ namespace ExpControlsLib
                     ExpListPathChanged?.Invoke(_CurrentPath);
 
                     if (needsUpdate)
-                    {
                         _ListView.EndUpdate();
-                    }
                 }
                 else
                 {
@@ -399,9 +512,7 @@ namespace ExpControlsLib
                         var csi = CShellItemFactory.CreateCShItem(value);
 
                         if (csi != null && csi.IsFolder)
-                        {
                             DisplayFiles(value, csi, true);
-                        }
                         else
                         {
                             _CurrentPath = value;
@@ -556,53 +667,6 @@ namespace ExpControlsLib
 
         #endregion
 
-        #region Form Load/VisibleChanged ExpFileList HandleCreated
-
-        /// <summary>
-        /// Handles the <see cref="Control.Load"/> event of the <see cref="ExpList"/> control.
-        /// Initializes drag and drop wrappers, thumbnail manager, and shell item update notifications.
-        /// </summary>
-        private void ExpList_Load(object sender, EventArgs e)
-        {
-            // Setup Drag and Drop Wrappers
-            DW = new CDragWrapper(_ListView);
-            DropWrap = new ClvDropWrapper(_ListView);
-
-            // Initialize Thumbnail Manager
-            _thumbnailManager = new ThumbnailImageListManager(_ListView);
-
-            //create sorter
-            var sorter = new LVColSorter(_ListView);
-            sorter.SortOrderChanged += (s, e) => SortOrderChanged?.Invoke(this, EventArgs.Empty);
-            _ListView.ListViewItemSorter = sorter;
-
-            // Setup Change Notification
-            UpdateEvent += UpdateInvoke;
-            
-            DisplayMode = (ListViewDisplayMode)_ListView.View;
-        }
-
-        /// <summary>
-        /// Handles the <see cref="Control.HandleCreated"/> event of the <see cref="_ListView"/> ListView.
-        /// </summary>
-        private void ExpFileList_HandleCreated(object sender, EventArgs e)
-        {
-            //SystemImageListManager.SetListViewImageList(ExpFileList, false, false);
-            //SystemImageListManager.SetListViewImageList(ExpFileList, true, false);
-            _scrollHook = new ListViewScrollHook(_ListView, OnListViewScroll);
-        }
-
-        /// <summary>
-        /// Handles the <see cref="Control.VisibleChanged"/> event of the <see cref="ExpList"/> control.
-        /// Re-configures image lists for the current display mode when the control becomes visible.
-        /// </summary>
-        private void ExpList_VisibleChanged(object sender, EventArgs e) //occurs when the control become visible
-        {
-
-            SetupImageListsForListView(DisplayMode);
-        }
-
-        #endregion
 
         #region ExplorerTree Event Handling -- AfterNodeSelect
 
@@ -663,6 +727,13 @@ namespace ExpControlsLib
                 samePath = CPidl.IsEqual(_currentFolderCsi.PIDL, csi.PIDL);
 
             if (_currentFolderCsi != null && samePath && reload == false) return;
+
+            if (!samePath)
+            { //refetch icons/thumbnails 
+                _smallImageListInitialized = false;
+                _largeImageListInitialized = false;
+                _thumbnailImageListInitialized = false;
+            }
 
             // record history
             if (!_isNavigatingHistory && _currentFolderCsi != null && !samePath)
@@ -729,6 +800,9 @@ namespace ExpControlsLib
                 if (!RequestListRefresh(combinedLvi.ToArray())) return;
             }
 
+            if (IsThumbnailViewMode())
+                LoadThumbnails(GetThumbnailSizeForMode(), true);
+
             ExpListFolderChanged?.Invoke(_currentFolderCsi);
             if (!samePath) ExpListPathChanged?.Invoke(_CurrentPath);
         }
@@ -792,14 +866,15 @@ namespace ExpControlsLib
                     {
                         _ListView.Tag = _currentFolderCsi; // For ClvDropWrapper
 
-                        //get initial thumbnails
-                        if (IsThumbnailViewMode())
-                        {
-                            LoadThumbnails(GetThumbnailSizeForMode(DisplayMode), true);
-                        }
-
                         topIndex = Math.Max(0, Math.Min(topIndex, _ListView.Items.Count - 1));
                         _ListView.EnsureVisible(topIndex);
+
+                        //get all icons or some initial thumbnails
+                        //if (IsThumbnailViewMode())
+                        //{
+                        //    LoadThumbnails(GetThumbnailSizeForMode(DisplayMode), true);
+                        //}
+                        LoadThumbnails(GetThumbnailSizeForMode(DisplayMode), true);
                     }
                 }
                 finally
@@ -863,10 +938,10 @@ namespace ExpControlsLib
             if (_thumbnailManager == null)
                 _thumbnailManager = new ThumbnailImageListManager(_ListView);
 
-            if (!onlyVisible)
-            {
-                _thumbnailManager.BeginSession(thumbnailSize);
-            }
+            //if (!onlyVisible)
+            //{
+            //    _thumbnailManager.BeginSession(thumbnailSize);
+            //}
 
             Rectangle clientRect = _ListView.ClientRectangle;
             clientRect.Height *= 2; //preload beyond visual range
@@ -1134,11 +1209,6 @@ namespace ExpControlsLib
         {
             if (lvi == null || item == null) return;
 
-            if (IsThumbnailViewMode())
-                _thumbnailManager.RequestThumbnail(lvi, item.FullPath, GetThumbnailSizeForMode());
-            else
-                lvi.ImageIndex = SystemImageListManager.GetIconIndex(item, false);
-
             // Update primary text
             lvi.Text = item.DisplayName;
             lvi.Name = item.FullPath;
@@ -1246,6 +1316,10 @@ namespace ExpControlsLib
                 }
             } //end for
 
+            //if (IsThumbnailViewMode()) //too slow.  defer to lazy loading.
+            //    _thumbnailManager.RequestThumbnail(lvi, item.FullPath, GetThumbnailSizeForMode());
+            //else
+                lvi.ImageIndex = SystemImageListManager.GetIconIndex(item, false);
         }
 
         /// <summary>
@@ -2340,6 +2414,24 @@ namespace ExpControlsLib
             //issues a new request to get thumbnails after a brief debounce delay
             _thumbnailTimer?.Stop();
             _thumbnailTimer?.Start();
+        }
+
+        private void LoadIconsForVisibleItems()
+        {
+            if (!_ListView.IsHandleCreated) return;
+
+            Rectangle clientRect = _ListView.ClientRectangle;
+            bool large = (_ListView.View == View.LargeIcon);
+
+            foreach (ListViewItem item in _ListView.Items)
+            {
+                if (!clientRect.IntersectsWith(item.Bounds)) continue;
+
+                if (item.Tag is CShellItem csi && item.ImageIndex == -1)
+                {
+                    item.ImageIndex = SystemImageListManager.GetIconIndex(csi, large);
+                }
+            }
         }
 
         #endregion

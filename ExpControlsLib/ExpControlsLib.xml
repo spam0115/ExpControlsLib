@@ -578,6 +578,23 @@
             for the control and its child <see cref="F:ExpControlsLib.ExpList._ListView"/> ListView.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ExpList.ExpList_Load(System.Object,System.EventArgs)">
+            <summary>
+            Handles the <see cref="!:Control.Load"/> event of the <see cref="T:ExpControlsLib.ExpList"/> control.
+            Initializes drag and drop wrappers, thumbnail manager, and shell item update notifications.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ExpFileList_HandleCreated(System.Object,System.EventArgs)">
+            <summary>
+            Handles the <see cref="E:System.Windows.Forms.Control.HandleCreated"/> event of the <see cref="F:ExpControlsLib.ExpList._ListView"/> ListView.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ExpList_VisibleChanged(System.Object,System.EventArgs)">
+            <summary>
+            Handles the <see cref="E:System.Windows.Forms.Control.VisibleChanged"/> event of the <see cref="T:ExpControlsLib.ExpList"/> control.
+            Re-configures image lists for the current display mode when the control becomes visible.
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.ExpList.ExpListGetColumnDataEventHandler">
             <summary>
             Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListGetColumnData"/> event.
@@ -602,12 +619,14 @@
         <member name="P:ExpControlsLib.ExpList.DisplayMode">
             <summary>
             Gets or sets the display mode used to present items in the list view.
+            The native ListView dates from Windows 95 and doesn't support thumbnails.  Support for thumbnails 
+            was a kludge introduced in XP.
             </summary>
             <remarks>Use this property to select among multiple visual representations for items,
             including standard views and thumbnail modes. Changing the display mode updates the appearance of the list
             view accordingly.</remarks>
         </member>
-        <member name="M:ExpControlsLib.ExpList.SetupImageListsForListView(ExpControlsLib.ListViewDisplayMode)">
+        <member name="M:ExpControlsLib.ExpList.SetAndLoadImageList(ExpControlsLib.ListViewDisplayMode)">
             <summary>
             Configures the image lists bound to the ListView for the given display mode.
             For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
@@ -688,23 +707,6 @@
             </summary>
             <param name="column">The column index.</param>
             <param name="order">The sort order.</param>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.ExpList_Load(System.Object,System.EventArgs)">
-            <summary>
-            Handles the <see cref="!:Control.Load"/> event of the <see cref="T:ExpControlsLib.ExpList"/> control.
-            Initializes drag and drop wrappers, thumbnail manager, and shell item update notifications.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.ExpFileList_HandleCreated(System.Object,System.EventArgs)">
-            <summary>
-            Handles the <see cref="E:System.Windows.Forms.Control.HandleCreated"/> event of the <see cref="F:ExpControlsLib.ExpList._ListView"/> ListView.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.ExpList_VisibleChanged(System.Object,System.EventArgs)">
-            <summary>
-            Handles the <see cref="E:System.Windows.Forms.Control.VisibleChanged"/> event of the <see cref="T:ExpControlsLib.ExpList"/> control.
-            Re-configures image lists for the current display mode when the control becomes visible.
-            </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.WndProc(System.Windows.Forms.Message@)">
             <summary>
