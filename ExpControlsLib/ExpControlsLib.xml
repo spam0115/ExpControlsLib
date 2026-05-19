@@ -583,6 +583,17 @@
             Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListGetColumnData"/> event.
             </summary>
         </member>
+        <member name="T:ExpControlsLib.ExpList.DisplayModeChangedEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.DisplayModeChanged"/> event.
+            </summary>
+            <param name="newMode">The new <see cref="T:ExpControlsLib.ListViewDisplayMode"/>.</param>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.DisplayModeChanged">
+            <summary>
+            Occurs when the <see cref="P:ExpControlsLib.ExpList.DisplayMode"/> has changed.
+            </summary>
+        </member>
         <member name="P:ExpControlsLib.ExpList.DisplayMode">
             <summary>
             Gets or sets the display mode used to present items in the list view.

@@ -265,9 +265,21 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Delegate for the <see cref="ExpList.ExpListGetColumnData"/> event.
+        /// Delegate for the <see cref="ExpListGetColumnData"/> event.
         /// </summary>
         public delegate void ExpListGetColumnDataEventHandler(object sender, ExpListGetColumnDataEventArgs e);
+
+        /// <summary>
+        /// Delegate for the <see cref="DisplayModeChanged"/> event.
+        /// </summary>
+        /// <param name="newMode">The new <see cref="ListViewDisplayMode"/>.</param>
+        public delegate void DisplayModeChangedEventHandler(ListViewDisplayMode newMode);
+        /// <summary>
+        /// Occurs when the <see cref="DisplayMode"/> has changed.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires when the DisplayMode property has changed")]
+        public event DisplayModeChangedEventHandler DisplayModeChanged;
 
         #region Public Properties
 
@@ -284,12 +296,14 @@ namespace ExpControlsLib
         {
             get; set
             {
+                if (field == value) return;
                 if (value <= ListViewDisplayMode.Tile) // View values native to the ListView control 
                 {
                     _ListView.View = (View)value;
                 }
                 field = value;
                 SetupImageListsForListView(value);
+                DisplayModeChanged?.Invoke(value);
             }
         }
 
@@ -2233,7 +2247,7 @@ namespace ExpControlsLib
 
         #endregion
 
-        private int GetIndexOfFirstVisible()
+        public int GetIndexOfFirstVisible()
         {
             ListViewItem current;
             if (_ListView.View == View.Details || _ListView.View == View.List)
