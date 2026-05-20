@@ -114,7 +114,8 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Handles thumbnail ready events and updates the ListView.
-        /// Important: this is where the image lists is assigned to the ListView.
+        /// Image manipulation is done on the background thread, while UI updates
+        /// are marshalled to the UI thread.
         /// </summary>
         private void OnThumbnailReady(object sender, ThumbnailReadyEventArgs e)
         {
@@ -124,57 +125,85 @@ namespace ExpControlsLib
             if (_listView.IsDisposed || !_listView.IsHandleCreated)
                 return;
 
-            if (_listView.InvokeRequired) //todo: move all the code that touches the listview into a marshalled call and leave all the image manipulation code in this background thread
-            {
-                _listView.BeginInvoke(new EventHandler<ThumbnailReadyEventArgs>(OnThumbnailReady), sender, e);
+            if (tag.Generation != _generation)
                 return;
+
+            if (tag.RequestedSize != _activeSize) //this can happen if we switch display modes while thumbnail requests are outstanding
+                return;
+
+            if (tag.Item == null || tag.Item.ListView != _listView)
+                return;
+
+            //// safety: ensure item still points to same shell object/path
+            //if (!(tag.Item.Tag is CShellItem csi) || !string.Equals(csi.FullPath, tag.FilePath, StringComparison.OrdinalIgnoreCase))
+            //    return;
+
+            int index = -1;
+            Bitmap? square = null;
+
+            if (e.Thumbnail != null)
+            {
+                // Image manipulation on background thread
+                // Use Format32bppPArgb to match what the shell produced (premultiplied alpha)
+                square = new Bitmap(tag.RequestedSize, tag.RequestedSize,
+                    System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+
+                using (var g = Graphics.FromImage(square))
+                {
+                    g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Low;
+                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.None;
+                    g.DrawImage(e.Thumbnail, new Rectangle(0, 0, tag.RequestedSize, tag.RequestedSize));
+                }
             }
 
-#if DEBUG
-            Console.WriteLine("Received Thumbnail ready event");
-            Console.WriteLine("\tItem: " + tag.Item.Text);
-#endif
+            if (!_listView.IsDisposed && _listView.IsHandleCreated)
+            {
+                _listView.BeginInvoke(new Action(() => ApplyThumbnailToUI(tag, square)));
+            }
+            else
+            {
+                square?.Dispose();
+            }
+        }
 
-            if (tag.Generation != _generation) 
-                return;
-            if (tag.RequestedSize != _activeSize) return;
-            if (tag.Item == null || tag.Item.ListView != _listView) return;
-
-            // safety: item still points to same shell object/path
-            if (!(tag.Item.Tag is CShellItem csi) || !string.Equals(csi.FullPath, tag.FilePath, StringComparison.OrdinalIgnoreCase))
-                return;
-
-            if (e.Thumbnail == null)
+        private void ApplyThumbnailToUI(ThumbnailRequestTag tag, Bitmap? square)
+        {
+            
+            if (square == null)
             {
                 tag.Item.ImageIndex = -1;
                 return;
             }
 
-            var imageList = GetImageList(_activeSize);
-            if (_listView.LargeImageList != imageList)
-                _listView.LargeImageList = imageList;
-            
-            string key = $"{tag.FilePath}|{tag.RequestedSize}";
-            if (!_imageIndexByKey.TryGetValue(key, out int index))
+            try
             {
-                // Use Format32bppPArgb to match what the shell produced (premultiplied alpha)
-                var normalized = new Bitmap(_activeSize, _activeSize,
-                    System.Drawing.Imaging.PixelFormat.Format32bppPArgb); //TODO: do we even need to normalize this anymore?  I think we are already normalizing it in the ThumbnailProvider class now.
+                var imageList = GetImageList(_activeSize);
+                if (_listView.LargeImageList != imageList)
+                    _listView.LargeImageList = imageList;
 
-                using (var g = Graphics.FromImage(normalized))
+                string key = $"{tag.FilePath}|{tag.RequestedSize}";
+                if (!_imageIndexByKey.TryGetValue(key, out int index))
                 {
-                    g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy; // <-- key
-                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
-                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighSpeed;
-                    g.DrawImage(e.Thumbnail, new Rectangle(0, 0, _activeSize, _activeSize));
+                    imageList.Images.Add(square);   // pass the Bitmap directly, do NOT Clone() to Image
+                    index = imageList.Images.Count - 1;  //the active image list actually belongs to the ListView so we can't event access the count without being on the ui thread
+                    _imageIndexByKey[key] = index;
+                }
+                else
+                {
+                    // Already have it in the image list, we can dispose the one we just made
+                    square.Dispose();
                 }
 
-                imageList.Images.Add(normalized);   // pass the Bitmap directly, do NOT Clone() to Image
-                index = imageList.Images.Count - 1;
-                _imageIndexByKey[key] = index;
+                tag.Item.ImageIndex = index;
             }
-
-            tag.Item.ImageIndex = index;
+            catch (Exception ex)
+            {
+                square?.Dispose();
+#if DEBUG
+                Console.WriteLine("Error applying thumbnail to UI: " + ex.Message);
+#endif
+            }
         }
 
         /// <summary>

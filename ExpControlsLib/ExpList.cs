@@ -419,11 +419,10 @@ namespace ExpControlsLib
 
         private void LoadAppropriateImages(ListViewDisplayMode? mode = null)
         {
-            //EnsureImageListsInitialized(DisplayMode);
-            
             mode = mode == null ? DisplayMode : mode;
 
-            if (mode <= ListViewDisplayMode.Tile) {
+            if (mode <= ListViewDisplayMode.Tile) 
+            {
                 bool large = (mode == ListViewDisplayMode.LargeIcon);
                 try
                 {
@@ -728,7 +727,7 @@ namespace ExpControlsLib
 
             if ((dirList.Count + fileList.Count) == 0)
             {
-                if (RequestListRefresh(null, !samePath))
+                if (RequestListViewRefresh(null, !samePath))
                 {
                     _itemIndex.Clear();
                     if (_currentFolderCsi != null && !ReferenceEquals(_currentFolderCsi, csi))
@@ -752,9 +751,6 @@ namespace ExpControlsLib
                 if (includeFolder) combList.AddRange(dirList);
                 combList.AddRange(fileList);
 
-                //if (_currentFolderCsi != null && !ReferenceEquals(_currentFolderCsi, csi))
-                //    _currentFolderCsi.ClearItems(true, true);
-
                 int initialFillLim = Math.Min(combList.Count, InitialLoadLimit);
                 var combinedLvi = new List<ListViewItem>(combList.Count);
                 int topIndex = this.GetIndexOfFirstVisible();
@@ -766,11 +762,14 @@ namespace ExpControlsLib
                     combinedLvi.Add(lvi);
                 }
 
-                if (!RequestListRefresh(combinedLvi.ToArray(), !samePath)) return;
+                if (!RequestListViewRefresh(combinedLvi.ToArray(), !samePath)) return;
             }
 
             if (IsThumbnailViewMode())
-                LoadThumbnails(GetThumbnailSizeForMode(), true);
+            {
+                //LoadThumbnails(GetThumbnailSizeForMode(), true); //doesn't work for some reason
+                OnListViewScroll();
+            }
 
             ExpListFolderChanged?.Invoke(_currentFolderCsi);
             if (!samePath) ExpListPathChanged?.Invoke(_CurrentPath);
@@ -790,7 +789,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="newItems"></param>
         /// <returns></returns>
-        private bool RequestListRefresh(ListViewItem[] newItems, bool fetchImages)
+        private bool RequestListViewRefresh(ListViewItem[] newItems, bool fetchImages)
         {
             if (_refreshing)
             {
@@ -920,13 +919,7 @@ namespace ExpControlsLib
                 //string? readable = CPidl.PidlToString(((CShellItem)item.Tag).PIDL);
 #endif
                 if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
-                {
                     _thumbnailManager.RequestThumbnail(item, csi.FullPath, thumbnailSize);
-                }
-                else if (!onlyVisible)
-                {
-                    //item.ImageIndex = -1;
-                }
             }
 
             var l = _listView.Items.Cast<ListViewItem>().Select(item => item.ImageIndex).ToList();

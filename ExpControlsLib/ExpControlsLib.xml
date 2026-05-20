@@ -723,7 +723,7 @@
             <param name="includeFolder">True to include subdirectories in the list.</param>
             <param name="reload">True to force a reload even if the same item was previously selected.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.RequestListRefresh(System.Windows.Forms.ListViewItem[],System.Boolean)">
+        <member name="M:ExpControlsLib.ExpList.RequestListViewRefresh(System.Windows.Forms.ListViewItem[],System.Boolean)">
             <summary>
             This refreshes the ListView with new items.
             This function marshals execution to the ui thread.  Also prevents double updating by gatekeeping 
@@ -1595,7 +1595,8 @@
         <member name="M:ExpControlsLib.ThumbnailImageListManager.OnThumbnailReady(System.Object,ExpControlsLib.ThumbnailReadyEventArgs)">
             <summary>
             Handles thumbnail ready events and updates the ListView.
-            Important: this is where the image lists is assigned to the ListView.
+            Image manipulation is done on the background thread, while UI updates
+            are marshalled to the UI thread.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.Clear">
