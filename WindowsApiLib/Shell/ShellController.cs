@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using static WindowsApiLib.Shell.ShellAPI;
 
@@ -42,9 +43,16 @@ namespace WindowsApiLib.Shell
         /// </remarks>
         /// <param name="csi"></param>
         /// <returns></returns>
-        public CShellItem LoadFolderContents(CShellItem csi)
+        public CShellItem? LoadFolderContents(CShellItem csi)
         {
             CShellItem target = HierachyManager.AddToHierarchy(csi); //ensure the item exists in the hierarchy
+
+            if (target is null)
+            {
+                Debug.WriteLine("Failed to find or add item to the shell item hierarchy: '" + csi.FullPath + "'");
+
+                return null;
+            }
 
             var contents = target.GetContents(SHCONTF.INCLUDEHIDDEN | SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
 

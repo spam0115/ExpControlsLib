@@ -1463,6 +1463,11 @@ namespace WindowsApiLib.Shell
                 }
             }
 
+            if (changed)
+            {
+                UpdateEvent?.Invoke(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
+            }
+
             return changed;
         }
 

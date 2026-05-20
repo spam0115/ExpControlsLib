@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
@@ -30,7 +31,30 @@ namespace WindowsApiLib.Shell
             //todo: move the item hierarchy code from cshellitem to over here.
         }
 
-        //todo: move this browsing functionality to the hierarchy manager
+        public CShellItem AddToHierarchy(CShellItem csi)
+        {
+            var result = FindInShellHierarchy(csi.PIDL, out CShellItem parent);
+            return result;
+        }
+
+        public CShellItem? FindInShellHierarchy(string path)
+        {
+            IntPtr pidl = ShellAPI.ILCreateFromPathW(path);
+            if (pidl == IntPtr.Zero)
+            {
+                Debug.WriteLine("Invalid path provided to FindInShellHierarchy(): '" + path + "'");
+                return null;
+            }
+            try
+            {
+                return FindInShellHierarchy(pidl, out _);
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(pidl);
+            }
+        }
+
         /// <summary>
         /// This is the "engine" that maintains the hierarchical relationship between items.
         /// - Method: internal static CShellItem BrowseTo(IntPtr absPidl, out CShellItem Parent)
@@ -91,10 +115,11 @@ namespace WindowsApiLib.Shell
             //Test for invalid paths
             if (CPidl.SegmentCount(currentFolder.PIDL) + 1 != CPidl.SegmentCount(absPidl)) //the root folder plus 1 final pidl should be the same length as the given pidl if the given pidl is real
             {
+                Debug.WriteLine("Invalid pidl provided to FindInShellHierarchy(): '" + CPidl.ToString(absPidl) + "'");
                 return null;
             }
 
-            // UPDATE: Check for files in the desktop
+            // Check for files in the current folder
             foreach (var currentCSI in currentFolder.Files)
             {
                 if (CPidl.IsEqual(currentCSI.PIDL, absPidl))
@@ -104,27 +129,8 @@ namespace WindowsApiLib.Shell
                 }
             }
 
-            return null; //file doesn't actually exist 
-        }
-
-        public CShellItem AddToHierarchy(CShellItem csi)
-        {
-            var result = FindInShellHierarchy(csi.PIDL, out CShellItem parent);
-            return result;
-        }
-
-        public CShellItem? FindInShellHierarchy(string path)
-        {
-            IntPtr pidl = ShellAPI.ILCreateFromPathW(path);
-            if (pidl == IntPtr.Zero) return null;
-            try
-            {
-                return FindInShellHierarchy(pidl, out _);
-            }
-            finally
-            {
-                Marshal.FreeCoTaskMem(pidl);
-            }
+            Debug.WriteLine("Could not find file in the current folder: '" + CPidl.ToString(absPidl) + "'");
+            return null;
         }
 
         /// <summary>True if parameter "ancestor" is an ancestor of parameter "current" 

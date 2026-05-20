@@ -245,6 +245,9 @@ namespace WindowsApiLib.Shell
                                         if (parentItem.FilesInitialized && parentItem.FileList.Contains(shNotify.dwItem1))
                                         {
                                             var childItem = parentItem.FileList[shNotify.dwItem1];
+#if DEBUG
+                                            Debug.WriteLine("Received DELETE message: '" + childItem.FullPath + "'");
+#endif
                                             parentItem.RemoveItem(childItem);
                                         }
                                     }
@@ -271,7 +274,7 @@ namespace WindowsApiLib.Shell
                                     {
                                         if (HierachyManager?.CurrentFolder != null)
                                         {
-                                            Debug.WriteLine("Recevied updatedir message with no location specified.  Trying to update current folder if it exists.");
+                                            Debug.WriteLine("Recieved UPDATEDIR message with no location specified.  Trying to update current folder if it exists.");
                                             HierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
                                         }
                                     }

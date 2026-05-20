@@ -1592,12 +1592,26 @@
             Requests a thumbnail for a file and updates the ListView when ready
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnailFromCache(System.Windows.Forms.ListViewItem,System.String,System.Int32)">
+            <summary>
+            Requests a thumbnail for a file and updates the ListView when ready
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.OnThumbnailReady(System.Object,ExpControlsLib.ThumbnailReadyEventArgs)">
             <summary>
             Handles thumbnail ready events and updates the ListView.
             Image manipulation is done on the background thread, while UI updates
             are marshalled to the UI thread.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.ApplyThumbnailToUI(ExpControlsLib.ThumbnailImageListManager.ThumbnailRequestArgs,System.Drawing.Bitmap)">
+            <summary>
+            Force thumbnail registration from the UI thread.  The active image list actually belongs to the 
+            ListView so we can't event read the count without causing an exception unless we are running from 
+            on the ui thread.
+            </summary>
+            <param name="tag"></param>
+            <param name="square"></param>
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.Clear">
             <summary>

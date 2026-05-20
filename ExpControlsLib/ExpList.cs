@@ -1020,8 +1020,14 @@ namespace ExpControlsLib
         {
             if (sender is null) return;
 
-            var csi = (CShellItem)sender;
-            if (!CPidl.IsEqual(csi.PIDL, _currentFolderCsi.PIDL)) return;
+            var senderCsi = (CShellItem)sender;
+            
+            // For Created/Deleted/UpdateDir, sender is the Folder containing the item.
+            // For Updated/Renamed/IconChange, sender is the Item itself.
+            bool isTargetFolder = CPidl.IsEqual(senderCsi.PIDL, _currentFolderCsi.PIDL);
+            bool isTargetItem = senderCsi.Parent != null && CPidl.IsEqual(senderCsi.Parent.PIDL, _currentFolderCsi.PIDL);
+
+            if (!isTargetFolder && !isTargetItem) return;
 
             try
             {
@@ -1029,6 +1035,7 @@ namespace ExpControlsLib
                 {
                     case CShItemUpdateType.Created:
                         {
+                            if (!isTargetFolder) return;
                             var lvi = MakeLVItem(e.Item);
 
                             if (IsThumbnailViewMode())

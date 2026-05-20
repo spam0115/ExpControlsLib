@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
+using static System.Windows.Forms.ListView;
 
 namespace ExpControlsLib
 {
@@ -21,7 +22,7 @@ namespace ExpControlsLib
         private int _generation = 0;
         private readonly Dictionary<string, int> _imageIndexByKey = new Dictionary<string, int>();
 
-        private sealed class ThumbnailRequestTag
+        private sealed class ThumbnailRequestArgs
         {
             public int Generation { get; set; }
             public string FilePath { get; set; }
@@ -100,7 +101,7 @@ namespace ExpControlsLib
             Console.WriteLine("\tRequesting thumbnail: " + item.Text);
 #endif
 
-            var reqObj = new ThumbnailRequestTag
+            var reqObj = new ThumbnailRequestArgs
             {
                 Generation = _generation,
                 FilePath = filePath,
@@ -113,13 +114,42 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Handles thumbnail ready events and updates the ListView.
-        /// Image manipulation is done on the background thread, while UI updates
-        /// are marshalled to the UI thread.
+        /// Requests a thumbnail for a file and updates the ListView when ready
         /// </summary>
+        public void RequestThumbnailFromCache(ListViewItem item, string filePath, int thumbnailSize)
+        {
+#if DEBUG
+            Console.WriteLine("\tRequesting thumbnail: " + item.Text);
+#endif
+
+
+            var reqObj = new ThumbnailRequestArgs
+            {
+                Generation = _generation,
+                FilePath = filePath,
+                RequestedSize = thumbnailSize,
+                Item = item
+            };
+
+            string key = CreateKey(reqObj);
+            if (_imageIndexByKey.TryGetValue(key, out int index))
+            {
+                item.ImageIndex = index; //redundant but just in case
+            }
+            {
+                var csi = item.Tag as CShellItem;
+                _thumbnailProvider.EnqueueThumbnailRequest(csi, thumbnailSize, reqObj);
+            }
+        }
+        
+        /// <summary>
+         /// Handles thumbnail ready events and updates the ListView.
+         /// Image manipulation is done on the background thread, while UI updates
+         /// are marshalled to the UI thread.
+         /// </summary>
         private void OnThumbnailReady(object sender, ThumbnailReadyEventArgs e)
         {
-            if (!(e.Tag is ThumbnailRequestTag tag))
+            if (!(e.Tag is ThumbnailRequestArgs tag))
                 return;
 
             if (_listView.IsDisposed || !_listView.IsHandleCreated)
@@ -167,7 +197,14 @@ namespace ExpControlsLib
             }
         }
 
-        private void ApplyThumbnailToUI(ThumbnailRequestTag tag, Bitmap? square)
+        /// <summary>
+        /// Force thumbnail registration from the UI thread.  The active image list actually belongs to the 
+        /// ListView so we can't event read the count without causing an exception unless we are running from 
+        /// on the ui thread.
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <param name="square"></param>
+        private void ApplyThumbnailToUI(ThumbnailRequestArgs tag, Bitmap? square)
         {
             
             if (square == null)
@@ -182,17 +219,18 @@ namespace ExpControlsLib
                 if (_listView.LargeImageList != imageList)
                     _listView.LargeImageList = imageList;
 
-                string key = $"{tag.FilePath}|{tag.RequestedSize}";
+                string key = CreateKey(tag);
                 if (!_imageIndexByKey.TryGetValue(key, out int index))
-                {
-                    imageList.Images.Add(square);   // pass the Bitmap directly, do NOT Clone() to Image
-                    index = imageList.Images.Count - 1;  //the active image list actually belongs to the ListView so we can't event access the count without being on the ui thread
+                { 
+                    imageList.Images.Add(square);
+                    index = imageList.Images.Count - 1;  
                     _imageIndexByKey[key] = index;
                 }
                 else
                 {
-                    // Already have it in the image list, we can dispose the one we just made
-                    square.Dispose();
+                    var oldImage = imageList.Images[index];
+                    imageList.Images[index] = square;
+                    oldImage.Dispose();
                 }
 
                 tag.Item.ImageIndex = index;
@@ -236,6 +274,11 @@ namespace ExpControlsLib
         {
             Clear();
             _thumbnailProvider?.Dispose();
+        }
+
+        private string CreateKey(ThumbnailRequestArgs tag)
+        {
+            return $"{tag.FilePath}|{tag.RequestedSize}";
         }
     }
 }
