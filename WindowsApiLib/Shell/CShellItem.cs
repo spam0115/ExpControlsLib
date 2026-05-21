@@ -845,9 +845,7 @@ namespace WindowsApiLib.Shell
 
         #region Shared public functions
 
-
-        #endregion
-
+        
         #region FileInfo derived Properties
 
         /// <summary>
@@ -1062,6 +1060,7 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
+        #endregion Properties
 
         #region    Constructors/Destructors
 
@@ -1836,7 +1835,7 @@ namespace WindowsApiLib.Shell
                         var allegedParentCsi = ShellController.Instance.HierachyManager.FindCShItem(splitPidl.ParentPidl);
 
                         try 
-                        { 
+                        {
                             if (allegedParentCsi is null) // moved to a dir that is not yet in internal tree
                             {
                                 Parent.RemoveItem(this);
@@ -1847,8 +1846,7 @@ namespace WindowsApiLib.Shell
                             else if (SHGetRealIDL(allegedParentCsi.Folder, splitPidl.ChildPidl, out pidlRel) == S_OK) // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
                             {
                                 Marshal.FreeCoTaskMem(m_Pidl);
-                                //m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, PidlRel);  // we use PidlRel because newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID
-                                m_Pidl = changedPidl;
+                                m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, pidlRel);  //Must do this!  newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID //don't do this: m_Pidl = changedPidl;
 
                                 //new
                                 if (!ReferenceEquals(allegedParentCsi, Parent)) // item was moved, not renamed
@@ -1894,57 +1892,57 @@ namespace WindowsApiLib.Shell
                                 if (IsFolder)
                                 {
                                     if (!ReferenceEquals(allegedParentCsi, Parent)) // deal with potential "Move" to a new dir
-                                    {
-                                        Parent.RemoveItem(this);
+                                {
+                                    Parent.RemoveItem(this);
                                         allegedParentCsi.AddItem(this);
-                                    }
+                                }
 
-                                    ResetInfo();
-                                    m_Path = CShellItemFactory.GetFullPath(this);
+                                ResetInfo();
+                                m_Path = CShellItemFactory.GetFullPath(this);
 
                                     if (allegedParentCsi.Folder.BindToObject(pidlRel, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref newIShellFolderPtr) == S_OK)
-                                    {
+                                {
                                         //Marshal.ReleaseComObject(Folder); //why would you do this?  subsequent accesses will throw and exception
                                         m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newIShellFolderPtr, typeof(IShellFolder));
                                         Marshal.Release(newIShellFolderPtr);
-                                        if (m_Files is not null)
-                                        {
-                                            foreach (CShellItem item in m_Files)
+                                    if (m_Files is not null)
+                                    {
+                                        foreach (CShellItem item in m_Files)
                                                 item.UpdateFolderPidlAndPath(); //update child paths
-                                        }
-                                        if (m_Directories is not null)
-                                        {
-                                            foreach (CShellItem item in m_Directories)
+                                    }
+                                    if (m_Directories is not null)
+                                    {
+                                        foreach (CShellItem item in m_Directories)
                                                 item.UpdateFolderPidlAndPath(); //update child paths
-                                        }
                                     }
                                 }
+                            }
                                 else if (!ReferenceEquals(oldParentCsi, allegedParentCsi)) // deal moved files
-                                {
+                            {
                                     if (oldParentCsi.FilesInitialized)
-                                    {
-                                        oldParentCsi.RemoveItem(this);
-                                    }
-                                    if (allegedParentCsi.FilesInitialized)
-                                    {
-                                        allegedParentCsi.AddItem(this);
-                                        ResetInfo();         // new since sent to others
-                                        m_Path = CShellItemFactory.GetFullPath(this); ;           // new since sent to others
-                                    }
-                                    else
-                                    {
-                                        m_Parent = null;
-                                        ResetInfo();
-                                    }         // new since sent to others
-                                }
-                                else // same parent, just renamed
                                 {
-                                    ResetInfo();         // Added for fix to the fix
-                                    m_Path = CShellItemFactory.GetFullPath(this); ;
-                                    // ResetInfo()         'newly deleted since sent to others
-                                    // SetPath()           'newly deleted since sent to others
-                                }           // Added for fix to the fix
-                                            // Not oldParentItem Is newParentItem
+                                        oldParentCsi.RemoveItem(this);
+                                }
+                                    if (allegedParentCsi.FilesInitialized)
+                                {
+                                        allegedParentCsi.AddItem(this);
+                                    ResetInfo();         // new since sent to others
+                                    m_Path = CShellItemFactory.GetFullPath(this); ;           // new since sent to others
+                                }
+                                else
+                                {
+                                    m_Parent = null;
+                                    ResetInfo();
+                                }         // new since sent to others
+                            }
+                                else // same parent, just renamed
+                            {
+                                ResetInfo();         // Added for fix to the fix
+                                m_Path = CShellItemFactory.GetFullPath(this); ;
+                                // ResetInfo()         'newly deleted since sent to others
+                                // SetPath()           'newly deleted since sent to others
+                            }           // Added for fix to the fix
+                                        // Not oldParentItem Is newParentItem
                                 */
                             }
 

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
@@ -183,7 +183,7 @@ namespace WindowsApiLib.Shell
             IntPtr ppidl = IntPtr.Zero;
             var msgID = default(SHCNE);
             SHNOTIFYSTRUCT shNotify = default;
-            var hLock = SHChangeNotification_Lock(m.WParam, (uint)m.LParam, ref ppidl, ref msgID); //note: we are using the legacy notification struct, not the newer SHCNRF_NewDelivery mode
+            var hLock = SHChangeNotification_Lock(m.WParam, (uint)m.LParam, ref ppidl, ref msgID); //note: we are using the legacy notification struct, not the newer SHCNRF_NewDelivery mode.  While this block of memory is locked, you cannot free it's members.
             if (hLock != IntPtr.Zero)
             {
                 try
@@ -191,7 +191,7 @@ namespace WindowsApiLib.Shell
                     if (IsItemNotificationEvent(msgID))
                     {
                         msgID &= SHCNE.ALLEVENTS;
-                        shNotify = (SHNOTIFYSTRUCT)Marshal.PtrToStructure(ppidl, shNotify.GetType());
+                        shNotify = (SHNOTIFYSTRUCT)Marshal.PtrToStructure(ppidl, shNotify.GetType()); //note: shNotify is managed memory, not COM memory.  However the pointers inside of it still point to COM memory.
 
 #if DEBUG
                         // var UArgs = new CShItemUpdateEventArgs(shNotify, msgID, ref counter);
@@ -237,8 +237,6 @@ namespace WindowsApiLib.Shell
                                 }
 
                             case SHCNE.DELETE:
-                            case SHCNE.RMDIR:
-                            case SHCNE.DRIVEREMOVED:
                                 {
                                     var parentPidl = CPidl.TrimLast(shNotify.dwItem1);
                                     var parentItem = HierachyManager.FindCShItem(parentPidl);
@@ -311,7 +309,7 @@ namespace WindowsApiLib.Shell
                                     break;
                                 }
 
-                            case SHCNE.UPDATEITEM: //this is supposed to be items but that include directories
+                            case SHCNE.UPDATEITEM: //this is supposed to be items but that include directories sometimes
                                 {
                                     if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0)
                                     {
@@ -336,9 +334,9 @@ namespace WindowsApiLib.Shell
                                         else
                                         {
                                             item.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
-                                        }
+                                        }                                        
                                     }
-
+                                    //if (shNotify.dwItem1 != IntPtr.Zero) Marshal.FreeCoTaskMem(shNotify.dwItem1); //Do NOT do this.  Crashes the app after startup.  The memory is still locked.
                                     break;
                                 }
 
@@ -401,6 +399,33 @@ namespace WindowsApiLib.Shell
                                     break;
                                 }
 
+                            case SHCNE.RMDIR:
+                            case SHCNE.DRIVEREMOVED:
+                                {
+                                    // Removed Directory
+                                    var parent = CPidl.TrimLast(shNotify.dwItem1);
+
+                                    var parentItem = HierachyManager.FindCShItem(parent);
+                                    if (parentItem is not null)
+                                    {
+                                        // From Calum...sometimes when deleting a folder in My Documents 
+                                        // parentItem.DirectoryList was Nothing...
+                                        if (parentItem.DirectoryList is not null) // Added code from Calum
+                                        {
+                                            int indx = parentItem.DirectoryList.IndexOf(shNotify.dwItem1);
+                                            if (indx > -1)
+                                            {
+                                                parentItem.RemoveItem(parentItem.DirectoryList[indx]);   // 7/2/2012 - incorrectly used Directories
+                                            }
+                                        }
+                                        else if (!IsVistaOrAbove())  // 6/27/2012 - XP will not send an UPDATEITEM for Parent in this case, so we have to
+                                        {
+                                            parentItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
+                                        }
+                                    }
+                                    Marshal.FreeCoTaskMem(parent);
+                                    break;
+                                }
                             case SHCNE.MEDIAINSERTED:
                             case SHCNE.MEDIAREMOVED:
                                 {
@@ -432,6 +457,11 @@ namespace WindowsApiLib.Shell
                     {
                         Debug.WriteLine("UnLock Failed " + hLock.ToString());
                     }
+                    else
+                    {
+                        //note: do NOT try to free shNotify.dwItem1 and shNotify.dwItem2.  The app will crash at after startup.
+                    }
+
                 }
             }
 
