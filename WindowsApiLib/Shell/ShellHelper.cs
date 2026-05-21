@@ -641,7 +641,8 @@ namespace WindowsApiLib.Shell
             }
             finally
             {
-                if (pszName != IntPtr.Zero) WinSDK.CoTaskMemFree(pszName);
+                //if (pszName != IntPtr.Zero) WinSDK.CoTaskMemFree(pszName);
+                if (pszName != IntPtr.Zero) Marshal.FreeCoTaskMem(pszName); 
                 if (pidl != IntPtr.Zero) WinSDK.CoTaskMemFree(pidl);
             }
         }

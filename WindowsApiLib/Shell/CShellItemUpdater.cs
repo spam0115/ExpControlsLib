@@ -337,6 +337,7 @@ namespace WindowsApiLib.Shell
                                         {
                                             item.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
                                         }
+                                        Marshal.FreeCoTaskMem(shNotify.dwItem1);
                                     }
 
                                     break;

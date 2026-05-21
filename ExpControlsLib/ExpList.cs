@@ -703,6 +703,12 @@ namespace ExpControlsLib
 
             if (_currentFolderCsi != null && samePath && reload == false) return;
 
+            var hierarchyCsi = _shellController.LoadFolderContents(csi);
+            if (hierarchyCsi != null)
+            {
+                _currentFolderCsi = hierarchyCsi;
+            }
+
             // record history
             if (!_isNavigatingHistory && _currentFolderCsi != null && !samePath)
             {
@@ -710,17 +716,8 @@ namespace ExpControlsLib
                 _forwardHistory.Clear();
             }
 
-            _currentFolderCsi = csi;
-            
             _selectedItem = null; //new folder loaded, no item selected yet
-            _CurrentPath = pathName;
-
-            _currentFolderCsi.ClearItems(true, true);  // clears m_Directories and m_Files so DisplayFiles won't rely on the cache
-            var hierarchyCsi = _shellController.LoadFolderContents(_currentFolderCsi);
-            if (hierarchyCsi != null)
-            {
-                _currentFolderCsi = hierarchyCsi;
-            }
+            _CurrentPath = _currentFolderCsi.FullPath;
 
             //display directories separately
             var dirList = new List<CShellItem>();
