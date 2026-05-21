@@ -504,7 +504,8 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #region        IL functions
-        [DllImport("shell32", EntryPoint = "#21", CharSet = CharSet.Auto)]
+        [DllImport("shell32.dll", ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool ILIsEqual(IntPtr pidl1, IntPtr pidl2);
 
         [DllImport("shell32", EntryPoint = "#23", CharSet = CharSet.Auto)]
@@ -534,7 +535,7 @@ namespace WindowsApiLib.Shell
         internal static extern IntPtr ILClone(IntPtr pidl);
 
         [DllImport("shell32.dll", ExactSpelling = true)]
-        internal static extern void ILFree(IntPtr pidl);
+        internal static extern void ILFree(IntPtr pidl); //don't recommend you use this.  Use CoTaskMemFree instead
 
         /// <summary>
         /// Creates an absolute PIDL (pointer to an item identifier list) from a file system path.

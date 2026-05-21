@@ -173,9 +173,9 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <param name="ID"></param>
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem CreateCShItem(CSIDL ID)
+        public static CShellItem? CreateCShItem(CSIDL ID)
         {
-            CShellItem csi = null;
+            CShellItem? csi = null;
             if (ID == CSIDL.DESKTOP) return DesktopCSI;
 
             /* MYDOCUMENTS - the saga continues
@@ -210,7 +210,8 @@ namespace WindowsApiLib.Shell
             {
                 csi = CreateCShItem(tmpPidl, DesktopCSI);
             }
-            if (!tmpPidl.Equals(IntPtr.Zero))
+
+            if (csi is null && tmpPidl != IntPtr.Zero)
             {
                 Marshal.FreeCoTaskMem(tmpPidl);
             }
@@ -235,7 +236,7 @@ namespace WindowsApiLib.Shell
             if (pidlFolder == null && pidlItem == null)
                 return csi; // can do no more with invalid pidls
 
-            IntPtr fullPidl;
+            IntPtr fullPidl = IntPtr.Zero;
 
             GCHandle handle = GCHandle.Alloc(pidlFolder, GCHandleType.Pinned);
             GCHandle handle2 = GCHandle.Alloc(pidlFolder, GCHandleType.Pinned);
@@ -251,10 +252,12 @@ namespace WindowsApiLib.Shell
 
             csi = GetOrCreateCShItem(fullPidl);
 
-            if (!fullPidl.Equals(IntPtr.Zero))
-                Marshal.FreeCoTaskMem(fullPidl);
-            if (csi.PIDL.Equals(IntPtr.Zero))
-                csi = null; // last minute failsafe
+            if (csi is null && fullPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(fullPidl);
+            if (csi is not null && csi.PIDL == IntPtr.Zero)
+            {
+                csi.Dispose(); // last minute failsafe
+                csi = null;
+            }
 
             //byte[] fullPidl = CPidl.JoinPidlBytes(pidlFolder, pidlItem);
 

@@ -61,14 +61,6 @@ namespace WindowsApiLib.Shell
             if (CPidl.IsEqual(BaseItem.PIDL, Abs))
                 return BaseItem;
 
-            if (BaseItem.FileList is not null && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
-            {
-                foreach (CShellItem FItem in BaseItem.FileList)
-                {
-                    if (CPidl.IsEqual(FItem.PIDL, Abs))
-                        return FItem;
-                }
-            }
             if (BaseItem.DirectoryList is not null) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
             {
                 foreach (CShellItem DItem in BaseItem.DirectoryList)
@@ -77,6 +69,15 @@ namespace WindowsApiLib.Shell
                         return DItem;
                     if (CPidl.IsAncestorOf(DItem.PIDL, Abs, false))
                         return FindCShItem(DItem, Abs);
+                }
+            }
+
+            if (BaseItem.FileList is not null && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
+            {
+                foreach (CShellItem FItem in BaseItem.FileList)
+                {
+                    if (CPidl.IsEqual(FItem.PIDL, Abs))
+                        return FItem;
                 }
             }
 
@@ -113,7 +114,7 @@ namespace WindowsApiLib.Shell
             return result;
         }
 
-        public CShellItem? FindInShellHierarchy(string path)
+        public CShellItem? FindOrAdd(string path)
         {
             IntPtr pidl = ShellAPI.ILCreateFromPathW(path);
             if (pidl == IntPtr.Zero)
@@ -134,13 +135,13 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// This is the "engine" that maintains the hierarchical relationship between items.
         /// - Method: internal static CShellItem BrowseTo(IntPtr absPidl, out CShellItem Parent)
-        /// - Logic: It traverses the cached tree from the Desktop down to the target PIDL.If an item doesn't
-        /// exist in the cache, it expands the parent folders to find or place the item. This ensures that 
-        /// every CShellItem is correctly linked to its parent in the internal structure.
+        /// - Logic: It traverses the cached tree from the Desktop down to the target PIDL.  If an item 
+        /// doesn't exist in the cache, it expands the parent folders to find or place the item. This ensures 
+        /// that every CShellItem is correctly linked to its parent in the internal structure.
         /// 
         /// BrowseTo locates the desired item and places it in its proper location on the internal tree.
         /// Any and all sub-directories that need to be populated in the tree in order to properly place
-        /// the desired item, are populated. This is the programatic equivalent of Browsing to a node in 
+        /// the desired item, are populated. This is the programmatic equivalent of Browsing to a node in 
         /// <code>ExpTree's</code> TreeView.<br /> 
         /// BrowseTo also returns the Parent CShellItem. 
         /// If the desired CShellItem does not exist, the returned Parent is the CShellItem that would be the

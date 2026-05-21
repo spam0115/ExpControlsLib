@@ -24,7 +24,6 @@ namespace WindowsApiLib.Shell
         /// </summary>
         public static CShellItem? DesktopCSI { get; private set; }
 
-
         private ShellController() {
 
             HierachyManager = new CShellItemHierachyManager();
@@ -66,7 +65,9 @@ namespace WindowsApiLib.Shell
             var contents = target.GetContents(SHCONTF.INCLUDEHIDDEN | SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
 
             if (target.m_Directories is null) target.m_Directories = new CShellItemCollection(target);
+            else target.m_Directories.Clear();
             if (target.m_Files is null) target.m_Files = new CShellItemCollection(target);
+            else target.m_Files.Clear();
 
             foreach (var item in contents.Items)
             {

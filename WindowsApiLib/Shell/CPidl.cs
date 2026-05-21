@@ -103,63 +103,6 @@ namespace WindowsApiLib
             }
         }
 
-        /// <summary> Copy the contents of a byte() containing a PIDL to
-    /// CoTaskMemory, returning an IntPtr that points to that mem block
-    /// Assumes that this cPidl is properly terminated, as all New 
-    /// cPidls are.
-    /// </summary>
-    /// <returns>The newly created PIDL</returns>
-    /// <remarks> Caller must Free the returned IntPtr when done with the returned PIDL.</remarks>
-        public IntPtr ToPIDL()
-        {
-            IntPtr ToPIDLRet = default;
-            ToPIDLRet = BytesToPidl(m_bytes);
-            return ToPIDLRet;
-        }
-
-        /// <summary>
-    /// Returns an object containing a byte() for each of this cPidl's
-    /// ITEMIDs (individual PIDLS), in order such that obj(0) is
-    /// a byte() containing the bytes of the first ITEMID, etc.
-    /// Each ITEMID is properly terminated with a nulnul    ''' </summary>
-    /// <returns>An Object containing a Byte() for each ID in the PIDL</returns>
-    /// <remarks></remarks>
-        public object[] Decompose()
-        {
-            var bArrays = new object[ItemCount];
-            ICPidlEnumerator eByte = (ICPidlEnumerator)GetEnumerator();
-            var i = default(int);
-            while (eByte.MoveNext())
-            {
-                bArrays[i] = eByte.Current;
-                i += 1;
-            }
-            return bArrays;
-        }
-
-        /// <summary>
-    /// Returns True if input cPidl's content exactly match the 
-    /// contents of this instance, False otherwise
-    /// </summary>
-    /// <param name="other">The CPidl to compare to this instance</param>
-    /// <returns>True if "other" is Equal to this instance, False otherwise</returns>
-        public bool IsEqual(CPidl other)
-        {
-            bool IsEqualRet = default;
-            IsEqualRet = false;     // assume not
-            if (other.Length != Length)
-                return IsEqualRet;
-            byte[] ob = other.PidlBytes;
-            int i;
-            var loopTo = Length - 1;
-            for (i = 0; i <= loopTo; i++)  // note: we look at nulnul also
-            {
-                if (ob[i] != m_bytes[i])
-                    return IsEqualRet;
-            }
-            return true;         // all equal on fall thru
-        }
-
         #endregion
 
         #region        Public Static Methods
@@ -367,7 +310,72 @@ namespace WindowsApiLib
         public static bool IsEqual(IntPtr Pidl1, IntPtr Pidl2)
         {
             if (Pidl1 == Pidl2) return true;
-            return ILIsEqual(Pidl1, Pidl2);
+            try
+            {
+                return ILIsEqual(Pidl1, Pidl2);
+            }
+            catch(Exception ex)
+            {
+                Debug.WriteLine(ex.ToString());
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Returns True if input cPidl's content exactly match the 
+        /// contents of this instance, False otherwise
+        /// </summary>
+        /// <param name="other">The CPidl to compare to this instance</param>
+        /// <returns>True if "other" is Equal to this instance, False otherwise</returns>
+        public bool IsEqual(CPidl other)
+        {
+            bool IsEqualRet = default;
+            IsEqualRet = false;     // assume not
+            if (other.Length != Length)
+                return IsEqualRet;
+            byte[] ob = other.PidlBytes;
+            int i;
+            var loopTo = Length - 1;
+            for (i = 0; i <= loopTo; i++)  // note: we look at nulnul also
+            {
+                if (ob[i] != m_bytes[i])
+                    return IsEqualRet;
+            }
+            return true;         // all equal on fall thru
+        }
+
+        /// <summary> Copy the contents of a byte() containing a PIDL to
+        /// CoTaskMemory, returning an IntPtr that points to that mem block
+        /// Assumes that this cPidl is properly terminated, as all New 
+        /// cPidls are.
+        /// </summary>
+        /// <returns>The newly created PIDL</returns>
+        /// <remarks> Caller must Free the returned IntPtr when done with the returned PIDL.</remarks>
+        public IntPtr ToPIDL()
+        {
+            IntPtr ToPIDLRet = default;
+            ToPIDLRet = BytesToPidl(m_bytes);
+            return ToPIDLRet;
+        }
+
+        /// <summary>
+        /// Returns an object containing a byte() for each of this cPidl's
+        /// ITEMIDs (individual PIDLS), in order such that obj(0) is
+        /// a byte() containing the bytes of the first ITEMID, etc.
+        /// Each ITEMID is properly terminated with a nulnul    ''' </summary>
+        /// <returns>An Object containing a Byte() for each ID in the PIDL</returns>
+        /// <remarks></remarks>
+        public object[] Decompose()
+        {
+            var bArrays = new object[ItemCount];
+            ICPidlEnumerator eByte = (ICPidlEnumerator)GetEnumerator();
+            var i = default(int);
+            while (eByte.MoveNext())
+            {
+                bArrays[i] = eByte.Current;
+                i += 1;
+            }
+            return bArrays;
         }
 
         /// <summary>
@@ -782,11 +790,9 @@ namespace WindowsApiLib
             }
             finally
             {
-                if (pathPtr != IntPtr.Zero)
-                    WinSDK.CoTaskMemFree(pathPtr);
-
-                if (item != null && Marshal.IsComObject(item))
-                    Marshal.ReleaseComObject(item);
+                //if (pathPtr != IntPtr.Zero) WinSDK.CoTaskMemFree(pathPtr);
+                if (pathPtr != IntPtr.Zero) Marshal.FreeCoTaskMem(pathPtr);
+                if (item != null && Marshal.IsComObject(item)) Marshal.ReleaseComObject(item);
             }
         }
 
