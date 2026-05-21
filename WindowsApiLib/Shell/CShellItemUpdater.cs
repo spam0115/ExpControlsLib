@@ -449,6 +449,8 @@ namespace WindowsApiLib.Shell
                     {
                         Debug.WriteLine("UnLock Failed " + hLock.ToString());
                     }
+
+                    //todo: free shNotify.dwItem1 and shNotify.dwItem2 ?
                 }
             }
 

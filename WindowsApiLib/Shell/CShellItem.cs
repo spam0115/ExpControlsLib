@@ -1824,56 +1824,103 @@ namespace WindowsApiLib.Shell
                     }
                 case CShItemUpdateType.Renamed:      // Item has been renamed or moved
                     {
-                        IntPtr PidlRel = IntPtr.Zero, newFolderPtr = IntPtr.Zero;
+                        IntPtr pidlRel = IntPtr.Zero, newIShellFolderPtr = IntPtr.Zero;
                         var splitPidl = CPidl.Split(changedPidl);
-                        var oldParentItem = Parent;    // Save in case "renamed" to a new directory
-                        var newParentItem = ShellController.Instance.HierachyManager.FindCShItem(splitPidl.ParentPidl);
-                        if (newParentItem is null)            // renamed to a dir that is not yet in internal tree
+                        var oldParentCsi = Parent;    // Save in case "renamed" to a new directory
+                        var allegedParentCsi = ShellController.Instance.HierachyManager.FindCShItem(splitPidl.ParentPidl);
+
+                        try 
                         {
-                            Parent.RemoveItem(this);                // no longer in this Folder
-                            m_Parent = null;                      // and therefore no longer in tree
-                        }
-                        else if (SHGetRealIDL(newParentItem.Folder, splitPidl.ChildPidl, out PidlRel) == S_OK)            // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
-                        {
-                            Marshal.FreeCoTaskMem(m_Pidl);
-                            m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, PidlRel);  // we use PidlRel because newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID
-                            if (IsFolder)            // deal with potential "Move" to a new dir
+                            if (allegedParentCsi is null) // moved to a dir that is not yet in internal tree
                             {
-                                if (!ReferenceEquals(newParentItem, Parent))
+                                Parent.RemoveItem(this);
+                                m_Parent = null;           
+                                m_Pidl = changedPidl;
+                                //todo: shouldn't we add the newParentCsi to the tree at this point?
+                            }
+                            else if (SHGetRealIDL(allegedParentCsi.Folder, splitPidl.ChildPidl, out pidlRel) == S_OK) // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
+                            {
+                                Marshal.FreeCoTaskMem(m_Pidl);
+                                m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, pidlRel);  //Must do this!  newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID //don't do this: m_Pidl = changedPidl;
+
+                                //new
+                                if (!ReferenceEquals(allegedParentCsi, Parent)) // item was moved, not renamed
                                 {
                                     Parent.RemoveItem(this);
-                                    newParentItem.AddItem(this);
+                                    allegedParentCsi.AddItem(this);
+
+                                    this.m_Parent = allegedParentCsi;
+
+                                    ResetInfo();
+                                    m_Path = CShellItemFactory.GetFullPath(this);
+
+                                    if (IsFolder) //update children for folders
+                                    {
+                                        if (allegedParentCsi.Folder.BindToObject(pidlRel, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref newIShellFolderPtr) != S_OK) //get new ishellfolder interface object
+                                        {
+                                            Marshal.Release(newIShellFolderPtr);
+                                            return;
+                                        }
+                                        m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newIShellFolderPtr, typeof(IShellFolder));
+                                        Marshal.Release(newIShellFolderPtr);
+
+                                        if (m_Files is not null)
+                                        {
+                                            foreach (CShellItem item in m_Files)
+                                                item.UpdateFolderPidlAndPath(); //update child paths
+                                        }
+                                        if (m_Directories is not null)
+                                        {
+                                            foreach (CShellItem item in m_Directories)
+                                                item.UpdateFolderPidlAndPath(); //update child paths
+                                        }
+                                    }
+                                }
+                                else //renamed
+                                {
+                                    ResetInfo();         // Added for fix to the fix
+                                    m_Path = CShellItemFactory.GetFullPath(this); ;
+                                }
+                                //
+
+                                /*
+                                if (IsFolder)
+                                {
+                                    if (!ReferenceEquals(allegedParentCsi, Parent)) // deal with potential "Move" to a new dir
+                                {
+                                    Parent.RemoveItem(this);
+                                        allegedParentCsi.AddItem(this);
                                 }
 
                                 ResetInfo();
                                 m_Path = CShellItemFactory.GetFullPath(this);
 
-                                if (newParentItem.Folder.BindToObject(PidlRel, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref newFolderPtr) == S_OK)
+                                    if (allegedParentCsi.Folder.BindToObject(pidlRel, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref newIShellFolderPtr) == S_OK)
                                 {
-                                    Marshal.ReleaseComObject(Folder);
-                                    m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newFolderPtr, typeof(IShellFolder));
-                                    Marshal.Release(newFolderPtr);
+                                        //Marshal.ReleaseComObject(Folder); //why would you do this?  subsequent accesses will throw and exception
+                                        m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newIShellFolderPtr, typeof(IShellFolder));
+                                        Marshal.Release(newIShellFolderPtr);
                                     if (m_Files is not null)
                                     {
                                         foreach (CShellItem item in m_Files)
-                                            item.UpdateFolderPidlAndPath();
+                                                item.UpdateFolderPidlAndPath(); //update child paths
                                     }
                                     if (m_Directories is not null)
                                     {
                                         foreach (CShellItem item in m_Directories)
-                                            item.UpdateFolderPidlAndPath();
+                                                item.UpdateFolderPidlAndPath(); //update child paths
                                     }
                                 }
                             }
-                            else if (!ReferenceEquals(oldParentItem, newParentItem))
+                                else if (!ReferenceEquals(oldParentCsi, allegedParentCsi)) // deal moved files
                             {
-                                if (oldParentItem.FilesInitialized)    // deal with potential "Move" to a new dir
+                                    if (oldParentCsi.FilesInitialized)
                                 {
-                                    oldParentItem.RemoveItem(this);
+                                        oldParentCsi.RemoveItem(this);
                                 }
-                                if (newParentItem.FilesInitialized)
+                                    if (allegedParentCsi.FilesInitialized)
                                 {
-                                    newParentItem.AddItem(this);
+                                        allegedParentCsi.AddItem(this);
                                     ResetInfo();         // new since sent to others
                                     m_Path = CShellItemFactory.GetFullPath(this); ;           // new since sent to others
                                 }
@@ -1883,7 +1930,7 @@ namespace WindowsApiLib.Shell
                                     ResetInfo();
                                 }         // new since sent to others
                             }
-                            else                    // Added for fix to the fix
+                                else // same parent, just renamed
                             {
                                 ResetInfo();         // Added for fix to the fix
                                 m_Path = CShellItemFactory.GetFullPath(this); ;
@@ -1891,15 +1938,21 @@ namespace WindowsApiLib.Shell
                                 // SetPath()           'newly deleted since sent to others
                             }           // Added for fix to the fix
                                         // Not oldParentItem Is newParentItem
-                        }   // SHGetRealIDL = S_OK
-                            // Check for New ParentDir in internal Tree
+                                */
+                            }
+
+                            UpdateEvent?.Invoke(oldParentCsi, new ShellItemUpdateEventArgs(this, changeType));
+                        }
+                        finally 
+                        {
                             // Note: FreeCoTaskMem will ignore IntPtr.Zero
-                        Marshal.FreeCoTaskMem(PidlRel);
-                        //Marshal.FreeCoTaskMem(newParent);
-                        //Marshal.FreeCoTaskMem(newPidlRel);
-                        Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
-                        Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
-                        UpdateEvent?.Invoke(oldParentItem, new ShellItemUpdateEventArgs(this, changeType));
+                            if (pidlRel != IntPtr.Zero)
+                            {
+                                Marshal.FreeCoTaskMem(pidlRel);
+                            }
+                            Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
+                            Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
+                        }
                         break;
                     }
                 case CShItemUpdateType.IconChange:
