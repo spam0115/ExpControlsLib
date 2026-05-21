@@ -1823,6 +1823,11 @@ namespace WindowsApiLib.Shell
                         //todo: update thumbnail for item
                         break;
                     }
+                case CShItemUpdateType.Deleted:
+                    {
+                        Parent?.RemoveItem(this);
+                        break;
+                    }
                 case CShItemUpdateType.Renamed:      // Item has been renamed or moved
                     {
                         IntPtr pidlRel = IntPtr.Zero, newIShellFolderPtr = IntPtr.Zero;

@@ -237,22 +237,34 @@ namespace WindowsApiLib.Shell
                                 }
 
                             case SHCNE.DELETE:
+                            case SHCNE.RMDIR:
+                            case SHCNE.DRIVEREMOVED:
                                 {
-                                    var parent = CPidl.TrimLast(shNotify.dwItem1);
-                                    CShellItem parentItem;
-                                    parentItem = HierachyManager.FindCShItem(parent);
-                                    if (!(parentItem == null))
+                                    var parentPidl = CPidl.TrimLast(shNotify.dwItem1);
+                                    var parentItem = HierachyManager.FindCShItem(parentPidl);
+                                    
+                                    if (parentItem != null)
                                     {
-                                        if (parentItem.FilesInitialized && parentItem.FileList.Contains(shNotify.dwItem1))
+                                        var relPidl = CPidl.ILFindLastID(shNotify.dwItem1);
+                                        CShellItem childItem = null;
+
+                                        // Try to find the child item in either files or directories
+                                        if (parentItem.FileList != null)
+                                            childItem = parentItem.FileList[relPidl];
+                                        
+                                        if (childItem == null && parentItem.DirectoryList != null)
+                                            childItem = parentItem.DirectoryList[relPidl];
+
+                                        if (childItem != null)
                                         {
-                                            var childItem = parentItem.FileList[shNotify.dwItem1];
 #if DEBUG
-                                            Debug.WriteLine("Received DELETE message: '" + childItem.FullPath + "'");
+                                            Debug.WriteLine("Received DELETE/RMDIR message: '" + childItem.FullPath + "'");
 #endif
-                                            parentItem.RemoveItem(childItem);
+                                            childItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Deleted);
                                         }
                                     }
-                                    Marshal.FreeCoTaskMem(parent);
+                                    
+                                    Marshal.FreeCoTaskMem(parentPidl);
                                     break;
                                 }
 
@@ -389,36 +401,6 @@ namespace WindowsApiLib.Shell
                                     break;
                                 }
 
-                            case SHCNE.RMDIR:
-                            case SHCNE.DRIVEREMOVED:
-                                {
-                                    // Removed Directory
-                                    //IntPtr parent, child = IntPtr.Zero;
-                                    //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
-                                    var parent = CPidl.TrimLast(shNotify.dwItem1);
-
-                                    var parentItem = HierachyManager.FindCShItem(parent);
-                                    if (parentItem is not null)
-                                    {
-                                        // From Calum...sometimes when deleting a folder in My Documents 
-                                        // parentItem.DirectoryList was Nothing...
-                                        if (parentItem.DirectoryList is not null) // Added code from Calum
-                                        {
-                                            int indx = parentItem.DirectoryList.IndexOf(shNotify.dwItem1);
-                                            if (indx > -1)
-                                            {
-                                                parentItem.RemoveItem(parentItem.DirectoryList[indx]);   // 7/2/2012 - incorrectly used Directories
-                                            }
-                                        }
-                                        else if (!IsVistaOrAbove())  // 6/27/2012 - XP will not send an UPDATEITEM for Parent in this case, so we have to
-                                        {
-                                            parentItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
-                                        }
-                                    }
-                                    //Marshal.FreeCoTaskMem(child);
-                                    Marshal.FreeCoTaskMem(parent);
-                                    break;
-                                }
                             case SHCNE.MEDIAINSERTED:
                             case SHCNE.MEDIAREMOVED:
                                 {

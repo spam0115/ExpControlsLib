@@ -138,6 +138,18 @@ namespace WindowsApiLib.Shell
             return -1;
         }
 
+        public int IndexOfRelative(IntPtr relPidl)
+        {
+            for (int i = 0; i < m_items.Count; i++)
+            {
+                if (CPidl.IsEqual(m_items[i].LastPIDL, relPidl))
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
         internal void Insert(int index, CShellItem value)
         {
             lock (m_syncRoot)
@@ -193,16 +205,21 @@ namespace WindowsApiLib.Shell
             }
         }
 
+        /// <summary>
+        /// Gets the item matching either an absolute PIDL or a relative PIDL (last segment).
+        /// </summary>
         public CShellItem this[IntPtr pidl]
         {
             get
             {
                 int index = IndexOf(pidl);
+                if (index == -1) index = IndexOfRelative(pidl);
                 return index > -1 ? m_items[index] : null;
             }
             set
             {
                 int index = IndexOf(pidl);
+                if (index == -1) index = IndexOfRelative(pidl);
                 if (index > -1)
                 {
                     m_items[index] = value;

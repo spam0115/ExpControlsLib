@@ -716,7 +716,11 @@ namespace ExpControlsLib
             _CurrentPath = pathName;
 
             _currentFolderCsi.ClearItems(true, true);  // clears m_Directories and m_Files so DisplayFiles won't rely on the cache
-            _shellController.LoadFolderContents(_currentFolderCsi);
+            var hierarchyCsi = _shellController.LoadFolderContents(_currentFolderCsi);
+            if (hierarchyCsi != null)
+            {
+                _currentFolderCsi = hierarchyCsi;
+            }
 
             //display directories separately
             var dirList = new List<CShellItem>();
