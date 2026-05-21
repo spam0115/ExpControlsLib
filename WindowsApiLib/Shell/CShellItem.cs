@@ -845,101 +845,7 @@ namespace WindowsApiLib.Shell
 
         #region Shared public functions
 
-        /// <summary>
-        /// FindCShItem attempts to locate a CShellItem in the internal tree. It will NOT expand the Tree during the
-        /// search. If the Item identified by the Absolute PIDL parameter is not ALREADY in the internal tree, then
-        /// FindCShItem will return NOTHING.
-        /// </summary>
-        /// <param name="ptr">An Absolute PIDL referencing the item to be Found.</param>
-        /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
-        /// <remarks> 5/31/2012 - most code in this function replaced by a call to FindCShItem(BaseItem as CShellItem, Abs as IntPtr)</remarks>
-        public static CShellItem FindCShItem(IntPtr ptr)
-        {
-            return FindCShItem(ShellController.DesktopCSI, ptr);
-        }
-
-        /// <summary>
-        /// FindCShItem attempts to locate a CShellItem in the internal tree. It will NOT expand the Tree during the
-        /// search. If the Item identified by the Absolute PIDL parameter is not ALREADY in the internal tree, then
-        /// FindCShItem will return NOTHING.
-        /// </summary>
-        /// <param name="Abs">An Absolute PIDL referencing the item to be Found.</param>
-        /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
-        /// <remarks> 5/31/2012 -Function added to replace algorithm used in FindCShItem(ptr as IntPtr) which now only calls this routine.</remarks>
-        public static CShellItem FindCShItem(CShellItem BaseItem, IntPtr Abs)
-        {
-            CShellItem FindCShItemRet = default;
-            FindCShItemRet = null;
-
-            if (CPidl.IsEqual(BaseItem.PIDL, Abs))
-                return BaseItem;
-
-            if (BaseItem.FileList is not null && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
-            {
-                foreach (CShellItem FItem in BaseItem.FileList)
-                {
-                    if (CPidl.IsEqual(FItem.PIDL, Abs))
-                        return FItem;
-                }
-            }
-            if (BaseItem.DirectoryList is not null) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
-            {
-                foreach (CShellItem DItem in BaseItem.DirectoryList)
-                {
-                    if (CPidl.IsEqual(DItem.PIDL, Abs))
-                        return DItem;
-                    if (CPidl.IsAncestorOf(DItem.PIDL, Abs, false))
-                        return FindCShItem(DItem, Abs);
-                }
-            }
-
-            //if (BaseItem.FilesInitialized && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
-            //{
-            //    foreach (CShellItem FItem in BaseItem.FileList)
-            //    {
-            //        if (CPidl.IsEqual(FItem.PIDL, Abs))
-            //            return FItem;
-            //    }
-            //}
-            //if (BaseItem.FoldersInitialized) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
-            //{
-            //    foreach (CShellItem DItem in BaseItem.DirectoryList)
-            //    {
-            //        if (CPidl.IsEqual(DItem.PIDL, Abs))
-            //            return DItem;
-            //        if (CPidl.IsAncestorOf(DItem.PIDL, Abs, false))
-            //            return FindCShItem(DItem, Abs);
-            //    }
-            //}
-
-            return FindCShItemRet;
-        }
-
-        /// <summary>
-        /// FindCShItem attempts to locate a CShellItem in the internal tree. It will NOT expand the Tree during the
-        /// search. If the Item identified by the Absolute PIDL parameter is not ALREADY in the internal tree, then
-        /// FindCShItem will return NOTHING.
-        /// </summary>
-        /// <param name="b">A Byte array representation of a Full or Absolute PIDL 
-        /// referencing the item to be Found.</param>
-        /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
-        /// <remarks></remarks>
-        public static CShellItem FindCShItem(byte[] b)
-        {
-            CShellItem FindCShItemRet = default;
-            if (!CPidl.IsValid(b))
-                return null;
-            var thisPidl = Marshal.AllocCoTaskMem(b.Length);
-            if (thisPidl.Equals(IntPtr.Zero))
-                return null;
-            Marshal.Copy(b, 0, thisPidl, b.Length);
-            FindCShItemRet = FindCShItem(thisPidl);
-            Marshal.FreeCoTaskMem(thisPidl);
-            return FindCShItemRet;
-        }
-
-        #endregion
-
+        
         #region FileInfo derived Properties
 
         /// <summary>
@@ -1154,6 +1060,7 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
+        #endregion Properties
 
         #region    Constructors/Destructors
 
@@ -1876,6 +1783,7 @@ namespace WindowsApiLib.Shell
             }
         }
 
+        //todo:move this into ShellController and CShellHierarchyManager
         /// <summary>For internal use only<br />
         /// Update is called by the CShItemUpdater Class when that Class receives a WM_Notify message. The purpose 
         /// of this Class is to translate the information passed to it into the appropriate set of actions needed 
@@ -1889,7 +1797,7 @@ namespace WindowsApiLib.Shell
         /// <remarks>Serves as a bridge between CShItemUpdater and the CShellItem that should handle a change.</remarks>
         internal void Update(IntPtr changedPidl, CShItemUpdateType changeType)
         {
-            Debug.WriteLine("Entered Update: " + changeType.ToString());
+            Debug.WriteLine("Entered CShellItem Update: " + changeType.ToString());
             switch (changeType)
             {
                 case CShItemUpdateType.UpdateDir: // raised when content of a dir changes
@@ -1919,7 +1827,7 @@ namespace WindowsApiLib.Shell
                         IntPtr PidlRel = IntPtr.Zero, newFolderPtr = IntPtr.Zero;
                         var splitPidl = CPidl.Split(changedPidl);
                         var oldParentItem = Parent;    // Save in case "renamed" to a new directory
-                        var newParentItem = FindCShItem(splitPidl.ParentPidl); // newParent);
+                        var newParentItem = ShellController.Instance.HierachyManager.FindCShItem(splitPidl.ParentPidl);
                         if (newParentItem is null)            // renamed to a dir that is not yet in internal tree
                         {
                             Parent.RemoveItem(this);                // no longer in this Folder
