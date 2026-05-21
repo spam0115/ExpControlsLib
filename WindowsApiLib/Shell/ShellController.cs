@@ -20,7 +20,7 @@ namespace WindowsApiLib.Shell
         public static IShellFolder Desktop { get; private set; }
 
         /// <summary>
-        /// 
+        /// the desktop cShellIitem
         /// </summary>
         public static CShellItem? DesktopCSI { get; private set; }
 

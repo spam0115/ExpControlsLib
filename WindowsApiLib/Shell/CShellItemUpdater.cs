@@ -237,21 +237,31 @@ namespace WindowsApiLib.Shell
 
                             case SHCNE.DELETE:
                                 {
-                                    var parent = CPidl.TrimLast(shNotify.dwItem1);
-                                    CShellItem parentItem;
-                                    parentItem = HierachyManager.FindCShItem(parent);
-                                    if (!(parentItem == null))
+                                    var parentPidl = CPidl.TrimLast(shNotify.dwItem1);
+                                    var parentItem = HierachyManager.FindCShItem(parentPidl);
+                                    
+                                    if (parentItem != null)
                                     {
-                                        if (parentItem.FilesInitialized && parentItem.FileList.Contains(shNotify.dwItem1))
+                                        var relPidl = CPidl.ILFindLastID(shNotify.dwItem1);
+                                        CShellItem childItem = null;
+
+                                        // Try to find the child item in either files or directories
+                                        if (parentItem.FileList != null)
+                                            childItem = parentItem.FileList[relPidl];
+                                        
+                                        if (childItem == null && parentItem.DirectoryList != null)
+                                            childItem = parentItem.DirectoryList[relPidl];
+
+                                        if (childItem != null)
                                         {
-                                            var childItem = parentItem.FileList[shNotify.dwItem1];
 #if DEBUG
-                                            Debug.WriteLine("Received DELETE message: '" + childItem.FullPath + "'");
+                                            Debug.WriteLine("Received DELETE/RMDIR message: '" + childItem.FullPath + "'");
 #endif
-                                            parentItem.RemoveItem(childItem);
+                                            childItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Deleted);
                                         }
                                     }
-                                    Marshal.FreeCoTaskMem(parent);
+                                    
+                                    Marshal.FreeCoTaskMem(parentPidl);
                                     break;
                                 }
 
