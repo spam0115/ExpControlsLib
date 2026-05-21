@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -641,9 +641,8 @@ namespace WindowsApiLib.Shell
             }
             finally
             {
-                //if (pszName != IntPtr.Zero) WinSDK.CoTaskMemFree(pszName);
                 if (pszName != IntPtr.Zero) Marshal.FreeCoTaskMem(pszName); 
-                if (pidl != IntPtr.Zero) WinSDK.CoTaskMemFree(pidl);
+                if (pidl != IntPtr.Zero) Marshal.FreeCoTaskMem(pidl);
             }
         }
 
