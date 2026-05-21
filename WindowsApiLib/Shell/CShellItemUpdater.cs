@@ -403,8 +403,6 @@ namespace WindowsApiLib.Shell
                             case SHCNE.DRIVEREMOVED:
                                 {
                                     // Removed Directory
-                                    //IntPtr parent, child = IntPtr.Zero;
-                                    //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
                                     var parent = CPidl.TrimLast(shNotify.dwItem1);
 
                                     var parentItem = HierachyManager.FindCShItem(parent);
@@ -425,7 +423,6 @@ namespace WindowsApiLib.Shell
                                             parentItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
                                         }
                                     }
-                                    //Marshal.FreeCoTaskMem(child);
                                     Marshal.FreeCoTaskMem(parent);
                                     break;
                                 }
