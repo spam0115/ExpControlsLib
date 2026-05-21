@@ -18,7 +18,7 @@ namespace WindowsApiLib.Shell
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
     public class CShellItemHierachyManager
     {
-        public CShellItem? Root {  get; set; }
+        public CShellItem Root {  get; set; }
         public CShellItem? CurrentFolder { get; set; }
         public string? CurrentPath { get {
                 if (CurrentFolder?.PIDL == null) return string.Empty;
@@ -31,9 +31,85 @@ namespace WindowsApiLib.Shell
             //todo: move the item hierarchy code from cshellitem to over here.
         }
 
+
+        /// <summary>
+        /// FindCShItem attempts to locate a CShellItem in the internal tree. It will NOT expand the Tree during the
+        /// search. If the Item identified by the Absolute PIDL parameter is not ALREADY in the internal tree, then
+        /// FindCShItem will return NOTHING.
+        /// </summary>
+        /// <param name="ptr">An Absolute PIDL referencing the item to be Found.</param>
+        /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
+        /// <remarks> 5/31/2012 - most code in this function replaced by a call to FindCShItem(BaseItem as CShellItem, Abs as IntPtr)</remarks>
+        public CShellItem FindCShItem(IntPtr ptr)
+        {
+            return FindCShItem(Root, ptr);
+        }
+
+        /// <summary>
+        /// FindCShItem attempts to locate a CShellItem in the internal tree. It will NOT expand the Tree during the
+        /// search. If the Item identified by the Absolute PIDL parameter is not ALREADY in the internal tree, then
+        /// FindCShItem will return NOTHING.
+        /// </summary>
+        /// <param name="Abs">An Absolute PIDL referencing the item to be Found.</param>
+        /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
+        /// <remarks> 5/31/2012 -Function added to replace algorithm used in FindCShItem(ptr as IntPtr) which now only calls this routine.</remarks>
+        public CShellItem FindCShItem(CShellItem BaseItem, IntPtr Abs)
+        {
+            CShellItem FindCShItemRet = default;
+            FindCShItemRet = null;
+
+            if (CPidl.IsEqual(BaseItem.PIDL, Abs))
+                return BaseItem;
+
+            if (BaseItem.FileList is not null && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
+            {
+                foreach (CShellItem FItem in BaseItem.FileList)
+                {
+                    if (CPidl.IsEqual(FItem.PIDL, Abs))
+                        return FItem;
+                }
+            }
+            if (BaseItem.DirectoryList is not null) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
+            {
+                foreach (CShellItem DItem in BaseItem.DirectoryList)
+                {
+                    if (CPidl.IsEqual(DItem.PIDL, Abs))
+                        return DItem;
+                    if (CPidl.IsAncestorOf(DItem.PIDL, Abs, false))
+                        return FindCShItem(DItem, Abs);
+                }
+            }
+
+            return FindCShItemRet;
+        }
+
+        /// <summary>
+        /// FindCShItem attempts to locate a CShellItem in the internal tree. It will NOT expand the Tree during the
+        /// search. If the Item identified by the Absolute PIDL parameter is not ALREADY in the internal tree, then
+        /// FindCShItem will return NOTHING.
+        /// </summary>
+        /// <param name="b">A Byte array representation of a Full or Absolute PIDL 
+        /// referencing the item to be Found.</param>
+        /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
+        /// <remarks></remarks>
+        public CShellItem FindCShItem(byte[] b)
+        {
+            CShellItem FindCShItemRet = default;
+            if (!CPidl.IsValid(b))
+                return null;
+            var thisPidl = Marshal.AllocCoTaskMem(b.Length);
+            if (thisPidl.Equals(IntPtr.Zero))
+                return null;
+            Marshal.Copy(b, 0, thisPidl, b.Length);
+            FindCShItemRet = FindCShItem(Root, thisPidl);
+            Marshal.FreeCoTaskMem(thisPidl);
+            return FindCShItemRet;
+        }
+
+
         public CShellItem AddToHierarchy(CShellItem csi)
         {
-            var result = FindInShellHierarchy(csi.PIDL, out CShellItem parent);
+            var result = FindOrAdd(csi.PIDL, out CShellItem parent);
             return result;
         }
 
@@ -47,7 +123,7 @@ namespace WindowsApiLib.Shell
             }
             try
             {
-                return FindInShellHierarchy(pidl, out _);
+                return FindOrAdd(pidl, out _);
             }
             finally
             {
@@ -81,7 +157,7 @@ namespace WindowsApiLib.Shell
         /// For Example: GetCShItem(Path) may be given a string specifying a non-existant directory.
         /// (eg -- C:\Test\NonExistant\junk.txt). 
         /// In that case, and that case only, Parent may be returned as Nothing.</remarks>
-        public CShellItem? FindInShellHierarchy(IntPtr absPidl, out CShellItem? Parent)
+        public CShellItem? FindOrAdd(IntPtr absPidl, out CShellItem? Parent)
         {
             Parent = null;
 

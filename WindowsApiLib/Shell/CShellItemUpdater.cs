@@ -86,7 +86,7 @@ namespace WindowsApiLib.Shell
             var parent1 = default(CShellItem);
             if (shNotify.dwItem1 != IntPtr.Zero)     // 5/26/2012
             {
-                csi1 = CShellItem.FindCShItem(shNotify.dwItem1);
+                csi1 = HierachyManager.FindCShItem(shNotify.dwItem1);
                 if (csi1 is not null)
                 {
                     // If csi1.Path.IndexOf("ntuser.dat", StringComparison.InvariantCultureIgnoreCase) > -1 Then  '6/6/2012 - No longer needed
@@ -116,7 +116,7 @@ namespace WindowsApiLib.Shell
             }
             if (shNotify.dwItem2 != IntPtr.Zero)     // 5/26/2012
             {
-                csi2 = CShellItem.FindCShItem(shNotify.dwItem2);    // 5/26/2012
+                csi2 = HierachyManager.FindCShItem(shNotify.dwItem2);    // 5/26/2012
                 if (csi2 is not null)
                 {
                     Debug.WriteLine(id + "dwItem2: " + " (" + shNotify.dwItem2.ToString() + ")" + csi2.ItemPath);
@@ -155,6 +155,7 @@ namespace WindowsApiLib.Shell
         /// If located, then call Item.Update for further processing. 
         /// If appropriate, Item.Update will raise an appropriate event to notify
         /// interested controls.
+        /// 
         /// </summary>
         /// <param name="m">A Windows Message</param>
         /// <remarks>The use of SHGetRealIDL appears non-essential and wasteful. It is NOT.
@@ -182,7 +183,7 @@ namespace WindowsApiLib.Shell
             IntPtr ppidl = IntPtr.Zero;
             var msgID = default(SHCNE);
             SHNOTIFYSTRUCT shNotify = default;
-            var hLock = SHChangeNotification_Lock(m.WParam, (uint)m.LParam, ref ppidl, ref msgID);
+            var hLock = SHChangeNotification_Lock(m.WParam, (uint)m.LParam, ref ppidl, ref msgID); //note: we are using the legacy notification struct, not the newer SHCNRF_NewDelivery mode
             if (hLock != IntPtr.Zero)
             {
                 try
@@ -196,7 +197,7 @@ namespace WindowsApiLib.Shell
                         // var UArgs = new CShItemUpdateEventArgs(shNotify, msgID, ref counter);
                         // Debug.WriteLine("Enter WndProc -- Counter = " & UArgs.Tag & " - " & [Enum].GetName(GetType(SHCNE), CType(msgid, SHCNE)))
                         // EventDump("Enter WndProc", shNotify, UArgs, msgID)
-                        Debug.Write("CShellItemUpdated.WndProc, Msg: " + msgID.ToString());
+                        Debug.Write("CShellItemUpdater.WndProc, Msg: " + msgID.ToString());
 #endif
 
                         // In the below test, only UPDATEDIR will ever give me just the Desktop's PIDL - which will appear as an Empty PIDL to IsPidlEmpty
@@ -215,7 +216,7 @@ namespace WindowsApiLib.Shell
                                     IntPtr realRel;
                                     var splitPidl = CPidl.Split(shNotify.dwItem1);
 
-                                    var parentItem = CShellItem.FindCShItem(splitPidl.ParentPidl);
+                                    var parentItem = HierachyManager.FindCShItem(splitPidl.ParentPidl);
                                     if (!(parentItem == null))
                                     {
                                         if (parentItem.FilesInitialized && !parentItem.FileList.Contains(shNotify.dwItem1))
@@ -239,7 +240,7 @@ namespace WindowsApiLib.Shell
                                 {
                                     var parent = CPidl.TrimLast(shNotify.dwItem1);
                                     CShellItem parentItem;
-                                    parentItem = CShellItem.FindCShItem(parent);
+                                    parentItem = HierachyManager.FindCShItem(parent);
                                     if (!(parentItem == null))
                                     {
                                         if (parentItem.FilesInitialized && parentItem.FileList.Contains(shNotify.dwItem1))
@@ -259,7 +260,7 @@ namespace WindowsApiLib.Shell
                                 {
                                     if (shNotify.dwItem2 != IntPtr.Zero)     // 5/26/2012
                                     {
-                                        var item = CShellItem.FindCShItem(shNotify.dwItem1);
+                                        var item = HierachyManager.FindCShItem(shNotify.dwItem1);
                                         if (item is not null)
                                         {
                                             item.Update(shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
@@ -288,7 +289,7 @@ namespace WindowsApiLib.Shell
                                     }
                                     else
                                     {
-                                        var upCSI = CShellItem.FindCShItem(shNotify.dwItem1);
+                                        var upCSI = HierachyManager.FindCShItem(shNotify.dwItem1);
                                         if (upCSI is not null)
                                         {
                                             upCSI.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
@@ -314,7 +315,7 @@ namespace WindowsApiLib.Shell
                                     }
                                     else
                                     {
-                                        var item = HierachyManager.FindInShellHierarchy(shNotify.dwItem1, out CShellItem parent);
+                                        var item = HierachyManager.FindOrAdd(shNotify.dwItem1, out CShellItem parent);
                                         if (item is null) return;
                                         if (item.IsFolder)
                                         {
@@ -337,7 +338,7 @@ namespace WindowsApiLib.Shell
                                     //IntPtr parent, child = IntPtr.Zero;
                                     //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
                                     var splitPidls = CPidl.Split(shNotify.dwItem1);
-                                    var parentItem = CShellItem.FindCShItem(splitPidls.ParentPidl);
+                                    var parentItem = HierachyManager.FindCShItem(splitPidls.ParentPidl);
                                     if (parentItem is not null)
                                     {
                                         if (parentItem.FoldersInitialized && !parentItem.DirectoryList.Contains(shNotify.dwItem1))
@@ -378,7 +379,7 @@ namespace WindowsApiLib.Shell
                                     // If Not shNotify.dwItem2 <> IntPtr.Zero Then     '5/26/2012 - Old Code
                                     if (shNotify.dwItem2 != IntPtr.Zero)          // 6/11/2012 - New Code
                                     {
-                                        var item = CShellItem.FindCShItem(shNotify.dwItem1);
+                                        var item = HierachyManager.FindCShItem(shNotify.dwItem1);
                                         if (item is not null)
                                         {
                                             item.Update(shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
@@ -396,7 +397,7 @@ namespace WindowsApiLib.Shell
                                     //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
                                     var parent = CPidl.TrimLast(shNotify.dwItem1);
 
-                                    var parentItem = CShellItem.FindCShItem(parent);
+                                    var parentItem = HierachyManager.FindCShItem(parent);
                                     if (parentItem is not null)
                                     {
                                         // From Calum...sometimes when deleting a folder in My Documents 
@@ -421,7 +422,7 @@ namespace WindowsApiLib.Shell
                             case SHCNE.MEDIAINSERTED:
                             case SHCNE.MEDIAREMOVED:
                                 {
-                                    var mediaCSI = CShellItem.FindCShItem(shNotify.dwItem1);
+                                    var mediaCSI = HierachyManager.FindCShItem(shNotify.dwItem1);
                                     if (mediaCSI is not null)
                                     {
                                         mediaCSI.Update(default, CShellItem.CShItemUpdateType.MediaChange);
@@ -431,7 +432,7 @@ namespace WindowsApiLib.Shell
                                 }
                             case SHCNE.UPDATEIMAGE:
                                 {
-                                    var imgCSI = CShellItem.FindCShItem(shNotify.dwItem1);
+                                    var imgCSI = HierachyManager.FindCShItem(shNotify.dwItem1);
                                     if (imgCSI is not null)
                                     {
                                         imgCSI.Update(default, CShellItem.CShItemUpdateType.IconChange);

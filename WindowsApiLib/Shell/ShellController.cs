@@ -8,6 +8,8 @@ namespace WindowsApiLib.Shell
 {
     public class ShellController
     {
+        public static ShellController Instance = null!;
+
         public CShellItemHierachyManager HierachyManager { get; private set; }
         public CShellItemUpdater ShellUpdater { get; private set; }
    
@@ -16,14 +18,12 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
         public static IShellFolder Desktop { get; private set; }
-
         /// <summary>
-        /// 
+        /// the desktop cShellIitem
         /// </summary>
         public static CShellItem? DesktopCSI { get; private set; }
 
-
-        public ShellController() {
+        private ShellController() {
 
             HierachyManager = new CShellItemHierachyManager();
             CShellItemFactory.Initialize(HierachyManager); //force the constructor to run
@@ -31,7 +31,14 @@ namespace WindowsApiLib.Shell
 
             HierachyManager.Root = DesktopCSI;
             ShellUpdater = new CShellItemUpdater(HierachyManager, (uint)SHCNE.DISKEVENTS);
+        }
 
+        public static ShellController Initialize() { 
+            if (Instance == null)
+            {
+                Instance = new ShellController();
+            }
+            return Instance;
         }
 
         /// <summary>
