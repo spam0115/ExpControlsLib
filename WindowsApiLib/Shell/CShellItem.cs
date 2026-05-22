@@ -2170,7 +2170,7 @@ namespace WindowsApiLib.Shell
         /// </summary>
         private void FillDemandInfo()
         {
-            if (m_W32Data is not null)  // 04/24/2012 - changed to use m_W32Data rather than .Tag
+            if (m_W32Data is not null)
             {
                 if (m_IsFileSystem)
                 {
@@ -2221,7 +2221,7 @@ namespace WindowsApiLib.Shell
                     }
                 }
             }
-            m_XtrInfo = true;            // 05/15/2012 even if there were errors, we have what we can get (long file name problem)
+            m_XtrInfo = true;
         }
 
         /// <summary>
@@ -2302,7 +2302,7 @@ namespace WindowsApiLib.Shell
             var shfi = new SHFILEINFO();
             var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL; //you can also ask for attributes here with SHGFI.ATTRIBUTES
             int dwAttr = 0;
-            if (m_IsFileSystem & !m_IsFolder)
+            if (m_IsFileSystem && !m_IsFolder)
             {
                 dwflag = dwflag | SHGFI.USEFILEATTRIBUTES;
                 dwAttr = FILE_ATTRIBUTE_NORMAL;

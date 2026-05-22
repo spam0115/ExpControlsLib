@@ -821,12 +821,7 @@ namespace ExpControlsLib
                 int topIndex = 0;
                 if (_listView.Items.Count > 0)
                 {
-                    var firstVisible = _listView.Items.Cast<ListViewItem>()
-                        .Where(it => _listView.ClientRectangle.IntersectsWith(it.Bounds))
-                        .OrderBy(it => it.Bounds.Top).ThenBy(it => it.Bounds.Left)
-                        .FirstOrDefault();
-
-                    if (firstVisible != null) topIndex = firstVisible.Index;
+                    topIndex = GetIndexOfFirstVisible();
                 }
 
                 var newItems = _pendingItems ?? Array.Empty<ListViewItem>();
@@ -928,7 +923,7 @@ namespace ExpControlsLib
                     _thumbnailManager.RequestThumbnail(item, csi.FullPath, thumbnailSize);
             }
 
-            var l = _listView.Items.Cast<ListViewItem>().Select(item => item.ImageIndex).ToList();
+            //var l = _listView.Items.Cast<ListViewItem>().Select(item => item.ImageIndex).ToList();
         }
 
         #endregion
@@ -2465,16 +2460,18 @@ namespace ExpControlsLib
 
         public int GetIndexOfFirstVisible()
         {
-            ListViewItem current;
+            ListViewItem? current;
             if (_listView.View == View.Details || _listView.View == View.List)
             {
                 current = _listView.TopItem;   // valid here
             }
             else
             {
+                if (_listView.Items is null) return 0;
+
                 current = _listView.Items
                     .Cast<ListViewItem>()
-                    .Where(it => _listView.ClientRectangle.IntersectsWith(it.Bounds))
+                    .Where(it => _listView.ClientRectangle.IntersectsWith(it.Bounds)) //got an exception where 'it' was null
                     .OrderBy(it => it.Bounds.Top)
                     .ThenBy(it => it.Bounds.Left)
                     .FirstOrDefault();

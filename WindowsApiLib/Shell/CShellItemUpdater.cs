@@ -746,10 +746,6 @@ namespace WindowsApiLib.Shell
                                                     if (newTime <= csi.LastWriteTime.ToFileTimeUtc())
                                                         doupdate = false;
                                                 }
-                                                else
-                                                {
-
-                                                }
                                                 //todo: maybe also do a date check for virtual items since people might be using their onedrives
                                             }
 

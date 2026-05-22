@@ -797,7 +797,6 @@ namespace WindowsApiLib.Shell
 
         #region        shlwapi Dll Declarations
 
-        #region            STRRETtoSomeString
         /// Accepts a STRRET structure returned by IShellFolder::GetDisplayNameOf that contains or points to a 
         /// string, and then returns that string as a BSTR.
         /// <param>
@@ -824,7 +823,50 @@ namespace WindowsApiLib.Shell
         [DllImport("shlwapi.dll", CharSet = CharSet.Auto)]
         public static extern int StrRetToBuf(IntPtr pstr, IntPtr pidl, StringBuilder pszBuf, [MarshalAs(UnmanagedType.U4)] int cchBuf);
 
-        #endregion
+
+        [Flags]
+        public enum ASSOCF : uint
+        {
+            NONE = 0
+        }
+
+        public enum ASSOCSTR
+        {
+            COMMAND = 1,
+            EXECUTABLE,
+            FRIENDLYDOCNAME,
+            FRIENDLYAPPNAME,
+            NOOPEN,
+            SHELLNEWVALUE,
+            DDECOMMAND,
+            DDEIFEXEC,
+            DDEAPPLICATION,
+            DDETOPIC,
+            INFOTIP,
+            QUICKTIP,
+            TILEINFO,
+            CONTENTTYPE,
+            DEFAULTICON,
+            SHELLEXTENSION,
+            DROPTARGET,
+            DELEGATEEXECUTE,
+            SUPPORTED_URI_PROTOCOLS,
+            PROGID,
+            APPID,
+            APPPUBLISHER,
+            APPICONREFERENCE,
+            MAX
+        }
+
+        [DllImport("Shlwapi.dll", CharSet = CharSet.Unicode, SetLastError = false)]
+        public static extern int AssocQueryString(
+            ASSOCF flags,
+            ASSOCSTR str,
+            string pszAssoc,
+            string pszExtra,
+            StringBuilder pszOut,
+            ref uint pcchOut);
+
 
         #endregion
 

@@ -228,7 +228,7 @@ namespace ExpControlsLib
                 }
                 else
                 {
-                    var oldImage = imageList.Images[index];
+                    var oldImage = imageList.Images[index]; //todo: this is very slow during folder refreshes
                     imageList.Images[index] = square;
                     oldImage.Dispose();
                 }

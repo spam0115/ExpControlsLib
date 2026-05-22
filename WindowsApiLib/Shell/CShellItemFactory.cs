@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.DirectoryServices;
@@ -34,6 +35,11 @@ namespace WindowsApiLib.Shell
         /// </summary>
         private static CShellItem? DesktopCSI { get; set; }
 
+        private static readonly ConcurrentDictionary<string, string> s_typeNameCache = new(StringComparer.OrdinalIgnoreCase);
+        // Optional cache for no-extension files
+        private const string NoExtensionCacheKey = "<​NOEXT>";
+
+
         public static CShellItemFactory Instance { get; private set; }
         
         /// <summary>
@@ -65,6 +71,8 @@ namespace WindowsApiLib.Shell
         public static CShellItem RecycleBin { get; private set; }
         public static CShellItem DeskTopDirectory { get; private set; }
 
+        public static CShellItem MyDocuments { get; private set; }
+
         public static CShellItemHierachyManager? HierachyManager { get; internal set; }
 
         private CShellItemFactory(CShellItemHierachyManager? hierachyManager = null) 
@@ -77,14 +85,15 @@ namespace WindowsApiLib.Shell
             SystemName = Environment.MachineName;
 
             (CShellItemFactory.DesktopShellFolder, CShellItemFactory.DesktopCSI) = GetDesktopRoot();
+            DeskTopDirectory = CreateCShItem(CSIDL.DESKTOPDIRECTORY);
 
             RecycleBin = CreateCShItem(CSIDL.BITBUCKET);
 
+            MyDocuments = CreateCShItem(CSIDL.MYDOCUMENTS);
 
-            // firstly determine what the local machine calls a "System Folder" and "My Computer"
+            StrMyDocuments = MyDocuments.m_DisplayName;
             StrSystemFolder = DesktopCSI.m_TypeName;
             StrMyComputer = DesktopCSI.m_DisplayName;
-            DeskTopDirectory = CreateCShItem(CSIDL.DESKTOPDIRECTORY);
         }
 
         // Call once at startup
@@ -110,16 +119,16 @@ namespace WindowsApiLib.Shell
         private static (IShellFolder, CShellItem) PopulateDesktopCShellItem(CShellItem csi)
         {
             int HR;
-            IntPtr tmpPidl = IntPtr.Zero;
-            HR = SHGetSpecialFolderLocation(0, (int)CSIDL.DESKTOP, ref tmpPidl);
+            //IntPtr tmpPidl = IntPtr.Zero;
+            //HR = SHGetSpecialFolderLocation(0, (int)CSIDL.DESKTOP, ref tmpPidl);
             var shfi = new SHFILEINFO();
             var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
             int dwAttr = 0;
-            SHGetFileInfo(tmpPidl, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
+            SHGetFileInfo(DesktopPidl, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
 
             IShellFolder iShellFolder = null;
             HR = SHGetDesktopFolder(ref iShellFolder);
-            csi.m_Pidl = tmpPidl; //do we even need to populate this here since SetUpAttributes will do it?
+            csi.m_Pidl = DesktopPidl;
             csi.m_IShellFolder = iShellFolder;
             csi.m_DisplayName = shfi.szDisplayName;
             csi.m_Path = "::{" + DesktopGUID.ToString() + "}";
@@ -133,15 +142,8 @@ namespace WindowsApiLib.Shell
             csi.IsDropTarget = true;
             csi.m_IsReadOnly = false;
             csi.m_IsReadOnlySetup = true;
-            csi.SetDispType();
-            SetUpAttributes(csi, DesktopPidl);
-
-            // also get local name for "My Documents"
-            var pchEaten = default(int);
-            int argpdwAttributes = default;
-            HR = iShellFolder.ParseDisplayName(default, default, "::{" + ShellNamespaceGuids.Documents.ToString() + "}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
-
-            StrMyDocuments = shfi.szDisplayName;
+            PopulateBasicAttributes(csi);
+            SetDisplayNameAndType(csi);
 
             return (iShellFolder, csi);
         }
@@ -443,9 +445,9 @@ namespace WindowsApiLib.Shell
                 csi.m_Pidl = pidl;
                
                 csi.m_Parent = parentCsi;
-                
+
                 // Get some attributes
-                SetUpAttributes(csi, pidl);
+                PopulateInitial(csi);
 
                 if (csi.m_IsFolder)
                 {
@@ -723,10 +725,17 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
+        private static void PopulateInitial(CShellItem csiOutput)
+        {
+            PopulateBasicAttributes(csiOutput);
+            SetDisplayNameAndType(csiOutput);
+            ComputeSortFlag(csiOutput);
+        }
+
         /// <summary>Get the base attributes of the folder/file that this CShellItem represents</summary>
         /// <param name="folder">Parent Folder of this Item</param>
         /// <param name="pidl">Relative Pidl of this Item.</param>
-        private static void SetUpAttributes(CShellItem csiOutput, IntPtr pidl)
+        private static void PopulateBasicAttributes(CShellItem csiOutput)
         {
             SFGAO attrFlag;
             attrFlag = SFGAO.BROWSABLE | SFGAO.FILESYSTEM | SFGAO.FOLDER | SFGAO.LINK | SFGAO.SHARE
@@ -736,6 +745,7 @@ namespace WindowsApiLib.Shell
             // SFGAO.HASSUBFOLDER   'made into an on-demand attribute
 
             var iid = typeof(IShellItem).GUID;
+            var pidl = csiOutput.m_Pidl;
             SHCreateItemFromIDList(pidl, ref iid, out IntPtr item);
             IShellItem shellItem = (IShellItem)Marshal.GetObjectForIUnknown(item);
             shellItem.GetAttributes((uint)attrFlag, out uint attrs);
@@ -833,6 +843,147 @@ namespace WindowsApiLib.Shell
             }
         }
 
+        /// <summary>
+        /// Sets DisplayName, TypeName, and SortFlag when actually needed.
+        /// Optimized to avoid expensive shell calls when filesystem APIs are enough.
+        /// </summary>
+        internal static void SetDisplayNameAndType(CShellItem csi)
+        {
+            if (csi.m_HasDispType)
+                return;
+
+            // Fast path for filesystem file items (most common case)
+            if (csi.m_IsFileSystem && !csi.m_IsFolder)
+            {
+                csi.m_DisplayName = GetFastFileDisplayName(csi.FullPath);
+
+                // Cached type-name by extension
+                csi.m_TypeName = GetCachedTypeNameForFile(csi.FullPath);
+
+                // Rare fallback if we couldn't resolve a type name
+                if (string.IsNullOrWhiteSpace(csi.m_TypeName))
+                {
+                    TryPopulateViaShell(csi, out _, out var shellTypeName);
+                    if (!string.IsNullOrWhiteSpace(shellTypeName))
+                        csi.m_TypeName = shellTypeName;
+                }
+            }
+            else
+            {
+                // Folder and non-filesystem items: keep shell semantics
+                if (TryPopulateViaShell(csi, out var shellDisplayName, out var shellTypeName))
+                {
+                    csi.m_DisplayName = shellDisplayName;
+                    csi.m_TypeName = shellTypeName;
+                }
+
+                // Fast fallback display name
+                if (string.IsNullOrEmpty(csi.m_DisplayName))
+                    csi.m_DisplayName = GetFastFileDisplayName(csi.FullPath);
+            }
+
+            // Final hard fallbacks
+            if (string.IsNullOrWhiteSpace(csi.m_DisplayName))
+                csi.m_DisplayName = Path.GetFileName(csi.FullPath);
+
+            if (string.IsNullOrWhiteSpace(csi.m_TypeName))
+                csi.m_TypeName = csi.m_IsFolder ? "Folder" : "File";
+
+            csi.m_HasDispType = true;
+        }
+
+        private static string GetFastFileDisplayName(string fullPath)
+        {
+            if (string.IsNullOrWhiteSpace(fullPath))
+                return string.Empty;
+
+            // Trim trailing separators to handle folder-like paths safely
+            var trimmed = fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var name = Path.GetFileName(trimmed);
+
+            // Root paths (e.g. "C:\") yield empty name; fallback to path itself
+            return string.IsNullOrEmpty(name) ? fullPath : name;
+        }
+
+        private static string GetCachedTypeNameForFile(string fullPath)
+        {
+            string ext = Path.GetExtension(fullPath);
+            string key = string.IsNullOrEmpty(ext) ? NoExtensionCacheKey : ext;
+
+            return s_typeNameCache.GetOrAdd(key, _ =>
+            {
+                // For files with no extension
+                if (key == NoExtensionCacheKey)
+                {
+                    // "File" is a fast fallback; you can choose to do a shell lookup here once if desired.
+                    return "File";
+                }
+
+                // Ask Windows association subsystem for friendly type name.
+                string assocType = TryGetAssocTypeName(ext);
+                if (!string.IsNullOrWhiteSpace(assocType))
+                    return assocType;
+
+                // Fallback
+                return "File";
+            });
+        }
+
+        private static string TryGetAssocTypeName(string extension)
+        {
+            // AssocQueryString expects ".ext"
+            if (string.IsNullOrWhiteSpace(extension))
+                return null;
+
+            uint pcchOut = 0;
+            // First call to get required buffer size
+            AssocQueryString(
+                ASSOCF.NONE,
+                ASSOCSTR.FRIENDLYDOCNAME,
+                extension,
+                null,
+                null,
+                ref pcchOut);
+
+            if (pcchOut == 0)
+                return null;
+
+            var sb = new StringBuilder((int)pcchOut);
+            int hr = AssocQueryString(
+                ASSOCF.NONE,
+                ASSOCSTR.FRIENDLYDOCNAME,
+                extension,
+                null,
+                sb,
+                ref pcchOut);
+
+            return hr == 0 ? sb.ToString() : null;
+        }
+
+        private static bool TryPopulateViaShell(CShellItem csi, out string displayName, out string typeName)
+        {
+            displayName = null;
+            typeName = null;
+
+            var shfi = new SHFILEINFO();
+            var flags = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
+            int attrs = 0;
+
+            // USEFILEATTRIBUTES helps avoid touching disk for filesystem files
+            if (csi.m_IsFileSystem && !csi.m_IsFolder)
+            {
+                flags |= SHGFI.USEFILEATTRIBUTES;
+                attrs = FILE_ATTRIBUTE_NORMAL;
+            }
+
+            IntPtr result = SHGetFileInfo(csi.m_Pidl, attrs, ref shfi, SHFILEINFO_size, flags);
+            if (result == IntPtr.Zero)
+                return false;
+
+            displayName = shfi.szDisplayName;
+            typeName = shfi.szTypeName;
+            return true;
+        }
 
         public static string? GetFullPath(CShellItem csi)
         {
@@ -844,6 +995,32 @@ namespace WindowsApiLib.Shell
             else return CPidl.GetParsingPath(pidl);
         }
 
+        /// <summary>Computes the Sort key of this CShellItem, based on its attributes</summary>
+        private static int ComputeSortFlag(CShellItem csi)
+        {
+            int rVal = 0;
+            if (csi.m_IsDisk)
+                rVal = 0x100000;
+
+            if (csi.m_TypeName.Equals(CShellItemFactory.StrSystemFolder))
+            {
+                if (!csi.m_IsBrowsable)
+                {
+                    rVal = rVal | 0x10000;
+                    if (CShellItemFactory.StrMyDocuments.Equals(csi.m_DisplayName))
+                    {
+                        rVal = rVal | 0x1;
+                    }
+                }
+                else
+                {
+                    rVal = rVal | 0x1000;
+                }
+            }
+            if (csi.m_IsFolder)
+                rVal = rVal | 0x100;
+            return rVal;
+        }
 
     }
 }
