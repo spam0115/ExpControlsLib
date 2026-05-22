@@ -798,9 +798,9 @@
             Refreshes the display of a single item whose underlying filesystem data has changed.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.RefreshItem(System.String)">
+        <member name="M:ExpControlsLib.ExpList.RefreshItemByDisplayName(System.String)">
             <summary>
-            Refresh by path string.
+            Refresh by display name string.  This is very inefficient.  Avoid this function.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.GoBack">

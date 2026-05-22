@@ -752,6 +752,40 @@ namespace WindowsApiLib.Shell
             return iShFolder;
         }
 
+        public static bool TryGetLastWriteTimeForPidl(
+        IShellFolder folder,
+        IntPtr childPidl,              // relative PIDL (child of folder)
+        out FILETIME lastWriteTime)
+        {
+            lastWriteTime = default;
+
+            if (folder == null || childPidl == IntPtr.Zero)
+                return false;
+
+            int hr = SHGetDataFromIDListW(
+                folder,
+                childPidl,
+                SHGDFIL_FINDDATA,
+                out WIN32_FIND_DATAW fd,
+                Marshal.SizeOf<WIN32_FIND_DATAW>());
+
+            // SUCCEEDED(hr)
+            if (hr < 0)
+                return false;
+
+            lastWriteTime = fd.ftLastWriteTime;
+
+            // optional: treat zero FILETIME as "no value"
+            return lastWriteTime.dwLowDateTime != 0 || lastWriteTime.dwHighDateTime != 0;
+        }
+
+        public static long FileTimeToLong(FILETIME ft)
+        {
+            // FILETIME is an unsigned 64-bit value split into two 32-bit parts.
+            // Cast through uint to avoid sign-extension issues.
+            return ((long)(uint)ft.dwHighDateTime << 32) | (uint)ft.dwLowDateTime;
+        }
+
         #region        Shell Navigation and PIDL Utilities
 
         /// <summary>The WalkAllCallBack delegate defines the signature of 

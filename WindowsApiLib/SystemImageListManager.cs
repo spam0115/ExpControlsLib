@@ -89,7 +89,7 @@ namespace WindowsApiLib
 
             var shfi = new SHFILEINFO();
             string argpszPath = ".txt";
-            m_smImgList = ShellAPI.SHGetFileInfo(argpszPath, FILE_ATTRIBUTE_NORMAL, ref shfi, cbFileInfo, dwFlag);
+            m_smImgList = ShellAPI.SHGetFileInfo(argpszPath, FILE_ATTRIBUTE_NORMAL, ref shfi, SHFILEINFO_size, dwFlag);
 
             Debug.Assert(!m_smImgList.Equals(IntPtr.Zero), "Failed to create Image Small ImageList");
             if (m_smImgList.Equals(IntPtr.Zero))
@@ -100,7 +100,7 @@ namespace WindowsApiLib
             dwFlag = (int)(SHGFI.USEFILEATTRIBUTES | SHGFI.SYSICONINDEX | SHGFI.LARGEICON);
 
             string argpszPath1 = ".txt";
-            m_lgImgList = ShellAPI.SHGetFileInfo(argpszPath1, FILE_ATTRIBUTE_NORMAL, ref shfi, cbFileInfo, dwFlag);
+            m_lgImgList = ShellAPI.SHGetFileInfo(argpszPath1, FILE_ATTRIBUTE_NORMAL, ref shfi, SHFILEINFO_size, dwFlag);
 
 
 
@@ -268,8 +268,8 @@ namespace WindowsApiLib
                         dwflag = dwflag | SHGFI.OPENICON;
                     }
                     //todo: i think these flags are already in CShellItem, no need to fetch them again
-                    HR = SHGetFileInfo(withBlock.PIDL, dwAttr, ref shfi, cbFileInfo, dwflag);
-                    HR_SMALL = SHGetFileInfo(withBlock.PIDL, dwAttr, ref shfi_small, cbFileInfo, dwflag | SHGFI.SMALLICON);
+                    HR = SHGetFileInfo(withBlock.PIDL, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
+                    HR_SMALL = SHGetFileInfo(withBlock.PIDL, dwAttr, ref shfi_small, SHFILEINFO_size, SHGFI.SMALLICON); //can't get big and small icon at once
                     // m_Mutex.WaitOne()
                     int rVal2;
                     lock (SILMLock)

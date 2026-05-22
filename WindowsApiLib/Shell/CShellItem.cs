@@ -152,6 +152,7 @@ namespace WindowsApiLib.Shell
         // Private m_IsDisposing As Boolean
         internal bool m_Disposed;
 
+        internal Dictionary<uint, CShellItem> m_ChildrenDic = null;
 
         #endregion
 
@@ -209,7 +210,7 @@ namespace WindowsApiLib.Shell
                         dwflag = dwflag | SHGFI.USEFILEATTRIBUTES;
                         dwAttr = FILE_ATTRIBUTE_NORMAL;
                     }
-                    var H = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+                    var H = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
                     m_IconIndexNormalOrig = shfi.iIcon;
                     if (m_IconIndexNormal < 0)
                         m_IconIndexNormal = SystemImageListManager.GetIconIndex(this);
@@ -236,7 +237,7 @@ namespace WindowsApiLib.Shell
                     {
                         var dwflag = SHGFI.SYSICONINDEX | SHGFI.PIDL;
                         var shfi = new SHFILEINFO();
-                        var H = SHGetFileInfo(m_Pidl, 0, ref shfi, cbFileInfo, dwflag | SHGFI.OPENICON);
+                        var H = SHGetFileInfo(m_Pidl, 0, ref shfi, SHFILEINFO_size, dwflag | SHGFI.OPENICON);
                         m_IconIndexOpenOrig = shfi.iIcon;
                         if (m_IconIndexOpen < 0)
                             m_IconIndexOpen = SystemImageListManager.GetIconIndex(this, true);
@@ -680,7 +681,7 @@ namespace WindowsApiLib.Shell
                     var psfi = new SHFILEINFO() { dwAttributes = SFGAO.HASSUBFOLDER };
                     var uFlags = SHGFI.PIDL | SHGFI.ATTRIBUTES | SHGFI.ATTR_SPECIFIED;
                     int dwAttr = 0;
-                    var H = SHGetFileInfo(m_Pidl, dwAttr, ref psfi, cbFileInfo, uFlags);
+                    var H = SHGetFileInfo(m_Pidl, dwAttr, ref psfi, SHFILEINFO_size, uFlags);
                     if (H.ToInt32() != NOERROR && H.ToInt32() != 1)
                     {
                         Marshal.ThrowExceptionForHR(H.ToInt32());
@@ -985,7 +986,7 @@ namespace WindowsApiLib.Shell
                     var shfi = new SHFILEINFO() { dwAttributes = SFGAO.READONLY };
                     var dwflag = SHGFI.PIDL | SHGFI.ATTRIBUTES | SHGFI.ATTR_SPECIFIED;
                     int dwAttr = 0;
-                    var H = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+                    var H = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
                     if (H.ToInt32() != NOERROR && H.ToInt32() != 1)
                     {
                         Marshal.ThrowExceptionForHR(H.ToInt32());
@@ -1825,6 +1826,7 @@ namespace WindowsApiLib.Shell
                 case CShItemUpdateType.Deleted:
                     {
                         Parent?.RemoveItem(this);
+                        //UpdateEvent?.Invoke(this, new ShellItemUpdateEventArgs(this, changeType)); //removeitem will invoke the event
                         break;
                     }
                 case CShItemUpdateType.Renamed:      // Item has been renamed or moved
@@ -1848,8 +1850,13 @@ namespace WindowsApiLib.Shell
                                 Marshal.FreeCoTaskMem(m_Pidl);
                                 m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, pidlRel);  //Must do this!  newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID //don't do this: m_Pidl = changedPidl;
 
-                                //new
-                                if (!ReferenceEquals(allegedParentCsi, Parent)) // item was moved, not renamed
+                                if (ReferenceEquals(allegedParentCsi, Parent)) //renamed
+                                {
+                                    ResetInfo();         // Added for fix to the fix
+                                    m_Path = CShellItemFactory.GetFullPath(this); ;
+                                    UpdateEvent?.Invoke(oldParentCsi, new ShellItemUpdateEventArgs(this, changeType));
+                                }
+                                else // item was moved, not renamed
                                 {
                                     Parent.RemoveItem(this);
                                     allegedParentCsi.AddItem(this);
@@ -1880,73 +1887,10 @@ namespace WindowsApiLib.Shell
                                                 item.UpdateFolderPidlAndPath(); //update child paths
                                         }
                                     }
-                                }
-                                else //renamed
-                                {
-                                    ResetInfo();         // Added for fix to the fix
-                                    m_Path = CShellItemFactory.GetFullPath(this); ;
-                                }
-                                //
-
-                                /*
-                                if (IsFolder)
-                                {
-                                    if (!ReferenceEquals(allegedParentCsi, Parent)) // deal with potential "Move" to a new dir
-                                {
-                                    Parent.RemoveItem(this);
-                                        allegedParentCsi.AddItem(this);
-                                }
-
-                                ResetInfo();
-                                m_Path = CShellItemFactory.GetFullPath(this);
-
-                                    if (allegedParentCsi.Folder.BindToObject(pidlRel, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref newIShellFolderPtr) == S_OK)
-                                {
-                                        //Marshal.ReleaseComObject(Folder); //why would you do this?  subsequent accesses will throw and exception
-                                        m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newIShellFolderPtr, typeof(IShellFolder));
-                                        Marshal.Release(newIShellFolderPtr);
-                                    if (m_Files is not null)
-                                    {
-                                        foreach (CShellItem item in m_Files)
-                                                item.UpdateFolderPidlAndPath(); //update child paths
-                                    }
-                                    if (m_Directories is not null)
-                                    {
-                                        foreach (CShellItem item in m_Directories)
-                                                item.UpdateFolderPidlAndPath(); //update child paths
-                                    }
+                                    UpdateEvent?.Invoke(oldParentCsi, new ShellItemUpdateEventArgs(this, changeType)); //tell both old and new locations about the change
+                                    UpdateEvent?.Invoke(allegedParentCsi, new ShellItemUpdateEventArgs(this, changeType));
                                 }
                             }
-                                else if (!ReferenceEquals(oldParentCsi, allegedParentCsi)) // deal moved files
-                            {
-                                    if (oldParentCsi.FilesInitialized)
-                                {
-                                        oldParentCsi.RemoveItem(this);
-                                }
-                                    if (allegedParentCsi.FilesInitialized)
-                                {
-                                        allegedParentCsi.AddItem(this);
-                                    ResetInfo();         // new since sent to others
-                                    m_Path = CShellItemFactory.GetFullPath(this); ;           // new since sent to others
-                                }
-                                else
-                                {
-                                    m_Parent = null;
-                                    ResetInfo();
-                                }         // new since sent to others
-                            }
-                                else // same parent, just renamed
-                            {
-                                ResetInfo();         // Added for fix to the fix
-                                m_Path = CShellItemFactory.GetFullPath(this); ;
-                                // ResetInfo()         'newly deleted since sent to others
-                                // SetPath()           'newly deleted since sent to others
-                            }           // Added for fix to the fix
-                                        // Not oldParentItem Is newParentItem
-                                */
-                            }
-
-                            UpdateEvent?.Invoke(oldParentCsi, new ShellItemUpdateEventArgs(this, changeType));
                         }
                         finally 
                         {
@@ -1984,7 +1928,7 @@ namespace WindowsApiLib.Shell
         {
             if (ReferenceEquals(CSI, CShellItemFactory.RecycleBin)) return;
 
-            CSI.UpdateRefresh();
+            CSI.ConditionalUpdate();
         }
 
 
@@ -2014,7 +1958,7 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Refreshes the information for this item from the shell and raises an Update event.
         /// </summary>
-        public bool UpdateRefresh(bool UpdateFiles = true, bool UpdateFolders = true)
+        public bool ConditionalUpdate(bool UpdateFiles = true, bool UpdateFolders = true)
         {
             int updateCount = 0;
             char operationType = ' ';
@@ -2032,27 +1976,27 @@ namespace WindowsApiLib.Shell
 
                 lock (_itemTreeLock)
                 {
-                    var newPidls = GetPidlsOfCurrentFolder(attrFlag); // Relative PIDLs of current content
+                    var newPidls = CShellItemFactory.GetPidlsOfFolder(this, attrFlag); // Relative PIDLs of current content
 
 #if DEBUG
-                    var counts = newPidls
-                        .Select(p => new { length = CPidl.SegmentCount(p) })
-                        .GroupBy(o => o.length)
-                        .Select(g => new
-                        {
-                            Key = g.Key,
-                            Count = g.Count()
-                        }).ToList();
+                    //var counts = newPidls
+                    //    .Select(p => new { length = CPidl.SegmentCount(p) })
+                    //    .GroupBy(o => o.length)
+                    //    .Select(g => new
+                    //    {
+                    //        Key = g.Key,
+                    //        Count = g.Count()
+                    //    }).ToList();
 
-                    foreach (var count in counts)
-                    {
-                        Debug.WriteLine($"new pidls: Length=={count.Key}, Count=={count.Count}");
-                    }
+                    //foreach (var count in counts)
+                    //{
+                    //    Debug.WriteLine($"new pidls: Length=={count.Key}, Count=={count.Count}");
+                    //}
 #endif
 
                     try
                     {
-                        if (newPidls.Count < 1) // no items currently in Folder, so mark any previously known as invalid
+                        if (newPidls.Count < 1) // no items currently in Folder, so wipe prior contents
                         {
                             var invalidItems = new List<CShellItem>(); // Holds CShItems no longer present
 
@@ -2072,38 +2016,38 @@ namespace WindowsApiLib.Shell
                                 }
                             }
                         }
-                        else // there are currently some items of interest in Me.Folder
+                        else
                         {
-                            var oldCsiItems = new List<CShellItem>();              // working list of old known items
-                            if (m_Directories is not null && UpdateFolders)
-                                oldCsiItems.AddRange(m_Directories.ToArray());
-                            if (m_Files is not null && UpdateFiles)
-                                oldCsiItems.AddRange(m_Files.ToArray());
-
                             // Optimization: Use a dictionary to avoid O(N*M) search complexity.
                             var oldCsiDic = new Dictionary<uint, CShellItem>();
-                            foreach (var item in oldCsiItems)
+                            if (m_Directories is not null && UpdateFolders)
                             {
-                                oldCsiDic.Add(CPidl.HashPidlFastLastFull(item.LastPIDL), item); //might want to save this dic between calls
+                                foreach (var item in m_Directories.Items)
+                                    oldCsiDic.Add(CPidl.HashPidlFastLastFull(item.LastPIDL), item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
+                            }
+                            if (m_Files is not null && UpdateFiles)
+                            {
+                                foreach (var item in m_Files.Items)
+                                    oldCsiDic.Add(CPidl.HashPidlFastLastFull(item.LastPIDL), item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
                             }
 
 #if DEBUG
                             Debug.WriteLine("oldCsiDic size: " + oldCsiDic.Count());
                             Debug.WriteLine("newPidls size: " + newPidls.Count());
 
-                            counts = oldCsiItems
-                                .Select(p => new { length = CPidl.SegmentCount(p.PIDL) })
-                                .GroupBy(o => o.length)          // SQL GROUP BY column
-                                .Select(g => new
-                                {
-                                    Key = g.Key,
-                                    Count = g.Count()
-                                }).ToList();
+                            //counts = oldCsiItems
+                            //    .Select(p => new { length = CPidl.SegmentCount(p.PIDL) })
+                            //    .GroupBy(o => o.length)          // SQL GROUP BY column
+                            //    .Select(g => new
+                            //    {
+                            //        Key = g.Key,
+                            //        Count = g.Count()
+                            //    }).ToList();
 
-                            foreach (var count in counts)
-                            {
-                                Debug.WriteLine($"old pidls - Length=={count.Key}: {count.Count}");
-                            }
+                            //foreach (var count in counts)
+                            //{
+                            //    Debug.WriteLine($"old pidls - Length=={count.Key}: {count.Count}");
+                            //}
 #endif
                             for (int i = 0; i < newPidls.Count; i++)
                             {
@@ -2115,14 +2059,33 @@ namespace WindowsApiLib.Shell
                                     // found the same item
                                     if (CPidl.IsEqual(oldCsi.LastPIDL, newPidl))
                                     {
-                                        if (!ReferenceEquals(this, CShellItemFactory.RecycleBin)) //the problem with this code is that it just updates every item even if there are no changes
+                                        if (!ReferenceEquals(this, CShellItemFactory.RecycleBin))
                                         {
-                                            oldCsi.ResetInfo();
-                                            if (oldCsi.IsFolder) oldCsi.ResetChildren();
-                                            UpdateEvent?.Invoke(oldCsi.Parent, new ShellItemUpdateEventArgs(oldCsi, CShItemUpdateType.Updated)); //this happens even for items that aren't actually updated!
-                                            updatedItem = oldCsi;
-                                            updateCount++;
-                                            operationType = 'u';
+                                            bool doupdate = true;
+                                            if (this.IsFileSystem)
+                                            {
+                                                if (ShellHelper.TryGetLastWriteTimeForPidl(this.Folder, newPidl, out FILETIME lastWriteTime))
+                                                {
+                                                    var newTime = ShellHelper.FileTimeToLong(lastWriteTime);
+                                                    if (newTime <= this.LastWriteTime.ToFileTimeUtc())
+                                                        doupdate = false;
+                                                }
+                                                else
+                                                {
+
+                                                }
+                                                //todo: maybe also do a date check for virtual items since people might be using their onedrives
+                                            }
+
+                                            if (doupdate)
+                                            {
+                                                oldCsi.ResetInfo();
+                                                if (oldCsi.IsFolder) oldCsi.ResetChildren();
+                                                UpdateEvent?.Invoke(oldCsi.Parent, new ShellItemUpdateEventArgs(oldCsi, CShItemUpdateType.Updated)); //this happens even for items that aren't actually updated!
+                                                updatedItem = oldCsi;
+                                                updateCount++;
+                                                operationType = 'u';
+                                            }
                                         }
 
                                         Marshal.FreeCoTaskMem(newPidl);
@@ -2175,7 +2138,7 @@ namespace WindowsApiLib.Shell
                     {
                         var folder = this.IsFolder ? this : this.Parent;
 
-                        if (updateCount == 1)
+                        if (updateCount == 1) //todo: change this to handle small numbers of changes without a full refresh
                         {
                             switch (operationType)
                             {
@@ -2318,7 +2281,7 @@ namespace WindowsApiLib.Shell
             }
             CShellItem itm;
 
-            var pidls = GetPidlsOfCurrentFolder(flags);
+            var pidls = CShellItemFactory.GetPidlsOfFolder(this, flags);
 
             //new
             //var cshItems = CShellItemFactory.CreateCShItems(pidls, this);
@@ -2341,123 +2304,6 @@ namespace WindowsApiLib.Shell
 
             return items;
         }
-
-        /// <summary>
-        /// Given a relative PIDL (relative to Me.Folder) determine if item is a Folder.
-        /// </summary>
-        /// <param name="ptr">A relative PIDL, relative to Me.Folder</param>
-        /// <returns>True if item is a Folder, False is item is NOT a Folder.</returns>
-        /// <remarks>Container files (such as .zip or .cab) are marked as a "Folder" in WinXP and above, so
-        /// some further testing must be done on XP and above systems. We define such items as non-Folders.</remarks>
-        private bool IsFolderRel(IntPtr ptr)
-        {
-            bool IsFolderRelRet = default;
-            IsFolderRelRet = false;         // assume it is not
-            var attrFlag = SFGAO.FOLDER | SFGAO.STREAM;
-            // Note: for GetAttributesOf, we must provide an array, in all cases with 1 element
-            var aPidl = new IntPtr[1];
-            aPidl[0] = ptr;
-            Folder.GetAttributesOf(1, aPidl, ref attrFlag); //todo: change this to use the attributes field
-            if (((attrFlag & SFGAO.FOLDER) != 0) && !((attrFlag & SFGAO.STREAM) != 0))         // XP or above
-            {
-                IsFolderRelRet = true;
-            }
-
-            return IsFolderRelRet;
-        }
-
-        /// <summary>
-        /// Returns the requested Items of this Folder as a List of relative PIDLs 
-        /// (caller must free the pidls after use).
-        /// </summary>
-        /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
-        /// <returns>On error, returns an empty (count=0) List. Otherwise, returns the relative PIDLs of
-        /// the requested (via flags param) items in this Folder.</returns>
-        private List<IntPtr> GetPidlsOfCurrentFolder(SHCONTF flags)
-        {
-            List<IntPtr> rVal= new List<nint>(0);
-            int HR;
-            IEnumIDList IEnum = null;
-            // UPDATE: Vista and above strictly respect the SHCONTF flags. The "flags" param is now used only to determine what user wants
-            HR = Folder.EnumObjects(0, flags, ref IEnum);     // new code (12/11/09)
-
-            if (HR == NOERROR)
-            {
-                var ptr = IntPtr.Zero;
-                int itemCnt;
-                HR = IEnum.Next(1, out ptr, out itemCnt);
-                rVal = new List<nint>(itemCnt);
-
-                while (HR == NOERROR && itemCnt > 0 && !ptr.Equals(IntPtr.Zero))
-                {
-                    bool includeFolders = (flags & SHCONTF.FOLDERS) != 0;
-                    bool includeNonFolders = (flags & SHCONTF.NONFOLDERS) != 0;
-
-                    if (!includeFolders && !includeNonFolders)
-                    {
-                        // Nothing is allowed, so we can reject without checking item type.
-                        Marshal.FreeCoTaskMem(ptr);
-                    }
-                    else if (includeFolders && includeNonFolders)
-                    {
-                        // Everything is allowed, so no need to check item type.
-                        rVal.Add(ptr);
-                    }
-                    else
-                    {
-                        // Only one category is allowed; now we need to know what this item is.
-                        bool itemIsFolder = IsFolderRel(ptr); //don't do this earlier so we can sometimes avoid the expense
-
-                        if ((itemIsFolder && !includeFolders) || (!itemIsFolder && !includeNonFolders))
-                            Marshal.FreeCoTaskMem(ptr);
-                        else
-                            rVal.Add(ptr);
-                    }
-
-                    ptr = IntPtr.Zero;
-                    itemCnt = 0;
-                    HR = IEnum.Next(1, out ptr, out itemCnt);
-                }
-                if (HR != 1)
-                    goto HRError; // 1 means no more
-            }
-            else
-            {
-                goto HRError;
-            }
-            // Normal Exit
-        NORMAL:
-            if (!(IEnum == null))
-                Marshal.ReleaseComObject(IEnum);
-            return rVal;
-
-            // Error Exit for all Com errors
-        HRError:
-            // not ready disks will return the following error
-            // If HR = &HFFFFFFFF800704C7 Then
-            // GoTo NORMAL
-            // ElseIf HR = &HFFFFFFFF80070015 Then
-            // GoTo NORMAL
-            // 'unavailable net resources will return these
-            // ElseIf HR = &HFFFFFFFF80040E96 Or HR = &HFFFFFFFF80040E19 Then
-            // GoTo NORMAL
-            // ElseIf HR = &HFFFFFFFF80004001 Then 'Certain "Not Implemented" features will return this
-            // GoTo NORMAL
-            // Sharepoint folders return this at the end of the enum
-            if ((HR == (unchecked((long)0xFFFFFFFF80004005))))
-            {
-                goto NORMAL;
-                // ElseIf HR = &HFFFFFFFF800704C6 Then
-                // GoTo NORMAL
-            }
-#if DEBUG
-            // If Not IsNothing(IEnum) Then Marshal.ReleaseComObject(IEnum)
-            // Marshal.ThrowExceptionForHR(HR)
-#endif
-            rVal = new List<IntPtr>(); // sometimes it is a non-fatal error,ignored
-            goto NORMAL;
-        }
-
 
         private void GetSize()
         {
@@ -2506,7 +2352,7 @@ namespace WindowsApiLib.Shell
                 dwAttr = FILE_ATTRIBUTE_NORMAL;
             }
 
-            var hr = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+            var hr = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
             
             m_DisplayName = shfi.szDisplayName;
             m_TypeName = shfi.szTypeName;

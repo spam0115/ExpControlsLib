@@ -1,6 +1,7 @@
 ﻿using Microsoft.Win32.SafeHandles;
 using System.Runtime.InteropServices;
 using System.Text;
+using static WindowsApiLib.Shell.ShellAPI;
 
 namespace WindowsApiLib.Shell
 {
@@ -31,10 +32,10 @@ namespace WindowsApiLib.Shell
         public const int DRAGDROP_S_CANCEL = 0x40101;
         public const int DRAGDROP_S_USEDEFAULTCURSORS = 0x40102;
 
-        public static int cbFileInfo = Marshal.SizeOf(typeof(SHFILEINFO));
-        public static int cbMenuItemInfo = Marshal.SizeOf(typeof(MENUITEMINFO));
+        public static int SHFILEINFO_size = Marshal.SizeOf(typeof(SHFILEINFO));
+        public static int MENUITEMINFO_size = Marshal.SizeOf(typeof(MENUITEMINFO));
+        public static int CMInvokeCommandInfoEx_size = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx));
         // Public Const cbTpmParams As Integer = Marshal.SizeOf(GetType(TPMPARAMS))
-        public static int cbInvokeCommand = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx));
 
         // ListView Message Constants
         public const int LVM_FIRST = 0x1000;
@@ -753,6 +754,19 @@ namespace WindowsApiLib.Shell
             [MarshalAs(UnmanagedType.LPStruct)] Guid riid,
             out IShellItem ppv);
 
+        // SHGetDataFromIDList format values
+        internal const int SHGDFIL_FINDDATA = 1; //pv should point to a WIN32_FIND_DATA
+        internal const int SHGDFIL_NETRESOURCE = 2; //pv should point to a NETRESOURCE
+        internal const int SHGDFIL_DESCRIPTIONID = 3; //pv should point to a SHDESCRIPTIONID
+
+        [DllImport("shell32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
+        internal static extern int SHGetDataFromIDListW(
+            [MarshalAs(UnmanagedType.Interface)] IShellFolder psf,
+            IntPtr pidl,          // relative child PIDL
+            int nFormat,          // e.g. SHGDFIL_FINDDATA
+            out WIN32_FIND_DATAW pv,
+            int cb);               // Marshal.SizeOf<WIN32_FIND_DATAW>()
+
         #endregion
 
         #region        SHGetRealIDL
@@ -1109,7 +1123,7 @@ namespace WindowsApiLib.Shell
             var uFlags = SHGFI.PIDL | SHGFI.DISPLAYNAME | SHGFI.TYPENAME;
             // uFlags = uFlags Or SHGFI.SYSICONINDEX
             int dwAttr = 0;
-            res = SHGetFileInfo(ppidl, dwAttr, ref shfi, cbFileInfo, uFlags);
+            res = SHGetFileInfo(ppidl, dwAttr, ref shfi, SHFILEINFO_size, uFlags);
             Marshal.FreeCoTaskMem(ppidl);
             return shfi.szDisplayName + "  (" + shfi.szTypeName + ")";
         }

@@ -115,7 +115,7 @@ namespace WindowsApiLib.Shell
             var shfi = new SHFILEINFO();
             var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
             int dwAttr = 0;
-            SHGetFileInfo(tmpPidl, dwAttr, ref shfi, cbFileInfo, dwflag);
+            SHGetFileInfo(tmpPidl, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
 
             IShellFolder iShellFolder = null;
             HR = SHGetDesktopFolder(ref iShellFolder);
@@ -532,6 +532,99 @@ namespace WindowsApiLib.Shell
 
 
         /// <summary>
+        /// Returns the requested Items of this Folder as a List of relative PIDLs 
+        /// (caller must free the pidls after use).
+        /// </summary>
+        /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
+        /// <returns>On error, returns an empty (count=0) List. Otherwise, returns the relative PIDLs of
+        /// the requested (via flags param) items in this Folder.</returns>
+        public static List<IntPtr> GetPidlsOfFolder(CShellItem csi, SHCONTF flags)
+        {
+            const int S_OK = 0;
+            const int S_FALSE = 1;
+            const uint BATCH_SIZE = 64;
+
+            List<IntPtr> listPidls = new List<IntPtr>(0);
+            int HR;
+            IEnumIDList IEnum = null;
+
+            listPidls = new List<IntPtr>();
+
+            try
+            {
+                HR = csi.Folder.EnumObjects(0, flags, ref IEnum);
+                if (HR != S_OK)
+                    return listPidls;
+
+                bool includeFolders = (flags & SHCONTF.FOLDERS) != 0;
+                bool includeNonFolders = (flags & SHCONTF.NONFOLDERS) != 0;
+
+                IntPtr[] batch = new IntPtr[BATCH_SIZE];
+                uint fetched = 0;
+
+                while (true)
+                {
+                    // IMPORTANT: This assumes your interop signature supports array/batch Next (see note below).
+                    HR = IEnum.Next(BATCH_SIZE, batch, out fetched);
+
+                    // Any COM error besides S_FALSE(end) should go to error path.
+                    if (HR != S_OK && HR != S_FALSE) // UPDATE: Vista and above strictly respect the SHCONTF flags. The "flags" param is now used only to determine what user wants
+                    {
+                        // Sharepoint folders return this at the end of the enum
+                        if (HR == unchecked((int)0x80004005))
+                            break;
+                        else
+                            listPidls = new List<IntPtr>(); // sometimes it is a non-fatal error, ignored
+                        break;
+                    }
+
+                    // Handle partial batches (fetched may be < BATCH_SIZE).
+                    for (uint i = 0; i < fetched; i++)
+                    {
+                        IntPtr ptr = batch[i];
+                        batch[i] = IntPtr.Zero; // clear slot immediately
+
+                        if (ptr == IntPtr.Zero)
+                            continue;
+
+                        if (!includeFolders && !includeNonFolders)
+                        {
+                            Marshal.FreeCoTaskMem(ptr);
+                        }
+                        else if (includeFolders && includeNonFolders)
+                        {
+                            listPidls.Add(ptr);
+                        }
+                        else // Only one category is allowed; now we need to know what this item is.
+                        {
+                            bool itemIsFolder = IsFolderRel(csi, ptr); // only when needed
+                            if ((itemIsFolder && !includeFolders) || (!itemIsFolder && !includeNonFolders))
+                                Marshal.FreeCoTaskMem(ptr);
+                            else
+                                listPidls.Add(ptr);
+                        }
+                    }
+
+                    // S_FALSE means end of enumeration (possibly with a short final batch already processed).
+                    if (HR == S_FALSE)
+                        break;
+
+                    // Defensive guard against unusual providers returning S_OK with 0 items.
+                    if (fetched == 0)
+                        break;
+                }
+            }
+            finally
+            {
+                if (IEnum != null)
+                    Marshal.ReleaseComObject(IEnum);
+            }
+            return listPidls;
+
+        }
+
+
+        /// <summary>
         /// Returns the requested Items of the given Folder as a CShitemCollection
         /// </summary>
         /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
@@ -547,7 +640,7 @@ namespace WindowsApiLib.Shell
             // Debug.WriteLine("GPtrRel " & Now().Subtract(StTime).TotalMilliseconds.ToString & " ms")
             // StTime = Now()
             // For Each ptr In content
-            foreach (IntPtr ptr in GetContentPtrs(csi, flags))
+            foreach (IntPtr ptr in GetPidlsOfFolder(csi, flags))
             {
                 if (ptr == IntPtr.Zero)                                               // 11/09/2013 - Investigate other
                 {
@@ -604,104 +697,13 @@ namespace WindowsApiLib.Shell
         #region Private methods
 
         /// <summary>
-        /// Returns the requested Items of this Folder as a List of relative PIDLs 
-        /// (caller must free the pidls after use).
-        /// </summary>
-        /// <param name="csi">The CShellItem of the Folder to be enumerated</param>
-        /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
-        /// <returns>On error, returns an empty (count=0) List. Otherwise, returns the relative PIDLs of
-        /// the requested (via flags param) items in this Folder.</returns>
-        private List<IntPtr> GetContentPtrs(CShellItem csi, SHCONTF flags)
-        {
-            var rVal = new List<IntPtr>();
-            int HR;
-            IEnumIDList IEnum = null;
-            // UPDATE: Vista and above strictly respect the SHCONTF flags. The "flags" param is now used only to determine what user wants
-            HR = csi.Folder.EnumObjects(0, SHCONTF.INCLUDEHIDDEN | SHCONTF.FOLDERS | SHCONTF.NONFOLDERS, ref IEnum);     // new code (12/11/09)
-                                                                                                                     // HR = Me.Folder.EnumObjects(0, flags, IEnum)    'Old Code
-            if (HR == NOERROR)
-            {
-                var ptr = IntPtr.Zero;
-                int itemCnt;
-                HR = IEnum.Next(1, out ptr, out itemCnt);
-                while (HR == NOERROR && itemCnt > 0 && !ptr.Equals(IntPtr.Zero))
-                {
-                    bool includeFolders = (flags & SHCONTF.FOLDERS) != 0;
-                    bool includeNonFolders = (flags & SHCONTF.NONFOLDERS) != 0;
-
-                    if (!includeFolders && !includeNonFolders)
-                    {
-                        // Nothing is allowed, so we can reject without checking item type.
-                        Marshal.FreeCoTaskMem(ptr);
-                    }
-                    else if (includeFolders && includeNonFolders)
-                    {
-                        // Everything is allowed, so no need to check item type.
-                        rVal.Add(ptr);
-                    }
-                    else
-                    {
-                        // Only one category is allowed; now we need to know what this item is.
-                        bool itemIsFolder = IsFolderRel(csi, ptr); //don't do this earlier so we can sometimes avoid the expense
-
-                        if ((itemIsFolder && !includeFolders) || (!itemIsFolder && !includeNonFolders))
-                            Marshal.FreeCoTaskMem(ptr);
-                        else
-                            rVal.Add(ptr);
-                    }
-
-                    ptr = IntPtr.Zero;
-                    itemCnt = 0;
-                    HR = IEnum.Next(1, out ptr, out itemCnt);
-                }
-                if (HR != 1)
-                    goto HRError; // 1 means no more
-            }
-            else
-            {
-                goto HRError;
-            }
-            // Normal Exit
-        NORMAL:
-            if (!(IEnum == null))
-                Marshal.ReleaseComObject(IEnum);
-            return rVal;
-
-            // Error Exit for all Com errors
-        HRError:
-            // not ready disks will return the following error
-            // If HR = &HFFFFFFFF800704C7 Then
-            // GoTo NORMAL
-            // ElseIf HR = &HFFFFFFFF80070015 Then
-            // GoTo NORMAL
-            // 'unavailable net resources will return these
-            // ElseIf HR = &HFFFFFFFF80040E96 Or HR = &HFFFFFFFF80040E19 Then
-            // GoTo NORMAL
-            // ElseIf HR = &HFFFFFFFF80004001 Then 'Certain "Not Implemented" features will return this
-            // GoTo NORMAL
-            // Sharepoint folders return this at the end of the enum
-            if ((HR == (unchecked((long)0xFFFFFFFF80004005))))
-            {
-                goto NORMAL;
-                // ElseIf HR = &HFFFFFFFF800704C6 Then
-                // GoTo NORMAL
-            }
-#if DEBUG
-            // If Not IsNothing(IEnum) Then Marshal.ReleaseComObject(IEnum)
-            // Marshal.ThrowExceptionForHR(HR)
-#endif
-            rVal = new List<IntPtr>(); // sometimes it is a non-fatal error,ignored
-            goto NORMAL;
-        }
-
-        /// <summary>
         /// Given a relative PIDL (relative to Me.Folder) determine if item is a Folder.
         /// </summary>
         /// <param name="ptr">A relative PIDL, relative to Me.Folder</param>
         /// <returns>True if item is a Folder, False is item is NOT a Folder.</returns>
         /// <remarks>Container files (such as .zip or .cab) are marked as a "Folder" in WinXP and above, so
         /// some further testing must be done on XP and above systems. We define such items as non-Folders.</remarks>
-        private bool IsFolderRel(CShellItem csi, IntPtr ptr)
+        private static bool IsFolderRel(CShellItem csi, IntPtr ptr)
         {
             bool IsFolderRelRet = default;
             IsFolderRelRet = false;         // assume it is not

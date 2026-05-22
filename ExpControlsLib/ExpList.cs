@@ -726,7 +726,7 @@ namespace ExpControlsLib
 
             if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(_currentFolderCsi.Files);
 
-            if ((dirList.Count + fileList.Count) == 0)
+            if ((dirList.Count + fileList.Count) == 0) //no items
             {
                 if (RequestListViewRefresh(null, !samePath))
                 {
@@ -756,10 +756,15 @@ namespace ExpControlsLib
                 var combinedLvi = new List<ListViewItem>(combList.Count);
                 int topIndex = this.GetIndexOfFirstVisible();
 
+                _itemIndex.Clear();
                 foreach (CShellItem item in combList)
                 {
                     ListViewItem lvi = MakeLVItem(item);
-                    _itemIndex[item.FullPath] = lvi;
+                    if (!_itemIndex.TryAdd(item.FullPath, lvi))
+                    {
+                        _itemIndex[item.FullPath] = lvi;
+                    }
+
                     combinedLvi.Add(lvi);
                 }
 
@@ -943,7 +948,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="item">The <see cref="CShellItem"/> to search for.</param>
         /// <returns>The matching <see cref="ListViewItem"/>, or null if not found.</returns>
-        private ListViewItem FindLVItem(CShellItem item)
+        private ListViewItem? FindLVItem(CShellItem item)
         {
             if (_itemIndex.TryGetValue(item.FullPath, out var lvi))
                 return lvi;
@@ -1060,13 +1065,32 @@ namespace ExpControlsLib
 
                     case CShItemUpdateType.Deleted:
                         {
-                            var lvi = FindLVItem(e.Item);
-                            if (lvi != null)
+                            if (e.Item is null)
+                            {
+                                Debug.WriteLine("ExpList received DELETED event but no item was specified.");
+                                    return;
+                            }
+
+                            //var lvi = FindLVItem(e.Item);
+                            var lvi = e.Item.LVItem;
+                            if (lvi == null) //deletion messages get sent twice.  The second time the item has an index of -1
+                            {
+                                lvi = FindLVItem(e.Item);
+                            }
+
+                            if (lvi != null && lvi.Index >= 0) //deletion messages get sent twice.  The second time the item has an index of -1
                             {
                                 int index = lvi.Index;
                                 bool wasSelected = lvi.Selected;
                                 _itemIndex.Remove(e.Item.FullPath);
-                                _listView.Items.Remove(lvi);
+                                try
+                                {
+                                    _listView.Items.Remove(lvi);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.WriteLine("Exception while removing item from listview.  " + ex.ToString());
+                                }
                                 if (wasSelected && _listView.SelectedItems.Count == 0 && _listView.Items.Count > 0)
                                 {
                                     int nextIndex = Math.Min(index, _listView.Items.Count - 1);
@@ -1074,6 +1098,7 @@ namespace ExpControlsLib
                                     _listView.Items[nextIndex].Focused = true;
                                 }
                             }
+
                             break;
                         }
 
@@ -1292,22 +1317,55 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Refresh by path string.
+        /// Refresh by display name string.  This is very inefficient.  Avoid this function.
         /// </summary>
-        public ListViewItem RefreshItem(string fileName)
+        public ListViewItem? RefreshItemByDisplayName(string fileName)
         {
             // Try to find the item by its display name using the index values
-            var lvi = _itemIndex.Values.FirstOrDefault(i => i.Tag is CShellItem c &&
-                    string.Equals(c.DisplayName, fileName, StringComparison.OrdinalIgnoreCase));
+            //var lvi = _itemIndex.Values.FirstOrDefault(i => i.Tag is CShellItem c &&
+            //        string.Equals(c.DisplayName, fileName, StringComparison.OrdinalIgnoreCase));
+            var key = _itemIndex.Keys.FirstOrDefault(k => k.EndsWith(Path.DirectorySeparatorChar + fileName));
 
-            if (lvi is null)
+            if (key is not null)
             {
-                return null;
-            }
-            if (lvi.Tag is CShellItem csi)
-                UpdateLviUsingCsi(lvi, csi);
+                var lvi = _itemIndex[key];
+                if (lvi is null) return null;
 
-            return lvi;
+                if (lvi.Tag is CShellItem csi)
+                    UpdateLviUsingCsi(lvi, csi);
+
+                return lvi;
+            }
+            else return null;
+        }
+
+        public ListViewItem? RefreshItemByFullPath(string path)
+        {
+            if (_itemIndex.TryGetValue(path, out ListViewItem? lvi))
+            {
+                if (lvi is null) return null;
+
+                if (lvi.Tag is CShellItem csi)
+                    UpdateLviUsingCsi(lvi, csi);
+
+                return lvi;
+            }
+            else return null;
+        }
+
+        public ListViewItem? RefreshItem(CShellItem? item)
+        {
+            if (item is null) return null;
+
+            if (_itemIndex.TryGetValue(item.FullPath, out ListViewItem? lvi))
+            {
+                if (lvi is null) return null;
+
+                UpdateLviUsingCsi(lvi, item);
+
+                return lvi;
+            }
+            else return null;
         }
 
         #endregion
@@ -1874,7 +1932,7 @@ namespace ExpControlsLib
                         goto CLEANUP;
                     case CMD.REFRESH:
                         // Refresh the folder contents and re-sort the ListView items.
-                        _currentFolderCsi?.UpdateRefresh();
+                        _currentFolderCsi?.ConditionalUpdate();
                         SortLVItems();
                         goto CLEANUP;
                     case CMD.SELECT_ALL:
@@ -1985,7 +2043,7 @@ namespace ExpControlsLib
 
             if (e.KeyCode == Keys.F5)
             {
-                _currentFolderCsi?.UpdateRefresh();
+                _currentFolderCsi?.ConditionalUpdate();
                 SortLVItems();
             }
 
@@ -2034,7 +2092,7 @@ namespace ExpControlsLib
             else if (e.KeyCode == Keys.Delete)
             {
                 WinMenu("delete");
-                if (_listView.SelectedItems.Count > 150) _currentFolderCsi?.UpdateRefresh();
+                if (_listView.SelectedItems.Count > 150) _currentFolderCsi?.ConditionalUpdate();
             }
 
             OnKeyUp(e);
