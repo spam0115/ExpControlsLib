@@ -807,7 +807,7 @@ namespace ExpControlsLib
             {
                 if (e.Node.GetNodeCount(false) != System.IO.Directory.GetDirectories(CSI.FullPath).Length)
                 {
-                    CSI.ConditionalUpdate(false, true);
+                    CSI.SelectiveFolderUpdate(false, true);
                 }
             }
             // **********

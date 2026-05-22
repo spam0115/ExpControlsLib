@@ -434,7 +434,7 @@ namespace WindowsApiLib.Shell
             PIDL = 0x8,                  // pszPath is a pidl 
             USEFILEATTRIBUTES = 0x10,    // use passed dwFileAttribute 
             ADDOVERLAYS = 0x20,          // apply the appropriate overlays
-            OVERLAYINDEX = 0x40         // Get the index of the overlay
+            OVERLAYINDEX = 0x40          // Get the index of the overlay
         }
         #endregion
 

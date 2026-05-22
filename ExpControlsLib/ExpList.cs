@@ -1932,7 +1932,7 @@ namespace ExpControlsLib
                         goto CLEANUP;
                     case CMD.REFRESH:
                         // Refresh the folder contents and re-sort the ListView items.
-                        _currentFolderCsi?.ConditionalUpdate();
+                        _currentFolderCsi?.SelectiveFolderUpdate();
                         SortLVItems();
                         goto CLEANUP;
                     case CMD.SELECT_ALL:
@@ -2043,7 +2043,7 @@ namespace ExpControlsLib
 
             if (e.KeyCode == Keys.F5)
             {
-                _currentFolderCsi?.ConditionalUpdate();
+                _currentFolderCsi?.SelectiveFolderUpdate();
                 SortLVItems();
             }
 
@@ -2092,7 +2092,7 @@ namespace ExpControlsLib
             else if (e.KeyCode == Keys.Delete)
             {
                 WinMenu("delete");
-                if (_listView.SelectedItems.Count > 150) _currentFolderCsi?.ConditionalUpdate();
+                if (_listView.SelectedItems.Count > 150) _currentFolderCsi?.SelectiveFolderUpdate();
             }
 
             OnKeyUp(e);

@@ -18,12 +18,15 @@ namespace WindowsApiLib.Shell
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
     public class CShellItemHierachyManager
     {
-        public CShellItem Root {  get; set; }
+        public object Lock = new object();
+
+        public CShellItem Root { get; set; }
         public CShellItem? CurrentFolder { get; set; }
         public string? CurrentPath { get {
                 if (CurrentFolder?.PIDL == null) return string.Empty;
                 return CPidl.ToString(CurrentFolder.PIDL);
             } }
+
 
         public CShellItemHierachyManager(CShellItem? root = null) {
             this.Root = root;
@@ -108,7 +111,7 @@ namespace WindowsApiLib.Shell
         }
 
 
-        public CShellItem AddToHierarchy(CShellItem csi)
+        public CShellItem Add(CShellItem csi)
         {
             var result = FindOrAdd(csi.PIDL, out CShellItem parent);
             return result;

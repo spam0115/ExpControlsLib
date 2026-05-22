@@ -184,6 +184,57 @@ namespace WindowsApiLib.Shell
         }
 
         #region            IconIndex properties
+
+        /// <summary>
+        /// The Index of the "normal" Icon into the list maintained by SystemImageListManager and
+        /// used for the IconIndex in ListViewItems and TreeNodes.
+        /// </summary>
+        /// <value></value>
+        /// <returns>The "normal" IconIndex as used by ListViewItems and TreeNodes</returns>
+        /// <remarks></remarks>
+        public int IconIndexNormal
+        {
+            get
+            {
+                if (m_IconIndexNormal < 0)
+                {
+                    if (!m_HasDispType)
+                        SetDispType();
+                    m_IconIndexNormal = SystemImageListManager.GetIconIndex(this);
+                }
+                return m_IconIndexNormal;
+            }
+        }
+
+        /// <summary>
+        /// The Index of the "Open" Icon into the list maintained by SystemImageListManager and
+        /// used for the IconIndex in ListViewItems and TreeNodes.
+        /// </summary>
+        /// <value></value>
+        /// <returns>The "Open" IconIndex as used by ListViewItems and TreeNodes</returns>
+        /// <remarks></remarks>
+        public int IconIndexOpen
+        {
+            get
+            {
+                if (m_IconIndexOpen < 0)
+                {
+                    if (!m_HasDispType)
+                        SetDispType();
+                    if (!m_IsDisk && m_IsFileSystem && m_IsFolder)
+                    {
+                        m_IconIndexOpen = SystemImageListManager.GetIconIndex(this, true);
+                    }
+                    else
+                    {
+                        m_IconIndexOpen = m_IconIndexNormal;
+                    }
+                }
+                return m_IconIndexOpen;
+            }
+            set;
+        }
+
         /// <summary>
         /// Should not be directly referenced by the application.<br />
         /// Contains the base IconIndex of the "normal" Icon in the System ImageList 
@@ -205,7 +256,7 @@ namespace WindowsApiLib.Shell
                     var shfi = new SHFILEINFO();
                     var dwflag = SHGFI.PIDL | SHGFI.SYSICONINDEX;
                     int dwAttr = 0;
-                    if (m_IsFileSystem & !m_IsFolder)
+                    if (m_IsFileSystem && !m_IsFolder)
                     {
                         dwflag = dwflag | SHGFI.USEFILEATTRIBUTES;
                         dwAttr = FILE_ATTRIBUTE_NORMAL;
@@ -233,7 +284,7 @@ namespace WindowsApiLib.Shell
                 {
                     if (!m_HasDispType)
                         SetDispType();
-                    if (!m_IsDisk & m_IsFileSystem & m_IsFolder)
+                    if (!m_IsDisk && m_IsFileSystem && m_IsFolder)
                     {
                         var dwflag = SHGFI.SYSICONINDEX | SHGFI.PIDL;
                         var shfi = new SHFILEINFO();
@@ -258,52 +309,6 @@ namespace WindowsApiLib.Shell
 
 
         #region Public Properties
-
-
-        // Private Shared m_ExtDict As New Dictionary(Of String, Integer)
-
-        // ''' <summary>
-        // ''' The following optimization of IconIndexNormal is a successful but invalid way of optimizing the initial fetch of
-        // ''' IconIndexNormal. It is successful because it reduces Icon fetch time by 2/3 (2 seconds vs 6 seconds in 3000 file test dir on WHS1)
-        // ''' but is invalid since all of a file type will have the same Icon - the first one seen - 
-        // ''' this is really bad for .exe and .dll files and for certain image file types (eg .bmp, .ico, .png).
-        // ''' These Icons in a normal Win7 (at least) system will actually be a view of the Image which is very handy for most purposes.
-        // ''' The code avoids the trap of renamed link files, but cannot, without boosting the time and complexity, avoid the Image file
-        // ''' problem. It is worth noting that .bmp and .png files display, each with a single image using the normal SystemImageListManager
-        // ''' optimization - though .ico files show each with its' own unique icon - hmmm - probably need a different API call, or at least
-        // ''' an additional flag bit set. TBD. Note that in .bmp and .png files with normal SystemImageListManager optimization show a 
-        // ''' unique per type icon that is the old, regular icon.
-        // ''' </summary>
-        // ''' <value></value>
-        // ''' <returns></returns>
-        // ''' <remarks></remarks>
-        // Public ReadOnly Property IconIndexNormal() As Integer
-        // Get
-        // If m_IconIndexNormal < 0 Then
-        // If Not m_HasDispType Then SetDispType()
-        // Dim shfi As New SHFILEINFO()
-        // Dim dwflag As SHGFI = SHGFI.PIDL Or _
-        // SHGFI.SYSICONINDEX
-        // Dim dwAttr As Integer = 0
-        // Dim Ext As String
-        // If m_IsFileSystem And Not m_IsFolder Then
-        // dwflag = dwflag Or SHGFI.USEFILEATTRIBUTES
-        // dwAttr = FILE_ATTRIBUTE_NORMAL
-        // Ext = IO.Path.GetExtension(m_DisplayName)
-        // If m_ExtDict.ContainsKey(Ext) Then
-        // m_IconIndexNormal = m_ExtDict(Ext)
-        // End If
-        // End If
-        // If m_IconIndexNormal < 0 Then         'it won't be if set above
-        // Dim H As IntPtr = SHGetFileInfo(m_Pidl, dwAttr, shfi, cbFileInfo, dwflag)
-        // m_IconIndexNormal = shfi.iIcon
-        // If Ext IsNot Nothing AndAlso Not Me.IsLink AndAlso Ext <> "" Then m_ExtDict.Add(Ext, m_IconIndexNormal) 'Only set if should be in ExtDict, but isn't yet
-        // End If
-        // End If
-        // Return m_IconIndexNormal
-        // End Get
-        // End Property
-
 
         /// <summary>
         /// Property used to store information returned by FindFirstFile/FindNextFile API call.
@@ -759,55 +764,6 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        /// <summary>
-        /// The Index of the "normal" Icon into the list maintained by SystemImageListManager and
-        /// used for the IconIndex in ListViewItems and TreeNodes.
-        /// </summary>
-        /// <value></value>
-        /// <returns>The "normal" IconIndex as used by ListViewItems and TreeNodes</returns>
-        /// <remarks></remarks>
-        public int IconIndexNormal
-        {
-            get
-            {
-                if (m_IconIndexNormal < 0)
-                {
-                    if (!m_HasDispType)
-                        SetDispType();
-                    m_IconIndexNormal = SystemImageListManager.GetIconIndex(this);
-                }
-                return m_IconIndexNormal;
-            }
-        }
-
-        /// <summary>
-        /// The Index of the "Open" Icon into the list maintained by SystemImageListManager and
-        /// used for the IconIndex in ListViewItems and TreeNodes.
-        /// </summary>
-        /// <value></value>
-        /// <returns>The "Open" IconIndex as used by ListViewItems and TreeNodes</returns>
-        /// <remarks></remarks>
-        public int IconIndexOpen
-        {
-            get
-            {
-                if (m_IconIndexOpen < 0)
-                {
-                    if (!m_HasDispType)
-                        SetDispType();
-                    if (!m_IsDisk & m_IsFileSystem & m_IsFolder)
-                    {
-                        m_IconIndexOpen = SystemImageListManager.GetIconIndex(this, true);
-                    }
-                    else
-                    {
-                        m_IconIndexOpen = m_IconIndexNormal;
-                    }
-                }
-                return m_IconIndexOpen;
-            }
-            set;
-        }
 
         #region Drag Ops Properties
 
@@ -1928,7 +1884,7 @@ namespace WindowsApiLib.Shell
         {
             if (ReferenceEquals(CSI, CShellItemFactory.RecycleBin)) return;
 
-            CSI.ConditionalUpdate();
+            CSI.SelectiveFolderUpdate();
         }
 
 
@@ -1958,7 +1914,7 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Refreshes the information for this item from the shell and raises an Update event.
         /// </summary>
-        public bool ConditionalUpdate(bool UpdateFiles = true, bool UpdateFolders = true)
+        public bool SelectiveFolderUpdate(bool UpdateFiles = true, bool UpdateFolders = true)
         {
             int updateCount = 0;
             char operationType = ' ';
@@ -2182,7 +2138,7 @@ namespace WindowsApiLib.Shell
 
         #region    Private Methods
 
-        private void ResetInfo()
+        internal void ResetInfo()
         {
             m_HasDispType = false;
             m_IsReadOnlySetup = false;
@@ -2193,7 +2149,7 @@ namespace WindowsApiLib.Shell
             ResetIconIndex();
         }
         
-        private void ResetChildren()
+        internal void ResetChildren()
         {
             // propogate changes to the known children
             if (m_Files is not null)
@@ -2426,3 +2382,50 @@ namespace WindowsApiLib.Shell
     }
 
 }
+
+
+
+
+// Private Shared m_ExtDict As New Dictionary(Of String, Integer)
+
+// ''' <summary>
+// ''' The following optimization of IconIndexNormal is a successful but invalid way of optimizing the initial fetch of
+// ''' IconIndexNormal. It is successful because it reduces Icon fetch time by 2/3 (2 seconds vs 6 seconds in 3000 file test dir on WHS1)
+// ''' but is invalid since all of a file type will have the same Icon - the first one seen - 
+// ''' this is really bad for .exe and .dll files and for certain image file types (eg .bmp, .ico, .png).
+// ''' These Icons in a normal Win7 (at least) system will actually be a view of the Image which is very handy for most purposes.
+// ''' The code avoids the trap of renamed link files, but cannot, without boosting the time and complexity, avoid the Image file
+// ''' problem. It is worth noting that .bmp and .png files display, each with a single image using the normal SystemImageListManager
+// ''' optimization - though .ico files show each with its' own unique icon - hmmm - probably need a different API call, or at least
+// ''' an additional flag bit set. TBD. Note that in .bmp and .png files with normal SystemImageListManager optimization show a 
+// ''' unique per type icon that is the old, regular icon.
+// ''' </summary>
+// ''' <value></value>
+// ''' <returns></returns>
+// ''' <remarks></remarks>
+// Public ReadOnly Property IconIndexNormal() As Integer
+// Get
+// If m_IconIndexNormal < 0 Then
+// If Not m_HasDispType Then SetDispType()
+// Dim shfi As New SHFILEINFO()
+// Dim dwflag As SHGFI = SHGFI.PIDL Or _
+// SHGFI.SYSICONINDEX
+// Dim dwAttr As Integer = 0
+// Dim Ext As String
+// If m_IsFileSystem And Not m_IsFolder Then
+// dwflag = dwflag Or SHGFI.USEFILEATTRIBUTES
+// dwAttr = FILE_ATTRIBUTE_NORMAL
+// Ext = IO.Path.GetExtension(m_DisplayName)
+// If m_ExtDict.ContainsKey(Ext) Then
+// m_IconIndexNormal = m_ExtDict(Ext)
+// End If
+// End If
+// If m_IconIndexNormal < 0 Then         'it won't be if set above
+// Dim H As IntPtr = SHGetFileInfo(m_Pidl, dwAttr, shfi, cbFileInfo, dwflag)
+// m_IconIndexNormal = shfi.iIcon
+// If Ext IsNot Nothing AndAlso Not Me.IsLink AndAlso Ext <> "" Then m_ExtDict.Add(Ext, m_IconIndexNormal) 'Only set if should be in ExtDict, but isn't yet
+// End If
+// End If
+// Return m_IconIndexNormal
+// End Get
+// End Property

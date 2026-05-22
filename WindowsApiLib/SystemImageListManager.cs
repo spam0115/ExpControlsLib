@@ -51,7 +51,7 @@ namespace WindowsApiLib
         private static IntPtr m_lgImgList = IntPtr.Zero; // Handle to System Large ImageList
         private static IntPtr m_xlgImgList = IntPtr.Zero; // Handle to System XtraLarge ImageList
         private static IntPtr m_jumboImgList = IntPtr.Zero; // Handle to System Jumbo ImageList
-        private static readonly Hashtable m_Table = new Hashtable(128);
+        private static readonly Dictionary<int, int> m_Table = new();
         private static readonly object SILMLock = new object();
         // Private Shared m_Mutex As New Mutex()
 
@@ -211,126 +211,147 @@ namespace WindowsApiLib
             if (item is null) return 0;
 
             Initialize();
-            bool HasOverlay = false;  // true if it's an overlay
-            int rVal;     // The returned Index
 
-            var dwflag = SHGFI.SYSICONINDEX | SHGFI.PIDL | SHGFI.ICON;
-            int dwAttr = 0;
-            // build Key into HashTable for this Item
-            int Key = Convert.ToInt32(!GetOpenIcon ? item.IconIndexNormalOrig * 256 : item.IconIndexOpenOrig * 256);
+            // Build shell flags + packed key flags
+            SHGFI dwflag = SHGFI.PIDL | SHGFI.SYSICONINDEX | SHGFI.ICON;
+            int keyFlags = 0;
+            bool hasOverlayOrVariant = false;
+
+            if (item.IsLink)
             {
-                ref var withBlock = ref item;
-                if (withBlock.IsLink)
+                keyFlags |= 1;
+                dwflag |= SHGFI.LINKOVERLAY;
+                hasOverlayOrVariant = true;
+            }
+
+            if (item.IsShared)
+            {
+                keyFlags |= 2;
+                dwflag |= SHGFI.ADDOVERLAYS;
+                hasOverlayOrVariant = true;
+            }
+
+            if (GetSelectedIcon)
+            {
+                keyFlags |= 4;
+                dwflag |= SHGFI.SELECTED;
+                hasOverlayOrVariant = true; // selected isn't overlay, but treated similarly
+            }
+
+            int baseOrigIndex = GetOpenIcon ? item.IconIndexOpenOrig : item.IconIndexNormalOrig;
+            int key = (baseOrigIndex << 8) | keyFlags;
+
+            // Fast cache path
+            if (m_Table.TryGetValue(key, out int cached))
+            {
+                mCnt += 1;
+                return cached;
+            }
+
+            // For non-overlay/non-variant icons, the mapped index is the base index
+            if (!hasOverlayOrVariant)
+            {
+                int directIndex = key >> 8; // == baseOrigIndex
+                // Double-check in case another thread populated it
+                if (!m_Table.TryGetValue(key, out cached))
                 {
-                    Key = Key | 1;
-                    dwflag = dwflag | SHGFI.LINKOVERLAY;
-                    HasOverlay = true;
-                }
-                if (withBlock.IsShared)
-                {
-                    Key = Key | 2;
-                    dwflag = dwflag | SHGFI.ADDOVERLAYS;
-                    HasOverlay = true;
-                }
-                if (GetSelectedIcon)
-                {
-                    Key = Key | 4;
-                    dwflag = dwflag | SHGFI.SELECTED;
-                    HasOverlay = true;   // not really an overlay, but handled the same
-                }
-                if (m_Table.ContainsKey(Key))
-                {
-                    rVal = Convert.ToInt32(m_Table[Key]);
-                    mCnt += 1;
-                }
-                else if (!HasOverlay)  // for non-overlay icons, we already have
-                {
-                    rVal = Key / 256;        // the right index -- put in table
-                    m_Table[Key] = rVal;
+                    m_Table[key] = directIndex;
                     bCnt += 1;
+                    return directIndex;
                 }
-                else // don't have iconindex for an overlay, get it. 
-                {
-                    // This is the tricky part -- add overlaid Icon to systemimagelist
-                    // use of SmallImageList from Calum McLellan
-                    var shfi = new SHFILEINFO();
-                    var shfi_small = new SHFILEINFO();
-                    IntPtr HR;
-                    IntPtr HR_SMALL;
-                    if (withBlock.IsFileSystem & !withBlock.IsDisk & !withBlock.IsFolder)
-                    {
-                        dwflag = dwflag | SHGFI.USEFILEATTRIBUTES;
-                        dwAttr = FILE_ATTRIBUTE_NORMAL;
-                    }
-                    // UPDATE: OpenIcon with overlay
-                    if (GetOpenIcon)
-                    {
-                        dwflag = dwflag | SHGFI.OPENICON;
-                    }
-                    //todo: i think these flags are already in CShellItem, no need to fetch them again
-                    HR = SHGetFileInfo(withBlock.PIDL, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
-                    HR_SMALL = SHGetFileInfo(withBlock.PIDL, dwAttr, ref shfi_small, SHFILEINFO_size, SHGFI.SMALLICON); //can't get big and small icon at once
-                    // m_Mutex.WaitOne()
-                    int rVal2;
-                    lock (SILMLock)
-                    {
-                        rVal = ImageList_ReplaceIcon(m_smImgList, -1, shfi_small.hIcon);
-                        Debug.Assert(rVal > -1, "Failed to add overlaid small icon");
-                        rVal2 = ImageList_ReplaceIcon(m_lgImgList, -1, shfi.hIcon);
-                        Debug.Assert(rVal2 > -1, "Failed to add overlaid large icon");
-                        Debug.Assert(rVal == rVal2, "Small & Large IconIndices are Different");
 
-                        if (m_xlgImgList != IntPtr.Zero)  // Not set on Windows earlier than XP
+                mCnt += 1;
+                return cached;
+            }
+
+            int dwAttr = 0;
+            if (item.IsFileSystem && !item.IsDisk && !item.IsFolder)
+            {
+                dwflag |= SHGFI.USEFILEATTRIBUTES;
+                dwAttr = FILE_ATTRIBUTE_NORMAL;
+            }
+
+            if (GetOpenIcon)
+            {
+                dwflag |= SHGFI.OPENICON;
+            }
+
+            SHFILEINFO shfiLarge = new SHFILEINFO();
+            SHFILEINFO shfiSmall = new SHFILEINFO();
+
+            IntPtr hrLarge = SHGetFileInfo(item.PIDL, dwAttr, ref shfiLarge, SHFILEINFO_size, dwflag);
+            IntPtr hrSmall = SHGetFileInfo(item.PIDL, dwAttr, ref shfiSmall, SHFILEINFO_size, dwflag | SHGFI.SMALLICON);
+
+            if (hrLarge == IntPtr.Zero || hrSmall == IntPtr.Zero || shfiLarge.hIcon == IntPtr.Zero || shfiSmall.hIcon == IntPtr.Zero)
+            {
+                if (shfiLarge.hIcon != IntPtr.Zero) DestroyIcon(shfiLarge.hIcon);
+                if (shfiSmall.hIcon != IntPtr.Zero) DestroyIcon(shfiSmall.hIcon);
+                throw new ApplicationException($"SHGetFileInfo failed for {item.DisplayName}");
+            }
+
+            int rVal;
+            int rValLarge;
+
+            try
+            {
+                lock (SILMLock)
+                {                    
+                    rVal = ImageList_ReplaceIcon(m_smImgList, -1, shfiSmall.hIcon);
+                    Debug.Assert(rVal > -1, "Failed to add overlaid small icon");
+
+                    rValLarge = ImageList_ReplaceIcon(m_lgImgList, -1, shfiLarge.hIcon);
+                    Debug.Assert(rValLarge > -1, "Failed to add overlaid large icon");
+                    Debug.Assert(rVal == rValLarge, "Small & Large IconIndices are Different");
+
+                    ILD overlayFlags = ILD.NORMAL;
+                    if (item.IsLink) overlayFlags = (ILD)((int)overlayFlags | INDEXTOOVERLAYMASK(ovlLink));
+                    if (item.IsShared) overlayFlags = (ILD)((int)overlayFlags | INDEXTOOVERLAYMASK(ovlShare));
+
+                    if (m_xlgImgList != IntPtr.Zero)
+                    {
+                        int nonOverlayIndex = GetNonOverlayIndex(ref item, GetOpenIcon);
+                        IntPtr hIcon = ImageList_GetIcon(m_xlgImgList, nonOverlayIndex, overlayFlags);
+                        try
                         {
-                            var flags = ILD.NORMAL; // = 0    '5/9/2013 - JDP
-                            if (item.IsLink)
-                                flags = (ILD)((int)flags | INDEXTOOVERLAYMASK(ovlLink));
-                            if (item.IsShared)
-                                flags = (ILD)((int)flags | INDEXTOOVERLAYMASK(ovlShare));
-                            var hIcon = IntPtr.Zero;
-                            rVal = GetNonOverlayIndex(ref item, GetOpenIcon);
-                            hIcon = ImageList_GetIcon(m_xlgImgList, rVal, flags);
-                            rVal = ImageList_ReplaceIcon(m_xlgImgList, -1, hIcon);
-                            int rCnt = ImageList_GetImageCount(m_jumboImgList);
-                            Debug.Assert(rVal > -1, "Failed to add overlaid xl icon");
-                            DestroyIcon(hIcon);
-                            Debug.Assert(rVal == rVal2, "XL & Large Icon Indices are Different");
+                            int xlIndex = ImageList_ReplaceIcon(m_xlgImgList, -1, hIcon);
+                            Debug.Assert(xlIndex > -1, "Failed to add overlaid xl icon");
+                            Debug.Assert(xlIndex == rValLarge, "XL & Large Icon Indices are Different");
                         }
-                        // This fails at rVal = ImageList_ReplaceIcon (incomplete implementation of interface??)
-                        if (m_jumboImgList != IntPtr.Zero)  // Not set on Windows earlier than XP
+                        finally
                         {
-                            var hIcon = IntPtr.Zero;
-                            rVal = GetNonOverlayIndex(ref item, GetOpenIcon);
-
-                            var flags = ILD.NORMAL;
-                            if (item.IsLink)
-                                flags = (ILD)((int)flags | INDEXTOOVERLAYMASK(ovlLink));
-                            if (item.IsShared)
-                                flags = (ILD)((int)flags | INDEXTOOVERLAYMASK(ovlShare));
-                            hIcon = ImageList_GetIcon(m_jumboImgList, rVal, flags);
-                            rVal = ImageList_ReplaceIcon(m_jumboImgList, -1, hIcon);
-                            if (rVal < 0)        // 5/11/2013 - JDP
-                            {
-                                rVal = rVal2;        // 5/11/2013 - JDP
-                            }                  // 5/11/2013 - JDP
-                            Debug.Assert(rVal > -1, "Failed to add overlaid Jumbo icon");
-                            DestroyIcon(hIcon);
-                            Debug.Assert(rVal == rVal2, "Jumbo & Large Icon Indices are Different");
-                            // END UPDATE
+                            if (hIcon != IntPtr.Zero) DestroyIcon(hIcon);
                         }
-
                     }
-                    // m_Mutex.ReleaseMutex()
-                    DestroyIcon(shfi.hIcon);
-                    DestroyIcon(shfi_small.hIcon);
-                    if (rVal < 0 || rVal != rVal2)
+
+                    if (m_jumboImgList != IntPtr.Zero)
                     {
+                        int nonOverlayIndex = GetNonOverlayIndex(ref item, GetOpenIcon);
+                        IntPtr hIcon = ImageList_GetIcon(m_jumboImgList, nonOverlayIndex, overlayFlags);
+                        try
+                        {
+                            int jumboIndex = ImageList_ReplaceIcon(m_jumboImgList, -1, hIcon);
+                            if (jumboIndex < 0) jumboIndex = rValLarge; // preserve prior fallback behavior
+                            Debug.Assert(jumboIndex > -1, "Failed to add overlaid Jumbo icon");
+                            Debug.Assert(jumboIndex == rValLarge, "Jumbo & Large Icon Indices are Different");
+                        }
+                        finally
+                        {
+                            if (hIcon != IntPtr.Zero) DestroyIcon(hIcon);
+                        }
+                    }
+
+                    if (rVal < 0 || rVal != rValLarge)
                         throw new ApplicationException("Failed to add Icon for " + item.DisplayName);
-                    }
-                    m_Table[Key] = rVal;
+
+                    m_Table[key] = rVal;
+                    return rVal;
                 }
             }
-            return rVal;
+            finally
+            {
+                if (shfiLarge.hIcon != IntPtr.Zero) DestroyIcon(shfiLarge.hIcon);
+                if (shfiSmall.hIcon != IntPtr.Zero) DestroyIcon(shfiSmall.hIcon);
+            }
         }
 
         // UPDATE: Add GetNonOverlayIndex
@@ -342,17 +363,16 @@ namespace WindowsApiLib
             int rVal;     // The returned Index
 
             // build Key into HashTable for this Item
-            int Key = Convert.ToInt32(!GetOpenIcon ? item.IconIndexNormalOrig * 256 : item.IconIndexOpenOrig * 256);
+            int key = Convert.ToInt32(!GetOpenIcon ? item.IconIndexNormalOrig * 256 : item.IconIndexOpenOrig * 256);
 
-            if (m_Table.ContainsKey(Key))
+            if (m_Table.TryGetValue(key, out rVal))
             {
-                rVal = Convert.ToInt32(m_Table[Key]);
                 mCnt += 1;
             }
             else                        // for non-overlay icons, we already have
             {
-                rVal = Key / 256;        // the right index -- put in table
-                m_Table[Key] = rVal;
+                rVal = key / 256;        // the right index -- put in table
+                m_Table[key] = rVal;
                 bCnt += 1;
             }
             return rVal;
