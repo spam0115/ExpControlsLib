@@ -150,6 +150,42 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
+        /// Returns true if the given absolute PIDL belongs to (is a descendant of) the Recycle Bin,
+        /// or IS the Recycle Bin itself.
+        /// Compares only the first two PIDL segments (Desktop + Recycle Bin) using raw byte comparison
+        /// to avoid shell API calls (ILIsEqual/ILIsParent).
+        /// </summary>
+        private static unsafe bool IsInRecycleBin(IntPtr pidl)
+        {
+            if (pidl == IntPtr.Zero) return false;
+
+            var recycleBinPidl = CShellItemFactory.RecycleBin.PIDL;
+            if (recycleBinPidl == IntPtr.Zero) return false;
+
+            // Read segment sizes from the Recycle Bin PIDL (cached pointer, stable for app lifetime)
+            ushort cb1 = (ushort)Marshal.ReadInt16(recycleBinPidl, 0);
+            if (cb1 == 0) return false; // empty pidl
+            ushort cb2 = (ushort)Marshal.ReadInt16(recycleBinPidl, cb1);
+            if (cb2 == 0) return false; // only one segment (desktop root)
+            int totalLen = cb1 + cb2;
+
+            // Verify the incoming PIDL has at least as many bytes
+            ushort inCb1 = (ushort)Marshal.ReadInt16(pidl, 0);
+            if (inCb1 == 0) return false;
+            ushort inCb2 = (ushort)Marshal.ReadInt16(pidl, inCb1);
+            if (inCb2 == 0) return false;
+
+            // Raw byte compare of the first two segments
+            byte* pRecycle = (byte*)recycleBinPidl;
+            byte* pIn = (byte*)pidl;
+            for (int i = 0; i < totalLen; i++)
+            {
+                if (pRecycle[i] != pIn[i]) return false;
+            }
+            return true;
+        }
+
+        /// <summary>
         /// CShItemUpdater.WndProc processes WM.SH_NOTIFY messages requested by the SHChangeNotifyRegister 
         /// API call in the CShItemUpdater constructor.
         /// Messages are processed as follows:
@@ -211,6 +247,12 @@ namespace WindowsApiLib.Shell
                         if (shNotify.dwItem1 == IntPtr.Zero) 
                         {
                             Debug.WriteLine(", dwItem1 is Zero (Returning)");
+                            return;
+                        }
+
+                        if (IsInRecycleBin(shNotify.dwItem1))
+                        {
+                            Debug.WriteLine(", dwItem1 is in Recycle Bin (Ignoring)");
                             return;
                         }
 
@@ -410,10 +452,10 @@ namespace WindowsApiLib.Shell
                                     }
                                     else
                                     {
-                                        var item = HierachyManager.FindOrAdd(shNotify.dwItem1, out CShellItem parent);
+                                        var item = HierachyManager.FindCShItem(shNotify.dwItem1);
                                         if (item is null) 
                                         {
-                                            Debug.WriteLine("  [UPDATEITEM] item is null (FindOrAdd failed)");
+                                            Debug.WriteLine("  [UPDATEITEM] item was not found");
                                             return;
                                         }
                                         

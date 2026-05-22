@@ -723,6 +723,32 @@
             <param name="includeFolder">True to include subdirectories in the list.</param>
             <param name="reload">True to force a reload even if the same item was previously selected.</param>
         </member>
+        <member name="M:ExpControlsLib.ExpList.EnterListViewEnumeration">
+            <summary>
+            Increments the enumeration depth counter. While depth > 0, DoItemUpdate will
+            defer shell item modifications to prevent reentrant mutation of _listView.Items.
+            Must be paired with <see cref="M:ExpControlsLib.ExpList.ExitListViewEnumeration"/>.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ExitListViewEnumeration">
+            <summary>
+            Decrements the enumeration depth counter. When it reaches 0, any deferred
+            shell item updates are drained and applied.
+            Must be paired with <see cref="M:ExpControlsLib.ExpList.EnterListViewEnumeration"/>.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.DrainDeferredUpdates">
+            <summary>
+            Processes all deferred shell item updates that were queued while an enumeration was in progress.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.InvokeWhenListViewReady(System.Action)">
+            <summary>
+            Executes the action immediately if no enumeration is in progress, otherwise
+            defers it via BeginInvoke to run after the enumeration completes.
+            Use this for ListView modification operations outside of DoItemUpdate.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ExpList.RequestListViewRefresh(System.Windows.Forms.ListViewItem[],System.Boolean)">
             <summary>
             This refreshes the ListView with new items.

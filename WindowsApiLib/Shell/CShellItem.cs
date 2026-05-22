@@ -565,7 +565,7 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                if (!m_IsFolder)
+                if (!m_IsFolder) //only folders have child elements
                 {
                     return (CShellItem[])Array.CreateInstance(typeof(CShellItem), 0);    // mod 6/27/09
                 }
@@ -1999,11 +1999,11 @@ namespace WindowsApiLib.Shell
         {
             var items = new CShellItemCollection(this);
             if (Folder is null)
-            {
-                return items; // deal with certain Virtual Folders which have no ishellfolder?
-            }
-            CShellItem itm;
+                return items; // when does this ever occur?
 
+            Debug.WriteLine($"Getting contents for folder '{this.FullPath}'.");
+
+            CShellItem itm;
             var pidls = CShellItemFactory.GetPidlsOfFolder(this, flags);
 
             //new

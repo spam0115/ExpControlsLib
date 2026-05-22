@@ -47,7 +47,10 @@ namespace ExpControlsLib
 
             _listView.BeginUpdate();
             foreach (ListViewItem item in _listView.Items)
+            {
+                if (item is null) continue;
                 item.ImageIndex = -1;
+            }
             _listView.EndUpdate();
         }
 
@@ -64,7 +67,10 @@ namespace ExpControlsLib
             _listView.LargeImageList = imageList;
 
             foreach (ListViewItem item in _listView.Items)
+            {
+                if (item is null) continue;
                 item.ImageIndex = -1;
+            }
         }
 
         /// <summary>
