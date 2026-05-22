@@ -304,7 +304,7 @@ namespace WindowsApiLib.Shell
 #if DEBUG
                                             Debug.WriteLine("Received DELETE/RMDIR message: '" + childItem.FullPath + "'");
 #endif
-                                            childItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Deleted);
+                                            Update(childItem, IntPtr.Zero, CShellItem.CShItemUpdateType.Deleted);
                                         }
                                         else
                                         {
@@ -329,7 +329,7 @@ namespace WindowsApiLib.Shell
                                         if (item is not null)
                                         {
                                             Debug.WriteLine("  [RENAMEITEM] Item found: " + item.ItemPath + ". New PIDL: " + shNotify.dwItem2.ToString("X"));
-                                            item.Update(shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
+                                            Update(item, shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
                                         }
                                         else
                                         {
@@ -351,7 +351,7 @@ namespace WindowsApiLib.Shell
                                         if (HierachyManager?.CurrentFolder != null)
                                         {
                                             Debug.WriteLine("  [UPDATEDIR] Recieved UPDATEDIR message with no location specified. Trying to update current folder: " + HierachyManager.CurrentFolder.ItemPath);
-                                            HierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            Update(HierachyManager.CurrentFolder, default, CShellItem.CShItemUpdateType.UpdateDir);
                                         }
                                         else
                                         {
@@ -363,7 +363,7 @@ namespace WindowsApiLib.Shell
                                         if (HierachyManager?.CurrentFolder != null && CPidl.IsEqual(HierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
                                         {
                                             Debug.WriteLine("  [UPDATEDIR] Updating CurrentFolder: " + HierachyManager.CurrentFolder.ItemPath);
-                                            HierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            Update(HierachyManager.CurrentFolder, default, CShellItem.CShItemUpdateType.UpdateDir);
                                         }
                                         else
                                         {
@@ -376,7 +376,7 @@ namespace WindowsApiLib.Shell
                                         if (upCSI is not null)
                                         {
                                             Debug.WriteLine("  [UPDATEDIR] Found item: " + upCSI.ItemPath + ". Updating dir.");
-                                            upCSI.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            Update(upCSI, default, CShellItem.CShItemUpdateType.UpdateDir);
                                         }
                                         else
                                         {
@@ -420,11 +420,11 @@ namespace WindowsApiLib.Shell
                                         Debug.WriteLine("  [UPDATEITEM] Found/Added item: " + item.ItemPath + (item.IsFolder ? " (Folder)" : " (File)"));
                                         if (item.IsFolder)
                                         {
-                                            item.Update(default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            Update(item, default, CShellItem.CShItemUpdateType.UpdateDir);
                                         }
                                         else
                                         {
-                                            item.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
+                                            Update(item, IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
                                         }                                        
                                     }
                                     //if (shNotify.dwItem1 != IntPtr.Zero) Marshal.FreeCoTaskMem(shNotify.dwItem1); //Do NOT do this.  Crashes the app after startup.  The memory is still locked.
@@ -481,7 +481,7 @@ namespace WindowsApiLib.Shell
                                             if (!IsVistaOrAbove())  // 6/27/2012 - XP will not send an UPDATEITEM for Parent in this case, so we have to
                                             {
                                                 Debug.WriteLine("  [MKDIR] XP path: Updating parent.");
-                                                parentItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
+                                                Update(parentItem, IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
                                             }
                                         }
                                     }
@@ -505,7 +505,7 @@ namespace WindowsApiLib.Shell
                                         if (item is not null)
                                         {
                                             Debug.WriteLine("  [RENAMEFOLDER] Found item: " + item.ItemPath + ". New PIDL: " + shNotify.dwItem2.ToString("X"));
-                                            item.Update(shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
+                                            Update(item, shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
                                         }
                                         else
                                         {
@@ -552,7 +552,7 @@ namespace WindowsApiLib.Shell
                                             if (!IsVistaOrAbove())  // 6/27/2012 - XP will not send an UPDATEITEM for Parent in this case, so we have to
                                             {
                                                 Debug.WriteLine("  [RMDIR] XP path: Updating parent.");
-                                                parentItem.Update(IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
+                                                Update(parentItem, IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
                                             }
                                         }
                                     }
@@ -571,7 +571,7 @@ namespace WindowsApiLib.Shell
                                     if (mediaCSI is not null)
                                     {
                                         Debug.WriteLine("  [MEDIA CHANGE] Found item: " + mediaCSI.ItemPath + ". Updating.");
-                                        mediaCSI.Update(default, CShellItem.CShItemUpdateType.MediaChange);
+                                        Update(mediaCSI, default, CShellItem.CShItemUpdateType.MediaChange);
                                     }
                                     else
                                     {
@@ -587,7 +587,7 @@ namespace WindowsApiLib.Shell
                                     if (imgCSI is not null)
                                     {
                                         Debug.WriteLine("  [UPDATEIMAGE] Found item: " + imgCSI.ItemPath + ". Updating icon.");
-                                        imgCSI.Update(default, CShellItem.CShItemUpdateType.IconChange);
+                                        Update(imgCSI, default, CShellItem.CShItemUpdateType.IconChange);
                                     }
                                     else
                                     {
@@ -613,6 +613,153 @@ namespace WindowsApiLib.Shell
         }
 
 
+        //todo:move this into ShellController and CShellHierarchyManager
+        /// <summary>For internal use only<br />
+        /// Update is called by the CShItemUpdater Class when that Class receives a WM_Notify message. The purpose 
+        /// of this Class is to translate the information passed to it into the appropriate set of actions needed 
+        /// to maintain the internal cache and to, directly or indirectly (thru the routines it calls), Raise 
+        /// CShItemUpdate events to notify the using application of changes.
+        /// </summary>
+        /// <param name="changedPidl">The absolute PIDL of the affected item. The definition of "affected item" 
+        ///     varies with the type of change being reported.  This is only needed if the pidl changed due to 
+        ///     rename, move, etc.</param>
+        /// <param name="changeType">The type of change.</param>
+        /// <remarks>Serves as a bridge between CShItemUpdater and the CShellItem that should handle a change.</remarks>
+        internal void Update(CShellItem csi, IntPtr changedPidl, CShItemUpdateType changeType)
+        {
+            Debug.WriteLine("Entered CShellItemUpdater.Update: " + changeType.ToString());
+            switch (changeType)
+            {
+                case CShItemUpdateType.UpdateDir: // raised when content of a dir changes
+                    {
+                        DoUpdateDir(csi); // recursively check this Folder and all known sub-Folders for change     '5/21/2012
+                        break;
+                    }
+                case CShItemUpdateType.Updated: // raised when Attributes (Item or Items under a Folder) change
+                    {
+                        // Debug.WriteLine("Updated for " & Me.Path)
+                        csi.ResetInfo();
+                        // Previous versions called ResetChildren. Changed to UpdateRefresh - which impacts performance.
+                        // Decided for now (6/12/2012) to do neither, so commented it out. This message is often closely followed or preceeded
+                        // by an UPDATEDIR which will, in fact call UpdateRefresh which will also call ResetChildren in many cases.
+                        // Performance impact is greatly aggravated by the (common on Win7) closely paired UPDATEDIR and UPDATEITEM messages
+                        // on the same Folder, caused by the same change! Removing this code limits the impact.
+                        // If Me.IsFolder Then
+                        // 'Me.ResetChildren()     'Original code
+                        // 'Me.UpdateRefresh()     '6/3/2012
+                        // End If
+                        UpdateEvent?.Invoke(csi.Parent, new ShellItemUpdateEventArgs(csi, changeType));
+                        //todo: update thumbnail for item
+                        break;
+                    }
+                case CShItemUpdateType.Deleted:
+                    {
+                        csi.Parent?.RemoveItem(csi);
+                        //UpdateEvent?.Invoke(this, new ShellItemUpdateEventArgs(this, changeType)); //removeitem will invoke the event
+                        break;
+                    }
+                case CShItemUpdateType.Renamed:      // Item has been renamed or moved
+                    {
+                        IntPtr pidlRel = IntPtr.Zero, newIShellFolderPtr = IntPtr.Zero;
+                        var splitPidl = CPidl.Split(changedPidl);
+                        var oldParentCsi = csi.Parent;    // Save in case "renamed" to a new directory
+                        var allegedParentCsi = ShellController.Instance.HierachyManager.FindCShItem(splitPidl.ParentPidl);
+
+                        try
+                        {
+                            if (allegedParentCsi is null) // moved to a dir that is not yet in internal tree
+                            {
+                                csi.Parent.RemoveItem(csi);
+                                csi.m_Parent = null;
+                                csi.m_Pidl = changedPidl;
+                                //todo: shouldn't we add the newParentCsi to the tree at this point?
+                            }
+                            else if (SHGetRealIDL(allegedParentCsi.Folder, splitPidl.ChildPidl, out pidlRel) == S_OK) // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
+                            {
+                                Marshal.FreeCoTaskMem(csi.m_Pidl);
+                                csi.m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, pidlRel);  //Must do this!  newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID //don't do this: m_Pidl = changedPidl;
+
+                                if (ReferenceEquals(allegedParentCsi, csi.Parent)) //renamed
+                                {
+                                    csi.ResetInfo();         // Added for fix to the fix
+                                    csi.m_Path = CShellItemFactory.GetFullPath(csi); ;
+                                    UpdateEvent?.Invoke(oldParentCsi, new ShellItemUpdateEventArgs(csi, changeType));
+                                }
+                                else // item was moved, not renamed
+                                {
+                                    csi.Parent.RemoveItem(csi);
+                                    allegedParentCsi.AddItem(csi);
+
+                                    csi.m_Parent = allegedParentCsi;
+
+                                    csi.ResetInfo();
+                                    csi.m_Path = CShellItemFactory.GetFullPath(csi);
+
+                                    if (csi.IsFolder) //update children for folders
+                                    {
+                                        if (allegedParentCsi.Folder.BindToObject(pidlRel, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref newIShellFolderPtr) != S_OK) //get new ishellfolder interface object
+                                        {
+                                            Marshal.Release(newIShellFolderPtr);
+                                            return;
+                                        }
+                                        csi.m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newIShellFolderPtr, typeof(IShellFolder));
+                                        Marshal.Release(newIShellFolderPtr);
+
+                                        if (csi.m_Files is not null)
+                                        {
+                                            foreach (CShellItem item in csi.m_Files)
+                                                item.UpdateFolderPidlAndPath(); //update child paths
+                                        }
+                                        if (csi.m_Directories is not null)
+                                        {
+                                            foreach (CShellItem item in csi.m_Directories)
+                                                item.UpdateFolderPidlAndPath(); //update child paths
+                                        }
+                                    }
+                                    UpdateEvent?.Invoke(oldParentCsi, new ShellItemUpdateEventArgs(csi, changeType)); //tell both old and new locations about the change
+                                    UpdateEvent?.Invoke(allegedParentCsi, new ShellItemUpdateEventArgs(csi, changeType));
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            // Note: FreeCoTaskMem will ignore IntPtr.Zero
+                            if (pidlRel != IntPtr.Zero)
+                            {
+                                Marshal.FreeCoTaskMem(pidlRel);
+                            }
+                            Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
+                            Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
+                        }
+                        break;
+                    }
+                case CShItemUpdateType.IconChange:
+                    {
+                        // Debug.WriteLine("IconChange for " & Me.Path)
+                        csi.ResetInfo();
+                        UpdateEvent?.Invoke(csi.Parent, new ShellItemUpdateEventArgs(csi, changeType));
+                        //todo: update thumbnail for item
+                        break;
+                    }
+                case CShItemUpdateType.MediaChange:          // CD/DVD/External Drive/Etc Added or Removed
+                    {
+                        // Debug.WriteLine("MediaChange for " & Me.Path)
+                        csi.ClearItems(true, true);
+                        csi.ResetInfo();
+                        csi.m_Path = CShellItemFactory.GetFullPath(csi);
+                        UpdateEvent?.Invoke(csi.Parent, new ShellItemUpdateEventArgs(csi, changeType));
+                        break;
+                    }
+            }
+        }
+
+        private void DoUpdateDir(CShellItem CSI)
+        {
+            if (ReferenceEquals(CSI, CShellItemFactory.RecycleBin)) return;
+
+            SelectiveFolderUpdate(CSI, true, true);
+        }
+
         /// <summary>
         /// The UpdateRefresh function compares the Current content of the Folder with the
         /// current state of m_Directories and m_Files, adding/deleting CShItems as appropriate  (thus causing
@@ -634,217 +781,198 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Refreshes the information for this item from the shell and raises an Update event.
         /// </summary>
-        public int SelectiveFolderUpdate(CShellItem csi, bool UpdateFiles = true, bool UpdateFolders = true)
+        public int SelectiveFolderUpdate(CShellItem? csi, bool UpdateFiles = true, bool UpdateFolders = true)
         {
-            int updateCount = 0;
-            char operationType = ' ';
-            CShellItem updatedItem = null;
+            if (csi is null) return 0;
+            if (!csi.m_IsFolder) return 0;
 
-            if (csi.m_IsFolder)
+            var attrFlag = SHCONTF.INCLUDEHIDDEN;
+            if (csi.m_Files is not null && UpdateFiles)
+                attrFlag = attrFlag | SHCONTF.NONFOLDERS;
+            if (csi.m_Directories is not null && UpdateFolders)
+                attrFlag = attrFlag | SHCONTF.FOLDERS;
+            if (attrFlag == SHCONTF.INCLUDEHIDDEN)
+                return 0; // nothing loaded in the given csi yet.  we ignore csi's that haven't been loaded yet (usually loaded in the UI) because they are folders the user hasn't browsed to yet
+
+            var newPidls = CShellItemFactory.GetPidlsOfFolder(csi, attrFlag); // Relative PIDLs of current content
+
+            //the next bit is to prevent multiple instances of this function running at the same time on the same folder
+            List<(CShellItem, CShItemUpdateType)> operations;
+            bool lockTaken = false;
+            try
             {
-                var attrFlag = SHCONTF.INCLUDEHIDDEN;
-                if (csi.m_Files is not null && UpdateFiles)
-                    attrFlag = attrFlag | SHCONTF.NONFOLDERS;
-                if (csi.m_Directories is not null && UpdateFolders)
-                    attrFlag = attrFlag | SHCONTF.FOLDERS;
-                if (attrFlag == SHCONTF.INCLUDEHIDDEN)
-                    return 0; // nothing loaded in the given csi yet.  we ignore csi's that haven't been loaded yet (usually loaded in the UI) because they are folders the user hasn't browsed to yet
+                Monitor.TryEnter(csi, TimeSpan.FromMilliseconds(1), ref lockTaken);
+                if (!lockTaken)
+                    return 0;
 
-                var newPidls = CShellItemFactory.GetPidlsOfFolder(csi, attrFlag); // Relative PIDLs of current content
+                operations = CrossCheckOldAndNewFolderContents(csi, UpdateFiles, UpdateFolders, newPidls);
+            }
+            finally
+            {
+                if (lockTaken)
+                    Monitor.Exit(csi);
+            }
 
-#if DEBUG
-                //var counts = newPidls
-                //    .Select(p => new { length = CPidl.SegmentCount(p) })
-                //    .GroupBy(o => o.length)
-                //    .Select(g => new
-                //    {
-                //        Key = g.Key,
-                //        Count = g.Count()
-                //    }).ToList();
+            // 6/18/2012 - If something changed in this Folder, then Raise an Updated Event AFTER all Adds, Deletes, etc have been posted
+            // 6/18/2012 - One was previously Raised when working down the Tree from Me's Parent, but Adds, Deletes, etc details had not been posted
+            // 6/18/2012 - at that time. The App did not know HOW this Folder had changed (except for attributes)
+            // these invokes MUST be within the lock or else you will get delete all items in the folder from memory for unknown reasons
+            if (operations.Count > 0)
+            {
+                var folder = csi.IsFolder ? csi : csi.Parent;
 
-                //foreach (var count in counts)
-                //{
-                //    Debug.WriteLine($"new pidls: Length=={count.Key}, Count=={count.Count}");
-                //}
-#endif
-
-                lock (HierachyManager.Lock)
+                if (operations.Count < 100) //todo: change this to handle small numbers of changes without a full refresh
                 {
-                    try
+                    foreach (var (item, type) in operations)
                     {
-                        if (newPidls.Count < 1) // no items currently in Folder, so wipe prior contents
+                        
+                        switch (type)
                         {
-                            var invalidItems = new List<CShellItem>(); // Holds CShItems no longer present
-
-                            if (csi.m_Files is not null && UpdateFiles)
-                                invalidItems.AddRange(csi.m_Files.ToArray());
-                            if (csi.m_Directories is not null && UpdateFolders)
-                                invalidItems.AddRange(csi.m_Directories.ToArray());
-
-                            // any not found should be removed from my collections (raising event)
-                            if (invalidItems.Count > 0)
-                            {
-                                foreach (var item in invalidItems)
-                                {
-                                    csi.RemoveItem(item);
-                                    updateCount++;
-                                    operationType = 'd';
-                                }
-                            }
-                        }
-                        else
-                        {
-                            // Optimization: Use a dictionary to avoid O(N*M) search complexity.
-                            var oldCsiDic = new Dictionary<uint, CShellItem>();
-                            if (csi.m_Directories is not null && UpdateFolders)
-                            {
-                                foreach (var item in csi.m_Directories.Items)
-                                    oldCsiDic.Add(CPidl.HashPidlFastLastFull(item.LastPIDL), item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
-                            }
-                            if (csi.m_Files is not null && UpdateFiles)
-                            {
-                                foreach (var item in csi.m_Files.Items)
-                                    oldCsiDic.Add(CPidl.HashPidlFastLastFull(item.LastPIDL), item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
-                            }
-
-#if DEBUG
-                            Debug.WriteLine("oldCsiDic size: " + oldCsiDic.Count());
-                            Debug.WriteLine("newPidls size: " + newPidls.Count());
-
-                            //counts = oldCsiItems
-                            //    .Select(p => new { length = CPidl.SegmentCount(p.PIDL) })
-                            //    .GroupBy(o => o.length)          // SQL GROUP BY column
-                            //    .Select(g => new
-                            //    {
-                            //        Key = g.Key,
-                            //        Count = g.Count()
-                            //    }).ToList();
-
-                            //foreach (var count in counts)
-                            //{
-                            //    Debug.WriteLine($"old pidls - Length=={count.Key}: {count.Count}");
-                            //}
-#endif
-                            for (int i = 0; i < newPidls.Count; i++)
-                            {
-                                IntPtr newPidl = newPidls[i];
-                                uint hash = CPidl.HashPidlFastLastFull(newPidl);
-
-                                if (oldCsiDic.TryGetValue(hash, out CShellItem oldCsi))
-                                {
-                                    // found the same item
-                                    if (CPidl.IsEqual(oldCsi.LastPIDL, newPidl))
-                                    {
-                                        if (!ReferenceEquals(this, CShellItemFactory.RecycleBin))
-                                        {
-                                            bool doupdate = true;
-                                            if (csi.IsFileSystem)
-                                            {
-                                                if (ShellHelper.TryGetLastWriteTimeForPidl(csi.Folder, newPidl, out FILETIME lastWriteTime))
-                                                {
-                                                    var newTime = ShellHelper.FileTimeToLong(lastWriteTime);
-                                                    if (newTime <= csi.LastWriteTime.ToFileTimeUtc())
-                                                        doupdate = false;
-                                                }
-                                                //todo: maybe also do a date check for virtual items since people might be using their onedrives
-                                            }
-
-                                            if (doupdate)
-                                            {
-                                                oldCsi.ResetInfo();
-                                                if (oldCsi.IsFolder) oldCsi.ResetChildren();
-                                                UpdateEvent?.Invoke(oldCsi.Parent, new ShellItemUpdateEventArgs(oldCsi, CShItemUpdateType.Updated)); //this happens even for items that aren't actually updated!
-                                                updatedItem = oldCsi;
-                                                updateCount++;
-                                                operationType = 'u';
-                                            }
-                                        }
-
-                                        Marshal.FreeCoTaskMem(newPidl);
-                                        newPidls[i] = IntPtr.Zero; // Mark as processed
-                                        oldCsiDic.Remove(hash);
-
-                                        continue;
-                                    }
-                                }
-                                else //new item
-                                {
-                                    if (newPidl == IntPtr.Zero) continue;
-
-                                    try
-                                    {
-                                        var NewItem = CShellItemFactory.CreateCShItem(newPidl, csi);
-                                        HierachyManager.Add(NewItem);
-                                        updateCount++;
-                                        operationType = 'a';
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Debug.WriteLine("ERROR - Failed to add new CShellItem to internal tree.  : " + ex.ToString());
-                                    }
-                                }
-                            }
-
-                            //any items remaining in the dictionary have no match with the current state of the folder.  Remove.
-                            if (oldCsiDic.Count > 0)
-                            {
-                                foreach (var item in oldCsiDic.Values)
-                                {
-                                    csi.RemoveItem(item);
-                                    updateCount++;
-                                    operationType = 'd';
-                                    Debug.WriteLine("removed item from hierarchy '" + csi.DisplayName + "'");
-                                }
-                            }
-                        }
-                    }
-                    finally
-                    {
-                    }
-                } //end lock
-
-                // 6/18/2012 - If something changed in this Folder, then Raise an Updated Event AFTER all Adds, Deletes, etc have been posted
-                // 6/18/2012 - One was previously Raised when working down the Tree from Me's Parent, but Adds, Deletes, etc details had not been posted
-                // 6/18/2012 - at that time. The App did not know HOW this Folder had changed (except for attributes)
-                // these invokes MUST be within the lock or else you will get delete all items in the folder from memory for unknown reasons
-                if (updateCount > 0)
-                {
-                    var folder = csi.IsFolder ? csi : csi.Parent;
-
-                    if (updateCount == 1) //todo: change this to handle small numbers of changes without a full refresh
-                    {
-                        switch (operationType)
-                        {
-                            case 'a':
+                            case CShItemUpdateType.Created:
                                 UpdateEvent?.Invoke(csi.Parent, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.UpdateDir));
                                 break;
-                            case 'u':
-                                UpdateEvent?.Invoke(csi, new ShellItemUpdateEventArgs(updatedItem, CShItemUpdateType.Updated));
+                            case CShItemUpdateType.Updated:
+                                UpdateEvent?.Invoke(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Updated));
                                 break;
-                            case 'd':
+                            case CShItemUpdateType.Deleted:
                             default:
                                 UpdateEvent?.Invoke(csi.Parent, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.UpdateDir));
                                 break;
                         }
                     }
-                    else
-                    {
-                        UpdateEvent?.Invoke(folder, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.UpdateDir));
-                    }
-
-                    //if (Parent is null)
-                    //    UpdateEvent?.Invoke(ShellController.DesktopCSI, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
-                    //else
-                    //    UpdateEvent?.Invoke(Parent, new ShellItemUpdateEventArgs(this, CShItemUpdateType.Updated));
                 }
-
+                else
+                {
+                    UpdateEvent?.Invoke(folder, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.UpdateDir));
+                }
             }
 
-            return updateCount;
+            return operations.Count;
         }
 
+        public List<(CShellItem, CShItemUpdateType)> CrossCheckOldAndNewFolderContents(CShellItem csi, bool UpdateFiles, bool UpdateFolders, List<nint> newPidls)
+        {
+            var operations = new List<(CShellItem Item, CShItemUpdateType Type)>();
 
-    } //end CShellItemUpdater
+            lock (HierachyManager.Lock)
+            {
+                try
+                {
+                    if (newPidls.Count < 1) // no items currently in Folder, so wipe prior contents
+                    {
+                        var invalidItems = new List<CShellItem>(); // Holds CShItems no longer present
+
+                        if (csi.m_Files is not null && UpdateFiles)
+                            invalidItems.AddRange(csi.m_Files.ToArray());
+                        if (csi.m_Directories is not null && UpdateFolders)
+                            invalidItems.AddRange(csi.m_Directories.ToArray());
+
+                        // any not found should be removed from my collections (raising event)
+                        if (invalidItems.Count > 0)
+                        {
+                            foreach (var item in invalidItems)
+                            {
+                                csi.RemoveItem(item);
+                                operations.Add((item, CShItemUpdateType.Deleted));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Optimization: Use a dictionary to avoid O(N*M) search complexity.
+                        var oldCsiDic = new Dictionary<uint, CShellItem>();
+                        if (csi.m_Directories is not null && UpdateFolders)
+                        {
+                            foreach (var item in csi.m_Directories.Items)
+                                oldCsiDic.Add(CPidl.HashPidlFastLastFull(item.LastPIDL), item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
+                        }
+                        if (csi.m_Files is not null && UpdateFiles)
+                        {
+                            foreach (var item in csi.m_Files.Items)
+                                oldCsiDic.Add(CPidl.HashPidlFastLastFull(item.LastPIDL), item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
+                        }
+
+#if DEBUG
+                        Debug.WriteLine("oldCsiDic size: " + oldCsiDic.Count());
+                        Debug.WriteLine("newPidls size: " + newPidls.Count());
+#endif
+                        for (int i = 0; i < newPidls.Count; i++)
+                        {
+                            IntPtr newPidl = newPidls[i];
+                            uint hash = CPidl.HashPidlFastLastFull(newPidl);
+
+                            if (oldCsiDic.TryGetValue(hash, out CShellItem oldCsi))
+                            {
+                                // found the same item
+                                if (CPidl.IsEqual(oldCsi.LastPIDL, newPidl))
+                                {
+                                    if (!ReferenceEquals(csi, CShellItemFactory.RecycleBin))
+                                    {
+                                        bool doupdate = true;
+                                        if (csi.IsFileSystem)
+                                        {
+                                            if (ShellHelper.TryGetLastWriteTimeForPidl(csi.Folder, newPidl, out FILETIME lastWriteTime))
+                                            {
+                                                var newTime = ShellHelper.FileTimeToLong(lastWriteTime);
+                                                if (newTime <= csi.LastWriteTime.ToFileTimeUtc())
+                                                    doupdate = false;
+                                            }
+                                            //todo: maybe also do a date check for virtual items since people might be using their onedrives
+                                        }
+
+                                        if (doupdate)
+                                        {
+                                            oldCsi.ResetInfo();
+                                            if (oldCsi.IsFolder) oldCsi.ResetChildren();
+                                            UpdateEvent?.Invoke(oldCsi.Parent, new ShellItemUpdateEventArgs(oldCsi, CShItemUpdateType.Updated)); //this happens even for items that aren't actually updated!
+                                            operations.Add((oldCsi, CShItemUpdateType.Updated));
+                                        }
+                                    }
+
+                                    Marshal.FreeCoTaskMem(newPidl);
+                                    newPidls[i] = IntPtr.Zero; // Mark as processed
+                                    oldCsiDic.Remove(hash);
+
+                                    continue;
+                                }
+                            }
+                            else //new item
+                            {
+                                if (newPidl == IntPtr.Zero) continue;
+
+                                try
+                                {
+                                    var NewItem = CShellItemFactory.CreateCShItem(newPidl, csi);
+                                    HierachyManager.Add(NewItem);
+                                    operations.Add((NewItem, CShItemUpdateType.Created));
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.WriteLine("ERROR - Failed to add new CShellItem to internal tree.  : " + ex.ToString());
+                                }
+                            }
+                        }
+
+                        //any items remaining in the dictionary have no match with the current state of the folder.  Remove.
+                        if (oldCsiDic.Count > 0)
+                        {
+                            foreach (var item in oldCsiDic.Values)
+                            {
+                                csi.RemoveItem(item);
+                                operations.Add((item, CShItemUpdateType.Deleted));
+                                Debug.WriteLine("removed item from hierarchy '" + csi.DisplayName + "'");
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                }
+            } //end lock
+
+            return operations;
+        }
+    }
 
 #if DEBUG
     /// <summary>

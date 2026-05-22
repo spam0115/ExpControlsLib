@@ -909,18 +909,22 @@ namespace ExpControlsLib
 
             Rectangle clientRect = _listView.ClientRectangle;
             clientRect.Height *= 2; //preload beyond visual range
-            foreach (ListViewItem item in _listView.Items)
+            lock (_listView.Items)
             {
-                // If onlyVisible is true, skip items already loaded or not currently visible
-                if (onlyVisible && item.ImageIndex != -1) continue;
-                if (!clientRect.IntersectsWith(item.Bounds)) continue;
+                foreach (ListViewItem item in _listView.Items)
+                {
+                    if (item is null) continue;
+                    // If onlyVisible is true, skip items already loaded or not currently visible
+                    if (onlyVisible && item.ImageIndex != -1) continue;
+                    if (!clientRect.IntersectsWith(item.Bounds)) continue;
 
 #if DEBUG
-                Console.WriteLine("Getting thumbnail for item: " + item.Text);
-                //string? readable = CPidl.PidlToString(((CShellItem)item.Tag).PIDL);
+                    Console.WriteLine("Getting thumbnail for item: " + item.Text);
+                    //string? readable = CPidl.PidlToString(((CShellItem)item.Tag).PIDL);
 #endif
-                if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
-                    _thumbnailManager.RequestThumbnail(item, csi.FullPath, thumbnailSize);
+                    if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
+                        _thumbnailManager.RequestThumbnail(item, csi.FullPath, thumbnailSize);
+                }
             }
 
             //var l = _listView.Items.Cast<ListViewItem>().Select(item => item.ImageIndex).ToList();
@@ -1927,7 +1931,7 @@ namespace ExpControlsLib
                         goto CLEANUP;
                     case CMD.REFRESH:
                         // Refresh the folder contents and re-sort the ListView items.
-                        _currentFolderCsi?.SelectiveFolderUpdate();
+                        _shellController.ShellUpdater.SelectiveFolderUpdate(_currentFolderCsi);
                         SortLVItems();
                         goto CLEANUP;
                     case CMD.SELECT_ALL:
@@ -2038,7 +2042,7 @@ namespace ExpControlsLib
 
             if (e.KeyCode == Keys.F5)
             {
-                _currentFolderCsi?.SelectiveFolderUpdate();
+                _shellController.ShellUpdater.SelectiveFolderUpdate(_currentFolderCsi);
                 SortLVItems();
             }
 
@@ -2087,7 +2091,8 @@ namespace ExpControlsLib
             else if (e.KeyCode == Keys.Delete)
             {
                 WinMenu("delete");
-                if (_listView.SelectedItems.Count > 150) _currentFolderCsi?.SelectiveFolderUpdate();
+                if (_listView.SelectedItems.Count > 150)
+                    _shellController.ShellUpdater.SelectiveFolderUpdate(_currentFolderCsi);
             }
 
             OnKeyUp(e);
