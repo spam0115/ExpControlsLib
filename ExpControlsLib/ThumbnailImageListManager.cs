@@ -21,6 +21,7 @@ namespace ExpControlsLib
         private int _activeSize;
         private int _generation = 0;
         private readonly Dictionary<string, int> _imageIndexByKey = new Dictionary<string, int>();
+        private bool _addingImage = false;
 
         private sealed class ThumbnailRequestArgs
         {
@@ -39,13 +40,14 @@ namespace ExpControlsLib
 
         public void SetImageListSize(int thumbnailSize)
         {
+            if (_addingImage) return;
+
             _activeSize = thumbnailSize;
 
             var imageList = GetImageList(thumbnailSize);
 
-            _listView.LargeImageList = imageList;
-
             _listView.BeginUpdate();
+            _listView.LargeImageList = imageList;
             foreach (ListViewItem item in _listView.Items)
             {
                 if (item is null) continue;
@@ -212,7 +214,9 @@ namespace ExpControlsLib
         /// <param name="square"></param>
         private void ApplyThumbnailToUI(ThumbnailRequestArgs tag, Bitmap? square)
         {
-            
+            if (tag.Item is null || tag.Item.ListView != _listView)
+                return;
+
             if (square == null)
             {
                 tag.Item.ImageIndex = -1;
@@ -227,15 +231,21 @@ namespace ExpControlsLib
 
                 string key = CreateKey(tag);
                 if (!_imageIndexByKey.TryGetValue(key, out int index))
-                { 
-                    imageList.Images.Add(square);
-                    index = imageList.Images.Count - 1;  
-                    _imageIndexByKey[key] = index;
+                {
+                    _addingImage = true;
+                    try { 
+                        imageList.Images.Add(square);
+                        index = imageList.Images.Count - 1;
+                        _imageIndexByKey[key] = index;
+                    }
+                    finally { _addingImage = false; }
                 }
                 else
                 {
-                    var oldImage = imageList.Images[index]; //todo: this is very slow during folder refreshes
-                    imageList.Images[index] = square;
+                    var oldImage = imageList.Images[index];
+                    _addingImage = true;
+                    try { imageList.Images[index] = square; }
+                    finally { _addingImage = false; }
                     oldImage.Dispose();
                 }
 

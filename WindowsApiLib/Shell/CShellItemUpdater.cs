@@ -346,7 +346,7 @@ namespace WindowsApiLib.Shell
 #if DEBUG
                                             Debug.WriteLine("Received DELETE/RMDIR message: '" + childItem.FullPath + "'");
 #endif
-                                            Update(childItem, IntPtr.Zero, CShellItem.CShItemUpdateType.Deleted);
+                                            Update(childItem, IntPtr.Zero, CShItemUpdateType.Deleted);
                                         }
                                         else
                                         {
@@ -371,7 +371,7 @@ namespace WindowsApiLib.Shell
                                         if (item is not null)
                                         {
                                             Debug.WriteLine("  [RENAMEITEM] Item found: " + item.ItemPath + ". New PIDL: " + shNotify.dwItem2.ToString("X"));
-                                            Update(item, shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
+                                            Update(item, shNotify.dwItem2, CShItemUpdateType.Renamed);
                                         }
                                         else
                                         {
@@ -393,7 +393,7 @@ namespace WindowsApiLib.Shell
                                         if (HierachyManager?.CurrentFolder != null)
                                         {
                                             Debug.WriteLine("  [UPDATEDIR] Recieved UPDATEDIR message with no location specified. Trying to update current folder: " + HierachyManager.CurrentFolder.ItemPath);
-                                            Update(HierachyManager.CurrentFolder, default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            Update(HierachyManager.CurrentFolder, default, CShItemUpdateType.UpdateDir);
                                         }
                                         else
                                         {
@@ -405,7 +405,7 @@ namespace WindowsApiLib.Shell
                                         if (HierachyManager?.CurrentFolder != null && CPidl.IsEqual(HierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
                                         {
                                             Debug.WriteLine("  [UPDATEDIR] Updating CurrentFolder: " + HierachyManager.CurrentFolder.ItemPath);
-                                            Update(HierachyManager.CurrentFolder, default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            Update(HierachyManager.CurrentFolder, default, CShItemUpdateType.UpdateDir);
                                         }
                                         else
                                         {
@@ -418,7 +418,7 @@ namespace WindowsApiLib.Shell
                                         if (upCSI is not null)
                                         {
                                             Debug.WriteLine("  [UPDATEDIR] Found item: " + upCSI.ItemPath + ". Updating dir.");
-                                            Update(upCSI, default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            Update(upCSI, default, CShItemUpdateType.UpdateDir);
                                         }
                                         else
                                         {
@@ -443,7 +443,7 @@ namespace WindowsApiLib.Shell
                                             if (shNotify.dwItem2 != IntPtr.Zero) Debug.WriteLine("  [UPDATEITEM] : dwItem2=" + CPidl.ToString(shNotify.dwItem2));
 
                                             //Debug.WriteLine("  [UPDATEITEM] Updating CurrentFolder: " + HierachyManager.CurrentFolder.ItemPath);
-                                            //HierachyManager.CurrentFolder.Update(default, CShellItem.CShItemUpdateType.UpdateDir); //this is too expensive!  the update event happens too often
+                                            //HierachyManager.CurrentFolder.Update(default, CShItemUpdateType.UpdateDir); //this is too expensive!  the update event happens too often
                                         }
                                         else
                                         {
@@ -462,11 +462,11 @@ namespace WindowsApiLib.Shell
                                         Debug.WriteLine("  [UPDATEITEM] Found/Added item: " + item.ItemPath + (item.IsFolder ? " (Folder)" : " (File)"));
                                         if (item.IsFolder)
                                         {
-                                            Update(item, default, CShellItem.CShItemUpdateType.UpdateDir);
+                                            Update(item, default, CShItemUpdateType.UpdateDir);
                                         }
                                         else
                                         {
-                                            Update(item, IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
+                                            Update(item, IntPtr.Zero, CShItemUpdateType.Updated);
                                         }                                        
                                     }
                                     //if (shNotify.dwItem1 != IntPtr.Zero) Marshal.FreeCoTaskMem(shNotify.dwItem1); //Do NOT do this.  Crashes the app after startup.  The memory is still locked.
@@ -523,7 +523,7 @@ namespace WindowsApiLib.Shell
                                             if (!IsVistaOrAbove())  // 6/27/2012 - XP will not send an UPDATEITEM for Parent in this case, so we have to
                                             {
                                                 Debug.WriteLine("  [MKDIR] XP path: Updating parent.");
-                                                Update(parentItem, IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
+                                                Update(parentItem, IntPtr.Zero, CShItemUpdateType.Updated);
                                             }
                                         }
                                     }
@@ -547,7 +547,7 @@ namespace WindowsApiLib.Shell
                                         if (item is not null)
                                         {
                                             Debug.WriteLine("  [RENAMEFOLDER] Found item: " + item.ItemPath + ". New PIDL: " + shNotify.dwItem2.ToString("X"));
-                                            Update(item, shNotify.dwItem2, CShellItem.CShItemUpdateType.Renamed);
+                                            Update(item, shNotify.dwItem2, CShItemUpdateType.Renamed);
                                         }
                                         else
                                         {
@@ -594,7 +594,7 @@ namespace WindowsApiLib.Shell
                                             if (!IsVistaOrAbove())  // 6/27/2012 - XP will not send an UPDATEITEM for Parent in this case, so we have to
                                             {
                                                 Debug.WriteLine("  [RMDIR] XP path: Updating parent.");
-                                                Update(parentItem, IntPtr.Zero, CShellItem.CShItemUpdateType.Updated);
+                                                Update(parentItem, IntPtr.Zero, CShItemUpdateType.Updated);
                                             }
                                         }
                                     }
@@ -613,7 +613,7 @@ namespace WindowsApiLib.Shell
                                     if (mediaCSI is not null)
                                     {
                                         Debug.WriteLine("  [MEDIA CHANGE] Found item: " + mediaCSI.ItemPath + ". Updating.");
-                                        Update(mediaCSI, default, CShellItem.CShItemUpdateType.MediaChange);
+                                        Update(mediaCSI, default, CShItemUpdateType.MediaChange);
                                     }
                                     else
                                     {
@@ -629,7 +629,7 @@ namespace WindowsApiLib.Shell
                                     if (imgCSI is not null)
                                     {
                                         Debug.WriteLine("  [UPDATEIMAGE] Found item: " + imgCSI.ItemPath + ". Updating icon.");
-                                        Update(imgCSI, default, CShellItem.CShItemUpdateType.IconChange);
+                                        Update(imgCSI, default, CShItemUpdateType.IconChange);
                                     }
                                     else
                                     {
@@ -871,28 +871,28 @@ namespace WindowsApiLib.Shell
                         switch (type)
                         {
                             case CShItemUpdateType.Created:
-                                UpdateEvent?.Invoke(csi.Parent, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.UpdateDir));
+                                UpdateEvent?.Invoke(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Created));
                                 break;
                             case CShItemUpdateType.Updated:
                                 UpdateEvent?.Invoke(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Updated));
                                 break;
                             case CShItemUpdateType.Deleted:
                             default:
-                                UpdateEvent?.Invoke(csi.Parent, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.UpdateDir));
+                                UpdateEvent?.Invoke(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
                                 break;
                         }
                     }
                 }
                 else
                 {
-                    UpdateEvent?.Invoke(folder, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.UpdateDir));
+                    UpdateEvent?.Invoke(csi.Parent, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.UpdateDir));
                 }
             }
 
             return operations.Count;
         }
 
-        public List<(CShellItem, CShItemUpdateType)> CrossCheckOldAndNewFolderContents(CShellItem csi, bool UpdateFiles, bool UpdateFolders, List<nint> newPidls)
+        private List<(CShellItem, CShItemUpdateType)> CrossCheckOldAndNewFolderContents(CShellItem csi, bool UpdateFiles, bool UpdateFolders, List<nint> newPidls)
         {
             var operations = new List<(CShellItem Item, CShItemUpdateType Type)>();
 
@@ -1002,7 +1002,7 @@ namespace WindowsApiLib.Shell
                             {
                                 csi.RemoveItem(item);
                                 operations.Add((item, CShItemUpdateType.Deleted));
-                                Debug.WriteLine("removed item from hierarchy '" + csi.DisplayName + "'");
+                                Debug.WriteLine("removed item from hierarchy '" + item.DisplayName + "'");
                             }
                         }
                     }
@@ -1014,6 +1014,12 @@ namespace WindowsApiLib.Shell
 
             return operations;
         }
+
+        public static void InvokeEvent(object sender, ShellItemUpdateEventArgs e) //todo: change this to add the events to a queue because this class will eventually run on a separate thread
+        {
+            UpdateEvent.Invoke(sender, e);
+        }
+
     }
 
 #if DEBUG
@@ -1062,5 +1068,21 @@ namespace WindowsApiLib.Shell
         }
     }
 #endif
+
+    /// <summary>
+    /// CShItemUpdateType is an Enum of the various types of change that will be reported in a ShellItemUpdateEventArgs.
+    /// </summary>
+    /// <remarks>This Enum is also used by the CShItemUpdater Class to report change types to CShellItem.Update which passes it 
+    ///          on to the Application.</remarks>
+    public enum CShItemUpdateType
+    {
+        Created,
+        IconChange,
+        Updated,
+        UpdateDir,
+        Renamed,
+        Deleted,
+        MediaChange
+    }
 
 }

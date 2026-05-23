@@ -132,9 +132,8 @@ namespace ExpControlsLib
 
             StartUpDirectoryChanged += OnStartUpDirectoryChanged;
 
-            CShellItem.UpdateEvent += OnItemUpdate;            // 7/1/2012
+            CShellItemUpdater.UpdateEvent += OnItemUpdate;            // 7/1/2012
             expandNodeTimer.Tick += ExpandNodeTimer_Tick;
-
         }
 
         #endregion
@@ -1375,7 +1374,7 @@ namespace ExpControlsLib
                         _TreeView.BeginUpdate();
                         switch (e.UpdateType)
                         {
-                            case CShellItem.CShItemUpdateType.Created:  // A new Dir has been created under Parent/pNode
+                            case CShItemUpdateType.Created:  // A new Dir has been created under Parent/pNode
                                 {
                                     var Node = MakeNode(e.Item);
                                     // Debug.WriteLine("Adding Node " & NodePath(Node))
@@ -1384,7 +1383,7 @@ namespace ExpControlsLib
                                                              // tv1.Invalidate()   '6/18/2012 - Trust tv1 to do right thing on an Add
                                     break;
                                 }
-                            case CShellItem.CShItemUpdateType.Deleted:  // An old Dir has been deleted from Parent/pNode
+                            case CShItemUpdateType.Deleted:  // An old Dir has been deleted from Parent/pNode
                                 {
                                     bool exitSelect = false;
                                     foreach (TreeNode Node in pNode.Nodes)
@@ -1408,7 +1407,7 @@ namespace ExpControlsLib
                                 }
                             // In the Renamed case, pnode is the Parent CShellItem Before the rename,
                             // get the current Parent CShellItem from the renamed CShellItem(e.Item)
-                            case CShellItem.CShItemUpdateType.Renamed:  // A directory has been renamed under Parent/pNode
+                            case CShItemUpdateType.Renamed:  // A directory has been renamed under Parent/pNode
                                 {
                                     var curPNode = default(TreeNode);
                                     bool exitSelect1 = false;
@@ -1442,7 +1441,7 @@ namespace ExpControlsLib
 
                                     break;
                                 }
-                            case CShellItem.CShItemUpdateType.MediaChange:  // Media has been added/removed
+                            case CShItemUpdateType.MediaChange:  // Media has been added/removed
                                 {
                                     bool exitSelect2 = false;
                                     for (int indx = 0, loopTo = pNode.Nodes.Count - 1; indx <= loopTo; indx++)
@@ -1492,7 +1491,7 @@ namespace ExpControlsLib
 
                                     break;
                                 }
-                            case CShellItem.CShItemUpdateType.Updated:  // 5/24/2012 - In this case, it is the Item that had some change. Check if Expandability has changed
+                            case CShItemUpdateType.Updated:  // 5/24/2012 - In this case, it is the Item that had some change. Check if Expandability has changed
                                 {
                                     var UNode = default(TreeNode);
                                     if (GetTreeNode(e.Item, ref UNode))    // otherwise don't care

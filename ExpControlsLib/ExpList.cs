@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.ComponentModel.Design;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -14,7 +14,6 @@ using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static System.Windows.Forms.ListView;
-using static WindowsApiLib.Shell.CShellItem;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
 using MethodInvoker = System.Windows.Forms.MethodInvoker;
@@ -78,11 +77,11 @@ namespace ExpControlsLib
         private static readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
 
         private CShellItem _currentFolderCsi;
-        private CShellItem _selectedItem; // The currently selected item within the list
-        private Dictionary<string, ListViewItem> _itemIndex = new Dictionary<string, ListViewItem>(StringComparer.OrdinalIgnoreCase);
+        private CShellItem? _selectedItem; // The currently selected item within the list
+        private Dictionary<string, ListViewItem> _itemIndex = new(StringComparer.OrdinalIgnoreCase); //if we ever have put real multithreading code into this control, change this to a concurrentdictionary
 
-        private Stack<CShellItem> _backHistory = new Stack<CShellItem>();
-        private Stack<CShellItem> _forwardHistory = new Stack<CShellItem>();
+        private Stack<CShellItem> _backHistory = new();
+        private Stack<CShellItem> _forwardHistory = new();
         private bool _isNavigatingHistory = false;
 
         private CDragWrapper DW;         // Wrapper for Drag ops originating in ExpFileList
@@ -91,7 +90,7 @@ namespace ExpControlsLib
         private bool m_CreateNew = false; // Flag for NewMenu processing of "New" item
         private ThumbnailImageListManager _thumbnailManager; // Manager for thumbnail display modes
 
-        private ShellController _shellController = null;
+        private ShellController? _shellController = null;
 
         // Reentrancy guard: prevents DoItemUpdate from modifying _listView.Items
         // while an enumeration is in progress (Invoke() pumps messages and can trigger
@@ -307,7 +306,7 @@ namespace ExpControlsLib
             _listView.ListViewItemSorter = sorter;
 
             // Setup Change Notification
-            UpdateEvent += UpdateInvoke;
+            CShellItemUpdater.UpdateEvent += UpdateInvoke;
 
             DisplayMode = (ListViewDisplayMode)_listView.View;
 
@@ -480,7 +479,8 @@ namespace ExpControlsLib
                     if (needsUpdate)
                     {
                         _listView.BeginUpdate();
-                        InvokeWhenListViewReady(() => _listView.Items.Clear());
+                        _listView.SelectedItems.Clear();
+                        _listView.Items.Clear();
                     }
                     _CurrentPath = value;
                     _itemIndex.Clear();
@@ -1095,6 +1095,8 @@ namespace ExpControlsLib
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
         private void DoItemUpdate(object sender, ShellItemUpdateEventArgs e)
         {
+            if (sender is null) return;
+
             // If an enumeration is in progress, defer this update to prevent reentrant
             // mutation of _listView.Items (which causes null items during foreach).
             if (_enumerationDepth > 0)
@@ -1102,8 +1104,6 @@ namespace ExpControlsLib
                 _deferredUpdates.Enqueue((sender, e));
                 return;
             }
-
-            if (sender is null) return;
 
             var senderCsi = (CShellItem)sender;
             
@@ -1587,19 +1587,23 @@ namespace ExpControlsLib
 
         private void ExpFileList_SelectedIndexChanged(object sender, EventArgs e)
         {
-          
-            if (_listView.SelectedItems.Count > 0)
+            try
             {
-                ListView listView = (ListView)sender;
+                if (_listView.SelectedItems.Count > 0)
+                {
+                    ListView listView = (ListView)sender;
 
-                _selectedItem = (CShellItem)_listView.SelectedItems[0].Tag;
-
-                SelectedIndexChanged?.Invoke(listView.SelectedItems);
+                    _selectedItem = (CShellItem)_listView.SelectedItems[0]?.Tag;
+                    if (_selectedItem is null)
+                    {
+                        Debug.WriteLine("ListView.SelectedItem was null.");
+                        return;
+                    }
+                    SelectedIndexChanged?.Invoke(listView.SelectedItems);
+                }
             }
-            //else
-            //{
-            //    _selectedItem = null;
-            //}
+            catch (InvalidOperationException) { }
+            catch (NullReferenceException) { }
         }
 
         private void ExpFileList_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
@@ -2257,10 +2261,10 @@ namespace ExpControlsLib
 
             IntPtr rgfReserved = IntPtr.Zero;
             IntPtr iUnknownOut = IntPtr.Zero;
-            IShellFolder folder = null;
-            IntPtr[] pidls = null;
+            IShellFolder? folder = null;
             IntPtr lpVerbAnsi = IntPtr.Zero;
             IntPtr lpVerbUni = IntPtr.Zero;
+            List<IntPtr>? pidls = null;
 
             try
             {
@@ -2288,7 +2292,7 @@ namespace ExpControlsLib
                             return;
                         }
 
-                        pidls = new[] { relPidl };
+                        pidls = new List<IntPtr> { relPidl };
                     }
                     catch (Exception ex)
                     {
@@ -2315,18 +2319,19 @@ namespace ExpControlsLib
 #if DEBUG
                         var name = ShellHelper.GetShellFolderDisplayName(folder);
 #endif
-                        pidls = new IntPtr[_listView.SelectedItems.Count];
+                        var selectedItems = new ListViewItem[_listView.SelectedItems.Count];
+                        _listView.SelectedItems.CopyTo(selectedItems, 0); //materialize this because it SelectedItems will be invalid as soon as we delete the first item (causes null reference exceptions)
+                        pidls = new List<IntPtr>(selectedItems.Length);
 
-                        // Collect PIDLs from selected items
-                        for (int i = 0; i < _listView.SelectedItems.Count; i++)
+                        for (int i = 0; i < selectedItems.Length; i++)
                         {
-                            var lvi = _listView.SelectedItems[i];
+                            var lvi = selectedItems[i];
                             if (lvi?.Tag is not CShellItem sel)
                             {
                                 Debug.WriteLine($"Selected item {i} has invalid or null tag");
                                 MessageBox.Show($"Selected item {i} is invalid.", "Error",
                                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                return;
+                                continue;
                             }
 
                             // For delete operations, validate that item can be deleted
@@ -2334,7 +2339,7 @@ namespace ExpControlsLib
                             {
                                 MessageBox.Show($"Cannot delete: {sel.DisplayName}", "Cannot Delete",
                                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                return;
+                                continue;
                             }
 
                             IntPtr pidl = CPidl.ILFindLastID(sel.PIDL);
@@ -2343,10 +2348,10 @@ namespace ExpControlsLib
                                 Debug.WriteLine($"Failed to get PIDL for item: {sel.DisplayName}");
                                 MessageBox.Show($"Failed to get ID for item: {sel.DisplayName}", "Error",
                                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                return;
+                                continue;
                             }
 
-                            pidls[i] = pidl;
+                            pidls.Add(pidl);
                         }
                     }
                     catch (Exception ex)
@@ -2365,7 +2370,7 @@ namespace ExpControlsLib
                 var path2 = CPidl.ToString(pidls[0]);
 #endif
                 // Get IContextMenu interface from the shell folder
-                if (pidls == null || pidls.Length == 0)
+                if (pidls == null || pidls.Count == 0)
                 {
                     Debug.WriteLine("No items to process");
                     return;
@@ -2373,7 +2378,7 @@ namespace ExpControlsLib
 
                 try
                 {
-                    int HR = folder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Length, pidls, 
+                    int HR = folder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Count, pidls.ToArray(), 
                         IID_IContextMenu, rgfReserved, out iUnknownOut);
 
                     if (HR != S_OK || iUnknownOut == IntPtr.Zero)
@@ -2424,8 +2429,24 @@ namespace ExpControlsLib
                         lpVerbW = lpVerbUni
                     };
 
+                    int topItemIndex = -1;
+                    if (cmd == "delete" && _listView.Items.Count > 0)
+                    { //prevent null references from invalid selections that were deleted
+                        topItemIndex = GetIndexOfFirstVisible();
+                        _listView.SelectedItems.Clear();
+                        _listView.SelectedIndices.Clear();
+                    }
                     // Execute the shell command
                     int invokeHR = m_WindowsContextMenu.winMenu.InvokeCommand(cmi);
+
+                    if (topItemIndex >= 0 && _listView.Items.Count > 0)
+                    {
+                        _listView.BeginInvoke(new Action(() =>
+                        {
+                            if (topItemIndex < _listView.Items.Count)
+                                _listView.Items[topItemIndex].EnsureVisible();
+                        }));
+                    }
 
                     if (invokeHR != S_OK)
                     {
@@ -2545,7 +2566,17 @@ namespace ExpControlsLib
 
             protected override void WndProc(ref Message m)
             {
-                base.WndProc(ref m);
+                try
+                {
+                    base.WndProc(ref m);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine(ex.ToString());
+                    _listView.SelectedItems.Clear();
+                    _listView.SelectedIndices.Clear();
+                }
+
                 switch (m.Msg)
                 {
                     case WM_VSCROLL:

@@ -1292,13 +1292,12 @@ namespace WindowsApiLib.Shell
             }
             if (Changed)
             {
-                UpdateEvent?.Invoke(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Created));
+                CShellItemUpdater.InvokeEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Created));
             }
         }
 
         /// <summary>
-        /// For internal use only
-        /// </summary>
+       /// </summary>
         internal bool RemoveItem(CShellItem item)
         {
             bool changed = false;
@@ -1329,7 +1328,7 @@ namespace WindowsApiLib.Shell
 
             if (changed)
             {
-                UpdateEvent?.Invoke(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
+                CShellItemUpdater.InvokeEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
             }
 
             return changed;
@@ -1699,9 +1698,9 @@ namespace WindowsApiLib.Shell
         /// <param name="sender">The CShellItem of the Folder that has changes in its' content.</param>
         /// <param name="e">A <see cref="ShellItemUpdateEventArgs">ShellItemUpdateEventArgs</see> which provides information about the change.</param>
         /// <remarks></remarks>
-        public static event CShItemUpdateEventHandler UpdateEvent;
+        //public static event CShItemUpdateEventHandler UpdateEvent;
 
-        public delegate void CShItemUpdateEventHandler(object sender, ShellItemUpdateEventArgs e);
+        //public delegate void CShItemUpdateEventHandler(object sender, ShellItemUpdateEventArgs e);
 
         /// <summary>
         /// On a Rename operation, we simply modify the existant CShellItem to reflect the new PIDL, Path, and
@@ -2127,24 +2126,6 @@ namespace WindowsApiLib.Shell
 
 
         #endregion
-
-
-        /// <summary>
-        /// CShItemUpdateType is an Enum of the various types of change that will be reported in a ShellItemUpdateEventArgs.
-        /// </summary>
-        /// <remarks>This Enum is also used by the CShItemUpdater Class to report change types to CShellItem.Update which passes it 
-        ///          on to the Application.</remarks>
-        public enum CShItemUpdateType
-        {
-            Created,
-            IconChange,
-            Updated,
-            UpdateDir,
-            Renamed,
-            Deleted,
-            MediaChange
-        }
-
 
     }
 
