@@ -14,7 +14,6 @@ using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static System.Windows.Forms.ListView;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
 using MethodInvoker = System.Windows.Forms.MethodInvoker;
@@ -1921,7 +1920,22 @@ namespace ExpControlsLib
         {
             try
             {
-                if (_listView.SelectedItems.Count > 0)
+                if (_listView.SelectedIndices.Count > 0)
+                {
+                    _selectedItem = GetItem(_listView.SelectedIndices[0]);
+                }
+                else
+                {
+                    _selectedItem = null;
+                }
+
+                if (_useVirtualMode)
+                {
+                    // In virtual mode, we pass null to because there are no items in _listView.SelectedItems
+                    // Consumers should use SelectedCShellItems property instead.
+                    SelectedIndexChanged?.Invoke(null);
+                }
+                else
                 {
                     SelectedIndexChanged?.Invoke(_listView.SelectedItems);
                 }
