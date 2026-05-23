@@ -92,8 +92,10 @@ namespace ExpControlsLib
         /// <param name="shellItem">The shell item to generate a thumbnail for.</param>
         /// <param name="size">Desired thumbnail size in pixels (e.g., 96, 256).</param>
         /// <param name="tag">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
-        public void EnqueueThumbnailRequest(CShellItem shellItem, int size, object tag = null)
+        public void EnqueueThumbnailRequest(CShellItem? shellItem, int size, object? tag = null)
         {
+            if (shellItem is null) return;
+
             // Check cache first
             if (TryGetCachedThumbnail(shellItem.FullPath, size, out var cachedImage))
             {

@@ -102,8 +102,6 @@ namespace WindowsApiLib
             string argpszPath1 = ".txt";
             m_lgImgList = ShellAPI.SHGetFileInfo(argpszPath1, FILE_ATTRIBUTE_NORMAL, ref shfi, SHFILEINFO_size, dwFlag);
 
-
-
             Debug.Assert(!m_lgImgList.Equals(IntPtr.Zero), "Failed to create Image Small ImageList");
             if (m_lgImgList.Equals(IntPtr.Zero))
             {
@@ -423,7 +421,6 @@ namespace WindowsApiLib
             IDO_SHGIOI_DEFAULT = unchecked((int)0xFFFFFFFC)
         }
 
-
         // Private Shared Sub DebugShowImages(ByVal useSmall As Boolean, ByVal iFrom As Integer, ByVal iTo As Integer)
         // Dim RightIcon As Icon = GetIcon(iFrom, Not useSmall)
         // Dim rightIndex As Integer = iFrom
@@ -550,7 +547,6 @@ namespace WindowsApiLib
         [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static void SetListViewImageList(ListView listView, LVSIL Usage, SHIL IIlSize)
         {
-
             Initialize();
             int wParam = (int)Usage;
             var HImageList = m_lgImgList;

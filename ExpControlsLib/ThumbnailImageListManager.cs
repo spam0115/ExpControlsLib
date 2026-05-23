@@ -22,6 +22,7 @@ namespace ExpControlsLib
         private int _generation = 0;
         private readonly Dictionary<string, int> _imageIndexByKey = new Dictionary<string, int>();
         private bool _addingImage = false;
+        private readonly HashSet<ImageList> _corruptImageLists = new HashSet<ImageList>();
 
         private sealed class ThumbnailRequestArgs
         {
@@ -80,23 +81,27 @@ namespace ExpControlsLib
         /// </summary>
         public ImageList GetImageList(int thumbnailSize)
         {
-            if (!_imageLists.TryGetValue(thumbnailSize, out var imageList))
+            if (_imageLists.TryGetValue(thumbnailSize, out var imageList) && !_corruptImageLists.Contains(imageList))
             {
+                return imageList;
+            }
+
+            if (imageList != null)
+            {
+                _corruptImageLists.Remove(imageList);
+                imageList.Dispose();
+                _imageLists.Remove(thumbnailSize);
+            }
+
 #if DEBUG
-                Console.WriteLine("Creating new image list for thumbnails...");
+            Console.WriteLine("Creating new image list for thumbnails...");
 #endif
-                imageList = new ImageList
-                {
-                    ImageSize = new Size(thumbnailSize, thumbnailSize),
-                    ColorDepth = ColorDepth.Depth32Bit
-                };
-                _imageLists[thumbnailSize] = imageList;
-            }
-            else
+            imageList = new ImageList
             {
-
-            }
-
+                ImageSize = new Size(thumbnailSize, thumbnailSize),
+                ColorDepth = ColorDepth.Depth32Bit
+            };
+            _imageLists[thumbnailSize] = imageList;
             return imageList;
         }
 
@@ -129,8 +134,6 @@ namespace ExpControlsLib
 #if DEBUG
             Console.WriteLine("\tRequesting thumbnail: " + item.Text);
 #endif
-
-
             var reqObj = new ThumbnailRequestArgs
             {
                 Generation = _generation,
@@ -142,8 +145,9 @@ namespace ExpControlsLib
             string key = CreateKey(reqObj);
             if (_imageIndexByKey.TryGetValue(key, out int index))
             {
-                item.ImageIndex = index; //redundant but just in case
+                item.ImageIndex = index;
             }
+            else
             {
                 var csi = item.Tag as CShellItem;
                 _thumbnailProvider.EnqueueThumbnailRequest(csi, thumbnailSize, reqObj);
@@ -157,20 +161,16 @@ namespace ExpControlsLib
          /// </summary>
         private void OnThumbnailReady(object sender, ThumbnailReadyEventArgs e)
         {
-            if (!(e.Tag is ThumbnailRequestArgs tag))
-                return;
+            if (!(e.Tag is ThumbnailRequestArgs tag)) return;
+            if (_listView.IsDisposed || _listView.Disposing || !_listView.IsHandleCreated) return;
 
-            if (_listView.IsDisposed || !_listView.IsHandleCreated)
-                return;
-
-            if (tag.Generation != _generation)
-                return;
+            //if (tag.Generation != _generation)
+            //    return;
 
             if (tag.RequestedSize != _activeSize) //this can happen if we switch display modes while thumbnail requests are outstanding
                 return;
 
-            if (tag.Item == null || tag.Item.ListView != _listView)
-                return;
+            if (tag.Item == null || tag.Item.ListView != _listView) return;
 
             //// safety: ensure item still points to same shell object/path
             //if (!(tag.Item.Tag is CShellItem csi) || !string.Equals(csi.FullPath, tag.FilePath, StringComparison.OrdinalIgnoreCase))
@@ -215,7 +215,10 @@ namespace ExpControlsLib
         private void ApplyThumbnailToUI(ThumbnailRequestArgs tag, Bitmap? square)
         {
             if (tag.Item is null || tag.Item.ListView != _listView)
+            {
+                square?.Dispose();
                 return;
+            }
 
             if (square == null)
             {
@@ -223,9 +226,10 @@ namespace ExpControlsLib
                 return;
             }
 
+            ImageList imageList = null;
             try
             {
-                var imageList = GetImageList(_activeSize);
+                imageList = GetImageList(_activeSize);
                 if (_listView.LargeImageList != imageList)
                     _listView.LargeImageList = imageList;
 
@@ -238,15 +242,21 @@ namespace ExpControlsLib
                         index = imageList.Images.Count - 1;
                         _imageIndexByKey[key] = index;
                     }
-                    finally { _addingImage = false; }
+                    finally {
+                        square?.Dispose(); 
+                        _addingImage = false; 
+                    }
                 }
                 else
                 {
                     var oldImage = imageList.Images[index];
                     _addingImage = true;
                     try { imageList.Images[index] = square; }
-                    finally { _addingImage = false; }
-                    oldImage.Dispose();
+                    finally { 
+                        square?.Dispose(); 
+                        _addingImage = false; 
+                    }
+                    //oldImage.Dispose(); do not do this.  internal state corruption
                 }
 
                 tag.Item.ImageIndex = index;
@@ -257,6 +267,8 @@ namespace ExpControlsLib
 #if DEBUG
                 Console.WriteLine("Error applying thumbnail to UI: " + ex.Message);
 #endif
+                if (imageList != null)
+                    _corruptImageLists.Add(imageList);
             }
         }
 
