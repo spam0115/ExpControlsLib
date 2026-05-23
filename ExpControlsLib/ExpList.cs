@@ -757,6 +757,7 @@ namespace ExpControlsLib
             {
                 int totalItems;
 
+                Console.WriteLine("\tSorting...");
                 fileList.Sort();
                 totalItems = fileList.Count;
                 if (includeFolder)
@@ -764,6 +765,7 @@ namespace ExpControlsLib
                     dirList.Sort();
                     totalItems += dirList.Count;
                 }
+                Console.WriteLine("\tSorting done");
 
                 var combList = new List<CShellItem>(totalItems);
                 if (includeFolder) combList.AddRange(dirList);
@@ -772,6 +774,8 @@ namespace ExpControlsLib
                 int initialFillLim = Math.Min(combList.Count, InitialLoadLimit);
                 var combinedLvi = new List<ListViewItem>(combList.Count);
                 int topIndex = this.GetIndexOfFirstVisible();
+
+                Console.WriteLine("\tMaking ListViewItems...");
 
                 _itemIndex.Clear();
                 foreach (CShellItem item in combList)
@@ -784,6 +788,7 @@ namespace ExpControlsLib
 
                     combinedLvi.Add(lvi);
                 }
+                Console.WriteLine("\tDone making ListViewItems.");
 
                 if (!RequestListViewRefresh(combinedLvi.ToArray(), !samePath)) return;
             }
@@ -903,6 +908,7 @@ namespace ExpControlsLib
 
                 var newItems = _pendingItems ?? Array.Empty<ListViewItem>();
 
+                Console.WriteLine("Begin loading items into listview...");
                 _listView.BeginUpdate();
                 try
                 {
@@ -925,6 +931,7 @@ namespace ExpControlsLib
                 {
                     _listView.EndUpdate();
                 }
+                Console.WriteLine("End loading items into listview");
             }
             finally
             {

@@ -1467,58 +1467,6 @@ namespace WindowsApiLib.Shell
             return GetFilesRet;
         }
 
-        /// <summary>
-        /// Returns the Directories and Files of this sub-folder as a sorted
-        ///   List of CShitems
-        /// </summary>
-        /// <returns>A List of CShItems. May return an empty List if there are none.</returns>
-        /// <remarks>This version is the Optimized version added after any distribution of v2.14</remarks>
-        public List<CShellItem> GetChildItems()
-        {
-            var rVal = new List<CShellItem>();
-            if (m_IsFolder)
-            {
-                var Flags = SHCONTF.INCLUDEHIDDEN;
-
-                lock (_itemTreeLock)
-                {
-                    if (m_Directories is null)
-                        Flags = Flags | SHCONTF.FOLDERS;
-                    if (m_Files is null)
-                        Flags = Flags | SHCONTF.NONFOLDERS;
-                    if (Flags != SHCONTF.INCLUDEHIDDEN) // if already have both already, just report what we have
-                    {
-                        var items = GetContents(Flags);
-                        var dirs = new List<CShellItem>(items.Count);      // trade space for time - capacity set to max possible
-                        var filesList = new List<CShellItem>(items.Count);     // trade space for time - capacity set to max possible
-                        foreach (CShellItem Item in items)
-                        {
-                            if (Item.IsFolder)
-                                dirs.Add(Item);
-                            else
-                                filesList.Add(Item);
-                        }
-                        if (m_Directories is null)
-                        {
-                            m_Directories = new CShellItemCollection(this);   // First time we even asked
-                            m_Directories.AddRange(dirs);
-                        }
-                        if (m_Files is null)
-                        {
-                            m_Files = new CShellItemCollection(this);         // First time we even asked
-                            m_Files.AddRange(filesList);
-                        }
-                    }
-                    rVal.AddRange(m_Directories);    // 7/14/2012 - trust in SyncLock
-                    rVal.AddRange(m_Files);          // 7/14/2012 - trust in SyncLock
-                                                     // rVal.AddRange(Me.Directories)   'use this instead of local list as a last sanity precaution and to prevent race conditions
-                                                     // rVal.AddRange(Me.Files)         'use this instead of local list as a last sanity precaution and to prevent race conditions
-                }                        // should have prevented race conditions, but Windows messages can be funky
-                rVal.Sort();
-            }
-            return rVal;
-        }
-
         // Previous, unoptimized version of GetItems
         // Public Function GetItems() As ArrayList
         // Dim rVal As New ArrayList()
@@ -2005,10 +1953,7 @@ namespace WindowsApiLib.Shell
             CShellItem itm;
             var pidls = CShellItemFactory.GetPidlsOfFolder(this, flags);
 
-            //new
-            //var cshItems = CShellItemFactory.CreateCShItems(pidls, this);
-            //endnew
-
+            Console.WriteLine("\tCreating cshellitems...");
             foreach (IntPtr pidl in pidls)
             {
                 if (pidl == IntPtr.Zero)
@@ -2020,9 +1965,11 @@ namespace WindowsApiLib.Shell
                 else
                 {
                     itm = CShellItemFactory.CreateCShItem(pidl, this);
-                    items.Add(itm);
+                    items.Add(itm);                    
                 }
             }
+
+            Console.WriteLine("\tFinished creating cshellitems");
 
             return items;
         }
