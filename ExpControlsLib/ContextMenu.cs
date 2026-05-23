@@ -205,7 +205,7 @@ namespace ExpControlsLib
         {
             var invoke = new ShellAPI.CMInvokeCommandInfoEx
             {
-                cbSize = ShellAPI.cbInvokeCommand,
+                cbSize = ShellAPI.CMInvokeCommandInfoEx_size,
                 lpVerb = (IntPtr)cmd,
                 lpDirectory = parentDir,
                 lpVerbW = (IntPtr)cmd,

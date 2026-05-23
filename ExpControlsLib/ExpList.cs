@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.ComponentModel.Design;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -14,7 +14,6 @@ using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static System.Windows.Forms.ListView;
-using static WindowsApiLib.Shell.CShellItem;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
 using MethodInvoker = System.Windows.Forms.MethodInvoker;
@@ -78,11 +77,11 @@ namespace ExpControlsLib
         private static readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
 
         private CShellItem _currentFolderCsi;
-        private CShellItem _selectedItem; // The currently selected item within the list
-        private Dictionary<string, ListViewItem> _itemIndex = new Dictionary<string, ListViewItem>(StringComparer.OrdinalIgnoreCase);
+        private CShellItem? _selectedItem; // The currently selected item within the list
+        private Dictionary<string, ListViewItem> _itemIndex = new(StringComparer.OrdinalIgnoreCase); //if we ever have put real multithreading code into this control, change this to a concurrentdictionary
 
-        private Stack<CShellItem> _backHistory = new Stack<CShellItem>();
-        private Stack<CShellItem> _forwardHistory = new Stack<CShellItem>();
+        private Stack<CShellItem> _backHistory = new();
+        private Stack<CShellItem> _forwardHistory = new();
         private bool _isNavigatingHistory = false;
 
         private CDragWrapper DW;         // Wrapper for Drag ops originating in ExpFileList
@@ -91,7 +90,13 @@ namespace ExpControlsLib
         private bool m_CreateNew = false; // Flag for NewMenu processing of "New" item
         private ThumbnailImageListManager _thumbnailManager; // Manager for thumbnail display modes
 
-        private ShellController _shellController = null;
+        private ShellController? _shellController = null;
+
+        // Reentrancy guard: prevents DoItemUpdate from modifying _listView.Items
+        // while an enumeration is in progress (Invoke() pumps messages and can trigger
+        // reentrant shell notifications on the same UI thread).
+        private int _enumerationDepth = 0;
+        private readonly Queue<(object sender, ShellItemUpdateEventArgs e)> _deferredUpdates = new();
 
         #endregion
 
@@ -301,7 +306,7 @@ namespace ExpControlsLib
             _listView.ListViewItemSorter = sorter;
 
             // Setup Change Notification
-            UpdateEvent += UpdateInvoke;
+            CShellItemUpdater.UpdateEvent += UpdateInvoke;
 
             DisplayMode = (ListViewDisplayMode)_listView.View;
 
@@ -413,7 +418,15 @@ namespace ExpControlsLib
             }
             else //custom thumbnail view modes
             {
-                _thumbnailManager.SetImageListSize(GetThumbnailSizeForMode(value));
+                EnterListViewEnumeration();
+                try
+                {
+                    _thumbnailManager.SetImageListSize(GetThumbnailSizeForMode(value));
+                }
+                finally
+                {
+                    ExitListViewEnumeration();
+                }
             }
         }
 
@@ -424,11 +437,13 @@ namespace ExpControlsLib
             if (mode <= ListViewDisplayMode.Tile) 
             {
                 bool large = (mode == ListViewDisplayMode.LargeIcon);
+                EnterListViewEnumeration();
                 try
                 {
                     _listView.BeginUpdate();
                     foreach (ListViewItem lvi in _listView.Items)
                     {
+                        if (lvi is null) continue;
                         if (lvi.Tag is CShellItem csi)
                             lvi.ImageIndex = SystemImageListManager.GetIconIndex(csi, large);
                         else
@@ -438,6 +453,7 @@ namespace ExpControlsLib
                 finally
                 {
                     _listView.EndUpdate();
+                    ExitListViewEnumeration();
                 }
             }
             else
@@ -463,6 +479,7 @@ namespace ExpControlsLib
                     if (needsUpdate)
                     {
                         _listView.BeginUpdate();
+                        _listView.SelectedItems.Clear();
                         _listView.Items.Clear();
                     }
                     _CurrentPath = value;
@@ -726,7 +743,7 @@ namespace ExpControlsLib
 
             if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(_currentFolderCsi.Files);
 
-            if ((dirList.Count + fileList.Count) == 0)
+            if ((dirList.Count + fileList.Count) == 0) //no items
             {
                 if (RequestListViewRefresh(null, !samePath))
                 {
@@ -756,10 +773,15 @@ namespace ExpControlsLib
                 var combinedLvi = new List<ListViewItem>(combList.Count);
                 int topIndex = this.GetIndexOfFirstVisible();
 
+                _itemIndex.Clear();
                 foreach (CShellItem item in combList)
                 {
                     ListViewItem lvi = MakeLVItem(item);
-                    _itemIndex[item.FullPath] = lvi;
+                    if (!_itemIndex.TryAdd(item.FullPath, lvi))
+                    {
+                        _itemIndex[item.FullPath] = lvi;
+                    }
+
                     combinedLvi.Add(lvi);
                 }
 
@@ -781,6 +803,58 @@ namespace ExpControlsLib
         private bool _refreshPending = false;
         private bool _refetchImages = false;
         private ListViewItem[]? _pendingItems = null;
+
+        /// <summary>
+        /// Increments the enumeration depth counter. While depth > 0, DoItemUpdate will
+        /// defer shell item modifications to prevent reentrant mutation of _listView.Items.
+        /// Must be paired with <see cref="ExitListViewEnumeration"/>.
+        /// </summary>
+        private void EnterListViewEnumeration()
+        {
+            _enumerationDepth++;
+        }
+
+        /// <summary>
+        /// Decrements the enumeration depth counter. When it reaches 0, any deferred
+        /// shell item updates are drained and applied.
+        /// Must be paired with <see cref="EnterListViewEnumeration"/>.
+        /// </summary>
+        private void ExitListViewEnumeration()
+        {
+            _enumerationDepth--;
+            if (_enumerationDepth <= 0)
+            {
+                _enumerationDepth = 0;
+                DrainDeferredUpdates();
+            }
+        }
+
+        /// <summary>
+        /// Processes all deferred shell item updates that were queued while an enumeration was in progress.
+        /// </summary>
+        private void DrainDeferredUpdates()
+        {
+            while (_deferredUpdates.Count > 0)
+            {
+                var (sender, e) = _deferredUpdates.Dequeue();
+                DoItemUpdate(sender, e);
+            }
+        }
+
+        /// <summary>
+        /// Executes the action immediately if no enumeration is in progress, otherwise
+        /// defers it via BeginInvoke to run after the enumeration completes.
+        /// Use this for ListView modification operations outside of DoItemUpdate.
+        /// </summary>
+        private void InvokeWhenListViewReady(Action action)
+        {
+            if (_enumerationDepth > 0)
+            {
+                BeginInvoke(() => InvokeWhenListViewReady(action));
+                return;
+            }
+            action();
+        }
 
         /// <summary>
         /// This refreshes the ListView with new items.
@@ -810,18 +884,21 @@ namespace ExpControlsLib
 
         private void RefreshListViewCore()
         {
+            // If an enumeration is in progress (reentrancy via message pumping),
+            // defer this refresh to after the enumeration completes.
+            if (_enumerationDepth > 0)
+            {
+                BeginInvoke(new MethodInvoker(RefreshListViewCore));
+                return;
+            }
+
             try
             {
                 // snapshot old position safely
                 int topIndex = 0;
                 if (_listView.Items.Count > 0)
                 {
-                    var firstVisible = _listView.Items.Cast<ListViewItem>()
-                        .Where(it => _listView.ClientRectangle.IntersectsWith(it.Bounds))
-                        .OrderBy(it => it.Bounds.Top).ThenBy(it => it.Bounds.Left)
-                        .FirstOrDefault();
-
-                    if (firstVisible != null) topIndex = firstVisible.Index;
+                    topIndex = GetIndexOfFirstVisible();
                 }
 
                 var newItems = _pendingItems ?? Array.Empty<ListViewItem>();
@@ -909,21 +986,30 @@ namespace ExpControlsLib
 
             Rectangle clientRect = _listView.ClientRectangle;
             clientRect.Height *= 2; //preload beyond visual range
-            foreach (ListViewItem item in _listView.Items)
+            EnterListViewEnumeration();
+            try
             {
-                // If onlyVisible is true, skip items already loaded or not currently visible
-                if (onlyVisible && item.ImageIndex != -1) continue;
-                if (!clientRect.IntersectsWith(item.Bounds)) continue;
+                foreach (ListViewItem item in _listView.Items)
+                {
+                    if (item is null) continue;
+                    // If onlyVisible is true, skip items already loaded or not currently visible
+                    if (onlyVisible && item.ImageIndex != -1) continue;
+                    if (!clientRect.IntersectsWith(item.Bounds)) continue;
 
 #if DEBUG
-                Console.WriteLine("Getting thumbnail for item: " + item.Text);
-                //string? readable = CPidl.PidlToString(((CShellItem)item.Tag).PIDL);
+                    Console.WriteLine("Getting thumbnail for item: " + item.Text);
+                    //string? readable = CPidl.PidlToString(((CShellItem)item.Tag).PIDL);
 #endif
-                if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
-                    _thumbnailManager.RequestThumbnail(item, csi.FullPath, thumbnailSize);
+                    if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
+                        _thumbnailManager.RequestThumbnail(item, csi.FullPath, thumbnailSize);
+                }
+            }
+            finally
+            {
+                ExitListViewEnumeration();
             }
 
-            var l = _listView.Items.Cast<ListViewItem>().Select(item => item.ImageIndex).ToList();
+            //var l = _listView.Items.Cast<ListViewItem>().Select(item => item.ImageIndex).ToList();
         }
 
         #endregion
@@ -943,7 +1029,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="item">The <see cref="CShellItem"/> to search for.</param>
         /// <returns>The matching <see cref="ListViewItem"/>, or null if not found.</returns>
-        private ListViewItem FindLVItem(CShellItem item)
+        private ListViewItem? FindLVItem(CShellItem item)
         {
             if (_itemIndex.TryGetValue(item.FullPath, out var lvi))
                 return lvi;
@@ -993,21 +1079,11 @@ namespace ExpControlsLib
 
             if (InvokeRequired)
             {
-                Invoke((InvokeUpdate)DoItemUpdate, sender, e);
+                BeginInvoke((InvokeUpdate)DoItemUpdate, sender, e);
             }
             else
             {
                 DoItemUpdate(sender, e);
-
-                if (e.UpdateType == CShItemUpdateType.Created || e.UpdateType == CShItemUpdateType.Deleted)
-                {
-                    if (_currentFolderCsi is null) return;
-
-                    if (_currentFolderCsi.FullPath.StartsWith(":"))
-                        ExpListItemsChanged?.Invoke(_currentFolderCsi.DisplayName, _currentFolderCsi);
-                    else
-                        ExpListItemsChanged?.Invoke(_currentFolderCsi.FullPath, _currentFolderCsi);
-                }
             }
         }
 
@@ -1020,6 +1096,14 @@ namespace ExpControlsLib
         private void DoItemUpdate(object sender, ShellItemUpdateEventArgs e)
         {
             if (sender is null) return;
+
+            // If an enumeration is in progress, defer this update to prevent reentrant
+            // mutation of _listView.Items (which causes null items during foreach).
+            if (_enumerationDepth > 0)
+            {
+                _deferredUpdates.Enqueue((sender, e));
+                return;
+            }
 
             var senderCsi = (CShellItem)sender;
             
@@ -1060,13 +1144,32 @@ namespace ExpControlsLib
 
                     case CShItemUpdateType.Deleted:
                         {
-                            var lvi = FindLVItem(e.Item);
-                            if (lvi != null)
+                            if (e.Item is null)
+                            {
+                                Debug.WriteLine("ExpList received DELETED event but no item was specified.");
+                                    return;
+                            }
+
+                            //var lvi = FindLVItem(e.Item);
+                            var lvi = e.Item.LVItem;
+                            if (lvi == null) //deletion messages get sent twice.  The second time the item has an index of -1
+                            {
+                                lvi = FindLVItem(e.Item);
+                            }
+
+                            if (lvi != null && lvi.Index >= 0) //deletion messages get sent twice.  The second time the item has an index of -1
                             {
                                 int index = lvi.Index;
                                 bool wasSelected = lvi.Selected;
                                 _itemIndex.Remove(e.Item.FullPath);
-                                _listView.Items.Remove(lvi);
+                                try
+                                {
+                                    _listView.Items.Remove(lvi);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.WriteLine("Exception while removing item from listview.  " + ex.ToString());
+                                }
                                 if (wasSelected && _listView.SelectedItems.Count == 0 && _listView.Items.Count > 0)
                                 {
                                     int nextIndex = Math.Min(index, _listView.Items.Count - 1);
@@ -1074,6 +1177,7 @@ namespace ExpControlsLib
                                     _listView.Items[nextIndex].Focused = true;
                                 }
                             }
+
                             break;
                         }
 
@@ -1144,6 +1248,20 @@ namespace ExpControlsLib
                             }
                             break;
                         }
+                }
+
+                // Fire ExpListItemsChanged for Created/Deleted events.
+                // This was previously in UpdateInvoke but must be here since
+                // BeginInvoke is now used (the marshaling path wouldn't fire it).
+                if (e.UpdateType == CShItemUpdateType.Created || e.UpdateType == CShItemUpdateType.Deleted)
+                {
+                    if (_currentFolderCsi != null)
+                    {
+                        if (_currentFolderCsi.FullPath.StartsWith(":"))
+                            ExpListItemsChanged?.Invoke(_currentFolderCsi.DisplayName, _currentFolderCsi);
+                        else
+                            ExpListItemsChanged?.Invoke(_currentFolderCsi.FullPath, _currentFolderCsi);
+                    }
                 }
             }
             catch (Exception ex)
@@ -1292,22 +1410,55 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Refresh by path string.
+        /// Refresh by display name string.  This is very inefficient.  Avoid this function.
         /// </summary>
-        public ListViewItem RefreshItem(string fileName)
+        public ListViewItem? RefreshItemByDisplayName(string fileName)
         {
             // Try to find the item by its display name using the index values
-            var lvi = _itemIndex.Values.FirstOrDefault(i => i.Tag is CShellItem c &&
-                    string.Equals(c.DisplayName, fileName, StringComparison.OrdinalIgnoreCase));
+            //var lvi = _itemIndex.Values.FirstOrDefault(i => i.Tag is CShellItem c &&
+            //        string.Equals(c.DisplayName, fileName, StringComparison.OrdinalIgnoreCase));
+            var key = _itemIndex.Keys.FirstOrDefault(k => k.EndsWith(Path.DirectorySeparatorChar + fileName));
 
-            if (lvi is null)
+            if (key is not null)
             {
-                return null;
-            }
-            if (lvi.Tag is CShellItem csi)
-                UpdateLviUsingCsi(lvi, csi);
+                var lvi = _itemIndex[key];
+                if (lvi is null) return null;
 
-            return lvi;
+                if (lvi.Tag is CShellItem csi)
+                    UpdateLviUsingCsi(lvi, csi);
+
+                return lvi;
+            }
+            else return null;
+        }
+
+        public ListViewItem? RefreshItemByFullPath(string path)
+        {
+            if (_itemIndex.TryGetValue(path, out ListViewItem? lvi))
+            {
+                if (lvi is null) return null;
+
+                if (lvi.Tag is CShellItem csi)
+                    UpdateLviUsingCsi(lvi, csi);
+
+                return lvi;
+            }
+            else return null;
+        }
+
+        public ListViewItem? RefreshItem(CShellItem? item)
+        {
+            if (item is null) return null;
+
+            if (_itemIndex.TryGetValue(item.FullPath, out ListViewItem? lvi))
+            {
+                if (lvi is null) return null;
+
+                UpdateLviUsingCsi(lvi, item);
+
+                return lvi;
+            }
+            else return null;
         }
 
         #endregion
@@ -1436,19 +1587,23 @@ namespace ExpControlsLib
 
         private void ExpFileList_SelectedIndexChanged(object sender, EventArgs e)
         {
-          
-            if (_listView.SelectedItems.Count > 0)
+            try
             {
-                ListView listView = (ListView)sender;
+                if (_listView.SelectedItems.Count > 0)
+                {
+                    ListView listView = (ListView)sender;
 
-                _selectedItem = (CShellItem)_listView.SelectedItems[0].Tag;
-
-                SelectedIndexChanged?.Invoke(listView.SelectedItems);
+                    _selectedItem = (CShellItem)_listView.SelectedItems[0]?.Tag;
+                    if (_selectedItem is null)
+                    {
+                        Debug.WriteLine("ListView.SelectedItem was null.");
+                        return;
+                    }
+                    SelectedIndexChanged?.Invoke(listView.SelectedItems);
+                }
             }
-            //else
-            //{
-            //    _selectedItem = null;
-            //}
+            catch (InvalidOperationException) { }
+            catch (NullReferenceException) { }
         }
 
         private void ExpFileList_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
@@ -1570,13 +1725,21 @@ namespace ExpControlsLib
         {
             if (_listView.Items.Count < 2) return;
 
-            _listView.BeginUpdate();
-            var tmp = new ListViewItem[_listView.Items.Count];
-            _listView.Items.CopyTo(tmp, 0);
-            Array.Sort(tmp, new TagComparer());
-            _listView.Items.Clear();
-            _listView.Items.AddRange(tmp);
-            _listView.EndUpdate();
+            EnterListViewEnumeration();
+            try
+            {
+                _listView.BeginUpdate();
+                var tmp = new ListViewItem[_listView.Items.Count];
+                _listView.Items.CopyTo(tmp, 0);
+                Array.Sort(tmp, new TagComparer());
+                _listView.Items.Clear();
+                _listView.Items.AddRange(tmp);
+                _listView.EndUpdate();
+            }
+            finally
+            {
+                ExitListViewEnumeration();
+            }
         }
 
         /// <summary>
@@ -1874,12 +2037,24 @@ namespace ExpControlsLib
                         goto CLEANUP;
                     case CMD.REFRESH:
                         // Refresh the folder contents and re-sort the ListView items.
-                        _currentFolderCsi?.UpdateRefresh();
+                        _shellController.ShellUpdater.SelectiveFolderUpdate(_currentFolderCsi);
                         SortLVItems();
                         goto CLEANUP;
                     case CMD.SELECT_ALL:
                         // Select all items in the ListView.
-                        foreach (ListViewItem item in _listView.Items) item.Selected = true;
+                        EnterListViewEnumeration();
+                        try
+                        {
+                            foreach (ListViewItem item in _listView.Items)
+                            {
+                                if (item is null) continue;
+                                item.Selected = true;
+                            }
+                        }
+                        finally
+                        {
+                            ExitListViewEnumeration();
+                        }
                         goto CLEANUP;
                     case CMD.PASTE:
                         if (_currentFolderCsi != null)
@@ -1965,7 +2140,19 @@ namespace ExpControlsLib
         {
             if (e.Control && e.KeyCode == Keys.A)
             {
-                foreach (ListViewItem item in _listView.Items) item.Selected = true;
+                EnterListViewEnumeration();
+                try
+                {
+                    foreach (ListViewItem item in _listView.Items)
+                    {
+                        if (item is null) continue;
+                        item.Selected = true;
+                    }
+                }
+                finally
+                {
+                    ExitListViewEnumeration();
+                }
                 ExpListItemGetSelItems?.Invoke(_listView.SelectedItems);
             }
 
@@ -1985,7 +2172,7 @@ namespace ExpControlsLib
 
             if (e.KeyCode == Keys.F5)
             {
-                _currentFolderCsi?.UpdateRefresh();
+                _shellController.ShellUpdater.SelectiveFolderUpdate(_currentFolderCsi);
                 SortLVItems();
             }
 
@@ -2034,7 +2221,8 @@ namespace ExpControlsLib
             else if (e.KeyCode == Keys.Delete)
             {
                 WinMenu("delete");
-                if (_listView.SelectedItems.Count > 150) _currentFolderCsi?.UpdateRefresh();
+                if (_listView.SelectedItems.Count > 150)
+                    _shellController.ShellUpdater.SelectiveFolderUpdate(_currentFolderCsi);
             }
 
             OnKeyUp(e);
@@ -2073,10 +2261,10 @@ namespace ExpControlsLib
 
             IntPtr rgfReserved = IntPtr.Zero;
             IntPtr iUnknownOut = IntPtr.Zero;
-            IShellFolder folder = null;
-            IntPtr[] pidls = null;
+            IShellFolder? folder = null;
             IntPtr lpVerbAnsi = IntPtr.Zero;
             IntPtr lpVerbUni = IntPtr.Zero;
+            List<IntPtr>? pidls = null;
 
             try
             {
@@ -2104,7 +2292,7 @@ namespace ExpControlsLib
                             return;
                         }
 
-                        pidls = new[] { relPidl };
+                        pidls = new List<IntPtr> { relPidl };
                     }
                     catch (Exception ex)
                     {
@@ -2131,18 +2319,19 @@ namespace ExpControlsLib
 #if DEBUG
                         var name = ShellHelper.GetShellFolderDisplayName(folder);
 #endif
-                        pidls = new IntPtr[_listView.SelectedItems.Count];
+                        var selectedItems = new ListViewItem[_listView.SelectedItems.Count];
+                        _listView.SelectedItems.CopyTo(selectedItems, 0); //materialize this because it SelectedItems will be invalid as soon as we delete the first item (causes null reference exceptions)
+                        pidls = new List<IntPtr>(selectedItems.Length);
 
-                        // Collect PIDLs from selected items
-                        for (int i = 0; i < _listView.SelectedItems.Count; i++)
+                        for (int i = 0; i < selectedItems.Length; i++)
                         {
-                            var lvi = _listView.SelectedItems[i];
+                            var lvi = selectedItems[i];
                             if (lvi?.Tag is not CShellItem sel)
                             {
                                 Debug.WriteLine($"Selected item {i} has invalid or null tag");
                                 MessageBox.Show($"Selected item {i} is invalid.", "Error",
                                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                return;
+                                continue;
                             }
 
                             // For delete operations, validate that item can be deleted
@@ -2150,7 +2339,7 @@ namespace ExpControlsLib
                             {
                                 MessageBox.Show($"Cannot delete: {sel.DisplayName}", "Cannot Delete",
                                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                return;
+                                continue;
                             }
 
                             IntPtr pidl = CPidl.ILFindLastID(sel.PIDL);
@@ -2159,10 +2348,10 @@ namespace ExpControlsLib
                                 Debug.WriteLine($"Failed to get PIDL for item: {sel.DisplayName}");
                                 MessageBox.Show($"Failed to get ID for item: {sel.DisplayName}", "Error",
                                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                return;
+                                continue;
                             }
 
-                            pidls[i] = pidl;
+                            pidls.Add(pidl);
                         }
                     }
                     catch (Exception ex)
@@ -2181,7 +2370,7 @@ namespace ExpControlsLib
                 var path2 = CPidl.ToString(pidls[0]);
 #endif
                 // Get IContextMenu interface from the shell folder
-                if (pidls == null || pidls.Length == 0)
+                if (pidls == null || pidls.Count == 0)
                 {
                     Debug.WriteLine("No items to process");
                     return;
@@ -2189,7 +2378,7 @@ namespace ExpControlsLib
 
                 try
                 {
-                    int HR = folder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Length, pidls, 
+                    int HR = folder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Count, pidls.ToArray(), 
                         IID_IContextMenu, rgfReserved, out iUnknownOut);
 
                     if (HR != S_OK || iUnknownOut == IntPtr.Zero)
@@ -2240,8 +2429,24 @@ namespace ExpControlsLib
                         lpVerbW = lpVerbUni
                     };
 
+                    int topItemIndex = -1;
+                    if (cmd == "delete" && _listView.Items.Count > 0)
+                    { //prevent null references from invalid selections that were deleted
+                        topItemIndex = GetIndexOfFirstVisible();
+                        _listView.SelectedItems.Clear();
+                        _listView.SelectedIndices.Clear();
+                    }
                     // Execute the shell command
                     int invokeHR = m_WindowsContextMenu.winMenu.InvokeCommand(cmi);
+
+                    if (topItemIndex >= 0 && _listView.Items.Count > 0)
+                    {
+                        _listView.BeginInvoke(new Action(() =>
+                        {
+                            if (topItemIndex < _listView.Items.Count)
+                                _listView.Items[topItemIndex].EnsureVisible();
+                        }));
+                    }
 
                     if (invokeHR != S_OK)
                     {
@@ -2350,31 +2555,54 @@ namespace ExpControlsLib
             private const int WM_KEYDOWN = 0x0100;
 
             private readonly Action _onScroll;
+            private readonly ListView _listView;
 
             public ListViewScrollHook(ListView listView, Action onScroll)
             {
                 AssignHandle(listView.Handle);
                 _onScroll = onScroll;
+                _listView = listView;
             }
 
             protected override void WndProc(ref Message m)
             {
-                base.WndProc(ref m);
+                try
+                {
+                    base.WndProc(ref m);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine(ex.ToString());
+                    _listView.SelectedItems.Clear();
+                    _listView.SelectedIndices.Clear();
+                }
+
                 switch (m.Msg)
                 {
                     case WM_VSCROLL:
                     case WM_HSCROLL:
                     case WM_MOUSEWHEEL:
-                        _onScroll();
+                        QueueOnScroll();
                         break;
                     case WM_KEYDOWN:
                         Keys key = (Keys)m.WParam.ToInt32();
                         if (key == Keys.PageUp || key == Keys.PageDown || key == Keys.Home || key == Keys.End || key == Keys.Up || key == Keys.Down)
-                        {
-                            _onScroll();
-                        }
+                            QueueOnScroll();
                         break;
                 }
+            }
+
+            private int _scrollQueued;
+            private void QueueOnScroll()
+            {
+                if (_listView.IsDisposed || !_listView.IsHandleCreated) return;
+                if (System.Threading.Interlocked.Exchange(ref _scrollQueued, 1) == 1) return;
+
+                _listView.BeginInvoke((MethodInvoker)(() =>
+                {
+                    System.Threading.Interlocked.Exchange(ref _scrollQueued, 0);
+                    if (!_listView.IsDisposed) _onScroll?.Invoke();
+                }));
             }
         }
 
@@ -2392,14 +2620,23 @@ namespace ExpControlsLib
             Rectangle clientRect = _listView.ClientRectangle;
             bool large = (_listView.View == View.LargeIcon);
 
-            foreach (ListViewItem item in _listView.Items)
+            EnterListViewEnumeration();
+            try
             {
-                if (!clientRect.IntersectsWith(item.Bounds)) continue;
-
-                if (item.Tag is CShellItem csi && item.ImageIndex == -1)
+                foreach (ListViewItem item in _listView.Items)
                 {
-                    item.ImageIndex = SystemImageListManager.GetIconIndex(csi, large);
+                    if (item is null) continue;
+                    if (!clientRect.IntersectsWith(item.Bounds)) continue;
+
+                    if (item.Tag is CShellItem csi && item.ImageIndex == -1)
+                    {
+                        item.ImageIndex = SystemImageListManager.GetIconIndex(csi, large);
+                    }
                 }
+            }
+            finally
+            {
+                ExitListViewEnumeration();
             }
         }
 
@@ -2407,19 +2644,29 @@ namespace ExpControlsLib
 
         public int GetIndexOfFirstVisible()
         {
-            ListViewItem current;
+            ListViewItem? current;
             if (_listView.View == View.Details || _listView.View == View.List)
             {
                 current = _listView.TopItem;   // valid here
             }
             else
             {
-                current = _listView.Items
-                    .Cast<ListViewItem>()
-                    .Where(it => _listView.ClientRectangle.IntersectsWith(it.Bounds))
-                    .OrderBy(it => it.Bounds.Top)
-                    .ThenBy(it => it.Bounds.Left)
-                    .FirstOrDefault();
+                if (_listView.Items is null) return 0;
+
+                EnterListViewEnumeration();
+                try
+                {
+                    current = _listView.Items
+                        .Cast<ListViewItem>()
+                        .Where(it => it != null && _listView.ClientRectangle.IntersectsWith(it.Bounds))
+                        .OrderBy(it => it.Bounds.Top)
+                        .ThenBy(it => it.Bounds.Left)
+                        .FirstOrDefault();
+                }
+                finally
+                {
+                    ExitListViewEnumeration();
+                }
             }
 
             return (current?.Index == null ? 0 : current.Index);

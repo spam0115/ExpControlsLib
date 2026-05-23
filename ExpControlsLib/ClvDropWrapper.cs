@@ -179,6 +179,7 @@ namespace ExpControlsLib
 
             foreach (ListViewItem lvi in m_ListView.Items)
             {
+                if (lvi is null) continue;
                 CShellItem csi = lvi.Tag as CShellItem;
                 if (csi is not null)
                 {

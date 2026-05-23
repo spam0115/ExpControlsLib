@@ -100,5 +100,7 @@
   <ItemGroup>
     <ProjectReference Include="..\WindowsApiLib\WindowsApiLib.csproj" />
   </ItemGroup>
-  <PropertyGroup />
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
 </Project>

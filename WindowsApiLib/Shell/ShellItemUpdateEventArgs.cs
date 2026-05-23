@@ -11,9 +11,9 @@ namespace WindowsApiLib.Shell
     public class ShellItemUpdateEventArgs : EventArgs
     {
         private readonly CShellItem m_Item;
-        private readonly CShellItem.CShItemUpdateType m_Type;
+        private readonly CShItemUpdateType m_Type;
 
-        public ShellItemUpdateEventArgs(CShellItem Item, CShellItem.CShItemUpdateType @type)
+        public ShellItemUpdateEventArgs(CShellItem Item, CShItemUpdateType @type)
         {
             m_Item = Item;
             m_Type = type;
@@ -142,7 +142,7 @@ namespace WindowsApiLib.Shell
         ///      will have been already reported with previous Created and/or Deleted Events.
         /// </p>
         /// </remarks>
-        public CShellItem.CShItemUpdateType UpdateType
+        public CShItemUpdateType UpdateType
         {
             get
             {
