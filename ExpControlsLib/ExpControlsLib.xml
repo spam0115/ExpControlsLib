@@ -656,6 +656,37 @@
             Gets or sets the vertical scroll position of the list view.
             </summary>
         </member>
+        <member name="P:ExpControlsLib.ExpList.Count">
+            <summary>
+            Gets the number of items in the list view.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.SelectedCount">
+            <summary>
+            Gets the number of selected items in the list view.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.SelectedIndices">
+            <summary>
+            Gets the indices of the selected items.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.SelectedCShellItems">
+            <summary>
+            Gets an enumerable collection of selected CShellItems.
+            This is more efficient than using SelectedItems in virtual mode.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.GetItem(System.Int32)">
+            <summary>
+            Gets the CShellItem at the specified index.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.RemoveAt(System.Int32)">
+            <summary>
+            Removes the item at the specified index.
+            </summary>
+        </member>
         <member name="P:ExpControlsLib.ExpList.Columns">
             <summary>
             Gets the collection of all column headers that appear in the list view.
@@ -707,6 +738,11 @@
             </summary>
             <param name="column">The column index.</param>
             <param name="order">The sort order.</param>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.VirtualMode">
+            <summary>
+            Gets or sets a value indicating whether the list view is in virtual mode.
+            </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.WndProc(System.Windows.Forms.Message@)">
             <summary>
@@ -1613,12 +1649,12 @@
             Gets or creates an ImageList for the specified thumbnail size
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnail(System.Windows.Forms.ListViewItem,System.String,System.Int32)">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnail(System.Windows.Forms.ListViewItem,System.String,System.Int32,System.Int32)">
             <summary>
             Requests a thumbnail for a file and updates the ListView when ready
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnailFromCache(System.Windows.Forms.ListViewItem,System.String,System.Int32)">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnailFromCache(System.Windows.Forms.ListViewItem,System.String,System.Int32,System.Int32)">
             <summary>
             Requests a thumbnail for a file and updates the ListView when ready
             </summary>

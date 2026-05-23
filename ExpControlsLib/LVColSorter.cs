@@ -286,7 +286,9 @@ namespace ExpControlsLib
                 m_ColOrder[m_Col] = -1;
             }
 
-            m_View.Sort();
+            if (!m_View.VirtualMode)
+                m_View.Sort();
+
             ListViewSortGlyph.SetSortIcon(m_View, m_Col, order);
             SortOrderChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -299,7 +301,7 @@ namespace ExpControlsLib
                                               // Check that this instance of ListViewColumnSorter is still the operative one
                                               // if Me is not the operative ListViewColumnSorter, then remove this instance's Handler and exit
                                               // Debug.WriteLine("LVSorter ColumnClick on " & e.Column)
-            if (LV.ListViewItemSorter is null || !ReferenceEquals(LV.ListViewItemSorter, this))
+            if (!LV.VirtualMode && (LV.ListViewItemSorter is null || !ReferenceEquals(LV.ListViewItemSorter, this)))
             {
                 LV.ColumnClick -= ListView_ColumnClick;
                 return;
@@ -316,7 +318,10 @@ namespace ExpControlsLib
             {
                 m_ColOrder[m_Col] *= -1;
             }
-            LV.Sort();
+
+            if (!LV.VirtualMode)
+                LV.Sort();
+
             SortOrder Order;
 
             if (m_ColOrder.Length == 0) return;

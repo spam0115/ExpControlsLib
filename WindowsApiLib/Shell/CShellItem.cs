@@ -957,6 +957,8 @@ namespace WindowsApiLib.Shell
 
         private bool _IsSystem_HaveSysInfo = default;
         private bool _IsSystem_m_IsSystem = default;
+        public int ImageIndex;
+
         /// <summary>True if this instance has been marked "System", False otherwise
         /// </summary>
         /// <returns>True if this instance has been marked "System", False otherwise</returns>

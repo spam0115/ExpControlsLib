@@ -81,17 +81,23 @@ namespace ExpControlsLib
             {
                 // All items to drag MUST be in the same Folder!
                 var ctl = (ListView)m_Client;
-                if (ctl.SelectedItems.Count == 0) return;
+                if (ctl.SelectedIndices.Count == 0) return;
 
-                var items = new CShellItem[ctl.SelectedItems.Count];
-                var parent = ((CShellItem)ctl.SelectedItems[0].Tag).Parent;
+                var items = new CShellItem[ctl.SelectedIndices.Count];
+                
+                // Get first item to establish parent
+                var firstItem = ctl.Items[ctl.SelectedIndices[0]].Tag as CShellItem;
+                if (firstItem == null) return;
+                var parent = firstItem.Parent;
 
-                for (int i = 0; i < ctl.SelectedItems.Count; i++)
+                for (int i = 0; i < ctl.SelectedIndices.Count; i++)
                 {
-                    if (!ReferenceEquals(parent, ((CShellItem)ctl.SelectedItems[i].Tag).Parent))
+                    int index = ctl.SelectedIndices[i];
+                    var itemTag = ctl.Items[index].Tag as CShellItem;
+                    if (itemTag == null || !ReferenceEquals(parent, itemTag.Parent))
                         return;
 
-                    items[i] = (CShellItem)ctl.SelectedItems[i].Tag;
+                    items[i] = itemTag;
                 }
 
                 item = items[0];

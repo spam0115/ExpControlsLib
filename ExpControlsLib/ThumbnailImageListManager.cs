@@ -29,7 +29,8 @@ namespace ExpControlsLib
             public int Generation { get; set; }
             public string FilePath { get; set; }
             public int RequestedSize { get; set; }
-            public ListViewItem Item { get; set; }
+            public ListViewItem? Item { get; set; }
+            public int ItemIndex { get; set; } = -1;
         }
 
         public ThumbnailImageListManager(ListView listView)
@@ -37,6 +38,13 @@ namespace ExpControlsLib
             _listView = listView;
             _thumbnailProvider = new ThumbnailProvider();
             _thumbnailProvider.ThumbnailReady += OnThumbnailReady;
+        }
+
+        public int GetThumbnailIndex(string filePath, int requestedSize)
+        {
+            if (_imageIndexByKey.TryGetValue($"{filePath}|{requestedSize}", out int index))
+                return index;
+            return -1;
         }
 
         public void SetImageListSize(int thumbnailSize)
@@ -49,10 +57,13 @@ namespace ExpControlsLib
 
             _listView.BeginUpdate();
             _listView.LargeImageList = imageList;
-            foreach (ListViewItem item in _listView.Items)
+            if (!_listView.VirtualMode)
             {
-                if (item is null) continue;
-                item.ImageIndex = -1;
+                foreach (ListViewItem item in _listView.Items)
+                {
+                    if (item is null) continue;
+                    item.ImageIndex = -1;
+                }
             }
             _listView.EndUpdate();
         }
@@ -69,10 +80,13 @@ namespace ExpControlsLib
 
             _listView.LargeImageList = imageList;
 
-            foreach (ListViewItem item in _listView.Items)
+            if (!_listView.VirtualMode)
             {
-                if (item is null) continue;
-                item.ImageIndex = -1;
+                foreach (ListViewItem item in _listView.Items)
+                {
+                    if (item is null) continue;
+                    item.ImageIndex = -1;
+                }
             }
         }
 
@@ -108,10 +122,10 @@ namespace ExpControlsLib
         /// <summary>
         /// Requests a thumbnail for a file and updates the ListView when ready
         /// </summary>
-        public void RequestThumbnail(ListViewItem item, string filePath, int thumbnailSize)
+        public void RequestThumbnail(ListViewItem? item, string filePath, int thumbnailSize, int itemIndex = -1)
         {
 #if DEBUG
-            Console.WriteLine("\tRequesting thumbnail: " + item.Text);
+            if (item != null) Console.WriteLine("\tRequesting thumbnail: " + item.Text);
 #endif
 
             var reqObj = new ThumbnailRequestArgs
@@ -119,37 +133,39 @@ namespace ExpControlsLib
                 Generation = _generation,
                 FilePath = filePath,
                 RequestedSize = thumbnailSize,
-                Item = item
+                Item = item,
+                ItemIndex = itemIndex
             };
 
-            var csi = item.Tag as CShellItem;
+            var csi = item?.Tag as CShellItem;
             _thumbnailProvider.EnqueueThumbnailRequest(csi, thumbnailSize, reqObj);
         }
 
         /// <summary>
         /// Requests a thumbnail for a file and updates the ListView when ready
         /// </summary>
-        public void RequestThumbnailFromCache(ListViewItem item, string filePath, int thumbnailSize)
+        public void RequestThumbnailFromCache(ListViewItem? item, string filePath, int thumbnailSize, int itemIndex = -1)
         {
 #if DEBUG
-            Console.WriteLine("\tRequesting thumbnail: " + item.Text);
+            if (item != null) Console.WriteLine("\tRequesting thumbnail: " + item.Text);
 #endif
             var reqObj = new ThumbnailRequestArgs
             {
                 Generation = _generation,
                 FilePath = filePath,
                 RequestedSize = thumbnailSize,
-                Item = item
+                Item = item,
+                ItemIndex = itemIndex
             };
 
             string key = CreateKey(reqObj);
             if (_imageIndexByKey.TryGetValue(key, out int index))
             {
-                item.ImageIndex = index;
+                if (item != null) item.ImageIndex = index;
             }
             else
             {
-                var csi = item.Tag as CShellItem;
+                var csi = item?.Tag as CShellItem;
                 _thumbnailProvider.EnqueueThumbnailRequest(csi, thumbnailSize, reqObj);
             }
         }
@@ -170,7 +186,7 @@ namespace ExpControlsLib
             if (tag.RequestedSize != _activeSize) //this can happen if we switch display modes while thumbnail requests are outstanding
                 return;
 
-            if (tag.Item == null || tag.Item.ListView != _listView) return;
+            if (tag.Item != null && tag.Item.ListView != _listView) return;
 
             //// safety: ensure item still points to same shell object/path
             //if (!(tag.Item.Tag is CShellItem csi) || !string.Equals(csi.FullPath, tag.FilePath, StringComparison.OrdinalIgnoreCase))
@@ -214,7 +230,13 @@ namespace ExpControlsLib
         /// <param name="square"></param>
         private void ApplyThumbnailToUI(ThumbnailRequestArgs tag, Bitmap? square)
         {
-            if (tag.Item is null || tag.Item.ListView != _listView)
+            if (tag.Item == null && tag.ItemIndex == -1)
+            {
+                square?.Dispose();
+                return;
+            }
+
+            if (tag.Item != null && tag.Item.ListView != _listView)
             {
                 square?.Dispose();
                 return;
@@ -222,7 +244,7 @@ namespace ExpControlsLib
 
             if (square == null)
             {
-                tag.Item.ImageIndex = -1;
+                if (tag.Item != null) tag.Item.ImageIndex = -1;
                 return;
             }
 
@@ -259,7 +281,14 @@ namespace ExpControlsLib
                     //oldImage.Dispose(); do not do this.  internal state corruption
                 }
 
-                tag.Item.ImageIndex = index;
+                if (tag.Item != null)
+                {
+                    tag.Item.ImageIndex = index;
+                }
+                else if (tag.ItemIndex != -1)
+                {
+                    _listView.RedrawItems(tag.ItemIndex, tag.ItemIndex, false);
+                }
             }
             catch (Exception ex)
             {
