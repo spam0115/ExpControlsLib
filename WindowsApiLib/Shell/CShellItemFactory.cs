@@ -424,7 +424,7 @@ namespace WindowsApiLib.Shell
             else
             {
 #if DEBUG
-                var segments = CPidl.SegmentCount(pidl);
+                var length = CPidl.SegmentCount(pidl);
 #endif
                 csi.m_Pidl = pidl;
                

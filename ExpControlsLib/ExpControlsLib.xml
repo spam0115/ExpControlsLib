@@ -572,50 +572,6 @@
             Occurs when data for a custom column is requested.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.#ctor">
-            <summary>
-            Initializes a new instance of <see cref="T:ExpControlsLib.ExpList"/>, wires up all event handlers
-            for the control and its child <see cref="F:ExpControlsLib.ExpList._listView"/> ListView.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.ExpList_Load(System.Object,System.EventArgs)">
-            <summary>
-            Handles the <see cref="!:Control.Load"/> event of the <see cref="T:ExpControlsLib.ExpList"/> control.
-            Initializes drag and drop wrappers, thumbnail manager, and shell item update notifications.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.ExpFileList_HandleCreated(System.Object,System.EventArgs)">
-            <summary>
-            Handles the <see cref="E:System.Windows.Forms.Control.HandleCreated"/> event of the <see cref="F:ExpControlsLib.ExpList._listView"/> ListView.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.ExpList_VisibleChanged(System.Object,System.EventArgs)">
-            <summary>
-            Handles the <see cref="E:System.Windows.Forms.Control.VisibleChanged"/> event of the <see cref="T:ExpControlsLib.ExpList"/> control.
-            Re-configures image lists for the current display mode when the control becomes visible.
-            </summary>
-        </member>
-        <member name="T:ExpControlsLib.ExpList.ExpListGetColumnDataEventHandler">
-            <summary>
-            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListGetColumnData"/> event.
-            </summary>
-        </member>
-        <member name="T:ExpControlsLib.ExpList.DisplayModeChangedEventHandler">
-            <summary>
-            Delegate for the <see cref="E:ExpControlsLib.ExpList.DisplayModeChanged"/> event.
-            </summary>
-            <param name="newMode">The new <see cref="T:ExpControlsLib.ListViewDisplayMode"/>.</param>
-        </member>
-        <member name="E:ExpControlsLib.ExpList.DisplayModeChanged">
-            <summary>
-            Occurs when the <see cref="P:ExpControlsLib.ExpList.DisplayMode"/> has changed.
-            </summary>
-        </member>
-        <member name="E:ExpControlsLib.ExpList.SortOrderChanged">
-            <summary>
-            Occurs when the sort column or order has changed.
-            </summary>
-        </member>
         <member name="P:ExpControlsLib.ExpList.DisplayMode">
             <summary>
             Gets or sets the display mode used to present items in the list view.
@@ -626,15 +582,55 @@
             including standard views and thumbnail modes. Changing the display mode updates the appearance of the list
             view accordingly.</remarks>
         </member>
-        <member name="M:ExpControlsLib.ExpList.SetAndLoadImageList(ExpControlsLib.ListViewDisplayMode)">
+        <member name="P:ExpControlsLib.ExpList.Columns">
             <summary>
-            Configures the image lists bound to the ListView for the given display mode.
-            For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
-            list is applied and each item's <see cref="P:System.Windows.Forms.ListViewItem.ImageIndex"/> is refreshed.
-            For custom thumbnail modes, the ListView is switched to LargeIcon view and
-            <see cref="M:ExpControlsLib.ExpList.LoadThumbnails(System.Int32,System.Boolean)"/> is called to populate thumbnail images.
+            Gets the collection of all column headers that appear in the list view.
             </summary>
-            <param name="value">The <see cref="T:ExpControlsLib.ListViewDisplayMode"/> to configure for.</param>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.Items">
+            <summary>
+            Gets the collection of all items that appear in the list view.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.MultiSelect">
+            <summary>
+            Gets or sets a value indicating whether multiple items can be selected.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.FullRowSelect">
+            <summary>
+            Gets or sets a value indicating whether clicking an item selects all its subitems.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.GridLines">
+            <summary>
+            Gets or sets a value indicating whether grid lines appear between the rows and columns.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.HeaderStyle">
+            <summary>
+            Gets or sets the column header style.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.MinimalContextMenu">
+            <summary>
+            Gets or sets whether to show a minimal context menu by filtering out most 3rd party extensions.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.SortColumn">
+            <summary>
+            Gets or sets the column to sort on.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.SortOrder">
+            <summary>
+            Gets the current sort order.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.VirtualMode">
+            <summary>
+            Gets or sets a value indicating whether the list view is in virtual mode.
+            </summary>
         </member>
         <member name="P:ExpControlsLib.ExpList.CurrentPath">
             <summary>
@@ -687,51 +683,6 @@
             Removes the item at the specified index.
             </summary>
         </member>
-        <member name="P:ExpControlsLib.ExpList.Columns">
-            <summary>
-            Gets the collection of all column headers that appear in the list view.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpList.Items">
-            <summary>
-            Gets the collection of all items that appear in the list view.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpList.MultiSelect">
-            <summary>
-            Gets or sets a value indicating whether multiple items can be selected.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpList.FullRowSelect">
-            <summary>
-            Gets or sets a value indicating whether clicking an item selects all its subitems.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpList.GridLines">
-            <summary>
-            Gets or sets a value indicating whether grid lines appear between the rows and columns.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpList.HeaderStyle">
-            <summary>
-            Gets or sets the column header style.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpList.MinimalContextMenu">
-            <summary>
-            Gets or sets whether to show a minimal context menu by filtering out most 3rd party extensions.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpList.SortColumn">
-            <summary>
-            Gets or sets the column to sort on.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpList.SortOrder">
-            <summary>
-            Gets the current sort order.
-            </summary>
-        </member>
         <member name="M:ExpControlsLib.ExpList.SetSort(System.Int32,System.Windows.Forms.SortOrder)">
             <summary>
             Sets the sort column and order.
@@ -739,9 +690,27 @@
             <param name="column">The column index.</param>
             <param name="order">The sort order.</param>
         </member>
-        <member name="P:ExpControlsLib.ExpList.VirtualMode">
+        <member name="M:ExpControlsLib.ExpList.#ctor">
             <summary>
-            Gets or sets a value indicating whether the list view is in virtual mode.
+            Initializes a new instance of <see cref="T:ExpControlsLib.ExpList"/>, wires up all event handlers
+            for the control and its child <see cref="F:ExpControlsLib.ExpList._listView"/> ListView.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ExpList_Load(System.Object,System.EventArgs)">
+            <summary>
+            Handles the <see cref="!:Control.Load"/> event of the <see cref="T:ExpControlsLib.ExpList"/> control.
+            Initializes drag and drop wrappers, thumbnail manager, and shell item update notifications.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ExpFileList_HandleCreated(System.Object,System.EventArgs)">
+            <summary>
+            Handles the <see cref="E:System.Windows.Forms.Control.HandleCreated"/> event of the <see cref="F:ExpControlsLib.ExpList._listView"/> ListView.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ExpList_VisibleChanged(System.Object,System.EventArgs)">
+            <summary>
+            Handles the <see cref="E:System.Windows.Forms.Control.VisibleChanged"/> event of the <see cref="T:ExpControlsLib.ExpList"/> control.
+            Re-configures image lists for the current display mode when the control becomes visible.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.WndProc(System.Windows.Forms.Message@)">
@@ -749,6 +718,27 @@
             Overrides <see cref="M:System.Windows.Forms.Control.WndProc(System.Windows.Forms.Message@)"/> to handle shell context menu messages.
             </summary>
             <param name="m">The Windows <see cref="T:System.Windows.Forms.Message"/> to process.</param>
+        </member>
+        <member name="T:ExpControlsLib.ExpList.ExpListGetColumnDataEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListGetColumnData"/> event.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ExpList.DisplayModeChangedEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.DisplayModeChanged"/> event.
+            </summary>
+            <param name="newMode">The new <see cref="T:ExpControlsLib.ListViewDisplayMode"/>.</param>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.DisplayModeChanged">
+            <summary>
+            Occurs when the <see cref="P:ExpControlsLib.ExpList.DisplayMode"/> has changed.
+            </summary>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.SortOrderChanged">
+            <summary>
+            Occurs when the sort column or order has changed.
+            </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.DisplayFiles(System.String,WindowsApiLib.Shell.CShellItem,System.Boolean,System.Boolean)">
             <summary>
@@ -802,18 +792,6 @@
             </summary>
             <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to create the list view item for.</param>
             <returns>A configured <see cref="T:System.Windows.Forms.ListViewItem"/>.</returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.GetThumbnailSizeForMode(System.Nullable{ExpControlsLib.ListViewDisplayMode})">
-            <summary>
-            Gets the pixel size for a given thumbnail display mode
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.LoadThumbnails(System.Int32,System.Boolean)">
-            <summary>
-            Loads thumbnails into image lists.  Then assigns the image list to the ListView.
-            </summary>
-            <param name="thumbnailSize">The size of the thumbnails to load.</param>
-            <param name="onlyVisible">If true, only loads thumbnails for items currently visible in the viewport that don't already have one.</param>
         </member>
         <member name="P:ExpControlsLib.ExpList.SelectedItems">
             <summary>
@@ -1015,6 +993,28 @@
             <summary>
             Finds a ListViewItem by its full filesystem path.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.SetAndLoadImageList(ExpControlsLib.ListViewDisplayMode)">
+            <summary>
+            Configures the image lists bound to the ListView for the given display mode.
+            For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
+            list is applied and each item's <see cref="P:System.Windows.Forms.ListViewItem.ImageIndex"/> is refreshed.
+            For custom thumbnail modes, the ListView is switched to LargeIcon view and
+            <see cref="M:ExpControlsLib.ExpList.LoadThumbnails(System.Int32,System.Boolean)"/> is called to populate thumbnail images.
+            </summary>
+            <param name="value">The <see cref="T:ExpControlsLib.ListViewDisplayMode"/> to configure for.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.GetThumbnailSizeForMode(System.Nullable{ExpControlsLib.ListViewDisplayMode})">
+            <summary>
+            Gets the pixel size for a given thumbnail display mode
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.LoadThumbnails(System.Int32,System.Boolean)">
+            <summary>
+            Loads thumbnails into image lists.  Then assigns the image list to the ListView.
+            </summary>
+            <param name="thumbnailSize">The size of the thumbnails to load.</param>
+            <param name="onlyVisible">If true, only loads thumbnails for items currently visible in the viewport that don't already have one.</param>
         </member>
         <member name="F:ExpControlsLib.ExpList._thumbnailTimer">
              <summary>
