@@ -444,50 +444,53 @@ namespace ExpControlsLib
         {
             mode = mode == null ? DisplayMode : mode;
 
-            if (mode <= ListViewDisplayMode.Tile) //todo: change this to lazy load
+            if (mode <= ListViewDisplayMode.Tile)
             {
                 bool large = (mode == ListViewDisplayMode.LargeIcon);
-                
-                //try
-                //{
-                //    _listView.BeginUpdate();
 
-                //    if (_useVirtualMode)
-                //    {
-                //        for (int i = 0; i < Count; i++)
-                //        {
-                //            CShellItem? item = GetItem(i);
-                //            if (item is null) continue;
+                try
+                {
+                    _listView.BeginUpdate();
 
-                //            item.ImageIndex = SystemImageListManager.GetIconIndex(item, large);
-                //            if (item.LVItem is not null)
-                //                item.LVItem.ImageIndex = item.ImageIndex;
-                //        }
-                //    }
-                //    else
-                //    {
-                //        EnterListViewEnumeration();
-                //        try
-                //        {
-                //            foreach (ListViewItem lvi in _listView.Items)
-                //            {
-                //                if (lvi is null) continue;
-                //                if (lvi.Tag is CShellItem csi)
-                //                    lvi.ImageIndex = SystemImageListManager.GetIconIndex(csi, large);
-                //                else
-                //                    lvi.ImageIndex = -1;
-                //            }
-                //        }
-                //        finally
-                //        {
-                //            ExitListViewEnumeration();
-                //        }
-                //    }
-                //}
-                //finally
-                //{
-                //    _listView.EndUpdate();
-                //}
+                    if (_useVirtualMode)
+                    {
+                        int topIndex = GetTopIndex();
+                        int countPerPage = GetCountPerPage();
+                        int lastIndex = Math.Min(_virtualItems.Count - 1, topIndex + countPerPage + 10);
+                        for (int i = topIndex; i <= lastIndex; i++)
+                        {
+                            var item = GetItem(i);
+                            if (item is null) continue;
+
+                            item.ImageIndex = SystemImageListManager.GetIconIndex(item, large);
+                            if (_itemCache.TryGetValue(i, out var cachedLvi))
+                                cachedLvi.ImageIndex = item.ImageIndex;
+                        }
+                    }
+                    else
+                    {
+                        EnterListViewEnumeration();
+                        try
+                        {
+                            foreach (ListViewItem lvi in _listView.Items)
+                            {
+                                if (lvi is null) continue;
+                                if (lvi.Tag is CShellItem csi)
+                                    lvi.ImageIndex = SystemImageListManager.GetIconIndex(csi, large);
+                                else
+                                    lvi.ImageIndex = -1;
+                            }
+                        }
+                        finally
+                        {
+                            ExitListViewEnumeration();
+                        }
+                    }
+                }
+                finally
+                {
+                    _listView.EndUpdate();
+                }
             }
             else
             {
@@ -921,7 +924,8 @@ namespace ExpControlsLib
                     UpdateIndexMapping();
                     _itemCache.Clear();
                     _listView.VirtualListSize = _virtualItems.Count;
-                    if (!samePath) LoadVisibleIcons();
+                    // Removed LoadVisibleIcons call: the 200ms debounce timer started by 
+                    // OnListViewScroll will handle the initial load correctly after layout.
                 }
                 else
                 {
@@ -947,7 +951,6 @@ namespace ExpControlsLib
 
             if (IsThumbnailViewMode())
             {
-                //LoadThumbnails(GetThumbnailSizeForMode(), true); //doesn't work for some reason
                 OnListViewScroll();
             }
 
@@ -1136,42 +1139,46 @@ namespace ExpControlsLib
         {
             if (!_listView.IsHandleCreated) return;
 
-            Rectangle clientRect = _listView.ClientRectangle;
-            clientRect.Height *= 2; //preload beyond visual range
             EnterListViewEnumeration();
             try
             {
                 if (_useVirtualMode)
                 {
-                    // For virtual mode, iterate through visible indices
-                    // RedrawItems triggers RetrieveVirtualItem which will then call RequestThumbnail
-                    // However, we can also call it directly here to be more proactive
-                    int topIndex = GetTopIndex();
-                    int countPerPage = GetCountPerPage();
-                    int lastIndex = Math.Min(_virtualItems.Count - 1, topIndex + countPerPage * 2);
-                    
-                    for (int i = topIndex; i <= lastIndex; i++)
+                    int startIndex = 0;
+                    int endIndex = _virtualItems.Count - 1;
+
+                    if (onlyVisible)
+                    {
+                        int topIndex = GetTopIndex();
+                        int countPerPage = GetCountPerPage();
+                        // Use a reasonable buffer (1 page above/below) for smoother scrolling
+                        startIndex = Math.Max(0, topIndex - countPerPage);
+                        endIndex = Math.Min(_virtualItems.Count - 1, topIndex + countPerPage * 2);
+                    }
+
+                    for (int i = startIndex; i <= endIndex; i++)
                     {
                         var item = _virtualItems[i];
-                        if (onlyVisible)
-                        {
-                            if (_itemCache.TryGetValue(i, out var cachedLvi) && cachedLvi.ImageIndex != -1) continue;
-                        }
+                        // Skip if already in image list (GetThumbnailIndex will return != -1)
+                        if (onlyVisible && _thumbnailManager.GetThumbnailIndex(item.FullPath, thumbnailSize) != -1)
+                            continue;
 
-                        _thumbnailManager.RequestThumbnail(null, item.FullPath, thumbnailSize, i);
+                        _thumbnailManager.RequestThumbnail(null, item.FullPath, thumbnailSize, i, item);
                     }
                 }
                 else
                 {
+                    Rectangle clientRect = _listView.ClientRectangle;
+                    clientRect.Inflate(0, clientRect.Height); // buffer zone
+
                     foreach (ListViewItem item in _listView.Items)
                     {
                         if (item is null) continue;
-                        // If onlyVisible is true, skip items already loaded or not currently visible
                         if (onlyVisible && item.ImageIndex != -1) continue;
                         if (!clientRect.IntersectsWith(item.Bounds)) continue;
 
                         if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
-                            _thumbnailManager.RequestThumbnail(item, csi.FullPath, thumbnailSize);
+                            _thumbnailManager.RequestThumbnail(item, csi.FullPath, thumbnailSize, -1, csi);
                     }
                 }
             }
@@ -1483,7 +1490,7 @@ namespace ExpControlsLib
                                 {
                                     _itemCache.Remove(index);
                                     if (IsThumbnailViewMode())
-                                        _thumbnailManager.RequestThumbnail(null, e.Item.FullPath, GetThumbnailSizeForMode(), index);
+                                        _thumbnailManager.RequestThumbnail(null, e.Item.FullPath, GetThumbnailSizeForMode(), index, e.Item);
                                     else
                                         _listView.RedrawItems(index, index, false);
                                 }
@@ -1493,7 +1500,7 @@ namespace ExpControlsLib
                                 var lvi = FindLVItem(e.Item);
                                 if (lvi != null) {
                                     if (IsThumbnailViewMode())
-                                        _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode());
+                                        _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode(), -1, e.Item);
                                     else 
                                         lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal; 
                                 }
@@ -1509,7 +1516,7 @@ namespace ExpControlsLib
                                 {
                                     _itemCache.Remove(index);
                                     if (IsThumbnailViewMode())
-                                        _thumbnailManager.RequestThumbnail(null, e.Item.FullPath, GetThumbnailSizeForMode(), index);
+                                        _thumbnailManager.RequestThumbnail(null, e.Item.FullPath, GetThumbnailSizeForMode(), index, e.Item);
                                     else
                                         _listView.RedrawItems(index, index, false);
                                 }
@@ -1521,7 +1528,7 @@ namespace ExpControlsLib
                                 {
                                     lvi.Text = e.Item.DisplayName;
                                     if (IsThumbnailViewMode())
-                                        _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode());
+                                        _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode(), -1, e.Item);
                                     else lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
                                 }
                             }
@@ -1583,6 +1590,13 @@ namespace ExpControlsLib
 
             if (_itemCache.TryGetValue(e.ItemIndex, out var lvi))
             {
+                // Sync ImageIndex if it was updated in the background while item was cached
+                if (IsThumbnailViewMode() && lvi.ImageIndex == -1)
+                {
+                    var csi = _virtualItems[e.ItemIndex];
+                    int thumbIndex = _thumbnailManager.GetThumbnailIndex(csi.FullPath, GetThumbnailSizeForMode());
+                    if (thumbIndex != -1) lvi.ImageIndex = thumbIndex;
+                }
                 e.Item = lvi;
                 return;
             }

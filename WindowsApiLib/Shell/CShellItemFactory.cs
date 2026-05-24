@@ -314,25 +314,6 @@ namespace WindowsApiLib.Shell
 
             return csi;
 
-            //if (parent != null)
-            //{
-            //    csi.m_Parent = parent;
-            //    return csi;
-            //}
-
-            //var splitted = CPidl.Split(fullPidl);
-
-            ////todo: change this to lazy load
-            ////csi.m_Parent = CShellItemFactory.GetOrCreateCShItem(splitted.ParentPidl);
-            //CShellItemFactory.BrowseTo(splitted.ParentPidl, out parent);
-            //if (parent == null)
-            //{
-            //    parent = CreateCShItem(splitted.ParentPidl);
-            //}
-
-            //csi.m_Parent = parent;
-            //return csi;
-
         }
 
         /// <summary>
@@ -442,6 +423,9 @@ namespace WindowsApiLib.Shell
             }
             else
             {
+#if DEBUG
+                var segments = CPidl.SegmentCount(pidl);
+#endif
                 csi.m_Pidl = pidl;
                
                 csi.m_Parent = parentCsi;
@@ -634,46 +618,29 @@ namespace WindowsApiLib.Shell
         {
             var rVal = new CShellItemCollection(csi);
             if (csi.Folder is null)
-                return rVal; // Added 10/22/2011 to deal with certain Virtual Folders
+                return rVal;
             CShellItem itm;
-            // Debug.WriteLine("GContent " & Me.Path)
-            // Dim StTime As DateTime = Now()
-            // Dim content As ArrayList = GetContentPtrs(flags)       '11/09/2013 - should have been commented out originally
-            // Debug.WriteLine("GPtrRel " & Now().Subtract(StTime).TotalMilliseconds.ToString & " ms")
-            // StTime = Now()
-            // For Each ptr In content
-            foreach (IntPtr ptr in GetPidlsOfFolder(csi, flags))
+
+            foreach (IntPtr pidl in GetPidlsOfFolder(csi, flags))
             {
-                if (ptr == IntPtr.Zero)                                               // 11/09/2013 - Investigate other
+                if (pidl == IntPtr.Zero)
                 {
-                    Debug.WriteLine("Content=IntPtr.Zero while filling " + csi.FullPath);     // 11/09/2013 - Investigate other
-                    Marshal.FreeCoTaskMem(ptr);                                          // 11/09/2013 - Investigate other
-                    continue;                                                        // 11/09/2013 - Investigate other
+                    Debug.WriteLine("Content=IntPtr.Zero while filling " + csi.FullPath);
+                    Marshal.FreeCoTaskMem(pidl);
+                    continue;
                 }
-                else
+
+                try
                 {
-                    try                                         // ASUS Fix 'mod 06/27/09 First fix added
-                    {
-                        itm = CreateCShItem(ptr, csi);
-                        rVal.Add(itm);
-                    }
-                    // Catch ex As InvalidCastException             'ASUS Fix - superceeded 11/13/2013
-                    // Debug.WriteLine("GetContents - InvCast") 'ASUS Fix
-                    // Debug.WriteLine("GetContents - Exception: " & ex.Message)   '11/09/2013 - Investigate other
-                    // Debug.WriteLine("Processing " & Me.Path)                    '11/09/2013 - Investigate other
-                    // DumpPidl(ptr)                                               '11/09/2013 - Investigate other
-                    catch (Exception ex)                                           // 11/09/2013 - Investigate other
-                                                                                   // ASUS Fix
-                    {
-                    }
-                    finally
-                    {
-                        Marshal.FreeCoTaskMem(ptr);
-                    }
-                }           // ASUS Fix
-                            // 11/09/2013 - Investigate other
+                    itm = CreateCShItem(pidl, csi);
+                    rVal.Add(itm);
+                }
+                finally
+                {
+                    Marshal.FreeCoTaskMem(pidl);
+                }
             }
-            // Debug.WriteLine("BuildItems " & Now().Subtract(StTime).TotalMilliseconds.ToString & " ms")
+
             return rVal;
         }
 

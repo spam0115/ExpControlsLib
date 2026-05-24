@@ -122,7 +122,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Requests a thumbnail for a file and updates the ListView when ready
         /// </summary>
-        public void RequestThumbnail(ListViewItem? item, string filePath, int thumbnailSize, int itemIndex = -1)
+        public void RequestThumbnail(ListViewItem? item, string filePath, int thumbnailSize, int itemIndex = -1, CShellItem? csi = null)
         {
 #if DEBUG
             if (item != null) Console.WriteLine("\tRequesting thumbnail: " + item.Text);
@@ -137,14 +137,14 @@ namespace ExpControlsLib
                 ItemIndex = itemIndex
             };
 
-            var csi = item?.Tag as CShellItem;
+            csi ??= item?.Tag as CShellItem;
             _thumbnailProvider.EnqueueThumbnailRequest(csi, thumbnailSize, reqObj);
         }
 
         /// <summary>
         /// Requests a thumbnail for a file and updates the ListView when ready
         /// </summary>
-        public void RequestThumbnailFromCache(ListViewItem? item, string filePath, int thumbnailSize, int itemIndex = -1)
+        public void RequestThumbnailFromCache(ListViewItem? item, string filePath, int thumbnailSize, int itemIndex = -1, CShellItem? csi = null)
         {
 #if DEBUG
             if (item != null) Console.WriteLine("\tRequesting thumbnail: " + item.Text);
@@ -165,7 +165,7 @@ namespace ExpControlsLib
             }
             else
             {
-                var csi = item?.Tag as CShellItem;
+                csi ??= item?.Tag as CShellItem;
                 _thumbnailProvider.EnqueueThumbnailRequest(csi, thumbnailSize, reqObj);
             }
         }

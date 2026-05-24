@@ -253,7 +253,8 @@ namespace ExpControlsLib
             try
             {
 #if DEBUG
-                string name = CPidl.ToString(CPidl.ILFindLastID(pidl));
+                string name = CPidl.ToString(pidl);
+                var length = CPidl.SegmentCount(pidl);
                 Console.WriteLine("\tRequesting thumbnail from OS: " + name);
 #endif
                 Guid iid = ShellAPI.IID_IShellItemImageFactory;

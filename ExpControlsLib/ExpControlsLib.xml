@@ -1649,12 +1649,12 @@
             Gets or creates an ImageList for the specified thumbnail size
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnail(System.Windows.Forms.ListViewItem,System.String,System.Int32,System.Int32)">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnail(System.Windows.Forms.ListViewItem,System.String,System.Int32,System.Int32,WindowsApiLib.Shell.CShellItem)">
             <summary>
             Requests a thumbnail for a file and updates the ListView when ready
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnailFromCache(System.Windows.Forms.ListViewItem,System.String,System.Int32,System.Int32)">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnailFromCache(System.Windows.Forms.ListViewItem,System.String,System.Int32,System.Int32,WindowsApiLib.Shell.CShellItem)">
             <summary>
             Requests a thumbnail for a file and updates the ListView when ready
             </summary>
