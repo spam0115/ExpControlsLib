@@ -42,7 +42,7 @@ namespace ExpControlsLib
             _listView = new ListView();
             SuspendLayout();
             // 
-            // _ListView
+            // _listView
             // 
             _listView.BorderStyle = BorderStyle.FixedSingle;
             _listView.Dock = DockStyle.Fill;
@@ -50,7 +50,7 @@ namespace ExpControlsLib
             _listView.LabelEdit = true;
             _listView.Location = new Point(0, 0);
             _listView.Margin = new Padding(4, 3, 4, 3);
-            _listView.Name = "_ListView";
+            _listView.Name = "_listView";
             _listView.Size = new Size(817, 346);
             _listView.TabIndex = 2;
             _listView.UseCompatibleStateImageBehavior = false;
@@ -60,6 +60,7 @@ namespace ExpControlsLib
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
+            AutoScroll = true;
             Controls.Add(_listView);
             Margin = new Padding(4, 3, 4, 3);
             Name = "ExpList";

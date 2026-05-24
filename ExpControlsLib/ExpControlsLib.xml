@@ -994,24 +994,40 @@
             Finds a ListViewItem by its full filesystem path.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ExpList.GetTopIndex">
+            <summary>
+            Returns a "top-like" index for any ListView mode.
+            - Details/List: effectively top row index
+            - LargeIcon/SmallIcon/Tile: top-left visible item index
+            Works in virtual and non-virtual mode.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ExpList.SetAndLoadImageList(ExpControlsLib.ListViewDisplayMode)">
             <summary>
             Configures the image lists bound to the ListView for the given display mode.
             For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
             list is applied and each item's <see cref="P:System.Windows.Forms.ListViewItem.ImageIndex"/> is refreshed.
             For custom thumbnail modes, the ListView is switched to LargeIcon view and
-            <see cref="M:ExpControlsLib.ExpList.LoadThumbnails(System.Int32,System.Boolean)"/> is called to populate thumbnail images.
+            <see cref="M:ExpControlsLib.ExpList.LoadThumbnailsForItems(System.Int32,System.Boolean)"/> is called to populate thumbnail images.
             </summary>
             <param name="value">The <see cref="T:ExpControlsLib.ListViewDisplayMode"/> to configure for.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.LoadIconsForItems(System.Boolean)">
+            <summary>
+            loads icons (not thumbnails) for the items in the list.
+            Can either load all icons or only icons near the visible section.
+            </summary>
+            <param name="onlyVisible">true if you only want icons near the visible items.</param>
         </member>
         <member name="M:ExpControlsLib.ExpList.GetThumbnailSizeForMode(System.Nullable{ExpControlsLib.ListViewDisplayMode})">
             <summary>
             Gets the pixel size for a given thumbnail display mode
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.LoadThumbnails(System.Int32,System.Boolean)">
+        <member name="M:ExpControlsLib.ExpList.LoadThumbnailsForItems(System.Int32,System.Boolean)">
             <summary>
-            Loads thumbnails into image lists.  Then assigns the image list to the ListView.
+            loads thumbnails (not icons) for the items in the list.
+            Can either load all thumbnails or only some thumbnails near the visible section.
             </summary>
             <param name="thumbnailSize">The size of the thumbnails to load.</param>
             <param name="onlyVisible">If true, only loads thumbnails for items currently visible in the viewport that don't already have one.</param>

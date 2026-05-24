@@ -875,6 +875,15 @@ namespace WindowsApiLib.Shell
         #region            SendMessage
         public const int SB_HORZ = 0;
         public const int SB_VERT = 1;
+        [StructLayout(LayoutKind.Sequential)]
+        public struct LVHITTESTINFO
+        {
+            public POINT pt;
+            public uint flags;
+            public int iItem;
+            public int iSubItem;
+            public int iGroup; // safe for modern comctl; ignored if unused
+        }
 
         // <summary>
         // Sends a message to some Window
@@ -882,17 +891,23 @@ namespace WindowsApiLib.Shell
         [DllImport("User32.dll", CharSet = CharSet.Auto)]
         public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, int wParam, int lParam);
 
-        [DllImport("user32.dll")]
-        public static extern int GetScrollPos(IntPtr hWnd, int nBar);
-
-        [DllImport("user32", CharSet = CharSet.Auto)]
-        public static extern int SendMessage(IntPtr hWnd, WM wMsg, int wParam, IntPtr lParam);
-
         [DllImport("User32.dll", CharSet = CharSet.Auto)]
         public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, int wParam, IntPtr lParam);
 
         [DllImport("user32", CharSet = CharSet.Auto)]
         public static extern IntPtr SendMessage(IntPtr hWnd, uint wMsg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, ref RECT lParam);
+        
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref LVHITTESTINFO lParam);
+
+        [DllImport("user32.dll")]
+        public static extern int GetScrollPos(IntPtr hWnd, int nBar);
+
+        [DllImport("user32", CharSet = CharSet.Auto)]
+        public static extern int SendMessage(IntPtr hWnd, WM wMsg, int wParam, IntPtr lParam);
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern bool SendMessage(IntPtr hWnd, uint wMsg, int wParam, ref LVBKIMAGE lParam);

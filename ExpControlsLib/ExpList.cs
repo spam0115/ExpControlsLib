@@ -604,9 +604,9 @@ namespace ExpControlsLib
             {
                 _thumbnailTimer.Stop();
                 if (IsThumbnailViewMode())
-                    LoadThumbnails(GetThumbnailSizeForMode(), true);
+                    LoadThumbnailsForItems(GetThumbnailSizeForMode(), true);
                 else
-                    LoadIconsForVisibleItems(true);
+                    LoadIconsForItems(true);
             };
 
             // Converted from Handles clauses in VB
@@ -677,8 +677,6 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpFileList_HandleCreated(object sender, EventArgs e)
         {
-            //SystemImageListManager.SetListViewImageList(ExpFileList, false, false);
-            //SystemImageListManager.SetListViewImageList(ExpFileList, true, false);
             _scrollHook = new ListViewScrollHook(_listView, OnListViewScroll);
         }
 
@@ -816,6 +814,7 @@ namespace ExpControlsLib
             {
                 int totalItems;
 
+                Console.WriteLine("\tSorting...");
                 fileList.Sort();
                 totalItems = fileList.Count;
                 if (includeFolder)
@@ -823,6 +822,7 @@ namespace ExpControlsLib
                     dirList.Sort();
                     totalItems += dirList.Count;
                 }
+                Console.WriteLine("\tSorting done");
 
                 var combList = new List<CShellItem>(totalItems);
                 if (includeFolder) combList.AddRange(dirList);
@@ -843,6 +843,7 @@ namespace ExpControlsLib
                     var combinedLvi = new List<ListViewItem>(combList.Count);
                     int topIndex = this.GetIndexOfFirstVisible();
 
+                    Console.WriteLine("\tMaking ListViewItems...");
                     _itemIndex.Clear();
                     foreach (CShellItem item in combList)
                     {
@@ -854,6 +855,7 @@ namespace ExpControlsLib
 
                         combinedLvi.Add(lvi);
                     }
+                    Console.WriteLine("\tDone making ListViewItems.");
 
                     if (!RequestListViewRefresh(combinedLvi.ToArray(), !samePath)) return;
                 }
@@ -973,6 +975,7 @@ namespace ExpControlsLib
 
                 var newItems = _pendingItems ?? Array.Empty<ListViewItem>();
 
+                Console.WriteLine("Begin loading items into listview...");
                 _listView.BeginUpdate();
                 try
                 {
@@ -995,6 +998,7 @@ namespace ExpControlsLib
                 {
                     _listView.EndUpdate();
                 }
+                Console.WriteLine("End loading items into listview");
             }
             finally
             {
@@ -1004,8 +1008,6 @@ namespace ExpControlsLib
         }
 
         #endregion
-
-        #region MakeLVItem
 
         /// <summary>
         /// Creates a <see cref="ListViewItem"/> for a given <see cref="CShellItem"/>.
@@ -1024,22 +1026,37 @@ namespace ExpControlsLib
             return lvi;
         }
 
-
-        private const int LVM_GETTOPINDEX = 0x1000 + 39;
-        private const int LVM_GETCOUNTPERPAGE = 0x1000 + 40;
-
-        private int GetTopIndex()
+        public int GetIndexOfFirstVisible()
         {
-            return (int)SendMessage(_listView.Handle, LVM_GETTOPINDEX, 0, IntPtr.Zero);
+            ListViewItem? current;
+            if (_listView.View == View.Details || _listView.View == View.List)
+            {
+                current = _listView.TopItem;   // valid here
+            }
+            else
+            {
+                if (_listView.Items is null) return 0;
+
+                EnterListViewEnumeration();
+                try
+                {
+                    current = _listView.Items
+                        .Cast<ListViewItem>()
+                        .Where(it => it != null && _listView.ClientRectangle.IntersectsWith(it.Bounds))
+                        .OrderBy(it => it.Bounds.Top)
+                        .ThenBy(it => it.Bounds.Left)
+                        .FirstOrDefault();
+                }
+                finally
+                {
+                    ExitListViewEnumeration();
+                }
+            }
+
+            return (current?.Index == null ? 0 : current.Index);
         }
 
-        private int GetCountPerPage()
-        {
-            //return (int)SendMessage(_listView.Handle, LVM_GETCOUNTPERPAGE, 0, IntPtr.Zero); //doesn't work in virtual mode
-            return 50; // good enough approximation for our purposes, and works in virtual mode
-        }
 
-        #endregion
 
         #region Dynamic Update Handler
 
@@ -1643,6 +1660,7 @@ namespace ExpControlsLib
         }
 
         #endregion
+
 
         #region Navigation
 
@@ -2762,6 +2780,202 @@ namespace ExpControlsLib
             return null;
         }
 
+
+        private const int LVM_GETTOPINDEX = LVM_FIRST + 39;
+        private const int LVM_GETNEXTITEM = LVM_FIRST + 12;
+        private const int LVM_GETITEMRECT = LVM_FIRST + 14;
+        private const int LVM_HITTEST = LVM_FIRST + 18;
+
+        private const int LVNI_VISIBLE = 0x0008;
+        private const int LVIR_BOUNDS = 0; // for LVM_GETITEMRECT
+        private const int LVM_GETCOUNTPERPAGE = 0x1000 + 40;
+
+
+        /// <summary>
+        /// Returns a "top-like" index for any ListView mode.
+        /// - Details/List: effectively top row index
+        /// - LargeIcon/SmallIcon/Tile: top-left visible item index
+        /// Works in virtual and non-virtual mode.
+        /// </summary>
+        public int GetTopIndex()
+        {
+            if (_listView == null || !_listView.IsHandleCreated) return -1;
+
+            int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+            if (total <= 0) return -1;
+
+            // 1) Fast path for row-like views
+            int top = (int)SendMessage(_listView.Handle, LVM_GETTOPINDEX, IntPtr.Zero, IntPtr.Zero);
+            if ((_listView.View == View.Details || _listView.View == View.List) && top >= 0 && top < total)
+                return top;
+
+            // 2) Try visible enumeration (works in many non-virtual cases)
+            int byVisibleEnum = FindTopLeftByVisibleEnumeration(total);
+            if (byVisibleEnum >= 0) return byVisibleEnum;
+
+            // 3) Virtual-safe fallback: scan viewport by hit-test
+            int byHitTestScan = FindTopLeftByHitTestScan(total);
+            if (byHitTestScan >= 0) return byHitTestScan;
+
+            // 4) Last fallback
+            return (top >= 0 && top < total) ? top : -1;
+        }
+
+        private int FindTopLeftByVisibleEnumeration(int total)
+        {
+            int bestIndex = -1;
+            int bestTop = int.MaxValue;
+            int bestLeft = int.MaxValue;
+
+            int i = -1;
+            while (true)
+            {
+                i = (int)SendMessage(_listView.Handle, LVM_GETNEXTITEM, (IntPtr)i, (IntPtr)LVNI_VISIBLE);
+                if (i < 0) break;
+                if (i >= total) continue;
+
+                RECT rc = new RECT { left = LVIR_BOUNDS };
+                if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)i, ref rc) == IntPtr.Zero)
+                    continue;
+
+                if (rc.top < bestTop || (rc.top == bestTop && rc.left < bestLeft))
+                {
+                    bestTop = rc.top;
+                    bestLeft = rc.left;
+                    bestIndex = i;
+                }
+            }
+
+            return bestIndex;
+        }
+
+        private int FindTopLeftByHitTestScan(int total)
+        {
+            var client = _listView.ClientRectangle;
+            if (client.Width <= 0 || client.Height <= 0) return -1;
+
+            int step = Math.Max(6, _listView.Font.Height / 2);
+
+            int bestIndex = -1;
+            int bestTop = int.MaxValue;
+            int bestLeft = int.MaxValue;
+
+            for (int y = 0; y < client.Height; y += step)
+            {
+                for (int x = 0; x < client.Width; x += step)
+                {
+                    int idx = HitTestIndex(x, y);
+                    if (idx < 0 || idx >= total) continue;
+
+                    RECT rc = new RECT { left = LVIR_BOUNDS };
+                    if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)idx, ref rc) != IntPtr.Zero)
+                    {
+                        if (rc.top < bestTop || (rc.top == bestTop && rc.left < bestLeft))
+                        {
+                            bestTop = rc.top;
+                            bestLeft = rc.left;
+                            bestIndex = idx;
+                        }
+                    }
+                    else
+                    {
+                        // fallback ordering if rect unavailable
+                        if (y < bestTop || (y == bestTop && x < bestLeft))
+                        {
+                            bestTop = y;
+                            bestLeft = x;
+                            bestIndex = idx;
+                        }
+                    }
+                }
+            }
+
+            return bestIndex;
+        }
+
+        private int HitTestIndex(int x, int y)
+        {
+            LVHITTESTINFO ht = new LVHITTESTINFO
+            {
+                pt = new POINT { x = x, y = y }
+            };
+
+            int result = (int)SendMessage(_listView.Handle, LVM_HITTEST, IntPtr.Zero, ref ht);
+            return result; // -1 if none
+        }
+
+        private int GetApproxVisibleCount()
+        {
+            if (_listView == null || !_listView.IsHandleCreated)
+                return 0;
+
+            return _listView.View == View.LargeIcon
+                ? GetApproxVisibleCountLargeIcon()
+                : GetAnyVisibleCount();
+        }
+
+        private int GetAnyVisibleCount()
+        {
+            if (_listView == null || !_listView.IsHandleCreated || _listView.View == View.LargeIcon)
+                return 0;
+
+            int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+            if (total <= 0) return 0;
+
+            Rectangle client = _listView.ClientRectangle;
+            int count = 0;
+            int i = -1;
+
+            while (true)
+            {
+                i = (int)SendMessage(_listView.Handle, LVM_GETNEXTITEM, (IntPtr)i, (IntPtr)LVNI_VISIBLE);
+                if (i < 0) break;
+                if (i >= total) continue;
+
+                RECT rc = new RECT { left = LVIR_BOUNDS };
+                if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)i, ref rc) == IntPtr.Zero)
+                    continue;
+
+                Rectangle itemRect = Rectangle.FromLTRB(rc.left, rc.top, rc.right, rc.bottom);
+                if (itemRect.IntersectsWith(client))
+                    count++;
+            }
+
+            return count;
+        }
+
+        private const int LVM_GETITEMSPACING = LVM_FIRST + 51; // returns packed x/y in LPARAM
+        private int GetApproxVisibleCountLargeIcon()
+        {
+            if (_listView == null || !_listView.IsHandleCreated || _listView.View != View.LargeIcon)
+                return 0;
+
+            int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+            if (total <= 0) return 0;
+
+            // FALSE => large icon spacing
+            int packed = (int)SendMessage(_listView.Handle, LVM_GETITEMSPACING, IntPtr.Zero, IntPtr.Zero);
+            int cellW = packed & 0xFFFF;
+            int cellH = (packed >> 16) & 0xFFFF;
+
+            // Fallback if spacing couldn't be read
+            if (cellW <= 0 || cellH <= 0)
+            {
+                var img = _listView.LargeImageList?.ImageSize ?? new System.Drawing.Size(32, 32);
+                cellW = Math.Max(1, img.Width + 32);                   // rough label/padding allowance
+                cellH = Math.Max(1, img.Height + _listView.Font.Height * 2 + 16);
+            }
+
+            int vw = Math.Max(1, _listView.ClientSize.Width);
+            int vh = Math.Max(1, _listView.ClientSize.Height);
+
+            int cols = Math.Max(1, (int)Math.Ceiling(vw / (double)cellW));
+            int rows = Math.Max(1, (int)Math.Ceiling(vh / (double)cellH));
+
+            int approx = cols * rows;
+            return Math.Min(total, approx);
+        }
+
         #endregion
 
         #region Lazy Thumbnail Loading Support
@@ -2774,7 +2988,7 @@ namespace ExpControlsLib
         /// For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
         /// list is applied and each item's <see cref="ListViewItem.ImageIndex"/> is refreshed.
         /// For custom thumbnail modes, the ListView is switched to LargeIcon view and
-        /// <see cref="LoadThumbnails"/> is called to populate thumbnail images.
+        /// <see cref="LoadThumbnailsForItems"/> is called to populate thumbnail images.
         /// </summary>
         /// <param name="value">The <see cref="ListViewDisplayMode"/> to configure for.</param>
         private void SetAndLoadImageList(ListViewDisplayMode value)
@@ -2808,15 +3022,20 @@ namespace ExpControlsLib
 
             if (mode <= ListViewDisplayMode.Tile)
             {
-                LoadIconsForVisibleItems(true);
+                LoadIconsForItems(true);
             }
             else
             {
-                LoadThumbnails(GetThumbnailSizeForMode(mode), true);
+                LoadThumbnailsForItems(GetThumbnailSizeForMode(mode), true);
             }
         }
 
-        private void LoadIconsForVisibleItems(bool onlyVisible = false)
+        /// <summary>
+        /// loads icons (not thumbnails) for the items in the list.
+        /// Can either load all icons or only icons near the visible section.
+        /// </summary>
+        /// <param name="onlyVisible">true if you only want icons near the visible items.</param>
+        private void LoadIconsForItems(bool onlyVisible = false)
         {
             if (!_listView.IsHandleCreated) return;
 
@@ -2833,7 +3052,7 @@ namespace ExpControlsLib
                     if (onlyVisible)
                     {
                         int topIndex = GetTopIndex();
-                        int countPerPage = GetCountPerPage();
+                        int countPerPage = GetApproxVisibleCount();
                         // Use a reasonable buffer (1 page above/below) for smoother scrolling
                         startIndex = Math.Max(0, topIndex - countPerPage);
                         endIndex = Math.Min(_virtualItems.Count - 1, topIndex + countPerPage * 2);
@@ -2896,11 +3115,12 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Loads thumbnails into image lists.  Then assigns the image list to the ListView.
+        /// loads thumbnails (not icons) for the items in the list.
+        /// Can either load all thumbnails or only some thumbnails near the visible section.
         /// </summary>
         /// <param name="thumbnailSize">The size of the thumbnails to load.</param>
         /// <param name="onlyVisible">If true, only loads thumbnails for items currently visible in the viewport that don't already have one.</param>
-        private void LoadThumbnails(int thumbnailSize, bool onlyVisible = false)
+        private void LoadThumbnailsForItems(int thumbnailSize, bool onlyVisible = false)
         {
             if (!_listView.IsHandleCreated) return;
 
@@ -2915,7 +3135,7 @@ namespace ExpControlsLib
                     if (onlyVisible)
                     {
                         int topIndex = GetTopIndex();
-                        int countPerPage = GetCountPerPage();
+                        int countPerPage = GetApproxVisibleCount();
                         // Use a reasonable buffer (1 page above/below) for smoother scrolling
                         startIndex = Math.Max(0, topIndex - countPerPage);
                         endIndex = Math.Min(_virtualItems.Count - 1, topIndex + countPerPage * 2);
@@ -2953,6 +3173,34 @@ namespace ExpControlsLib
             }
         }
 
+        private void SortVirtualItems(int column, SortOrder order)
+        {
+            if (order == SortOrder.None || _virtualItems.Count == 0) return;
+
+            var col = _listView.Columns[column];
+
+            _virtualItems.Sort((x, y) =>
+            {
+                GetColumnData(x, col, out string textX, out object valX);
+                GetColumnData(y, col, out string textY, out object valY);
+
+                int result = 0;
+                if (valX is IComparable compX && valY is IComparable compY && valX.GetType() == valY.GetType())
+                {
+                    result = compX.CompareTo(compY);
+                }
+                else
+                {
+                    result = string.Compare(textX, textY, StringComparison.OrdinalIgnoreCase);
+                }
+
+                return order == SortOrder.Descending ? -result : result;
+            });
+
+            UpdateIndexMapping();
+            _itemCache.Clear();
+            _listView.Invalidate();
+        }
 
         private ListViewScrollHook _scrollHook;
         /// <summary>
@@ -3037,66 +3285,7 @@ namespace ExpControlsLib
             _thumbnailTimer?.Start();
         }
 
-        private void SortVirtualItems(int column, SortOrder order)
-        {
-            if (order == SortOrder.None || _virtualItems.Count == 0) return;
-
-            var col = _listView.Columns[column];
-
-            _virtualItems.Sort((x, y) =>
-            {
-                GetColumnData(x, col, out string textX, out object valX);
-                GetColumnData(y, col, out string textY, out object valY);
-
-                int result = 0;
-                if (valX is IComparable compX && valY is IComparable compY && valX.GetType() == valY.GetType())
-                {
-                    result = compX.CompareTo(compY);
-                }
-                else
-                {
-                    result = string.Compare(textX, textY, StringComparison.OrdinalIgnoreCase);
-                }
-
-                return order == SortOrder.Descending ? -result : result;
-            });
-
-            UpdateIndexMapping();
-            _itemCache.Clear();
-            _listView.Invalidate();
-        }
-
         #endregion
-
-        public int GetIndexOfFirstVisible()
-        {
-            ListViewItem? current;
-            if (_listView.View == View.Details || _listView.View == View.List)
-            {
-                current = _listView.TopItem;   // valid here
-            }
-            else
-            {
-                if (_listView.Items is null) return 0;
-
-                EnterListViewEnumeration();
-                try
-                {
-                    current = _listView.Items
-                        .Cast<ListViewItem>()
-                        .Where(it => it != null && _listView.ClientRectangle.IntersectsWith(it.Bounds))
-                        .OrderBy(it => it.Bounds.Top)
-                        .ThenBy(it => it.Bounds.Left)
-                        .FirstOrDefault();
-                }
-                finally
-                {
-                    ExitListViewEnumeration();
-                }
-            }
-
-            return (current?.Index == null ? 0 : current.Index);
-        }
 
     }
 }
