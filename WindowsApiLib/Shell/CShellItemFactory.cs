@@ -528,7 +528,7 @@ namespace WindowsApiLib.Shell
         {
             const int S_OK = 0;
             const int S_FALSE = 1;
-            const uint BATCH_SIZE = 64;
+            const uint BATCH_SIZE = 64; //this always only fetches 1 pidl at a time
 
             List<IntPtr> listPidls = new List<IntPtr>(0);
             int HR;
@@ -553,16 +553,27 @@ namespace WindowsApiLib.Shell
                     // IMPORTANT: This assumes your interop signature supports array/batch Next (see note below).
                     HR = IEnum.Next(BATCH_SIZE, batch, out fetched);
 
+                    //Console.WriteLine($"\tfetched {fetched.ToString()} pidls.");
+
                     // Any COM error besides S_FALSE(end) should go to error path.
                     if (HR != S_OK && HR != S_FALSE) // UPDATE: Vista and above strictly respect the SHCONTF flags. The "flags" param is now used only to determine what user wants
                     {
                         // Sharepoint folders return this at the end of the enum
                         if (HR == unchecked((int)0x80004005))
                             break;
-                        else
-                            listPidls = new List<IntPtr>(); // sometimes it is a non-fatal error, ignored
+                        //else
+                        //    listPidls = new List<IntPtr>(); // sometimes it is a non-fatal error, ignored
                         break;
                     }
+
+                    // S_FALSE means end of enumeration (possibly with a short final batch already processed).
+                    if (HR == S_FALSE)
+                        break;
+
+                    // Defensive guard against unusual providers returning S_OK with 0 items.
+                    if (fetched == 0)
+                        break;
+
 
                     // Handle partial batches (fetched may be < BATCH_SIZE).
                     for (uint i = 0; i < fetched; i++)
@@ -590,14 +601,6 @@ namespace WindowsApiLib.Shell
                                 listPidls.Add(ptr);
                         }
                     }
-
-                    // S_FALSE means end of enumeration (possibly with a short final batch already processed).
-                    if (HR == S_FALSE)
-                        break;
-
-                    // Defensive guard against unusual providers returning S_OK with 0 items.
-                    if (fetched == 0)
-                        break;
                 }
             }
             finally

@@ -671,23 +671,98 @@ namespace WindowsApiLib
         }
 
         /// <summary>
-        /// Converts a PIDL to a readable string.
-        /// Tries parsing name first, then falls back to normal display name.
-        /// Returns null if conversion fails.
+        /// Converts a PIDL to text.
         /// </summary>
-        public static string? ToString(IntPtr pidl)
+        public static string? ToString(IntPtr pidl, bool absolute = true)
         {
             if (pidl == IntPtr.Zero)
-                throw new ArgumentNullException(nameof(pidl));
+                return null;
 
-            // 1) Try full parsing name (often path-like).
-            string? s = TryGetName(pidl, SIGDN.DESKTOPABSOLUTEPARSING);
-            if (!string.IsNullOrEmpty(s))
-                return s;
-
-            // 2) Fallback to friendly display name.
-            return TryGetName(pidl, SIGDN.NORMALDISPLAY);
+            if (absolute == false || SegmentCount(pidl) == 1)
+            {
+                // relative PIDL: friendly display attempt
+                return TryGetName(pidl, SIGDN.NORMALDISPLAY);
+            }
+            else
+            {
+                // Absolute PIDL: friendly display attempt
+                return TryGetName(pidl, SIGDN.DESKTOPABSOLUTEPARSING);
+            }
         }
+
+        private static string? TryGetName(IntPtr pidl, SIGDN sigdn)
+        {
+            IntPtr namePtr = IntPtr.Zero;
+            int hr = SHGetNameFromIDList(pidl, sigdn, out namePtr);
+
+            if (hr >= 0 && namePtr != IntPtr.Zero) // SUCCEEDED(hr)
+            {
+                try
+                {
+                    return Marshal.PtrToStringUni(namePtr) ?? string.Empty;
+                }
+                finally
+                {
+                    Marshal.FreeCoTaskMem(namePtr); // SHGetNameFromIDList uses CoTaskMem
+                }
+            }
+            else return HexDump(pidl);
+
+        }
+
+        /// <summary>
+        /// Dumps a relative PIDL as SHITEMID chunks: [cb][abID...], terminated by cb=0.
+        /// </summary>
+        private static string? HexDump(IntPtr pidl)
+        {
+            if (pidl == IntPtr.Zero)
+                return null;
+
+            var sb = new StringBuilder();
+
+            int offset = 0;
+            int index = 0;
+
+            // Safety guard against malformed PIDLs
+            const int MaxItems = 1024;
+
+            for (; index < MaxItems; index++)
+            {
+                // SHITEMID starts with USHORT cb
+                ushort cb = (ushort)Marshal.ReadInt16(pidl, offset);
+
+                if (cb == 0)
+                {
+                    sb.Append("  [END]");
+                    return sb.ToString();
+                }
+
+                sb.Append($"  [{index}] cb={cb} data=");
+
+                int dataLen = cb - sizeof(ushort); // cb includes the cb field itself
+                if (dataLen < 0)
+                {
+                    sb.AppendLine("<​invalid>");
+                    return sb.ToString();
+                }
+
+                byte[] data = new byte[dataLen];
+                Marshal.Copy(IntPtr.Add(pidl, offset + sizeof(ushort)), data, 0, dataLen);
+
+                for (int i = 0; i < data.Length; i++)
+                {
+                    if (i > 0) sb.Append(' ');
+                    sb.Append(data[i].ToString("x2"));
+                }
+
+                sb.AppendLine();
+                offset += cb;
+            }
+
+            sb.Append("  [ERROR: malformed PIDL or too many items]");
+            return sb.ToString();
+        }
+
 
         /// <summary>
         /// Resolves a shell namespace GUID path to its corresponding file system path, if available.
@@ -1169,26 +1244,6 @@ namespace WindowsApiLib
         }
         */
 
-        private static string? TryGetName(IntPtr pidl, SIGDN sigdn)
-        {
-            IntPtr psz = IntPtr.Zero;
-            try
-            {
-                int hr = ShellAPI.SHGetNameFromIDList(pidl, sigdn, out psz);
-                if (hr < 0 || psz == IntPtr.Zero) // FAILED(hr)
-                    return null;
-
-                return Marshal.PtrToStringUni(psz);
-            }
-            finally
-            {
-                if (psz != IntPtr.Zero)
-                {
-                    // SHGetNameFromIDList allocates with CoTaskMemAlloc
-                    Marshal.FreeCoTaskMem(psz);
-                }
-            }
-        }
 
 
 

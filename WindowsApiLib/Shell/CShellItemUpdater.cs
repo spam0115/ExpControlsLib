@@ -863,7 +863,7 @@ namespace WindowsApiLib.Shell
             {
                 var folder = csi.IsFolder ? csi : csi.Parent;
 
-                if (operations.Count < 100) //todo: change this to handle small numbers of changes without a full refresh
+                if (operations.Count < 100)
                 {
                     foreach (var (item, type) in operations)
                     {
@@ -885,7 +885,7 @@ namespace WindowsApiLib.Shell
                 }
                 else
                 {
-                    UpdateEvent?.Invoke(csi.Parent, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.UpdateDir));
+                    UpdateEvent?.Invoke(csi, new ShellItemUpdateEventArgs(null, CShItemUpdateType.UpdateDir));
                 }
             }
 
@@ -922,16 +922,16 @@ namespace WindowsApiLib.Shell
                     else
                     {
                         // Optimization: Use a dictionary to avoid O(N*M) search complexity.
-                        var oldCsiDic = new Dictionary<uint, CShellItem>();
+                        var oldCsiDic = new Dictionary<string, CShellItem>();
                         if (csi.m_Directories is not null && UpdateFolders)
                         {
                             foreach (var item in csi.m_Directories.Items)
-                                oldCsiDic.Add(CPidl.HashPidlFastLastFull(item.LastPIDL), item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
+                                oldCsiDic.Add(CPidl.ToString(item.LastPIDL, false) ?? string.Empty, item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
                         }
                         if (csi.m_Files is not null && UpdateFiles)
                         {
                             foreach (var item in csi.m_Files.Items)
-                                oldCsiDic.Add(CPidl.HashPidlFastLastFull(item.LastPIDL), item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
+                                oldCsiDic.Add(CPidl.ToString(item.LastPIDL, false) ?? string.Empty, item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
                         }
 
 #if DEBUG
@@ -941,13 +941,19 @@ namespace WindowsApiLib.Shell
                         for (int i = 0; i < newPidls.Count; i++)
                         {
                             IntPtr newPidl = newPidls[i];
-                            uint hash = CPidl.HashPidlFastLastFull(newPidl);
+                            //uint hash = CPidl.HashPidlFastLastFull(newPidl);
 
-                            if (oldCsiDic.TryGetValue(hash, out CShellItem oldCsi))
+                            string newPidlText = CPidl.ToString(newPidl, false) ?? string.Empty;
+                            if (oldCsiDic.TryGetValue(newPidlText, out CShellItem? oldCsi))
                             {
-                                // found the same item
-                                if (CPidl.IsEqual(oldCsi.LastPIDL, newPidl))
+                                if (oldCsi is null)
                                 {
+                                    Debug.WriteLine("ERROR: oldCsiDic contained a null value for key '" + newPidlText + "'");
+                                    continue;
+                                }
+                                
+                                if (CPidl.IsEqual(oldCsi.LastPIDL, newPidl)) //additional check
+                                {   // found the same item
                                     if (!ReferenceEquals(csi, CShellItemFactory.RecycleBin))
                                     {
                                         bool doupdate = true;
@@ -973,7 +979,7 @@ namespace WindowsApiLib.Shell
 
                                     Marshal.FreeCoTaskMem(newPidl);
                                     newPidls[i] = IntPtr.Zero; // Mark as processed
-                                    oldCsiDic.Remove(hash);
+                                    oldCsiDic.Remove(newPidlText);
 
                                     continue;
                                 }
