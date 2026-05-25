@@ -1002,7 +1002,7 @@
             Works in virtual and non-virtual mode.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.SetImageListForMode(ExpControlsLib.ListViewDisplayMode)">
+        <member name="M:ExpControlsLib.ExpList.SetAndLoadImageList(ExpControlsLib.ListViewDisplayMode)">
             <summary>
             Configures the image lists bound to the ListView for the given display mode.
             For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
@@ -1032,7 +1032,7 @@
             <param name="thumbnailSize">The size of the thumbnails to load.</param>
             <param name="onlyVisible">If true, only loads thumbnails for items currently visible in the viewport that don't already have one.</param>
         </member>
-        <member name="F:ExpControlsLib.ExpList._thumbnailTimer">
+        <member name="F:ExpControlsLib.ExpList._scrollDebounceTimer">
              <summary>
              The _thumbnailTimer is a debounce timer used to implement Lazy Loading. Even though the actual thumbnail generation
             happens on background threads(via ThumbnailProvider), the timer is essential for maintaining UI performance and
@@ -1778,7 +1778,7 @@
             <c>IShellItemImageFactory</c>. Falls back to an icon image if no
             thumbnail is available.
             </summary>
-            <param name="filePath">Full path to the file or folder.</param>
+            <param name="fileName">Full path to the file or folder.</param>
             <param name="size">Desired thumbnail size in pixels (square).</param>
             <returns>
             A <see cref="T:System.Drawing.Bitmap"/> letterboxed to <paramref name="size"/> x

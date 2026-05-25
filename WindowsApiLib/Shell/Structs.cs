@@ -25,5 +25,16 @@ namespace WindowsApiLib.Shell
         public string cAlternateFileName;
     }
 
+    public struct ListViewSubitemData
+    {
+        public string Text;
+        public object Tag;
+
+        public ListViewSubitemData(string text, object? tag)
+        {
+            Text = text;
+            Tag = tag;
+        }
+    }
 
 }

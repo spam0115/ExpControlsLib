@@ -156,18 +156,18 @@ namespace ExpControlsLib
 
         #region        DragEnter
         /// <summary>
-    /// For internal use only
-    /// DragEnter is called by the Shell as a drag enters the listview. It determines the default (parent)
-    /// DropTarget and default (parent) pdwEffect for use in those areas of the ListView that do not
-    /// contain eligible DropTargets.
-    /// </summary>
-    /// <param name="pDataObj">IDataObject of the Folder of the Item being dragged, containing references to
-    /// the item(s) being Dragged.</param>
-    /// <param name="grfKeyState">State of the keyboard keys at this moment</param>
-    /// <param name="pt">Location, in screen coordinates, of the mouse.</param>
-    /// <param name="pdwEffect">Permitted Drop actions as set by the DragSource.</param>
-    /// <returns>Always returns S_OK (0)</returns>
-    /// <remarks></remarks>
+        /// For internal use only
+        /// DragEnter is called by the Shell as a drag enters the listview. It determines the default (parent)
+        /// DropTarget and default (parent) pdwEffect for use in those areas of the ListView that do not
+        /// contain eligible DropTargets.
+        /// </summary>
+        /// <param name="pDataObj">IDataObject of the Folder of the Item being dragged, containing references to
+        /// the item(s) being Dragged.</param>
+        /// <param name="grfKeyState">State of the keyboard keys at this moment</param>
+        /// <param name="pt">Location, in screen coordinates, of the mouse.</param>
+        /// <param name="pdwEffect">Permitted Drop actions as set by the DragSource.</param>
+        /// <returns>Always returns S_OK (0)</returns>
+        /// <remarks></remarks>
         public int DragEnter(IntPtr pDataObj, MK grfKeyState, POINT pt, ref DragDropEffects pdwEffect)
         {
 

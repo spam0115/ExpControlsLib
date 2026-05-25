@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
+using static WindowsApiLib.Shell.ShellAPI;
 
 namespace ExpControlsLib
 {
@@ -186,24 +187,24 @@ namespace ExpControlsLib
         /// <c>IShellItemImageFactory</c>. Falls back to an icon image if no
         /// thumbnail is available.
         /// </summary>
-        /// <param name="filePath">Full path to the file or folder.</param>
+        /// <param name="fileName">Full path to the file or folder.</param>
         /// <param name="size">Desired thumbnail size in pixels (square).</param>
         /// <returns>
         /// A <see cref="Bitmap"/> letterboxed to <paramref name="size"/> x
         /// <paramref name="size"/>, or <c>null</c> if no image could be obtained.
         /// </returns>
-        public Image GetThumbnailFromOS(string filePath, int size)
+        public Image? GetThumbnailFromOS(string fileName, int size)
         {
-            if (string.IsNullOrWhiteSpace(filePath))
+            if (string.IsNullOrWhiteSpace(fileName))
                 return null;
 
-            bool isFile = File.Exists(filePath);
-            bool isDir = Directory.Exists(filePath);
+            bool isFile = File.Exists(fileName);
+            bool isDir = Directory.Exists(fileName);
 
             if (!isFile && !isDir)
             {
 #if DEBUG
-                Console.WriteLine($"ERROR: filesystem object does not exist: '{filePath}");
+                Console.WriteLine($"ERROR: filesystem object does not exist: '{fileName}");
 #endif
                 return null;
             }
@@ -213,18 +214,27 @@ namespace ExpControlsLib
             try
             {
 #if DEBUG
-                Console.WriteLine("\tRequesting thumbnail from OS: " + filePath);
+                Console.WriteLine("\tRequesting thumbnail from OS: " + fileName);
 #endif
 
                 // Ask directly for IShellItemImageFactory
                 Guid iid = ShellAPI.IID_IShellItemImageFactory; // must be BCC18B79-BA16-442F-80C4-8A59C30C463B
-                int hr = ShellAPI.SHCreateItemFromParsingName(filePath, IntPtr.Zero, ref iid, out factoryPtr);
+                int hr = ShellAPI.SHCreateItemFromParsingName(fileName, IntPtr.Zero, ref iid, out factoryPtr);
                 if (hr != 0 || factoryPtr == IntPtr.Zero)
                     return null;
 
                 var factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(factoryPtr);
 
-                return GetThumbnailFromOsBase(factory, size);
+                var result = GetThumbnailFromOsBase(factory, size);
+                if (result == null)
+                {
+                    Console.WriteLine("Failed to get thumbnail from OS for " + fileName);
+                }
+                else
+                {
+                    Console.WriteLine("\tSuccessfully obtained thumbnail from OS for " + fileName);
+                }
+                return result;
             }
             finally
             {
@@ -244,7 +254,7 @@ namespace ExpControlsLib
         /// A <see cref="Bitmap"/> letterboxed to <paramref name="size"/> x
         /// <paramref name="size"/>, or <c>null</c> if no image could be obtained.
         /// </returns>
-        public Image GetThumbnailFromOS(IntPtr pidl, int size)
+        public Image? GetThumbnailFromOS(IntPtr pidl, int size)
         {
             if (pidl == IntPtr.Zero) return null;
 
@@ -252,10 +262,10 @@ namespace ExpControlsLib
 
             try
             {
+                string? fileName = CPidl.ToString(pidl);
 #if DEBUG
-                string name = CPidl.ToString(pidl);
                 var length = CPidl.SegmentCount(pidl);
-                Console.WriteLine("\tRequesting thumbnail from OS: " + name);
+                Console.WriteLine("\tRequesting thumbnail from OS: " + fileName);
 #endif
                 Guid iid = ShellAPI.IID_IShellItemImageFactory;
                 int hr = ShellAPI.SHCreateItemFromIDList(pidl, ref iid, out shellItemImageFactory);
@@ -263,7 +273,16 @@ namespace ExpControlsLib
 
                 var factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(shellItemImageFactory);
 
-                return GetThumbnailFromOsBase(factory, size);
+                var result = GetThumbnailFromOsBase(factory, size);
+                if (result == null)
+                {
+                    Console.WriteLine("Failed to get thumbnail from OS for " + fileName);
+                }
+                else
+                {
+                    Console.WriteLine("\tSuccessfully obtained thumbnail from OS for " + fileName);
+                }
+                return result;
             }
             finally
             {
@@ -278,7 +297,7 @@ namespace ExpControlsLib
 
             try
             {
-                //int flags = SIIGBF_ICONONLY | SIIGBF_THUMBNAILONLY; //SIIGBF_BIGGERSIZEOK - don't use biggersize you'll just get no thumbnail back;
+                //int flags = SIIGBF_ICONONLY | SIIGBF_THUMBNAILONLY; //SIIGBF_BIGGERSIZEOK - don't use SIIGBF_BIGGERSIZEOK you'll just get no thumbnail back;
                 uint flags = (uint)ShellAPI.SIIGBF.THUMBNAILONLY;
                 hr = factory.GetImage(new SIZE { cx = size, cy = size }, flags, out hbm);
 
@@ -287,7 +306,11 @@ namespace ExpControlsLib
                     flags = (uint)ShellAPI.SIIGBF.ICONONLY;
                     hr = factory.GetImage(new SIZE { cx = size, cy = size }, flags, out hbm);
                     if (hr != 0 || hbm == IntPtr.Zero)
+                    {
+                        Console.WriteLine("Failed to get image from shell item factory for");
                         return null;
+                    }
+
                 }
 
                 using (var raw = BitmapHelper.HBitmapToBitmapWithAlpha(hbm))

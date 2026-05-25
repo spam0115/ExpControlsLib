@@ -987,6 +987,19 @@ namespace WindowsApiLib.Shell
             }
         }
 
+        private Dictionary<string, ListViewSubitemData> m_columnDic = null;
+        public Dictionary<string, ListViewSubitemData> ColumnDic
+        {
+            get
+            {
+                if (m_columnDic == null)
+                {
+                    m_columnDic = new Dictionary<string, ListViewSubitemData>();
+                }
+                return m_columnDic;
+            }
+        }
+
         #endregion
 
         #endregion
@@ -1955,7 +1968,7 @@ namespace WindowsApiLib.Shell
             CShellItem itm;
             var pidls = CShellItemFactory.GetPidlsOfFolder(this, flags);
 
-            Console.WriteLine("\tCreating cshellitems...");
+            Debug.WriteLine("\tCreating " + pidls.Count() + " cshellitems...");
             foreach (IntPtr pidl in pidls)
             {
                 if (pidl == IntPtr.Zero)
@@ -1971,7 +1984,7 @@ namespace WindowsApiLib.Shell
                 }
             }
 
-            Console.WriteLine("\tFinished creating cshellitems");
+            Debug.WriteLine("\tFinished creating cshellitems");
 
             return items;
         }
