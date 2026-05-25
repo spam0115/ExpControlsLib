@@ -1002,7 +1002,7 @@
             Works in virtual and non-virtual mode.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.SetAndLoadImageList(ExpControlsLib.ListViewDisplayMode)">
+        <member name="M:ExpControlsLib.ExpList.SetImageListForMode(ExpControlsLib.ListViewDisplayMode)">
             <summary>
             Configures the image lists bound to the ListView for the given display mode.
             For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image

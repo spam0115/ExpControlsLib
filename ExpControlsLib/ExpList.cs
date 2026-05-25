@@ -266,8 +266,8 @@ namespace ExpControlsLib
                 }
                 field = value;
 
-                SetAndLoadImageList(value);
-                LoadImagesForItems();
+                SetImageListForMode(value);
+                //LoadImagesForItems();
 
                 DisplayModeChanged?.Invoke(value);
             }
@@ -667,8 +667,8 @@ namespace ExpControlsLib
 
             DisplayMode = (ListViewDisplayMode)_listView.View;
 
-            SetAndLoadImageList(DisplayMode);
-            LoadImagesForItems();
+            SetImageListForMode(DisplayMode);
+            //LoadImagesForItems();
 
         }
 
@@ -841,7 +841,7 @@ namespace ExpControlsLib
                 {
                     int initialFillLim = Math.Min(combList.Count, InitialLoadLimit);
                     var combinedLvi = new List<ListViewItem>(combList.Count);
-                    int topIndex = this.GetIndexOfFirstVisible();
+                    int topIndex = GetTopIndex();
 
                     Console.WriteLine("\tMaking ListViewItems...");
                     _itemIndex.Clear();
@@ -970,7 +970,7 @@ namespace ExpControlsLib
                 int topIndex = 0;
                 if (_listView.Items.Count > 0)
                 {
-                    topIndex = GetIndexOfFirstVisible();
+                    topIndex = GetTopIndex();
                 }
 
                 var newItems = _pendingItems ?? Array.Empty<ListViewItem>();
@@ -1026,35 +1026,40 @@ namespace ExpControlsLib
             return lvi;
         }
 
-        public int GetIndexOfFirstVisible()
-        {
-            ListViewItem? current;
-            if (_listView.View == View.Details || _listView.View == View.List)
-            {
-                current = _listView.TopItem;   // valid here
-            }
-            else
-            {
-                if (_listView.Items is null) return 0;
+        /// <summary>
+        /// doesn't work in virtual mode
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        //public int GetIndexOfFirstVisible()
+        //{
+        //    ListViewItem? current;
+        //    if (_listView.View == View.Details || _listView.View == View.List)
+        //    {
+        //        current = _listView.TopItem;   // valid here
+        //    }
+        //    else
+        //    {
+        //        if (_listView.Items is null) return 0;
 
-                EnterListViewEnumeration();
-                try
-                {
-                    current = _listView.Items
-                        .Cast<ListViewItem>()
-                        .Where(it => it != null && _listView.ClientRectangle.IntersectsWith(it.Bounds))
-                        .OrderBy(it => it.Bounds.Top)
-                        .ThenBy(it => it.Bounds.Left)
-                        .FirstOrDefault();
-                }
-                finally
-                {
-                    ExitListViewEnumeration();
-                }
-            }
+        //        EnterListViewEnumeration();
+        //        try
+        //        {
+        //            current = _listView.Items
+        //                .Cast<ListViewItem>()
+        //                .Where(it => it != null && _listView.ClientRectangle.IntersectsWith(it.Bounds))
+        //                .OrderBy(it => it.Bounds.Top)
+        //                .ThenBy(it => it.Bounds.Left)
+        //                .FirstOrDefault();
+        //        }
+        //        finally
+        //        {
+        //            ExitListViewEnumeration();
+        //        }
+        //    }
 
-            return (current?.Index == null ? 0 : current.Index);
-        }
+        //    return (current?.Index == null ? 0 : current.Index);
+        //}
 
 
 
@@ -2680,7 +2685,7 @@ namespace ExpControlsLib
                     bool hasItems = _useVirtualMode ? _listView.VirtualListSize > 0 : _listView.Items.Count > 0;
                     if (cmd == "delete" && hasItems)
                     { //prevent null references from invalid selections that were deleted
-                        topItemIndex = GetIndexOfFirstVisible();
+                        topItemIndex = GetTopIndex();
                         _listView.SelectedItems.Clear();
                         _listView.SelectedIndices.Clear();
                     }
@@ -2804,10 +2809,15 @@ namespace ExpControlsLib
             int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
             if (total <= 0) return -1;
 
-            // 1) Fast path for row-like views
-            int top = (int)SendMessage(_listView.Handle, LVM_GETTOPINDEX, IntPtr.Zero, IntPtr.Zero);
-            if ((_listView.View == View.Details || _listView.View == View.List) && top >= 0 && top < total)
-                return top;
+            int top = 0;
+            if (!_listView.VirtualMode)
+            {
+                if (_listView.TopItem != null) return _listView.TopItem.Index;
+                //// 1) the slow path since this requires sending messages
+                //top = (int)SendMessage(_listView.Handle, LVM_GETTOPINDEX, IntPtr.Zero, IntPtr.Zero);
+                //if ((_listView.View == View.Details || _listView.View == View.List) && top >= 0 && top < total)
+                //    return top;
+            }
 
             // 2) Try visible enumeration (works in many non-virtual cases)
             int byVisibleEnum = FindTopLeftByVisibleEnumeration(total);
@@ -2978,7 +2988,7 @@ namespace ExpControlsLib
 
         #endregion
 
-        #region Lazy Thumbnail Loading Support
+        #region Icon/Thumbnail Loading
 
         //private bool _smallImageListInitialized = false;
         //private bool _largeImageListInitialized = false;
@@ -2991,7 +3001,7 @@ namespace ExpControlsLib
         /// <see cref="LoadThumbnailsForItems"/> is called to populate thumbnail images.
         /// </summary>
         /// <param name="value">The <see cref="ListViewDisplayMode"/> to configure for.</param>
-        private void SetAndLoadImageList(ListViewDisplayMode value)
+        private void SetImageListForMode(ListViewDisplayMode value)
         {
             if (value <= ListViewDisplayMode.Tile) //built-in Windows 95 Shell view modes
             {
@@ -3004,15 +3014,7 @@ namespace ExpControlsLib
             }
             else //custom thumbnail view modes
             {
-                EnterListViewEnumeration();
-                try
-                {
-                    _thumbnailManager.SetImageListSize(GetThumbnailSizeForMode(value));
-                }
-                finally
-                {
-                    ExitListViewEnumeration();
-                }
+                _thumbnailManager.SetImageListSize(GetThumbnailSizeForMode(value));
             }
         }
 
