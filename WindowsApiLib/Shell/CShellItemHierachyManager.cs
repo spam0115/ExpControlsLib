@@ -166,7 +166,13 @@ namespace WindowsApiLib.Shell
             Parent = null;
 
             var currentFolder = Root;
-            if (currentFolder == null) return null;
+            if (currentFolder == null) throw new Exception("The root of the shell hierarchy was null.");
+
+            if (CPidl.IsEqual(currentFolder.PIDL, absPidl))  // we found the desired item
+            {
+                Parent = null;
+                return currentFolder;
+            }
 
             bool foundFinalExtantParentDirectory = false;
             while (!foundFinalExtantParentDirectory)

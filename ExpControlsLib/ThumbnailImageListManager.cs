@@ -125,7 +125,7 @@ namespace ExpControlsLib
         public void RequestThumbnail(ListViewItem? item, string filePath, int thumbnailSize, int itemIndex = -1, CShellItem? csi = null)
         {
 #if DEBUG
-            if (item != null) Console.WriteLine("\tRequesting thumbnail: " + item.Text);
+            if (item != null) Console.WriteLine("Requesting thumbnail: " + item.Text);
 #endif
 
             var reqObj = new ThumbnailRequestArgs
