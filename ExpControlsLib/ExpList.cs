@@ -3276,6 +3276,9 @@ namespace ExpControlsLib
         private const int LVM_GETCOUNTPERPAGE = 0x1000 + 40;
 
 
+
+        private int _lastTopIndex = -1;
+
         /// <summary>
         /// Returns a "top-like" index for any ListView mode.
         /// - Details/List: effectively top row index
@@ -3292,15 +3295,14 @@ namespace ExpControlsLib
                 int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
                 if (total <= 0) return -1;
 
-            int top = 0;
-            if (!_listView.VirtualMode)
-            {
-                if (_listView.TopItem != null) return _listView.TopItem.Index;
-                //// 1) the slow path since this requires sending messages
-                //top = (int)SendMessage(_listView.Handle, LVM_GETTOPINDEX, IntPtr.Zero, IntPtr.Zero);
-                //if ((_listView.View == View.Details || _listView.View == View.List) && top >= 0 && top < total)
-                //    return top;
-            }
+                if (_lastTopIndex > -1) return _lastTopIndex; // cache for repeated calls.  The OS will sometimes make tons of redundant calls
+
+                int top = 0;
+                if (!_listView.VirtualMode && _listView.TopItem != null)
+                {
+                    _lastTopIndex = _listView.TopItem.Index;
+                    return _listView.TopItem.Index;
+                }
 
                 // 2) Try visible enumeration (works in many non-virtual cases)
                 int byVisibleEnum = FindTopLeftByVisibleEnumeration(total);
@@ -3311,7 +3313,8 @@ namespace ExpControlsLib
                 if (byHitTestScan >= 0) return byHitTestScan;
 
                 // 4) Last fallback
-                return (top >= 0 && top < total) ? top : -1;
+                _lastTopIndex = (top >= 0 && top < total) ? top : -1;
+                return _lastTopIndex;
             }
             finally
             {
@@ -3409,7 +3412,7 @@ namespace ExpControlsLib
 
         private int HitTestIndex(int x, int y)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: HitTestIndex Begin");
+            //System.Diagnostics.Debug.WriteLine("ExpList: HitTestIndex Begin");
             try
             {
                 LVHITTESTINFO ht = new LVHITTESTINFO
@@ -3422,7 +3425,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: HitTestIndex End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: HitTestIndex End");
             }
         }
 
@@ -3826,15 +3829,17 @@ namespace ExpControlsLib
 
             private readonly Action _onScroll;
             private readonly ListView _listView;
+            private readonly ExpList _expList;
 
-            public ListViewScrollHook(ListView listView, Action onScroll)
+            public ListViewScrollHook(ExpList expList, Action onScroll)
             {
                 System.Diagnostics.Debug.WriteLine("ExpList.ListViewScrollHook: ListViewScrollHook Begin");
                 try
                 {
-                    AssignHandle(listView.Handle);
                     _onScroll = onScroll;
-                    _listView = listView;
+                    _expList = expList;
+                    _listView = _expList._listView;
+                    AssignHandle(_listView.Handle);
                 }
                 finally
                 {
@@ -3858,17 +3863,23 @@ namespace ExpControlsLib
                         _listView.SelectedIndices.Clear();
                     }
 
+
                     switch (m.Msg)
                     {
                         case WM_VSCROLL:
                         case WM_HSCROLL:
                         case WM_MOUSEWHEEL:
+                            _expList._lastTopIndex = -1; //invalid due to a scroll moving items
                             QueueOnScroll();
                             break;
                         case WM_KEYDOWN:
                             Keys key = (Keys)m.WParam.ToInt32();
                             if (key == Keys.PageUp || key == Keys.PageDown || key == Keys.Home || key == Keys.End || key == Keys.Up || key == Keys.Down)
+                            {
+                                //the problem with the arrow keys is we don't have a test yet to see if the navigation movement stayed with the list of visible items or moved to a non-visible item
+                                _expList._lastTopIndex = -1; //invalid due to a scroll moving items
                                 QueueOnScroll();
+                            }
                             break;
                     }
                 }
