@@ -231,10 +231,34 @@ namespace ExpControlsLib
         public event ExpListItemGetSelItemsEventHandler ExpListItemGetSelItems;
 
         /// <summary>
+        /// Delegate for the <see cref="ExpListGetColumnData"/> event.
+        /// </summary>
+        public delegate void ExpListGetColumnDataEventHandler(object sender, ExpListGetColumnDataEventArgs e);
+        /// <summary>
         /// Occurs when data for a custom column is requested.
         /// </summary>
         [Category("Action"), Description("Occurs when data for a custom column is requested.")]
         public event ExpListGetColumnDataEventHandler ExpListGetColumnData;
+
+        /// <summary>
+        /// Delegate for the <see cref="DisplayModeChanged"/> event.
+        /// </summary>
+        /// <param name="newMode">The new <see cref="ListViewDisplayMode"/>.</param>
+        public delegate void DisplayModeChangedEventHandler(ListViewDisplayMode newMode);
+        /// <summary>
+        /// Occurs when the <see cref="DisplayMode"/> has changed.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires when the DisplayMode property has changed")]
+        public event DisplayModeChangedEventHandler DisplayModeChanged;
+
+        /// <summary>
+        /// Occurs when the sort column or order has changed.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires when the sort column or order has changed")]
+        public event EventHandler SortOrderChanged;
+
 
         #endregion
 
@@ -559,7 +583,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: GetItem End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: GetItem End");
             }
         }
 
@@ -810,30 +834,6 @@ namespace ExpControlsLib
 
 
         #endregion
-
-        /// <summary>
-        /// Delegate for the <see cref="ExpListGetColumnData"/> event.
-        /// </summary>
-        public delegate void ExpListGetColumnDataEventHandler(object sender, ExpListGetColumnDataEventArgs e);
-
-        /// <summary>
-        /// Delegate for the <see cref="DisplayModeChanged"/> event.
-        /// </summary>
-        /// <param name="newMode">The new <see cref="ListViewDisplayMode"/>.</param>
-        public delegate void DisplayModeChangedEventHandler(ListViewDisplayMode newMode);
-        /// <summary>
-        /// Occurs when the <see cref="DisplayMode"/> has changed.
-        /// </summary>
-        [Category("Action")]
-        [Description("Fires when the DisplayMode property has changed")]
-        public event DisplayModeChangedEventHandler DisplayModeChanged;
-
-        /// <summary>
-        /// Occurs when the sort column or order has changed.
-        /// </summary>
-        [Category("Action")]
-        [Description("Fires when the sort column or order has changed")]
-        public event EventHandler SortOrderChanged;
 
 
         #region ExplorerTree Event Handling -- AfterNodeSelect
@@ -1200,7 +1200,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: MakeLVItem End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: MakeLVItem End");
             }
         }
 
@@ -1749,22 +1749,22 @@ namespace ExpControlsLib
                 item.LVItem = lvi;
 
                 if (DisplayMode == ListViewDisplayMode.Details) 
-                { 
+                {
                     for (int i = 1; i < _listView.Columns.Count; i++)
                     {
                         ColumnHeader col = _listView.Columns[i];
-                        var colData = GetColumnData(item, col);
 
+                        var data = GetColumnData(item, col);
                         if (lvi.SubItems.Count <= i)
                         {
                             var si = lvi.SubItems.Add(new ListViewItem.ListViewSubItem());
-                            si.Text = colData.Text;
-                            si.Tag = colData.Tag;
+                            si.Text = data.Text;
+                            si.Tag = data.Tag;
                         }
                         else
                         {
-                            lvi.SubItems[i].Text = colData.Text;
-                            lvi.SubItems[i].Tag = colData.Tag;
+                            lvi.SubItems[i].Text = data.Text;
+                            lvi.SubItems[i].Tag = data.Tag;
                         }
                     }
                 }
@@ -1779,6 +1779,40 @@ namespace ExpControlsLib
             finally
             {
                 //System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi End");
+            }
+        }
+
+        private void EnsureColumnDataFetched(CShellItem item)
+        {
+            if (ExpListGetColumnData == null) return;
+            if (item.ColumnDic.ContainsKey("__BulkEventFired")) return;
+
+            var args = new ExpListGetColumnDataEventArgs(item);
+            ExpListGetColumnData(this, args);
+            item.ColumnDic["__BulkEventFired"] = ListViewSubitemData.Default;
+
+            foreach (var kvp in args.ColumnData)
+            {
+                // Try to find column by text first (as used in MainForm)
+                ColumnHeader? targetCol = null;
+                for (int i = 0; i < _listView.Columns.Count; i++)
+                {
+                    if (_listView.Columns[i].Text == kvp.Key)
+                    {
+                        targetCol = _listView.Columns[i];
+                        break;
+                    }
+                }
+
+                if (targetCol != null)
+                {
+                    item.ColumnDic[targetCol.Name] = kvp.Value;
+                }
+                else
+                {
+                    // Fallback to column name if provided in ColumnData
+                    item.ColumnDic[kvp.Key] = kvp.Value;
+                }
             }
         }
 
@@ -1877,22 +1911,18 @@ namespace ExpControlsLib
                 {
                     text = item.DisplayName;
                 }
-                else if (ExpListGetColumnData is not null) // 2. Try invoking Event
+                else
                 {
-                    var args = new ExpListGetColumnDataEventArgs(item, col);
-                    ExpListGetColumnData?.Invoke(this, args);
-
-                    if (args.Handled)
-                    {
-                        text = args.Text;
-                        tag = args.Tag;
-                    }
+                    // 2. Try bulk fetch if still not found
+                    EnsureColumnDataFetched(item);
+                    if (item.ColumnDic.TryGetValue(col.Name, out propInfo))
+                        return propInfo;
                 }
 
             END:
                 var result = new ListViewSubitemData(text, tag);
 
-                item.ColumnDic.Add(col.Name, result); //save for future use
+                item.ColumnDic.TryAdd(col.Name, result); //save for future use
 
                 return result;
             }
