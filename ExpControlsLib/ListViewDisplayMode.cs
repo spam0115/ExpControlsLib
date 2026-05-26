@@ -44,6 +44,8 @@ namespace ExpControlsLib
         /// </summary>
         Tile = 4, // LV_VIEW_TILE
 
+        //I don't know why there is no setting for medium icons which are 32px
+
         /// new values below
 
         /// <summary>

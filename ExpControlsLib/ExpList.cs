@@ -76,7 +76,7 @@ namespace ExpControlsLib
         // Avoid Globalization problem-- an empty timevalue
         private static readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
 
-        private CShellItem _currentFolderCsi;
+        private CShellItem? _currentFolderCsi;
         private CShellItem? _selectedItem; // The currently selected item within the list
         private Dictionary<string, ListViewItem> _itemIndex = new(StringComparer.OrdinalIgnoreCase); //if we ever have put real multithreading code into this control, change this to a concurrentdictionary
 
@@ -160,28 +160,28 @@ namespace ExpControlsLib
         public event ExpListItemArrowKeyUpEventHandler ExpListItemArrowKeyUp;
 
         /// <summary>
-        /// Delegate for the <see cref="ExpListFolderChanged"/> event.
+        /// Delegate for the <see cref="ExpListCurrentFolderChanged"/> event.
         /// </summary>
         /// <param name="Item">The <see cref="CShellItem"/> of the folder that was just loaded.</param>
-        public delegate void ExpListFolderChangedEventHandler(CShellItem Item);
+        public delegate void ExpListCurrentFolderChangedEventHandler(CShellItem newCsi, CShellItem oldCsi);
         /// <summary>
         /// Occurs after the currently loaded folder has changed.
         /// </summary>
         [Category("Action")]
         [Description("Fires after the currently loaded folder has changed")]
-        public event ExpListFolderChangedEventHandler ExpListFolderChanged;
+        public event ExpListCurrentFolderChangedEventHandler ExpListCurrentFolderChanged;
 
-        /// <summary>
-        /// Delegate for the <see cref="ExpListPathChanged"/> event.
-        /// </summary>
-        /// <param name="Path">The new path of the ExpList.</param>
-        public delegate void ExpListPathChangedEventHandler(string Path);
-        /// <summary>
-        /// Occurs when the <see cref="CurrentPath"/> has changed.
-        /// </summary>
-        [Category("Action")]
-        [Description("Fires when the CurrentPath property has changed")]
-        public event ExpListPathChangedEventHandler ExpListPathChanged;
+        ///// <summary>
+        ///// Delegate for the <see cref="ExpListPathChanged"/> event.
+        ///// </summary>
+        ///// <param name="Path">The new path of the ExpList.</param>
+        //public delegate void ExpListPathChangedEventHandler(string Path);
+        ///// <summary>
+        ///// Occurs when the <see cref="CurrentPath"/> has changed.
+        ///// </summary>
+        //[Category("Action")]
+        //[Description("Fires when the CurrentPath property has changed")]
+        //public event ExpListPathChangedEventHandler ExpListPathChanged;
 
         /// <summary>
         /// Delegate for the <see cref="ExpListItemsChanged"/> event.
@@ -396,68 +396,78 @@ namespace ExpControlsLib
                 }
 
                 if (_currentFolderCsi != null)
-                    DisplayFiles(_CurrentPath, _currentFolderCsi, true, reload: true);
+                    DisplayFiles(_currentPath, _currentFolderCsi, true, reload: true);
             }
         }
 
+        private string? _currentPath = null;
         /// <summary>
         /// Gets or sets the current file system path displayed in the list view.
         /// </summary>
         [Browsable(true), Category("Misc"),
          Description("The current path of ExpFileList"),
          DefaultValue(null)]
-        public string CurrentPath
+        public string? CurrentPath
         {
-            get => _CurrentPath;
+            get => _currentPath;
             set
             {
                 if (string.IsNullOrEmpty(value))
                 {
-                    bool needsUpdate = !string.IsNullOrEmpty(_CurrentPath);
+                    bool needsUpdate = !string.IsNullOrEmpty(_currentPath);
                     if (needsUpdate)
                     {
                         _listView.BeginUpdate();
-                        _listView.SelectedItems.Clear();
-                        _listView.Items.Clear();
+                        ClearListInternal();
                     }
-                    _CurrentPath = value;
-                    _itemIndex.Clear();
-                    if (_currentFolderCsi != null)
-                    {
-                        _currentFolderCsi.ClearItems(true);
-                        _currentFolderCsi = null;
-                        ExpListFolderChanged?.Invoke(null);
-                    }
+                    _currentPath = value;
 
-                    ExpListPathChanged?.Invoke(_CurrentPath);
+                    var oldCsi = _currentFolderCsi;
+                    _currentFolderCsi = null;
+                    ExpListCurrentFolderChanged?.Invoke(null, oldCsi);
 
                     if (needsUpdate)
                         _listView.EndUpdate();
                 }
                 else
                 {
-                    if (value == _CurrentPath && _currentFolderCsi != null) return;
-                    try
-                    {
-                        var csi = CShellItemFactory.CreateCShItem(value);
+                    if (value == _currentPath && _currentFolderCsi != null) return;
+                     
+                    var oldCsi = _currentFolderCsi;
 
-                        if (csi != null && csi.IsFolder)
-                            DisplayFiles(value, csi, true);
-                        else
-                        {
-                            _CurrentPath = value;
-                            ExpListPathChanged?.Invoke(_CurrentPath);
-                        }
-                    }
-                    catch
+                    var newCsi = _shellController.HierachyManager.FindOrAdd(value);
+
+                    if (newCsi != null && newCsi.IsFolder)
+                        DisplayFiles(value, newCsi, true);
+                    else
                     {
-                        _CurrentPath = value;
-                        ExpListPathChanged?.Invoke(_CurrentPath);
+                        _listView.BeginUpdate();
+                        ClearListInternal();
+                        _currentPath = value;
+                        _currentFolderCsi = null;
+                        ExpListCurrentFolderChanged?.Invoke(newCsi, oldCsi);
+                        _listView.EndUpdate();
                     }
                 }
             }
         }
-        private string _CurrentPath = null;
+
+        private void ClearListInternal()
+        {
+            _listView.SelectedIndices.Clear();
+            if (_useVirtualMode)
+            {
+                _listView.VirtualListSize = 0;
+            }
+            else
+            {
+                _listView.Items.Clear();
+            }
+            _virtualItems.Clear();
+            _itemCache.Clear();
+            _pathToIndex.Clear();
+            _itemIndex.Clear();
+        }
 
         /// <summary>
         /// Gets the <see cref="CShellItem"/> representing the currently selected folder in the tree or the folder being viewed.
@@ -728,7 +738,7 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_HandleCreated Begin");
             try
             {
-                _scrollHook = new ListViewScrollHook(_listView, OnListViewScroll);
+                _scrollHook = new ListViewScrollHook(this, OnListViewScroll);
             }
             finally
             {
@@ -840,10 +850,20 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: DisplayFiles Begin");
             try
             {
-                if (csi == null)
+                if (csi == null && !string.IsNullOrEmpty(pathName))
                     csi = CShellItemFactory.CreateCShItem(pathName);
 
-                if (csi is null) throw new Exception("Failed to create new CShellItem in DisplayFiles");
+                if (csi is null)
+                {
+                    _listView.BeginUpdate();
+                    ClearListInternal();
+                    var oldCsi_null = _currentFolderCsi;
+                    _currentFolderCsi = null;
+                    _currentPath = pathName;
+                    ExpListCurrentFolderChanged?.Invoke(null, oldCsi_null);
+                    _listView.EndUpdate();
+                    return;
+                }
 
                 bool samePath;
                 if (_currentFolderCsi is null)
@@ -853,6 +873,7 @@ namespace ExpControlsLib
 
                 if (_currentFolderCsi != null && samePath && reload == false) return;
 
+                var oldCsi = _currentFolderCsi;
                 var hierarchyCsi = _shellController.LoadFolderContents(csi);
                 if (hierarchyCsi != null)
                 {
@@ -860,7 +881,14 @@ namespace ExpControlsLib
                 }
                 else
                 {
-                    throw new Exception("Failed to load folder contents for " + csi.DisplayName);
+                    // If loading fails, clear the list instead of throwing
+                    _listView.BeginUpdate();
+                    ClearListInternal();
+                    _currentFolderCsi = null;
+                    _currentPath = pathName;
+                    ExpListCurrentFolderChanged?.Invoke(null, oldCsi);
+                    _listView.EndUpdate();
+                    return;
                 }
 
                 // record history
@@ -871,7 +899,7 @@ namespace ExpControlsLib
                 }
 
                 _selectedItem = null; //new folder loaded, no item selected yet
-                _CurrentPath = _currentFolderCsi.FullPath;
+                _currentPath = _currentFolderCsi.FullPath;
 
                 //display directories separately
                 var dirList = new List<CShellItem>();
@@ -882,13 +910,13 @@ namespace ExpControlsLib
 
                 if ((dirList.Count + fileList.Count) == 0) //no items
                 {
-                    if (RequestListViewRefresh(null, !samePath))
-                    {
-                        _itemIndex.Clear();
-                        if (_currentFolderCsi != null && !ReferenceEquals(_currentFolderCsi, csi))
-                            _currentFolderCsi.ClearItems(true);
-                    }
-                    else return;
+                    _listView.BeginUpdate();
+                    ClearListInternal();
+                    _listView.EndUpdate();
+
+                    if (!samePath) ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
+
+                    return;
                 }
                 else
                 {
@@ -904,13 +932,13 @@ namespace ExpControlsLib
                     }
                     Console.WriteLine("\tSorting done");
 
-                    var combList = new List<CShellItem>(totalItems);
-                    if (includeFolder) combList.AddRange(dirList);
-                    combList.AddRange(fileList);
+                    var combinedList = new List<CShellItem>(totalItems);
+                    if (includeFolder) combinedList.AddRange(dirList);
+                    combinedList.AddRange(fileList);
 
                     if (_useVirtualMode)
                     {
-                        _virtualItems = combList;
+                        _virtualItems = combinedList;
                         UpdateIndexMapping();
                         _itemCache.Clear();
                         _listView.VirtualListSize = _virtualItems.Count;
@@ -919,13 +947,13 @@ namespace ExpControlsLib
                     }
                     else
                     {
-                        int initialFillLim = Math.Min(combList.Count, InitialLoadLimit);
-                        var combinedLvi = new List<ListViewItem>(combList.Count);
+                        int initialFillLim = Math.Min(combinedList.Count, InitialLoadLimit);
+                        var combinedLvi = new List<ListViewItem>(combinedList.Count);
                         int topIndex = GetTopIndex();
 
                         Console.WriteLine("\tMaking ListViewItems...");
                         _itemIndex.Clear();
-                        foreach (CShellItem item in combList)
+                        foreach (CShellItem item in combinedList)
                         {
                             ListViewItem lvi = MakeLVItem(item);
                             if (!_itemIndex.TryAdd(item.FullPath, lvi))
@@ -937,7 +965,7 @@ namespace ExpControlsLib
                         }
                         Console.WriteLine("\tDone making ListViewItems.");
 
-                        if (!RequestListViewRefresh(combinedLvi.ToArray(), !samePath)) return;
+                        if (!RequestListViewRepopulate(combinedLvi.ToArray(), !samePath)) return;
                     }
                 }
 
@@ -946,8 +974,7 @@ namespace ExpControlsLib
                     OnListViewScroll();
                 }
 
-                ExpListFolderChanged?.Invoke(_currentFolderCsi);
-                if (!samePath) ExpListPathChanged?.Invoke(_CurrentPath);
+                if (!samePath) ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
             }
             finally
             {
@@ -1053,7 +1080,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="newItems"></param>
         /// <returns></returns>
-        private bool RequestListViewRefresh(ListViewItem[] newItems, bool fetchImages)
+        private bool RequestListViewRepopulate(ListViewItem[] newItems, bool fetchImages)
         {
             System.Diagnostics.Debug.WriteLine("ExpList: RequestListViewRefresh Begin");
             try
@@ -1069,7 +1096,7 @@ namespace ExpControlsLib
                 _refetchImages = fetchImages;
                 _refreshing = true;
 
-                BeginInvoke(new MethodInvoker(RefreshListViewCore)); // queue, don't run inline.  Can't take arguments because of MethodInvoker unfortunately
+                BeginInvoke(new MethodInvoker(RepopulateListViewCore)); // queue, don't run inline.  Can't take arguments because of MethodInvoker unfortunately
 
                 return true;
             }
@@ -1079,7 +1106,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void RefreshListViewCore()
+        private void RepopulateListViewCore()
         {
             System.Diagnostics.Debug.WriteLine("ExpList: RefreshListViewCore Begin");
             try
@@ -1088,7 +1115,7 @@ namespace ExpControlsLib
                 // defer this refresh to after the enumeration completes.
                 if (_enumerationDepth > 0)
                 {
-                    BeginInvoke(new MethodInvoker(RefreshListViewCore));
+                    BeginInvoke(new MethodInvoker(RepopulateListViewCore));
                     return;
                 }
 
@@ -1107,19 +1134,29 @@ namespace ExpControlsLib
                     _listView.BeginUpdate();
                     try
                     {
-                        _listView.Items.Clear();
                         _itemIndex.Clear();
 
-                        _listView.Items.AddRange(newItems);
-
-                        if (_listView.Items.Count > 0)
+                        if (_useVirtualMode)
                         {
-                            _listView.Tag = _currentFolderCsi; // For ClvDropWrapper
+                            int count = newItems == null ? 0 : newItems.Length;
 
-                            topIndex = Math.Max(0, Math.Min(topIndex, _listView.Items.Count - 1));
-                            _listView.EnsureVisible(topIndex);
+                            _listView.VirtualListSize = count;
+                            _listView.Refresh();
+                        }
+                        else
+                        {
+                            _listView.Items.Clear();
+                            _listView.Items.AddRange(newItems);
 
-                            if (_refetchImages) LoadImagesForItems();
+                            if (_listView.Items.Count > 0)
+                            {
+                                _listView.Tag = _currentFolderCsi; // For ClvDropWrapper
+
+                                topIndex = Math.Max(0, Math.Min(topIndex, _listView.Items.Count - 1));
+                                _listView.EnsureVisible(topIndex);
+
+                                if (_refetchImages) LoadImagesForItems();
+                            }
                         }
                     }
                     finally
@@ -1280,9 +1317,8 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: UpdateInvoke Begin");
             try
             {
-                if (sender is null)
+                if (sender is null || IsDisposed || !IsHandleCreated)
                 {
-                    Console.WriteLine("Sender cannot be null in UpdateInvoke.");
                     return;
                 }
                 if (e is null)
@@ -1293,7 +1329,11 @@ namespace ExpControlsLib
 
                 if (InvokeRequired)
                 {
-                    BeginInvoke((InvokeUpdate)DoItemUpdate, sender, e);
+                    try
+                    {
+                        BeginInvoke((InvokeUpdate)DoItemUpdate, sender, e);
+                    }
+                    catch (InvalidOperationException) { } // Handle race condition where control is disposed just after check
                 }
                 else
                 {
@@ -1353,7 +1393,7 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: DoItemUpdate Begin");
             try
             {
-                if (sender is null) return;
+                if (sender is null || _currentFolderCsi == null) return;
 
                 // If an enumeration is in progress, defer this update to prevent reentrant
                 // mutation of _listView.Items (which causes null items during foreach).
@@ -1466,7 +1506,7 @@ namespace ExpControlsLib
                                 if (_useVirtualMode)
                                 {
                                     // Re-load and re-sort
-                                    DisplayFiles(_CurrentPath, _currentFolderCsi, true, reload: true);
+                                    DisplayFiles(_currentPath, _currentFolderCsi, true, reload: true);
                                 }
                                 else
                                 {
@@ -1499,7 +1539,7 @@ namespace ExpControlsLib
                             }
 
                         case CShItemUpdateType.UpdateDir:
-                            DisplayFiles(_CurrentPath, _currentFolderCsi, true, reload: true);
+                            DisplayFiles(_currentPath, _currentFolderCsi, true, reload: true);
                             break;
 
                         case CShItemUpdateType.Updated:
@@ -1644,33 +1684,35 @@ namespace ExpControlsLib
             //System.Diagnostics.Debug.WriteLine("ExpList: RetrieveVirtualItem Begin: " + e.ItemIndex.ToString() + ", " + DateTime.Now.ToString("mm:ss.fff"));
             try
             {
-                if (e.ItemIndex < 0 || e.ItemIndex >= _virtualItems.Count) return;
-
-                if (_itemCache.TryGetValue(e.ItemIndex, out var lvi))
-                {
-                    // Sync ImageIndex if it was updated in the background while item was cached
-                    if (IsThumbnailViewMode() && lvi.ImageIndex == -1)
-                    {
-                        var csi = _virtualItems[e.ItemIndex];
-                        int thumbIndex = _thumbnailManager.GetThumbnailIndex(csi.FullPath, GetThumbnailSizeForMode());
-                        if (thumbIndex != -1) lvi.ImageIndex = thumbIndex;
-                    }
-                    e.Item = lvi;
-                    return;
-                }
-
-                var item = _virtualItems[e.ItemIndex];
-                lvi = MakeLVItem(item);
-
-                // Limit cache size to prevent memory bloat during rapid scrolling
-                if (_itemCache.Count > 1000) _itemCache.Clear();
-                _itemCache[e.ItemIndex] = lvi;
-                e.Item = lvi;
+                e.Item = GetItemInternal(e.ItemIndex);
             }
             finally
             {
                 //System.Diagnostics.Debug.WriteLine("ExpList: RetrieveVirtualItem End " + DateTime.Now.ToString("mm:ss.fff"));
             }
+        }
+
+        private ListViewItem? GetItemInternal(int index)
+        {
+            if (index < 0 || index >= _virtualItems.Count) return null;
+
+            if (_itemCache.TryGetValue(index, out var lvi))
+            {
+                // Sync ImageIndex if it was updated in the background while item was cached
+                if (IsThumbnailViewMode() && lvi.ImageIndex == -1)
+                {
+                    var csi = _virtualItems[index];
+                    int thumbIndex = _thumbnailManager.GetThumbnailIndex(csi.FullPath, GetThumbnailSizeForMode());
+                    lvi.ImageIndex = thumbIndex;
+                }
+                return lvi;
+            }
+
+            var item = _virtualItems[index];
+            lvi = MakeLVItem(item);
+
+            _itemCache[index] = lvi;
+            return lvi;
         }
 
         private void UpdateIndexMapping()
@@ -1706,27 +1748,27 @@ namespace ExpControlsLib
                 lvi.Tag = item;
                 item.LVItem = lvi;
 
-                for (int i = 1; i < _listView.Columns.Count; i++)
-                {
-                    ColumnHeader col = _listView.Columns[i];
-                    var colData = GetColumnData(item, col);
-
-                    if (lvi.SubItems.Count <= i)
+                if (DisplayMode == ListViewDisplayMode.Details) 
+                { 
+                    for (int i = 1; i < _listView.Columns.Count; i++)
                     {
-                        var si = lvi.SubItems.Add(new ListViewItem.ListViewSubItem());
-                        si.Text = colData.Text;
-                        si.Tag = colData.Tag;
+                        ColumnHeader col = _listView.Columns[i];
+                        var colData = GetColumnData(item, col);
+
+                        if (lvi.SubItems.Count <= i)
+                        {
+                            var si = lvi.SubItems.Add(new ListViewItem.ListViewSubItem());
+                            si.Text = colData.Text;
+                            si.Tag = colData.Tag;
+                        }
+                        else
+                        {
+                            lvi.SubItems[i].Text = colData.Text;
+                            lvi.SubItems[i].Tag = colData.Tag;
+                        }
                     }
-                    else
-                    {
-                        lvi.SubItems[i].Text = colData.Text;
-                        lvi.SubItems[i].Tag = colData.Tag;
-                    }
-                } //end for
-
-
-
-                if (IsThumbnailViewMode())
+                }
+                else if (IsThumbnailViewMode())
                 {
                     int index = _thumbnailManager.GetThumbnailIndex(item.FullPath, GetThumbnailSizeForMode());
                     lvi.ImageIndex = index;
@@ -1736,7 +1778,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi End");
             }
         }
 
@@ -1750,7 +1792,7 @@ namespace ExpControlsLib
         /// <param name="tag"></param>
         private ListViewSubitemData GetColumnData(CShellItem item, ColumnHeader col)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: GetColumnData Begin");
+            Debug.WriteLine("ExpList: GetColumnData Begin");
             try
             {
                 string text = string.Empty;
@@ -1856,7 +1898,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: GetColumnData End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: GetColumnData End");
             }
         }
 
@@ -1868,9 +1910,21 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: RefreshItemByDisplayName Begin");
             try
             {
+                if (_useVirtualMode)
+                {
+                    for (int i = 0; i < _virtualItems.Count; i++)
+                    {
+                        if (string.Equals(_virtualItems[i].DisplayName, fileName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            _itemCache.Remove(i);
+                            _listView.RedrawItems(i, i, false);
+                            return GetItemInternal(i);
+                        }
+                    }
+                    return null;
+                }
+
                 // Try to find the item by its display name using the index values
-                //var lvi = _itemIndex.Values.FirstOrDefault(i => i.Tag is CShellItem c &&
-                //        string.Equals(c.DisplayName, fileName, StringComparison.OrdinalIgnoreCase));
                 var key = _itemIndex.Keys.FirstOrDefault(k => k.EndsWith(Path.DirectorySeparatorChar + fileName));
 
                 if (key is not null)
@@ -1887,7 +1941,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: RefreshItemByDisplayName End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: RefreshItemByDisplayName End");
             }
         }
 
@@ -1896,6 +1950,17 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: RefreshItemByFullPath Begin");
             try
             {
+                if (_useVirtualMode)
+                {
+                    if (_pathToIndex.TryGetValue(path, out int index))
+                    {
+                        _itemCache.Remove(index);
+                        _listView.RedrawItems(index, index, false);
+                        return GetItemInternal(index);
+                    }
+                    return null;
+                }
+
                 if (_itemIndex.TryGetValue(path, out ListViewItem? lvi))
                 {
                     if (lvi is null) return null;
@@ -1909,7 +1974,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: RefreshItemByFullPath End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: RefreshItemByFullPath End");
             }
         }
 
@@ -1919,6 +1984,17 @@ namespace ExpControlsLib
             try
             {
                 if (item is null) return null;
+
+                if (_useVirtualMode)
+                {
+                    if (_pathToIndex.TryGetValue(item.FullPath, out int index))
+                    {
+                        _itemCache.Remove(index);
+                        _listView.RedrawItems(index, index, false);
+                        return GetItemInternal(index);
+                    }
+                    return null;
+                }
 
                 if (_itemIndex.TryGetValue(item.FullPath, out ListViewItem? lvi))
                 {
@@ -1932,7 +2008,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: RefreshItem End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: RefreshItem End");
             }
         }
 
@@ -2173,13 +2249,15 @@ namespace ExpControlsLib
             try
             {
                 IntPtr editWnd = SendMessage(_listView.Handle, LVM_GETEDITCONTROL, 0, IntPtr.Zero);
-                int textLen = Path.GetFileNameWithoutExtension(_listView.Items[e.Item].Text).Length;
+                var csi = GetItem(e.Item);
+                if (csi == null) { e.CancelEdit = true; return; }
+
+                int textLen = Path.GetFileNameWithoutExtension(csi.DisplayName).Length;
                 SendMessage(editWnd, EM_SETSEL, IntPtr.Zero, (IntPtr)textLen);
 
-                var item = (CShellItem)_listView.Items[e.Item].Tag;
-                if ((!item.IsFileSystem) || item.IsDisk ||
-                    item.FullPath == CShellItemFactory.CreateCShItem(CSIDL.MYDOCUMENTS).FullPath ||
-                    !item.CanRename)
+                if ((!csi.IsFileSystem) || csi.IsDisk ||
+                    csi.FullPath == CShellItemFactory.CreateCShItem(CSIDL.MYDOCUMENTS).FullPath ||
+                    !csi.CanRename)
                 {
                     System.Media.SystemSounds.Beep.Play();
                     e.CancelEdit = true;
@@ -2200,8 +2278,8 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_AfterLabelEdit Begin");
             try
             {
-                var item = (CShellItem)_listView.Items[e.Item].Tag;
-                if (e.Label == null || e.Label == string.Empty) return;
+                var item = GetItem(e.Item);
+                if (item == null || e.Label == null || e.Label == string.Empty) return;
 
                 try
                 {
@@ -2322,7 +2400,7 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpFileList_MouseLeave(object sender, EventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseLeave Begin");
+            //System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseLeave Begin");
             try
             {
                 m_OutOfRange = true;
@@ -2330,20 +2408,20 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseLeave End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseLeave End");
             }
         }
 
         private void ExpFileList_MouseEnter(object sender, EventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseEnter Begin");
+            //System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseEnter Begin");
             try
             {
                 OnMouseEnter(e);
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseEnter End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseEnter End");
             }
         }
 
@@ -3137,7 +3215,6 @@ namespace ExpControlsLib
                         if (cmd == "delete" && hasItems)
                         { //prevent null references from invalid selections that were deleted
                             topItemIndex = GetTopIndex();
-                            _listView.SelectedItems.Clear();
                             _listView.SelectedIndices.Clear();
                         }
                         // Execute the shell command
@@ -3213,6 +3290,16 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: FindItemByName Begin");
             try
             {
+                if (_useVirtualMode)
+                {
+                    for (int i = 0; i < _virtualItems.Count; i++)
+                    {
+                        if (string.Equals(_virtualItems[i].DisplayName, name, StringComparison.OrdinalIgnoreCase))
+                            return GetItemInternal(i);
+                    }
+                    return null;
+                }
+
                 foreach (var lvi in _itemIndex.Values)
                 {
                     if (string.Equals(lvi.Text, name, StringComparison.OrdinalIgnoreCase))
@@ -3222,7 +3309,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: FindItemByName End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: FindItemByName End");
             }
         }
 
@@ -3234,6 +3321,16 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: FindItemByID Begin");
             try
             {
+                if (_useVirtualMode)
+                {
+                    for (int i = 0; i < _virtualItems.Count; i++)
+                    {
+                        if (CPidl.IsEqual(_virtualItems[i].PIDL, pidl))
+                            return GetItemInternal(i);
+                    }
+                    return null;
+                }
+
                 foreach (var lvi in _itemIndex.Values)
                 {
                     if (lvi.Tag is CShellItem csi && CPidl.IsEqual(csi.PIDL, pidl))
@@ -3243,7 +3340,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: FindItemByID End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: FindItemByID End");
             }
         }
 
@@ -3255,13 +3352,20 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: FindItemByPath Begin");
             try
             {
+                if (_useVirtualMode)
+                {
+                    if (_pathToIndex.TryGetValue(path, out int index))
+                        return GetItemInternal(index);
+                    return null;
+                }
+
                 if (_itemIndex.TryGetValue(path, out var lvi))
                     return lvi;
                 return null;
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: FindItemByPath End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: FindItemByPath End");
             }
         }
 
@@ -3677,7 +3781,7 @@ namespace ExpControlsLib
         /// </summary>
         private int GetThumbnailSizeForMode(ListViewDisplayMode? mode = null)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: GetThumbnailSizeForMode Begin");
+            //System.Diagnostics.Debug.WriteLine("ExpList: GetThumbnailSizeForMode Begin");
             try
             {
                 mode ??= DisplayMode;
@@ -3691,7 +3795,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: GetThumbnailSizeForMode End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: GetThumbnailSizeForMode End");
             }
         }
 
@@ -3703,7 +3807,8 @@ namespace ExpControlsLib
         /// <param name="onlyVisible">If true, only loads thumbnails for items currently visible in the viewport that don't already have one.</param>
         private void LoadThumbnailsForItems(int thumbnailSize, bool onlyVisible = false)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: LoadThumbnailsForItems Begin");
+            Debug.WriteLine("ExpList: LoadThumbnailsForItems Begin");
+
             try
             {
                 if (!_listView.IsHandleCreated) return;
@@ -3735,6 +3840,7 @@ namespace ExpControlsLib
                                 continue;
 
                             _thumbnailManager.RequestThumbnail(null, item.FullPath, thumbnailSize, i, item);
+                            Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
                         }
                     }
                     else
@@ -3758,11 +3864,10 @@ namespace ExpControlsLib
                     ExitListViewEnumeration();
                 }
 
-                Debug.WriteLine("Finished requesting thumbnails.");
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: LoadThumbnailsForItems End");
+                Debug.WriteLine("ExpList: LoadThumbnailsForItems End");
             }
         }
 
@@ -3859,7 +3964,6 @@ namespace ExpControlsLib
                     catch (Exception ex)
                     {
                         Debug.WriteLine(ex.ToString());
-                        _listView.SelectedItems.Clear();
                         _listView.SelectedIndices.Clear();
                     }
 
