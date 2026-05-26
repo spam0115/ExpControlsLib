@@ -175,38 +175,40 @@ namespace ExpControlsLib
             m_Original_Effect = pdwEffect;
             m_DataObj = pDataObj;
             m_ParentItem = null;
-            // Determine Parentage of this set of items -- not necessary if ListView is normal usage, but ...
 
-            foreach (ListViewItem lvi in m_ListView.Items)
+            // Determine Parentage of this set of items
+            if (m_ListView.Tag is CShellItem csiTag && csiTag.IsFolder)
             {
-                if (lvi is null) continue;
-                CShellItem csi = lvi.Tag as CShellItem;
-                if (csi is not null)
+                m_ParentItem = csiTag;
+            }
+            else if (!m_ListView.VirtualMode)
+            {
+                foreach (ListViewItem lvi in m_ListView.Items)
                 {
-                    if (m_ParentItem is null)
+                    if (lvi is null) continue;
+                    CShellItem csi = lvi.Tag as CShellItem;
+                    if (csi is not null)
                     {
-                        if (csi.Parent is not null)
+                        if (m_ParentItem is null)
                         {
-                            m_ParentItem = csi.Parent;
+                            if (csi.Parent is not null)
+                            {
+                                m_ParentItem = csi.Parent;
+                            }
+                            else            // only Desktop lacks a parent
+                            {
+                                m_ParentItem = ShellController.DesktopCSI;
+                            }
                         }
-                        else            // only Desktop lacks a parent
+                        else if (!ReferenceEquals(m_ParentItem, csi.Parent))    // multiple parents 
                         {
-                            m_ParentItem = ShellController.DesktopCSI;
+                            m_ParentItem = null;
+                            break;
                         }
-                    }
-                    else if (!ReferenceEquals(m_ParentItem, csi.Parent))    // multiple parents 
-                    {
-                        m_ParentItem = null;
-                        break;
                     }
                 }
             }
-            // 7/5/2012 - The next check deals with the case of an empty ListView (Folder with no Items)
-            if (m_ListView.Items.Count < 1 && m_ParentItem is null && m_ListView.Tag is not null && m_ListView.Tag is CShellItem && ((CShellItem)m_ListView.Tag).IsFolder)
 
-
-                m_ParentItem = (CShellItem)m_ListView.Tag;
-            // end of 7/5/2012 change
             if (m_ParentItem is not null)
             {
                 m_ParentTarget = m_ParentItem.GetDropTargetOf(m_ListView);

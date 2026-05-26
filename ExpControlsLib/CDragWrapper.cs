@@ -84,16 +84,34 @@ namespace ExpControlsLib
                 if (ctl.SelectedIndices.Count == 0) return;
 
                 var items = new CShellItem[ctl.SelectedIndices.Count];
-                
+
                 // Get first item to establish parent
-                var firstItem = ctl.Items[ctl.SelectedIndices[0]].Tag as CShellItem;
+                CShellItem firstItem = null;
+                if (ctl.Parent is ExpList expList)
+                {
+                    firstItem = expList.GetItem(ctl.SelectedIndices[0]);
+                }
+                else if (!ctl.VirtualMode)
+                {
+                    firstItem = ctl.Items[ctl.SelectedIndices[0]].Tag as CShellItem;
+                }
+
                 if (firstItem == null) return;
                 var parent = firstItem.Parent;
 
                 for (int i = 0; i < ctl.SelectedIndices.Count; i++)
                 {
                     int index = ctl.SelectedIndices[i];
-                    var itemTag = ctl.Items[index].Tag as CShellItem;
+                    CShellItem itemTag = null;
+                    if (ctl.Parent is ExpList el)
+                    {
+                        itemTag = el.GetItem(index);
+                    }
+                    else if (!ctl.VirtualMode)
+                    {
+                        itemTag = ctl.Items[index].Tag as CShellItem;
+                    }
+
                     if (itemTag == null || !ReferenceEquals(parent, itemTag.Parent))
                         return;
 

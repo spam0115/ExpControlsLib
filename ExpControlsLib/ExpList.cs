@@ -476,7 +476,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void ClearListInternal()
+        private void ClearListInternal() //todo: move this to the privates area
         {
             _listView.SelectedIndices.Clear();
             if (_useVirtualMode)
@@ -599,8 +599,8 @@ namespace ExpControlsLib
                 {
                     if (index >= 0 && index < _virtualItems.Count)
                     {
-                        _virtualItems.RemoveAt(index);
-                        UpdateIndexMapping();
+                        _virtualItems.RemoveAt(index); //this is very expensive
+                        RecreateIndexMapping(); //this is very expensive
                         _itemCache.Clear();
                         _listView.VirtualListSize = _virtualItems.Count;
                         _listView.Invalidate();
@@ -939,9 +939,10 @@ namespace ExpControlsLib
                     if (_useVirtualMode)
                     {
                         _virtualItems = combinedList;
-                        UpdateIndexMapping();
+                        RecreateIndexMapping();
                         _itemCache.Clear();
                         _listView.VirtualListSize = _virtualItems.Count;
+                        _listView.Tag = _currentFolderCsi;
                         // Removed LoadVisibleIcons call: the 200ms debounce timer started by 
                         // OnListViewScroll will handle the initial load correctly after layout.
                     }
@@ -965,6 +966,7 @@ namespace ExpControlsLib
                         }
                         Console.WriteLine("\tDone making ListViewItems.");
 
+                        _listView.Tag = _currentFolderCsi;
                         if (!RequestListViewRepopulate(combinedLvi.ToArray(), !samePath)) return;
                     }
                 }
@@ -1141,6 +1143,7 @@ namespace ExpControlsLib
                             int count = newItems == null ? 0 : newItems.Length;
 
                             _listView.VirtualListSize = count;
+                            _listView.Tag = _currentFolderCsi;
                             _listView.Refresh();
                         }
                         else
@@ -1371,7 +1374,7 @@ namespace ExpControlsLib
                     _virtualItems.Insert(insertIndex, item);
                 }
 
-                UpdateIndexMapping();
+                RecreateIndexMapping();
                 _itemCache.Clear();
                 _listView.VirtualListSize = _virtualItems.Count;
                 _listView.Invalidate();
@@ -1461,7 +1464,7 @@ namespace ExpControlsLib
                                     if (_pathToIndex.TryGetValue(e.Item.FullPath, out int index))
                                     {
                                         _virtualItems.RemoveAt(index);
-                                        UpdateIndexMapping();
+                                        RecreateIndexMapping();
                                         _itemCache.Clear();
                                         _listView.VirtualListSize = _virtualItems.Count;
                                         _listView.Invalidate();
@@ -1646,39 +1649,6 @@ namespace ExpControlsLib
             }
         }
 
-        /// <summary>
-        /// Refreshes the list view item associated with data from the given shell item.
-        /// </summary>
-        /// <param name="csi">The shell item whose corresponding list view item will be refreshed. Cannot be null.</param>
-        public void UpdateLviUsingCsi(CShellItem csi)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi Begin");
-            try
-            {
-                if (csi == null) return;
-
-                if (_useVirtualMode)
-                {
-                    if (_pathToIndex.TryGetValue(csi.FullPath, out int index))
-                    {
-                        _itemCache.Remove(index);
-                        _listView.RedrawItems(index, index, false);
-                    }
-                }
-                else
-                {
-                    var lvi = FindLVItem(csi);
-                    if (lvi == null) return;
-
-                    UpdateLviUsingCsi(lvi, csi);
-                }
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi End");
-            }
-        }
-
         private void RetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e)
         {
             //System.Diagnostics.Debug.WriteLine("ExpList: RetrieveVirtualItem Begin: " + e.ItemIndex.ToString() + ", " + DateTime.Now.ToString("mm:ss.fff"));
@@ -1698,12 +1668,18 @@ namespace ExpControlsLib
 
             if (_itemCache.TryGetValue(index, out var lvi))
             {
+                var csi = _virtualItems[index];
+
                 // Sync ImageIndex if it was updated in the background while item was cached
                 if (IsThumbnailViewMode() && lvi.ImageIndex == -1)
                 {
-                    var csi = _virtualItems[index];
                     int thumbIndex = _thumbnailManager.GetThumbnailIndex(csi.FullPath, GetThumbnailSizeForMode());
                     lvi.ImageIndex = thumbIndex;
+                }
+
+                if (DisplayMode == ListViewDisplayMode.Details && (csi.ColumnDic == null || csi.ColumnDic.Count == 0))
+                {
+                    PopulateColumnData(lvi, csi);
                 }
                 return lvi;
             }
@@ -1715,7 +1691,7 @@ namespace ExpControlsLib
             return lvi;
         }
 
-        private void UpdateIndexMapping()
+        private void RecreateIndexMapping() //todo: this is very expensive.  gotta refactor this.
         {
             System.Diagnostics.Debug.WriteLine("ExpList: UpdateIndexMapping Begin");
             try
@@ -1729,6 +1705,46 @@ namespace ExpControlsLib
             finally
             {
                 System.Diagnostics.Debug.WriteLine("ExpList: UpdateIndexMapping End");
+            }
+        }
+
+        /// <summary>
+        /// Refreshes the list view item associated with data from the given shell item.
+        /// </summary>
+        /// <param name="csi">The shell item whose corresponding list view item will be refreshed. Cannot be null.</param>
+        public void UpdateLviUsingCsi(CShellItem csi)
+        {
+            System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi Begin");
+            try
+            {
+                if (csi == null) return;
+
+                if (!_pathToIndex.TryGetValue(csi.FullPath, out int index))
+                {
+                    Debug.WriteLine("ExpList: UpdateLviUsingCsi - item not found in index for path: " + csi.FullPath);
+                    return;
+                }
+
+                if (_useVirtualMode)
+                {
+                    {
+                        var lvi = GetItemInternal(index);
+                        UpdateLviUsingCsi(lvi, csi); //ensure the columns have been populated because they are not in some other view modes
+                    }
+
+                    _listView.RedrawItems(index, index, false);
+                }
+                else
+                {
+                    var lvi = FindLVItem(csi);
+                    if (lvi == null) return;
+
+                    UpdateLviUsingCsi(lvi, csi);
+                }
+            }
+            finally
+            {
+                System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi End");
             }
         }
 
@@ -1748,25 +1764,9 @@ namespace ExpControlsLib
                 lvi.Tag = item;
                 item.LVItem = lvi;
 
-                if (DisplayMode == ListViewDisplayMode.Details) 
+                if (DisplayMode == ListViewDisplayMode.Details)
                 {
-                    for (int i = 1; i < _listView.Columns.Count; i++)
-                    {
-                        ColumnHeader col = _listView.Columns[i];
-
-                        var data = GetColumnData(item, col);
-                        if (lvi.SubItems.Count <= i)
-                        {
-                            var si = lvi.SubItems.Add(new ListViewItem.ListViewSubItem());
-                            si.Text = data.Text;
-                            si.Tag = data.Tag;
-                        }
-                        else
-                        {
-                            lvi.SubItems[i].Text = data.Text;
-                            lvi.SubItems[i].Tag = data.Tag;
-                        }
-                    }
+                    PopulateColumnData(lvi, item);
                 }
                 else if (IsThumbnailViewMode())
                 {
@@ -1782,6 +1782,27 @@ namespace ExpControlsLib
             }
         }
 
+        private void PopulateColumnData(ListViewItem lvi, CShellItem item)
+        {
+            for (int i = 1; i < _listView.Columns.Count; i++)
+            {
+                ColumnHeader col = _listView.Columns[i];
+
+                var data = GetColumnData(item, col);
+                if (lvi.SubItems.Count <= i)
+                {
+                    var si = lvi.SubItems.Add(new ListViewItem.ListViewSubItem());
+                    si.Text = data.Text;
+                    si.Tag = data.Tag;
+                }
+                else
+                {
+                    lvi.SubItems[i].Text = data.Text;
+                    lvi.SubItems[i].Tag = data.Tag;
+                }
+            }
+        }
+
         private void EnsureColumnDataFetched(CShellItem item)
         {
             if (ExpListGetColumnData == null) return;
@@ -1791,27 +1812,11 @@ namespace ExpControlsLib
             ExpListGetColumnData(this, args);
             item.ColumnDic["__BulkEventFired"] = ListViewSubitemData.Default;
 
-            foreach (var kvp in args.ColumnData)
+            foreach (ColumnHeader col in _listView.Columns)
             {
-                // Try to find column by text first (as used in MainForm)
-                ColumnHeader? targetCol = null;
-                for (int i = 0; i < _listView.Columns.Count; i++)
+                if (args.ColumnData.TryGetValue(col.Text, out var value))
                 {
-                    if (_listView.Columns[i].Text == kvp.Key)
-                    {
-                        targetCol = _listView.Columns[i];
-                        break;
-                    }
-                }
-
-                if (targetCol != null)
-                {
-                    item.ColumnDic[targetCol.Name] = kvp.Value;
-                }
-                else
-                {
-                    // Fallback to column name if provided in ColumnData
-                    item.ColumnDic[kvp.Key] = kvp.Value;
+                    item.ColumnDic[col.Name] = value;
                 }
             }
         }
@@ -3928,7 +3933,7 @@ namespace ExpControlsLib
                     return order == SortOrder.Descending ? -result : result;
                 });
 
-                UpdateIndexMapping();
+                RecreateIndexMapping();
                 _itemCache.Clear();
                 _listView.Invalidate();
             }
