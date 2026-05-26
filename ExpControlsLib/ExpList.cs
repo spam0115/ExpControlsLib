@@ -971,10 +971,7 @@ namespace ExpControlsLib
                     }
                 }
 
-                if (IsThumbnailViewMode())
-                {
-                    OnListViewScroll();
-                }
+                OnListViewScroll(); //this lazy loads the visible icons/thumbnails and is called here to ensure they are loaded on initial display
 
                 if (!samePath) ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
             }
@@ -1831,7 +1828,7 @@ namespace ExpControlsLib
         /// <param name="tag"></param>
         private ListViewSubitemData GetColumnData(CShellItem item, ColumnHeader col)
         {
-            Debug.WriteLine("ExpList: GetColumnData Begin");
+            //Debug.WriteLine("ExpList: GetColumnData Begin");
             try
             {
                 string text = string.Empty;
@@ -3405,10 +3402,11 @@ namespace ExpControlsLib
         }
 
 
-        private const int LVM_GETTOPINDEX = LVM_FIRST + 39;
         private const int LVM_GETNEXTITEM = LVM_FIRST + 12;
         private const int LVM_GETITEMRECT = LVM_FIRST + 14;
         private const int LVM_HITTEST = LVM_FIRST + 18;
+        private const int LVM_GETITEMSPACING = LVM_FIRST + 51; // returns packed x/y in LPARAM
+        private const int LVM_GETTOPINDEX = LVM_FIRST + 39;
 
         private const int LVNI_VISIBLE = 0x0008;
         private const int LVIR_BOUNDS = 0; // for LVM_GETITEMRECT
@@ -3588,43 +3586,90 @@ namespace ExpControlsLib
 
         private int GetAnyVisibleCount()
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: GetAnyVisibleCount Begin");
-            try
+            if (_listView == null || !_listView.IsHandleCreated || _listView.View == View.LargeIcon)
+                return 0;
+
+            int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+            if (total <= 0) return 0;
+
+            switch (_listView.View)
             {
-                if (_listView == null || !_listView.IsHandleCreated || _listView.View == View.LargeIcon)
+                case View.Details:
+                case View.List:
+                    // LVM_GETCOUNTPERPAGE is geometry-based and works in virtual mode
+                    int perPage = (int)SendMessage(_listView.Handle, LVM_GETCOUNTPERPAGE, IntPtr.Zero, IntPtr.Zero);
+                    return Math.Min(total, Math.Max(0, perPage));
+
+                case View.SmallIcon:
+                case View.Tile:
+                    // LVM_GETCOUNTPERPAGE returns total item count for these views, so use spacing math instead
+                    return EstimateVisibleBySpacing(_listView, total, largeIcon: false);
+
+                default:
                     return 0;
-
-                int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
-                if (total <= 0) return 0;
-
-                Rectangle client = _listView.ClientRectangle;
-                int count = 0;
-                int i = -1;
-
-                while (true)
-                {
-                    i = (int)SendMessage(_listView.Handle, LVM_GETNEXTITEM, (IntPtr)i, (IntPtr)LVNI_VISIBLE);
-                    if (i < 0) break;
-                    if (i >= total) continue;
-
-                    RECT rc = new RECT { left = LVIR_BOUNDS };
-                    if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)i, ref rc) == IntPtr.Zero)
-                        continue;
-
-                    Rectangle itemRect = Rectangle.FromLTRB(rc.left, rc.top, rc.right, rc.bottom);
-                    if (itemRect.IntersectsWith(client))
-                        count++;
-                }
-
-                return count;
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: GetAnyVisibleCount End");
             }
         }
 
-        private const int LVM_GETITEMSPACING = LVM_FIRST + 51; // returns packed x/y in LPARAM
+        private static int EstimateVisibleBySpacing(ListView lv, int total, bool largeIcon)
+        {
+            int packed = (int)SendMessage(lv.Handle, LVM_GETITEMSPACING,
+                largeIcon ? IntPtr.Zero : (IntPtr)1, IntPtr.Zero);
+
+            int cellW = packed & 0xFFFF;
+            int cellH = (packed >> 16) & 0xFFFF;
+
+            if (cellW <= 0 || cellH <= 0)
+            {
+                var img = (largeIcon ? lv.LargeImageList?.ImageSize : lv.SmallImageList?.ImageSize)
+                          ?? new System.Drawing.Size(16, 16);
+                cellW = Math.Max(1, img.Width + 16);
+                cellH = Math.Max(1, img.Height + lv.Font.Height + 8);
+            }
+
+            int cols = Math.Max(1, (int)Math.Ceiling(lv.ClientSize.Width / (double)cellW));
+            int rows = Math.Max(1, (int)Math.Ceiling(lv.ClientSize.Height / (double)cellH));
+
+            return Math.Min(total, cols * rows);
+        }
+
+        //private int GetAnyVisibleCount()
+        //{
+        //    System.Diagnostics.Debug.WriteLine("ExpList: GetAnyVisibleCount Begin");
+        //    try
+        //    {
+        //        if (_listView == null || !_listView.IsHandleCreated || _listView.View == View.LargeIcon)
+        //            return 0;
+
+        //        int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+        //        if (total <= 0) return 0;
+
+        //        Rectangle client = _listView.ClientRectangle;
+        //        int count = 0;
+        //        int i = -1;
+
+        //        while (true)
+        //        {
+        //            i = (int)SendMessage(_listView.Handle, LVM_GETNEXTITEM, (IntPtr)i, (IntPtr)LVNI_VISIBLE); //always returns -1 in listview virtual mode
+        //            if (i < 0) break;
+        //            if (i >= total) continue;
+
+        //            RECT rc = new RECT { left = LVIR_BOUNDS };
+        //            if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)i, ref rc) == IntPtr.Zero)
+        //                continue;
+
+        //            Rectangle itemRect = Rectangle.FromLTRB(rc.left, rc.top, rc.right, rc.bottom);
+        //            if (itemRect.IntersectsWith(client))
+        //                count++;
+        //        }
+
+        //        return count;
+        //    }
+        //    finally
+        //    {
+        //        System.Diagnostics.Debug.WriteLine("ExpList: GetAnyVisibleCount End");
+        //    }
+        //}
+
         private int GetApproxVisibleCountLargeIcon()
         {
             System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon Begin");
@@ -3768,18 +3813,25 @@ namespace ExpControlsLib
                         for (int i = startIndex; i <= endIndex; i++)
                         {
                             var csi = GetItem(i);
-                            if (csi is null) continue;
-
-                            if (_itemCache.TryGetValue(i, out var lvi) && lvi.ImageIndex == -1)
+                            if (csi is null)
                             {
-                                csi.ImageIndex = SystemImageListManager.GetIconIndex(csi, isLarge);
-                                lvi.ImageIndex = csi.ImageIndex;
+                                Debug.WriteLine($"LoadIconsForItems: GetItem returned null for index {i}");
+                                continue;
                             }
-                            else
+                            csi.ImageIndex = SystemImageListManager.GetIconIndex(csi, isLarge);
+
+                            var lvi = GetItemInternal(i);
+
+                            if (lvi is null)
                             {
-                                csi.ImageIndex = SystemImageListManager.GetIconIndex(csi, isLarge);
-                                if (_itemCache.TryGetValue(i, out var cachedLvi))
-                                    cachedLvi.ImageIndex = csi.ImageIndex;
+                                Debug.WriteLine($"LoadIconsForItems: GetItemInternal returned null for index {i}");
+                                continue;
+                            }
+
+                            if (lvi.ImageIndex != csi.ImageIndex)
+                            {
+                                lvi.ImageIndex = csi.ImageIndex;
+                                _listView.RedrawItems(i, i, false);
                             }
                         }
                     }
