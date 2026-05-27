@@ -1,5 +1,6 @@
-﻿using WindowsApiLib.Shell;
+using WindowsApiLib.Shell;
 using System;
+using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
@@ -12,6 +13,9 @@ namespace ExpControlsLib
     {
         // The Control which is our client
         private readonly Control m_Client;
+
+        // The point where the mouse was pressed down
+        private Point m_DragStartPoint;
 
         // The pointer to the IDataObject being dragged
         private IntPtr dataObjectPtr;
@@ -57,6 +61,12 @@ namespace ExpControlsLib
             }
 
             m_Client = ctl;
+            m_Client.MouseDown += OnMouseDown;
+        }
+
+        private void OnMouseDown(object? sender, MouseEventArgs e)
+        {
+            m_DragStartPoint = e.Location;
         }
 
         /// <summary>
@@ -64,6 +74,19 @@ namespace ExpControlsLib
         /// </summary>
         private void ItemDrag(object sender, ItemDragEventArgs e)
         {
+            // Guard against accidental drags by checking if the mouse has moved beyond the system drag threshold
+            Point currentPoint = m_Client.PointToClient(Cursor.Position);
+            Rectangle dragRect = new Rectangle(
+                m_DragStartPoint.X - SystemInformation.DragSize.Width / 2,
+                m_DragStartPoint.Y - SystemInformation.DragSize.Height / 2,
+                SystemInformation.DragSize.Width,
+                SystemInformation.DragSize.Height);
+
+            if (dragRect.Contains(currentPoint))
+            {
+                return;
+            }
+
             ReleaseCom();
 
             startButton = e.Button;
@@ -186,6 +209,10 @@ namespace ExpControlsLib
         {
             if (!disposed)
             {
+                if (m_Client != null)
+                {
+                    m_Client.MouseDown -= OnMouseDown;
+                }
                 ReleaseCom();
                 GC.SuppressFinalize(this);
                 disposed = true;

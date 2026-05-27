@@ -774,6 +774,16 @@
             <param name="newItems"></param>
             <returns></returns>
         </member>
+        <member name="M:ExpControlsLib.ExpList.GetIndexFromFullPath(System.String)">
+            <summary>
+            Gets the zero-based index of the item identified by the specified full path.
+            </summary>
+            <remarks>Lookup is performed against an internal dictionary; -1 indicates no entry exists for
+            the provided path.  Probably only works for virtual mode.
+            </remarks>
+            <param name="fullPath">The full path identifying the item to look up.</param>
+            <returns>The zero-based index of the item if found; otherwise -1.</returns>
+        </member>
         <member name="M:ExpControlsLib.ExpList.MakeLVItem(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Creates a <see cref="T:System.Windows.Forms.ListViewItem"/> for a given <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
@@ -781,13 +791,6 @@
             </summary>
             <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to create the list view item for.</param>
             <returns>A configured <see cref="T:System.Windows.Forms.ListViewItem"/>.</returns>
-        </member>
-        <member name="T:ExpControlsLib.ExpList.InvokeUpdate">
-            <summary>
-            doesn't work in virtual mode
-            </summary>
-            <param name="sender"></param>
-            <param name="e"></param>
         </member>
         <member name="P:ExpControlsLib.ExpList.SelectedItems">
             <summary>
@@ -822,6 +825,15 @@
             </summary>
             <param name="sender">The source of the event.</param>
             <param name="e">The <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the event data.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.RecreateIndexMapping">
+            <summary>
+            Clears and recreates the entire mapping of item paths to their indices in the virtual list. 
+            This is necessary after any operation that can change the order of items, such as sorting or bulk updates.
+            This is an expensive operation (O(n)) and should be used judiciously.
+            Do not use this function when only a small number of inserts and deletes are made
+            , as it will be more efficient to update the index mapping incrementally in those cases..
+            </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.UpdateLviUsingCsi(WindowsApiLib.Shell.CShellItem)">
             <summary>
@@ -1654,12 +1666,12 @@
             Gets or creates an ImageList for the specified thumbnail size
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnail(System.Windows.Forms.ListViewItem,System.String,System.Int32,System.Int32,WindowsApiLib.Shell.CShellItem)">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnail(WindowsApiLib.Shell.CShellItem,System.Int32,System.Int32)">
             <summary>
             Requests a thumbnail for a file and updates the ListView when ready
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnailFromCache(System.Windows.Forms.ListViewItem,System.String,System.Int32,System.Int32,WindowsApiLib.Shell.CShellItem)">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnailFromCache(WindowsApiLib.Shell.CShellItem,System.Int32,System.Int32)">
             <summary>
             Requests a thumbnail for a file and updates the ListView when ready
             </summary>
@@ -1667,17 +1679,22 @@
         <member name="M:ExpControlsLib.ThumbnailImageListManager.OnThumbnailReady(System.Object,ExpControlsLib.ThumbnailReadyEventArgs)">
             <summary>
             Handles thumbnail ready events and updates the ListView.
-            Image manipulation is done on the background thread, while UI updates
-            are marshalled to the UI thread.
+            Image manipulation is done on the background thread, while UI updates are marshalled to the UI thread.
+            
             </summary>
+            <remarks>
+            It is essential to remember that since thumbnail requests are lazy loaded, it is possible for the 
+            results to be invalid due to file deletions or navigating to different folders.  Cases like these
+            must be detected and thumbnail results should be ignored.
+            </remarks>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.ApplyThumbnailToUI(ExpControlsLib.ThumbnailImageListManager.ThumbnailRequestArgs,System.Drawing.Bitmap)">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.ApplyThumbnailToUI(ExpControlsLib.ThumbnailReadyEventArgs,System.Drawing.Bitmap)">
             <summary>
             Force thumbnail registration from the UI thread.  The active image list actually belongs to the 
             ListView so we can't event read the count without causing an exception unless we are running from 
             on the ui thread.
             </summary>
-            <param name="tag"></param>
+            <param name="reqArgs"></param>
             <param name="square"></param>
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.Clear">
@@ -1732,7 +1749,7 @@
             background thumbnail processor.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailProvider.EnqueueThumbnailRequest(WindowsApiLib.Shell.CShellItem,System.Int32,System.Object)">
+        <member name="M:ExpControlsLib.ThumbnailProvider.EnqueueThumbnailRequest(System.Int32,ExpControlsLib.ThumbnailRequestArgs)">
             <summary>
             Queues a thumbnail request that will be processed asynchronously for the specified shell
             item. If the thumbnail is already cached, <see cref="E:ExpControlsLib.ThumbnailProvider.ThumbnailReady"/>
@@ -1741,12 +1758,12 @@
             </summary>
             <param name="shellItem">The shell item to generate a thumbnail for.</param>
             <param name="size">Desired thumbnail size in pixels (e.g., 96, 256).</param>
-            <param name="tag">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
+            <param name="reqArgs">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailProvider.GenerateThumbnail(ExpControlsLib.ThumbnailProvider.ThumbnailRequest)">
+        <member name="M:ExpControlsLib.ThumbnailProvider.GenerateThumbnail(ExpControlsLib.ThumbnailRequestArgs)">
             <summary>
             Worker routine that produces the thumbnail for a single
-            <see cref="T:ExpControlsLib.ThumbnailProvider.ThumbnailRequest"/>, populates the cache, and raises
+            <see cref="!:ThumbnailRequest"/>, populates the cache, and raises
             <see cref="E:ExpControlsLib.ThumbnailProvider.ThumbnailReady"/>. A null thumbnail is reported on failure
             so consumers can fall back to an icon.
             </summary>
@@ -1812,11 +1829,6 @@
         <member name="M:ExpControlsLib.ThumbnailProvider.Dispose">
             <summary>
             Cleans up resources
-            </summary>
-        </member>
-        <member name="T:ExpControlsLib.ThumbnailProvider.ThumbnailRequest">
-            <summary>
-            Represents a thumbnail generation request
             </summary>
         </member>
         <member name="T:ExpControlsLib.ThumbnailReadyEventArgs">
