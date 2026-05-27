@@ -5,6 +5,7 @@ using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
 using static System.Windows.Forms.ListView;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace ExpControlsLib
 {
@@ -17,25 +18,16 @@ namespace ExpControlsLib
     {
         private readonly Dictionary<int, ImageList> _imageLists = new Dictionary<int, ImageList>();
         private readonly ThumbnailProvider _thumbnailProvider;
-        private readonly ListView _listView;
+        private readonly ExpList _expList;
         private int _activeSize;
         private int _generation = 0;
         private readonly Dictionary<string, int> _imageIndexByKey = new Dictionary<string, int>();
         private bool _addingImage = false;
         private readonly HashSet<ImageList> _corruptImageLists = new HashSet<ImageList>();
 
-        private sealed class ThumbnailRequestArgs
+        public ThumbnailImageListManager(ExpList expList)
         {
-            public int Generation { get; set; }
-            public string FilePath { get; set; }
-            public int RequestedSize { get; set; }
-            public ListViewItem? Item { get; set; }
-            public int ItemIndex { get; set; } = -1;
-        }
-
-        public ThumbnailImageListManager(ListView listView)
-        {
-            _listView = listView;
+            _expList = expList;
             _thumbnailProvider = new ThumbnailProvider();
             _thumbnailProvider.ThumbnailReady += OnThumbnailReady;
         }
@@ -55,17 +47,17 @@ namespace ExpControlsLib
 
             var imageList = GetImageList(thumbnailSize);
 
-            _listView.BeginUpdate();
-            _listView.LargeImageList = imageList;
-            if (!_listView.VirtualMode)
+            _expList._listView.BeginUpdate();
+            _expList._listView.LargeImageList = imageList;
+            if (!_expList._listView.VirtualMode)
             {
-                foreach (ListViewItem item in _listView.Items)
+                foreach (ListViewItem item in _expList._listView.Items)
                 {
                     if (item is null) continue;
                     item.ImageIndex = -1;
                 }
             }
-            _listView.EndUpdate();
+            _expList._listView.EndUpdate();
         }
 
 
@@ -78,11 +70,11 @@ namespace ExpControlsLib
             imageList.Images.Clear();
             _imageIndexByKey.Clear();
 
-            _listView.LargeImageList = imageList;
+            _expList._listView.LargeImageList = imageList;
 
-            if (!_listView.VirtualMode)
+            if (!_expList._listView.VirtualMode)
             {
-                foreach (ListViewItem item in _listView.Items)
+                foreach (ListViewItem item in _expList._listView.Items)
                 {
                     if (item is null) continue;
                     item.ImageIndex = -1;
@@ -122,103 +114,88 @@ namespace ExpControlsLib
         /// <summary>
         /// Requests a thumbnail for a file and updates the ListView when ready
         /// </summary>
-        public void RequestThumbnail(ListViewItem? item, string filePath, int thumbnailSize, int itemIndex = -1, CShellItem? csi = null)
+        public void RequestThumbnail(CShellItem csi, int thumbnailSize, int itemIndex = -1)
         {
 #if DEBUG
-            if (item != null) Console.WriteLine("Requesting thumbnail: " + item.Text);
+            Console.WriteLine("Requesting thumbnail: " + csi.Text);
 #endif
 
             var reqObj = new ThumbnailRequestArgs
             {
                 Generation = _generation,
-                FilePath = filePath,
-                RequestedSize = thumbnailSize,
-                Item = item,
-                ItemIndex = itemIndex
+                Item = csi,
+                Size = thumbnailSize,
+                Index = itemIndex
             };
 
-            csi ??= item?.Tag as CShellItem;
-            _thumbnailProvider.EnqueueThumbnailRequest(csi, thumbnailSize, reqObj);
+            _thumbnailProvider.EnqueueThumbnailRequest(thumbnailSize, reqObj);
         }
 
         /// <summary>
         /// Requests a thumbnail for a file and updates the ListView when ready
         /// </summary>
-        public void RequestThumbnailFromCache(ListViewItem? item, string filePath, int thumbnailSize, int itemIndex = -1, CShellItem? csi = null)
+        public void RequestThumbnailFromCache(CShellItem csi, int thumbnailSize, int itemIndex = -1)
         {
 #if DEBUG
-            if (item != null) Console.WriteLine("\tRequesting thumbnail: " + item.Text);
+            Console.WriteLine("\tRequesting thumbnail: " + csi.Text);
 #endif
-            var reqObj = new ThumbnailRequestArgs
-            {
-                Generation = _generation,
-                FilePath = filePath,
-                RequestedSize = thumbnailSize,
-                Item = item,
-                ItemIndex = itemIndex
-            };
+            if (csi == null) return;
 
-            string key = CreateKey(reqObj);
+            string key = CreateKey(csi.FullPath, thumbnailSize);
             if (_imageIndexByKey.TryGetValue(key, out int index))
             {
-                if (item != null) item.ImageIndex = index;
+                csi.ImageIndex = index;
             }
             else
             {
-                csi ??= item?.Tag as CShellItem;
-                _thumbnailProvider.EnqueueThumbnailRequest(csi, thumbnailSize, reqObj);
+                RequestThumbnail(csi, thumbnailSize, itemIndex);
             }
         }
         
         /// <summary>
-         /// Handles thumbnail ready events and updates the ListView.
-         /// Image manipulation is done on the background thread, while UI updates are marshalled to the UI thread.
-         /// 
-         /// </summary>
-         /// <remarks>
-         /// It is essential to remember that since thumbnail requests are lazy loaded, it is possible for the 
-         /// results to be invalid due to file deletions or navigating to different folders.  Cases like these
-         /// must be detected and thumbnail results should be ignored.
-         /// </remarks>
+        /// Handles thumbnail ready events and updates the ListView.
+        /// Image manipulation is done on the background thread, while UI updates are marshalled to the UI thread.
+        /// 
+        /// </summary>
+        /// <remarks>
+        /// It is essential to remember that since thumbnail requests are lazy loaded, it is possible for the 
+        /// results to be invalid due to file deletions or navigating to different folders.  Cases like these
+        /// must be detected and thumbnail results should be ignored.
+        /// </remarks>
         private void OnThumbnailReady(object sender, ThumbnailReadyEventArgs e)
         {
-            if (!(e.Tag is ThumbnailRequestArgs tag)) return;
-            if (_listView.IsDisposed || _listView.Disposing || !_listView.IsHandleCreated) return;
+            if (_expList._listView.IsDisposed || _expList._listView.Disposing || !_expList._listView.IsHandleCreated) return;
 
             //if (tag.Generation != _generation)
             //    return;
 
-            if (tag.RequestedSize != _activeSize) //this can happen if we switch display modes while thumbnail requests are outstanding
+            if (e.Size != _activeSize) //this can happen if we switch display modes while thumbnail requests are outstanding
                 return;
-
-            if (tag.Item != null && tag.Item.ListView != _listView) return;
 
             //// safety: ensure item still points to same shell object/path
             //if (!(tag.Item.Tag is CShellItem csi) || !string.Equals(csi.FullPath, tag.FilePath, StringComparison.OrdinalIgnoreCase))
             //    return;
 
-            int index = -1;
             Bitmap? square = null;
 
             if (e.Thumbnail != null)
             {
                 // Image manipulation on background thread
                 // Use Format32bppPArgb to match what the shell produced (premultiplied alpha)
-                square = new Bitmap(tag.RequestedSize, tag.RequestedSize,
-                    System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                square = new Bitmap(e.Size, e.Size, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
 
                 using (var g = Graphics.FromImage(square))
                 {
                     g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
                     g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Low;
                     g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.None;
-                    g.DrawImage(e.Thumbnail, new Rectangle(0, 0, tag.RequestedSize, tag.RequestedSize));
+                    g.DrawImage(e.Thumbnail, new Rectangle(0, 0, e.Size, e.Size));
                 }
             }
 
-            if (!_listView.IsDisposed && _listView.IsHandleCreated)
+            if (square != null && !_expList._listView.IsDisposed && _expList._listView.IsHandleCreated)
             {
-                _listView.BeginInvoke(new Action(() => ApplyThumbnailToUI(tag, square)));
+                _expList._listView.BeginInvoke(new Action(() => ApplyThumbnailToUI(e, square)));
             }
             else
             {
@@ -233,23 +210,17 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="reqArgs"></param>
         /// <param name="square"></param>
-        private void ApplyThumbnailToUI(ThumbnailRequestArgs reqArgs, Bitmap? square)
+        private void ApplyThumbnailToUI(ThumbnailReadyEventArgs reqArgs, Bitmap square)
         {
-            if (reqArgs.Item == null && reqArgs.ItemIndex == -1)
-            {
-                square?.Dispose();
-                return;
-            }
-
-            if (reqArgs.Item != null && reqArgs.Item.ListView != _listView)
-            {
-                square?.Dispose();
-                return;
-            }
-
             if (square == null)
             {
                 if (reqArgs.Item != null) reqArgs.Item.ImageIndex = -1;
+                return;
+            }
+
+            if (reqArgs is null || reqArgs.Item is null)
+            {
+                square?.Dispose();
                 return;
             }
 
@@ -257,10 +228,10 @@ namespace ExpControlsLib
             try
             {
                 imageList = GetImageList(_activeSize);
-                if (_listView.LargeImageList != imageList)
-                    _listView.LargeImageList = imageList;
+                if (_expList._listView.LargeImageList != imageList)
+                    _expList._listView.LargeImageList = imageList;
 
-                string key = CreateKey(reqArgs);
+                string key = CreateKey(reqArgs.Item.FullPath, reqArgs.Size);
                 if (!_imageIndexByKey.TryGetValue(key, out int index))
                 {
                     _addingImage = true;
@@ -286,13 +257,40 @@ namespace ExpControlsLib
                     //oldImage.Dispose(); //do not do this.  causes internal imageList state corruption
                 }
 
-                if (reqArgs.Item != null)
+                reqArgs.Item.ImageIndex = index;
+
+                if (_expList.VirtualMode)
                 {
-                    reqArgs.Item.ImageIndex = index;
+                    if (reqArgs.Index < 0)
+                    {
+                        var location_index = _expList.GetIndexFromFullPath(reqArgs.Item.FullPath);
+                        if (location_index > -1 && location_index < _expList.Count)
+                            _expList._listView.RedrawItems(reqArgs.Index, reqArgs.Index, false);
+                    }
+                    else if (reqArgs.Index >= 0 && reqArgs.Index < _expList._listView.Items.Count)
+                    {
+                        var location_index = _expList.GetIndexFromFullPath(reqArgs.Item.FullPath);
+                        if (location_index == reqArgs.Index && location_index > -1 && location_index < _expList.Count)
+                            _expList._listView.RedrawItems(reqArgs.Index, reqArgs.Index, false);
+                        // If the index doesn't match, it means the item has likely been removed or the list has changed, so we should ignore this thumbnail.
+                    }
                 }
-                else if (reqArgs.ItemIndex != -1)
+                else
                 {
-                    _listView.RedrawItems(reqArgs.ItemIndex, reqArgs.ItemIndex, false);
+                    if (reqArgs.Index == -1)
+                    {
+                        var lvi = _expList.FindItemByPath(reqArgs.Item.FullPath);
+                        if (lvi != null) lvi.ImageIndex = index;
+                    }
+                    else if (reqArgs.Index < _expList._listView.Items.Count)
+                    {
+                        var lvi = _expList.FindItemByPath(reqArgs.Item.FullPath);
+                        if (lvi == null) return;
+                        if (lvi.Index == reqArgs.Index)
+                        {
+                            lvi.ImageIndex = index;
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -317,10 +315,10 @@ namespace ExpControlsLib
             }
             _imageLists.Clear();
 
-            if (_listView != null)
+            if (_expList != null && _expList._listView != null)
             {
-                _listView.LargeImageList = null;
-                _listView.SmallImageList = null;
+                _expList._listView.LargeImageList = null;
+                _expList._listView.SmallImageList = null;
             }
         }
 
@@ -338,9 +336,9 @@ namespace ExpControlsLib
             _thumbnailProvider?.Dispose();
         }
 
-        private string CreateKey(ThumbnailRequestArgs tag)
+        private string CreateKey(string fullFileName, int size)
         {
-            return $"{tag.FilePath}|{tag.RequestedSize}";
+            return $"{fullFileName}|{size}";
         }
     }
 }

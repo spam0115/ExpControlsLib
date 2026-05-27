@@ -723,7 +723,7 @@ namespace ExpControlsLib
                 DropWrap = new ClvDropWrapper(_listView);
 
                 // Initialize Thumbnail Manager
-                _thumbnailManager = new ThumbnailImageListManager(_listView);
+                _thumbnailManager = new ThumbnailImageListManager(this);
 
                 //create sorter
                 var sorter = new LVColSorter(_listView);
@@ -1177,6 +1177,27 @@ namespace ExpControlsLib
 
         #endregion
 
+
+        #region Public Methods
+
+        /// <summary>
+        /// Gets the zero-based index of the item identified by the specified full path.
+        /// </summary>
+        /// <remarks>Lookup is performed against an internal dictionary; -1 indicates no entry exists for
+        /// the provided path.  Probably only works for virtual mode.
+        /// </remarks>
+        /// <param name="fullPath">The full path identifying the item to look up.</param>
+        /// <returns>The zero-based index of the item if found; otherwise -1.</returns>
+        public int GetIndexFromFullPath(string fullPath)
+        {
+            if (_pathToIndex.TryGetValue(fullPath, out int index))
+                return index;
+            return -1;
+        }
+
+        #endregion
+
+        #region Private Methods
         /// <summary>
         /// Creates a <see cref="ListViewItem"/> for a given <see cref="CShellItem"/>.
         /// Populates columns based on <see cref="ExpListGetColumnData"/> event or <see cref="ColumnHeader.Tag"/> mapping.
@@ -1201,48 +1222,7 @@ namespace ExpControlsLib
                 //System.Diagnostics.Debug.WriteLine("ExpList: MakeLVItem End");
             }
         }
-
-        /// <summary>
-        /// doesn't work in virtual mode
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        //public int GetIndexOfFirstVisible()
-        //{
-        //    ListViewItem? current;
-        //    if (_listView.View == View.Details || _listView.View == View.List)
-        //    {
-        //        current = _listView.TopItem;   // valid here
-        //    }
-        //    else
-        //    {
-        //        if (_listView.Items is null) return 0;
-//
-        //        EnterListViewEnumeration();
-        //        try
-        //        {
-        //            current = _listView.Items
-        //                .Cast<ListViewItem>()
-        //                .Where(it => it != null && _listView.ClientRectangle.IntersectsWith(it.Bounds))
-        //                .OrderBy(it => it.Bounds.Top)
-        //                .ThenBy(it => it.Bounds.Left)
-        //                .FirstOrDefault();
-        //        }
-        //        finally
-        //        {
-        //            ExitListViewEnumeration();
-        //        }
-        //    }
-//
-//                return (current?.Index == null ? 0 : current.Index);
- //           }
-//            finally
-//            {
-//                System.Diagnostics.Debug.WriteLine("ExpList: GetIndexOfFirstVisible End");
-//            }
-//        }
-
-
+        #endregion
 
         #region Dynamic Update Handler
 
@@ -1425,22 +1405,8 @@ namespace ExpControlsLib
                                 else
                                 {
                                     var lvi = MakeLVItem(e.Item);
-
-                                    if (IsThumbnailViewMode())
-                                    {
-                                        lvi.ImageIndex = -1; // Placeholder until thumbnail is loaded
-                                        if (m_CreateNew)
-                                        {
-                                            m_CreateNew = false;
-                                            lvi.BeginEdit();
-                                            if (IsThumbnailViewMode())
-                                                _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode());
-                                        }
-                                    }
-                                    else
-                                        lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
-
                                     InsertLvi(lvi, _listView);
+                                    m_CreateNew = false; //finished create new handling.  I don't think this is even used?
                                 }
 
                                 break;
@@ -1568,7 +1534,7 @@ namespace ExpControlsLib
                                     {
                                         _itemCache.Remove(index);
                                         if (IsThumbnailViewMode())
-                                            _thumbnailManager.RequestThumbnail(null, e.Item.FullPath, GetThumbnailSizeForMode(), index, e.Item);
+                                            _thumbnailManager.RequestThumbnail(e.Item, GetThumbnailSizeForMode(), index);
                                         else
                                             _listView.RedrawItems(index, index, false);
                                     }
@@ -1579,7 +1545,7 @@ namespace ExpControlsLib
                                     if (lvi != null)
                                     {
                                         if (IsThumbnailViewMode())
-                                            _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode(), -1, e.Item);
+                                            _thumbnailManager.RequestThumbnail(e.Item, GetThumbnailSizeForMode());
                                         else
                                             lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
                                     }
@@ -1595,7 +1561,7 @@ namespace ExpControlsLib
                                     {
                                         _itemCache.Remove(index);
                                         if (IsThumbnailViewMode())
-                                            _thumbnailManager.RequestThumbnail(null, e.Item.FullPath, GetThumbnailSizeForMode(), index, e.Item);
+                                            _thumbnailManager.RequestThumbnail(e.Item, GetThumbnailSizeForMode(), index);
                                         else
                                             _listView.RedrawItems(index, index, false);
                                     }
@@ -1607,7 +1573,7 @@ namespace ExpControlsLib
                                     {
                                         lvi.Text = e.Item.DisplayName;
                                         if (IsThumbnailViewMode())
-                                            _thumbnailManager.RequestThumbnail(e.Item.LVItem, e.Item.FullPath, GetThumbnailSizeForMode(), -1, e.Item);
+                                            _thumbnailManager.RequestThumbnail(e.Item, GetThumbnailSizeForMode());
                                         else lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
                                     }
                                 }
@@ -3938,7 +3904,7 @@ namespace ExpControlsLib
                             if (_thumbnailManager.GetThumbnailIndex(item.FullPath, thumbnailSize) != -1)
                                 continue;
 
-                            _thumbnailManager.RequestThumbnail(null, item.FullPath, thumbnailSize, i, item);
+                            _thumbnailManager.RequestThumbnail(item, thumbnailSize, i);
                             Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
                         }
                     }
@@ -3954,7 +3920,7 @@ namespace ExpControlsLib
                             if (!clientRect.IntersectsWith(item.Bounds)) continue;
 
                             if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
-                                _thumbnailManager.RequestThumbnail(item, csi.FullPath, thumbnailSize, -1, csi);
+                                _thumbnailManager.RequestThumbnail(csi, thumbnailSize);
                         }
                     }
                 }

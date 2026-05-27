@@ -92,36 +92,35 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="shellItem">The shell item to generate a thumbnail for.</param>
         /// <param name="size">Desired thumbnail size in pixels (e.g., 96, 256).</param>
-        /// <param name="tag">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
-        public void EnqueueThumbnailRequest(CShellItem? shellItem, int size, object? tag = null)
+        /// <param name="reqArgs">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
+        public void EnqueueThumbnailRequest(int size, ThumbnailRequestArgs reqArgs)
         {
-            if (shellItem is null) return;
+            var csi = reqArgs.Item;
+
+            if (csi is null && string.IsNullOrWhiteSpace(reqArgs.FilePath)) return;
 
             // Check cache first
-            if (TryGetCachedThumbnail(shellItem.FullPath, size, out var cachedImage))
+            if (TryGetCachedThumbnail(csi.FullPath, size, out var cachedImage))
             {
 #if DEBUG
-                Console.WriteLine("\tFound cached thumbnail: " + shellItem.DisplayName);
+                Console.WriteLine("\tFound cached thumbnail: " + csi.DisplayName);
 #endif
-                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(shellItem, cachedImage, tag, size));
+                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(csi, cachedImage, reqArgs.Index, size));
                 return;
             }
 
-            var request = new ThumbnailRequest { ShellItem = shellItem, Size = size, Tag = tag };
-
 #if DEBUG
-            Console.WriteLine("\tAttempting to add to thumbnail request queue: " + shellItem.DisplayName);
+            Console.WriteLine("\tAttempting to add to thumbnail request queue: " + csi.DisplayName);
 #endif
 
             var task = _requestQueueRunner.InvokeAsync(_cancellationToken => { 
                 if (_cancellationToken.IsCancellationRequested) return; 
-                GenerateThumbnail(request); }
+                GenerateThumbnail(reqArgs); }
                 , _cancellationToken);
 
             _activeTasks.Add(task);
 
             PruneActiveTasks(false); //don't need to thouroughly here
-
         }
 
         public void CancelAllPendingOperations() { 
@@ -141,19 +140,19 @@ namespace ExpControlsLib
         /// so consumers can fall back to an icon.
         /// </summary>
         /// <param name="request">The request to process.</param>
-        private void GenerateThumbnail(ThumbnailRequest request)
+        private void GenerateThumbnail(ThumbnailRequestArgs request)
         {
             try
             {
 #if DEBUG
-                Console.WriteLine("Attempting to generate thumbnail for: " + request.ShellItem.DisplayName);
+                Console.WriteLine("Attempting to generate thumbnail for: " + request.Item.DisplayName);
 #endif
 
-                Image thumbnail = GetThumbnailFromOS(request.ShellItem.PIDL, request.Size);
+                Image thumbnail = GetThumbnailFromOS(request.Item.PIDL, request.Size);
 
                 if (thumbnail != null)
                 {
-                    _thumbnailCache.TryAdd(ConstructCacheKey(request.ShellItem.FullPath, request.Size), thumbnail);
+                    _thumbnailCache.TryAdd(ConstructCacheKey(request.Item.FullPath, request.Size), thumbnail);
                 }
                 else
                 {
@@ -164,12 +163,12 @@ namespace ExpControlsLib
                 }
 
                 //send event back to the consumer
-                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.ShellItem, thumbnail, request.Tag, request.Size));
+                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.Item, thumbnail, request.Size, request.Index));
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error generating thumbnail for {request.ShellItem.FullPath}: {ex}");
-                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.ShellItem, null, request.Tag, request.Size));
+                System.Diagnostics.Debug.WriteLine($"Error generating thumbnail for {request.Item.FullPath}: {ex}");
+                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.Item, null, request.Size, request.Index));
             }
         }
 
@@ -433,50 +432,7 @@ namespace ExpControlsLib
 
         #endregion
 
-        /// <summary>
-        /// Represents a thumbnail generation request
-        /// </summary>
-        //private class ThumbnailRequest
-        //{
-        //    public string FilePath { get; set; }
-        //    public int Size { get; set; }
-        //    public object Tag { get; set; }
-        //}
-        private class ThumbnailRequest
-        {
-            public CShellItem ShellItem { get; set; }
-            public int Size { get; set; }
-            public object Tag { get; set; }
-        }
-
     }
 
-    /// <summary>
-    /// Event arguments for thumbnail ready notifications
-    /// </summary>
-    public class ThumbnailReadyEventArgs : EventArgs
-    {
-        //public string FilePath { get; }
-        public CShellItem ShellItem { get; }
-        public Image Thumbnail { get; }
-        public object Tag { get; }
-
-        public int RequestedSize { get; }
-
-        //public ThumbnailReadyEventArgs(string filePath, Image thumbnail, object tag, int size)
-        //{
-        //    FilePath = filePath;
-        //    Thumbnail = thumbnail;
-        //    Tag = tag;
-        //    RequestedSize = size;
-        //}
-        public ThumbnailReadyEventArgs(CShellItem shellItem, Image thumbnail, object tag, int size)
-        {
-            ShellItem = shellItem;
-            Thumbnail = thumbnail;
-            Tag = tag;
-            RequestedSize = size;
-        }
-    }
 
 }
