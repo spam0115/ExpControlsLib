@@ -599,9 +599,8 @@ namespace ExpControlsLib
                 {
                     if (index >= 0 && index < _virtualItems.Count)
                     {
-                        var item = _virtualItems[index];
-                        _pathToIndex.Remove(item.FullPath);
                         _virtualItems.RemoveAt(index);
+                        RecreateIndexMapping();
                         _itemCache.Clear();
                         _listView.VirtualListSize = _virtualItems.Count;
                         _listView.Invalidate();
@@ -1329,30 +1328,20 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: InsertVirtualItem Begin");
             try
             {
-                int insertIndex = -1;
-                for (int i = 0; i < _virtualItems.Count; i++)
-                {
-                    if (_virtualItems[i].CompareTo(item) > 0)
-                    {
-                        insertIndex = i;
-                        break;
-                    }
-                }
+                _virtualItems.Add(item);
+                _listView.VirtualListSize = _virtualItems.Count;
 
-                if (insertIndex == -1)
+                if (_listView.ListViewItemSorter is LVColSorter sorter && sorter.OrderOfSort != SortOrder.None)
                 {
-                    _virtualItems.Add(item);
-                    insertIndex = _virtualItems.Count - 1;
+                    SortVirtualItems(sorter.SortColumn, sorter.OrderOfSort);
                 }
                 else
                 {
-                    _virtualItems.Insert(insertIndex, item);
+                    _virtualItems.Sort();
+                    RecreateIndexMapping();
+                    _itemCache.Clear();
+                    _listView.Invalidate();
                 }
-
-                _pathToIndex.TryAdd(item.FullPath, insertIndex);
-                _itemCache.Clear();
-                _listView.VirtualListSize = _virtualItems.Count;
-                _listView.Invalidate();
             }
             finally
             {
@@ -1424,10 +1413,8 @@ namespace ExpControlsLib
                                 {
                                     if (_pathToIndex.TryGetValue(e.Item.FullPath, out int index))
                                     {
-                                        RemoveAt(index); // 1. Remove from your data source
-                                        _listView.VirtualListSize = _virtualItems.Count; // 2. Update VirtualListSize — this is critical
-                                        _listView.SelectedIndices.Clear(); // 3. Clear selection if needed to avoid index-out-of-range issues
-                                        _listView.Invalidate();
+                                        _listView.SelectedIndices.Clear();
+                                        RemoveAt(index);
                                     }
                                 }
                                 else
