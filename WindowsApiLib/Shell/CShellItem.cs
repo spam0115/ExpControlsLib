@@ -581,6 +581,49 @@ namespace WindowsApiLib.Shell
             }
         }
 
+        private Dictionary<string, CShellItem> m_FileDic = null;
+        public Dictionary<string, CShellItem> FilesDic
+        {
+            get
+            {
+                if (!m_IsFolder) //only folders have child elements
+                {
+                    return new Dictionary<string, CShellItem>();
+                }
+                else if (m_FileDic == null)
+                {
+                    m_FileDic = new Dictionary<string, CShellItem>();
+                    foreach (var file in m_Files)
+                    {
+                        m_FileDic.Add(file.FullPath, file);
+                    }
+                }
+                return m_FileDic;
+            }
+        }
+
+        private Dictionary<string, CShellItem> m_DirectoriesDic = null;
+        public Dictionary<string, CShellItem> DirectoriesDic
+        {
+            get
+            {
+                if (!m_IsFolder) //only folders have child elements
+                {
+                    return new Dictionary<string, CShellItem>();
+                }
+                else if (m_DirectoriesDic == null)
+                {
+                    m_DirectoriesDic = new Dictionary<string, CShellItem>();
+                    foreach (var file in m_Files)
+                    {
+                        m_DirectoriesDic.Add(file.FullPath, file);
+                    }
+                }
+                return m_DirectoriesDic;
+            }
+        }
+
+
         /// <summary>
         /// Contains the CShellItem of this instance's Parent Folder
         /// </summary>

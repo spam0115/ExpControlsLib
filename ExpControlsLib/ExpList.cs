@@ -792,8 +792,19 @@ namespace ExpControlsLib
         protected override void WndProc(ref Message m)
         {
             //System.Diagnostics.Debug.WriteLine("ExpList: WndProc Begin");
+            const int WM_QUERYENDSESSION = 0x0011;
+            const int WM_ENDSESSION = 0x0016;
+            const int WM_CLOSE = 0x0010;
+            bool isShuttingDown = false;
+
             try
             {
+                if (m.Msg == WM_QUERYENDSESSION || m.Msg == WM_ENDSESSION || m.Msg == WM_CLOSE)
+                {
+                    isShuttingDown = true;
+                }
+                if (isShuttingDown) return;
+
                 int hr;
                 if (m.Msg == (int)WM.INITMENUPOPUP || m.Msg == (int)WM.MEASUREITEM || m.Msg == (int)WM.DRAWITEM)
                 {
@@ -1358,6 +1369,7 @@ namespace ExpControlsLib
         private void DoItemUpdate(object sender, ShellItemUpdateEventArgs e)
         {
             System.Diagnostics.Debug.WriteLine("ExpList: DoItemUpdate Begin");
+
             try
             {
                 if (sender is null || _currentFolderCsi == null) return;
