@@ -112,7 +112,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="SelPath">The path of the clicked item.</param>
         /// <param name="Item">The <see cref="CShellItem"/> that was clicked.</param>
-        public delegate void ExpListItemClickEventHandler(CShellItem Item);
+        public delegate void ExpListItemClickEventHandler(ListViewItem lvItem, CShellItem Item);
         /// <summary>
         /// Occurs when an item in the list view is clicked.
         /// </summary>
@@ -785,6 +785,7 @@ namespace ExpControlsLib
         }
 
 
+        bool isShuttingDown = false;
         /// <summary>
         /// Overrides <see cref="Control.WndProc(ref Message)"/> to handle shell context menu messages.
         /// </summary>
@@ -795,14 +796,13 @@ namespace ExpControlsLib
             const int WM_QUERYENDSESSION = 0x0011;
             const int WM_ENDSESSION = 0x0016;
             const int WM_CLOSE = 0x0010;
-            bool isShuttingDown = false;
+            const int WM_NCDESTORY = 0x0082;
 
             try
             {
-                if (m.Msg == WM_QUERYENDSESSION || m.Msg == WM_ENDSESSION || m.Msg == WM_CLOSE)
-                {
+                if (m.Msg == WM_QUERYENDSESSION || m.Msg == WM_ENDSESSION || m.Msg == WM_CLOSE || m.Msg == WM_NCDESTORY)
                     isShuttingDown = true;
-                }
+
                 if (isShuttingDown) return;
 
                 int hr;
@@ -1630,16 +1630,18 @@ namespace ExpControlsLib
                 var csi = _virtualItems[index];
 
                 // Sync ImageIndex if it was updated in the background while item was cached
-                if (IsThumbnailViewMode() && lvi.ImageIndex == -1)
+                if (IsThumbnailViewMode() && lvi.ImageIndex == -1) //could be a sync problem to not run this each time because this data will not be populate for when the listview transitions from details to thumbnail modes
                 {
                     int thumbIndex = _thumbnailManager.GetThumbnailIndex(csi.FullPath, GetThumbnailSizeForMode());
                     lvi.ImageIndex = thumbIndex;
                 }
 
-                if (DisplayMode == ListViewDisplayMode.Details && (csi.ColumnDic == null || csi.ColumnDic.Count == 0))
-                {
-                    PopulateColumnData(lvi, csi);
-                }
+                //if (DisplayMode == ListViewDisplayMode.Details && (csi.ColumnDic == null || csi.ColumnDic.Count == 0))
+                //{
+                //}
+
+                PopulateColumnData(lvi, csi); //need to populate this even in thumbnail modes for sorting and because the listview doesn't call RetrieveVirtualItem again if it transitions to other display modes.
+
                 return lvi;
             }
 
@@ -2122,6 +2124,22 @@ namespace ExpControlsLib
         #endregion
 
 
+        private bool IsItemSelected(CShellItem item)
+        {
+            if (item == null) return false;
+            if (_useVirtualMode)
+            {
+                if (_pathToIndex.TryGetValue(item.FullPath, out int index))
+                    return _listView.SelectedIndices.Contains(index);
+                return false;
+            }
+            else
+            {
+                var lvi = FindLVItem(item);
+                return lvi?.Selected ?? false;
+            }
+        }
+
         private void ExpFileList_Click(object sender, EventArgs e)
         {
             System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_Click Begin");
@@ -2131,14 +2149,20 @@ namespace ExpControlsLib
 
                 if (listView.SelectedIndices.Count == 0) return;
 
-                var csi = GetItem(listView.SelectedIndices[0]);
-                if (csi == null) return;
+                CShellItem? csi = null;
+                if (listView.FocusedItem != null) //could be selected OR deselected
+                { 
+                    csi = GetItem(listView.FocusedItem.Index);
+                    if (csi == null) return;
 
-                _selectedItem = csi; // ← keep in sync
+                    if (listView.FocusedItem.Selected)
+                        _selectedItem = csi; // ← keep in sync
 
-                if (csi.IsFileSystem)
+                    ExpListItemClick?.Invoke(listView.FocusedItem, csi);
+                }
+                else
                 {
-                    ExpListItemClick?.Invoke(csi);
+                    ExpListItemClick?.Invoke(null, null);
                 }
             }
             finally
@@ -2158,7 +2182,12 @@ namespace ExpControlsLib
             {
                 if (_listView.SelectedIndices.Count <= 0) return;
 
-                var csi = GetItem(_listView.SelectedIndices[0]);
+                CShellItem? csi = null;
+                if (_listView.FocusedItem != null && _listView.FocusedItem.Selected)
+                    csi = GetItem(_listView.FocusedItem.Index);
+                else
+                    csi = GetItem(_listView.SelectedIndices[0]);
+
                 if (csi == null) return;
 
                 if (csi.IsFolder)
@@ -2195,7 +2224,21 @@ namespace ExpControlsLib
                 {
                     if (_listView.SelectedIndices.Count > 0)
                     {
-                        _selectedItem = GetItem(_listView.SelectedIndices[0]);
+                        // If current _selectedItem is still selected, keep it.
+                        // This handles the case where multiple items are selected and we don't want to 
+                        // jump back to the first one in the list.
+                        if (_selectedItem != null && IsItemSelected(_selectedItem))
+                        {
+                            // keep _selectedItem as is
+                        }
+                        else if (_listView.FocusedItem != null && _listView.FocusedItem.Selected)
+                        {
+                            _selectedItem = GetItem(_listView.FocusedItem.Index);
+                        }
+                        else
+                        {
+                            _selectedItem = GetItem(_listView.SelectedIndices[0]);
+                        }
                     }
                     else
                     {
@@ -2227,6 +2270,10 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_ItemSelectionChanged Begin");
             try
             {
+                if (e.IsSelected)
+                {
+                    _selectedItem = GetItem(e.ItemIndex);
+                }
                 ItemSelectionChanged?.Invoke(e);
             }
             finally
@@ -2507,7 +2554,12 @@ namespace ExpControlsLib
 
                 if (e.Button == MouseButtons.Middle && _listView.SelectedIndices.Count > 0)
                 {
-                    var csi = GetItem(_listView.SelectedIndices[0]);
+                    CShellItem? csi = null;
+                    if (_listView.FocusedItem != null && _listView.FocusedItem.Selected)
+                        csi = GetItem(_listView.FocusedItem.Index);
+                    else
+                        csi = GetItem(_listView.SelectedIndices[0]);
+
                     if (csi != null) ExpListItemMouseMBUp?.Invoke(csi.FullPath, csi);
                 }
                 OnMouseUp(e);

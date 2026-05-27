@@ -77,10 +77,10 @@ namespace ExpControlsLib
             // Guard against accidental drags by checking if the mouse has moved beyond the system drag threshold
             Point currentPoint = m_Client.PointToClient(Cursor.Position);
             Rectangle dragRect = new Rectangle(
-                m_DragStartPoint.X - SystemInformation.DragSize.Width / 2,
-                m_DragStartPoint.Y - SystemInformation.DragSize.Height / 2,
-                SystemInformation.DragSize.Width,
-                SystemInformation.DragSize.Height);
+                m_DragStartPoint.X - SystemInformation.DragSize.Width,
+                m_DragStartPoint.Y - SystemInformation.DragSize.Height,
+                SystemInformation.DragSize.Width * 2,
+                SystemInformation.DragSize.Height * 2);
 
             if (dragRect.Contains(currentPoint))
             {
