@@ -83,9 +83,13 @@ namespace WindowsApiLib.Shell
 
             if (BaseItem.FileList is not null && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
             {
+                var fullPath = CPidl.GetFileSystemPath(Abs);
                 foreach (CShellItem FItem in BaseItem.FileList)
                 {
-                    if (CPidl.IsEqual(FItem.PIDL, Abs))
+                    //if (CPidl.IsEqual(FItem.PIDL, Abs)) //too slow
+                    //    return FItem;
+
+                    if (FItem.FullPath == fullPath)
                         return FItem;
                 }
             }
@@ -211,14 +215,21 @@ namespace WindowsApiLib.Shell
                 return null;
             }
 
+            var fullPath = CPidl.GetFileSystemPath(absPidl);
             // Check for files in the current folder
             foreach (var currentCSI in currentFolder.Files) //this is really slow.  Is there a way to make this better?  are we going to have to store a dictionary at each folder to make lookup faster?
             {
-                if (CPidl.IsEqual(currentCSI.PIDL, absPidl))
+                if (currentCSI.FullPath == fullPath)
                 {
                     Parent = currentFolder;
                     return currentCSI;
                 }
+
+                //if (CPidl.IsEqual(currentCSI.PIDL, absPidl)) //too slow
+                //{
+                //    Parent = currentFolder;
+                //    return currentCSI;
+                //}
             }
 
             Debug.WriteLine("Could not find file in the current folder: '" + CPidl.ToString(absPidl) + "'");

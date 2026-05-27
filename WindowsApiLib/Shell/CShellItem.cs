@@ -88,11 +88,11 @@ namespace WindowsApiLib.Shell
         #region    Instance Private Fields
         // m_Folder and m_Pidl must be released/freed at Dispose time
         internal IntPtr m_Pidl;            // The Absolute PIDL for this item (not retained for files)
-        internal IShellFolder m_IShellFolder;    // if item is a folder, contains the Folder interface for this instance
-        internal CShellItem m_Parent;
+        internal IShellFolder? m_IShellFolder = null;    // if item is a folder, contains the Folder interface for this instance
+        internal CShellItem? m_Parent = null;
         internal string m_DisplayName = "";
-        internal string m_Path;
-        internal string m_TypeName;
+        internal string m_Path = null;
+        internal string m_TypeName = null;
         internal int m_IconIndexNormal = -1;        // index into the SystemImageListManager list for Normal icon
         internal int m_IconIndexOpen = -1;          // index into the SystemImageListManager list for Open icon
         internal int m_IconIndexNormalOrig = -1;    // index into the System Image list for Normal icon
@@ -466,7 +466,7 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                if (string.IsNullOrEmpty(m_Path))
+                if (m_Path is null)
                 {
                     m_Path = CShellItemFactory.GetFullPath(this);
                 }

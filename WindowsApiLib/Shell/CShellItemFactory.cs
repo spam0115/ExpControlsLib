@@ -822,6 +822,8 @@ namespace WindowsApiLib.Shell
             if (csi.m_HasDispType)
                 return;
 
+            csi.m_Path = GetFullPath(csi);
+
             // Fast path for filesystem file items (most common case)
             if (csi.m_IsFileSystem && !csi.m_IsFolder)
             {
