@@ -1876,6 +1876,7 @@ namespace WindowsApiLib.Shell
             if (W32Data is not null && W32Data is W32Find_Data)
                 W32Data = null;
             ResetIconIndex();
+            m_columnDic?.Clear();
         }
         
         internal void ResetChildren()

@@ -172,9 +172,14 @@ namespace ExpControlsLib
         
         /// <summary>
          /// Handles thumbnail ready events and updates the ListView.
-         /// Image manipulation is done on the background thread, while UI updates
-         /// are marshalled to the UI thread.
+         /// Image manipulation is done on the background thread, while UI updates are marshalled to the UI thread.
+         /// 
          /// </summary>
+         /// <remarks>
+         /// It is essential to remember that since thumbnail requests are lazy loaded, it is possible for the 
+         /// results to be invalid due to file deletions or navigating to different folders.  Cases like these
+         /// must be detected and thumbnail results should be ignored.
+         /// </remarks>
         private void OnThumbnailReady(object sender, ThumbnailReadyEventArgs e)
         {
             if (!(e.Tag is ThumbnailRequestArgs tag)) return;
@@ -226,17 +231,17 @@ namespace ExpControlsLib
         /// ListView so we can't event read the count without causing an exception unless we are running from 
         /// on the ui thread.
         /// </summary>
-        /// <param name="tag"></param>
+        /// <param name="reqArgs"></param>
         /// <param name="square"></param>
-        private void ApplyThumbnailToUI(ThumbnailRequestArgs tag, Bitmap? square)
+        private void ApplyThumbnailToUI(ThumbnailRequestArgs reqArgs, Bitmap? square)
         {
-            if (tag.Item == null && tag.ItemIndex == -1)
+            if (reqArgs.Item == null && reqArgs.ItemIndex == -1)
             {
                 square?.Dispose();
                 return;
             }
 
-            if (tag.Item != null && tag.Item.ListView != _listView)
+            if (reqArgs.Item != null && reqArgs.Item.ListView != _listView)
             {
                 square?.Dispose();
                 return;
@@ -244,7 +249,7 @@ namespace ExpControlsLib
 
             if (square == null)
             {
-                if (tag.Item != null) tag.Item.ImageIndex = -1;
+                if (reqArgs.Item != null) reqArgs.Item.ImageIndex = -1;
                 return;
             }
 
@@ -255,7 +260,7 @@ namespace ExpControlsLib
                 if (_listView.LargeImageList != imageList)
                     _listView.LargeImageList = imageList;
 
-                string key = CreateKey(tag);
+                string key = CreateKey(reqArgs);
                 if (!_imageIndexByKey.TryGetValue(key, out int index))
                 {
                     _addingImage = true;
@@ -278,16 +283,16 @@ namespace ExpControlsLib
                         square?.Dispose(); 
                         _addingImage = false; 
                     }
-                    //oldImage.Dispose(); do not do this.  internal state corruption
+                    //oldImage.Dispose(); //do not do this.  causes internal imageList state corruption
                 }
 
-                if (tag.Item != null)
+                if (reqArgs.Item != null)
                 {
-                    tag.Item.ImageIndex = index;
+                    reqArgs.Item.ImageIndex = index;
                 }
-                else if (tag.ItemIndex != -1)
+                else if (reqArgs.ItemIndex != -1)
                 {
-                    _listView.RedrawItems(tag.ItemIndex, tag.ItemIndex, false);
+                    _listView.RedrawItems(reqArgs.ItemIndex, reqArgs.ItemIndex, false);
                 }
             }
             catch (Exception ex)

@@ -291,7 +291,7 @@ namespace ExpControlsLib
                 field = value;
 
                 SetImageListForMode(value);
-                //LoadImagesForItems();
+                if (_useVirtualMode) LoadImagesForItems();
 
                 DisplayModeChanged?.Invoke(value);
             }
@@ -599,8 +599,9 @@ namespace ExpControlsLib
                 {
                     if (index >= 0 && index < _virtualItems.Count)
                     {
-                        _virtualItems.RemoveAt(index); //this is very expensive
-                        RecreateIndexMapping(); //this is very expensive
+                        var item = _virtualItems[index];
+                        _pathToIndex.Remove(item.FullPath);
+                        _virtualItems.RemoveAt(index);
                         _itemCache.Clear();
                         _listView.VirtualListSize = _virtualItems.Count;
                         _listView.Invalidate();
@@ -665,10 +666,7 @@ namespace ExpControlsLib
                 _scrollDebounceTimer.Tick += (s, e) =>
                 {
                     _scrollDebounceTimer.Stop();
-                    if (IsThumbnailViewMode())
-                        LoadThumbnailsForItems(GetThumbnailSizeForMode(), true);
-                    else
-                        LoadIconsForItems(true);
+                    LoadImagesForItems();
                 };
 
                 // Converted from Handles clauses in VB
@@ -745,8 +743,8 @@ namespace ExpControlsLib
 
                 DisplayMode = (ListViewDisplayMode)_listView.View;
 
-		        SetImageListForMode(DisplayMode);
-		        //LoadImagesForItems();
+		          SetImageListForMode(DisplayMode);
+		          //LoadImagesForItems();
             }
             finally
             {
@@ -1371,7 +1369,7 @@ namespace ExpControlsLib
                     _virtualItems.Insert(insertIndex, item);
                 }
 
-                RecreateIndexMapping();
+                _pathToIndex.TryAdd(item.FullPath, insertIndex);
                 _itemCache.Clear();
                 _listView.VirtualListSize = _virtualItems.Count;
                 _listView.Invalidate();
@@ -1460,10 +1458,9 @@ namespace ExpControlsLib
                                 {
                                     if (_pathToIndex.TryGetValue(e.Item.FullPath, out int index))
                                     {
-                                        _virtualItems.RemoveAt(index);
-                                        RecreateIndexMapping();
-                                        _itemCache.Clear();
-                                        _listView.VirtualListSize = _virtualItems.Count;
+                                        RemoveAt(index); // 1. Remove from your data source
+                                        _listView.VirtualListSize = _virtualItems.Count; // 2. Update VirtualListSize — this is critical
+                                        _listView.SelectedIndices.Clear(); // 3. Clear selection if needed to avoid index-out-of-range issues
                                         _listView.Invalidate();
                                     }
                                 }
@@ -1688,7 +1685,15 @@ namespace ExpControlsLib
             return lvi;
         }
 
-        private void RecreateIndexMapping() //todo: this is very expensive.  gotta refactor this.
+
+        /// <summary>
+        /// Clears and recreates the entire mapping of item paths to their indices in the virtual list. 
+        /// This is necessary after any operation that can change the order of items, such as sorting or bulk updates.
+        /// This is an expensive operation (O(n)) and should be used judiciously.
+        /// Do not use this function when only a small number of inserts and deletes are made
+        /// , as it will be more efficient to update the index mapping incrementally in those cases..
+        /// </summary>
+        private void RecreateIndexMapping()
         {
             System.Diagnostics.Debug.WriteLine("ExpList: UpdateIndexMapping Begin");
             try
@@ -1986,6 +1991,8 @@ namespace ExpControlsLib
                 {
                     if (_pathToIndex.TryGetValue(path, out int index))
                     {
+                        var csi = _virtualItems[index];
+                        csi.ColumnDic.Clear();
                         _itemCache.Remove(index);
                         _listView.RedrawItems(index, index, false);
                         return GetItemInternal(index);
@@ -1998,7 +2005,10 @@ namespace ExpControlsLib
                     if (lvi is null) return null;
 
                     if (lvi.Tag is CShellItem csi)
+                    {
+                        csi.ColumnDic.Clear();
                         UpdateLviUsingCsi(lvi, csi);
+                    }
 
                     return lvi;
                 }
@@ -2016,6 +2026,8 @@ namespace ExpControlsLib
             try
             {
                 if (item is null) return null;
+
+                item.ColumnDic.Clear();
 
                 if (_useVirtualMode)
                 {
@@ -3775,7 +3787,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: LoadImagesForItems End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: LoadImagesForItems End");
             }
         }
 
