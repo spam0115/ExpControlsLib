@@ -48,6 +48,12 @@ namespace WindowsApiLib.Shell
             return FindCShItem(Root, ptr);
         }
 
+        public CShellItem FindCShItem(string fullFileName)
+        {
+            IntPtr pidl = ShellAPI.ILCreateFromPathW(fullFileName);
+            return FindCShItem(Root, pidl);
+        }
+
         /// <summary>
         /// FindCShItem attempts to locate a CShellItem in the internal tree. It will NOT expand the Tree during the
         /// search. If the Item identified by the Absolute PIDL parameter is not ALREADY in the internal tree, then
