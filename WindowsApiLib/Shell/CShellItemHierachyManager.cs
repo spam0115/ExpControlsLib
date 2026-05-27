@@ -206,7 +206,7 @@ namespace WindowsApiLib.Shell
             }
 
             // Check for files in the current folder
-            foreach (var currentCSI in currentFolder.Files)
+            foreach (var currentCSI in currentFolder.Files) //this is really slow.  Is there a way to make this better?  are we going to have to store a dictionary at each folder to make lookup faster?
             {
                 if (CPidl.IsEqual(currentCSI.PIDL, absPidl))
                 {

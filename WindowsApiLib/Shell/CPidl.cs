@@ -313,7 +313,7 @@ namespace WindowsApiLib
             if (Pidl1 == Pidl2) return true;
             try
             {
-                return ILIsEqual(Pidl1, Pidl2);
+                return ILIsEqual(Pidl1, Pidl2); //todo: this only does binary comparison, not value comparison.  two pidls to the same item can have 2 different binary representations
             }
             catch(Exception ex)
             {

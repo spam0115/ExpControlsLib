@@ -1957,7 +1957,7 @@ namespace ExpControlsLib
                 {
                     if (_pathToIndex.TryGetValue(path, out int index))
                     {
-                        var csi = _virtualItems[index];
+                        var csi = _virtualItems[index]; //crash when index == count+1.  it's possible for _pathToIndex to become descynchronized from _virtualItems
                         csi.ColumnDic.Clear();
                         _itemCache.Remove(index);
                         _listView.RedrawItems(index, index, false);
