@@ -80,7 +80,7 @@ namespace ExpControlsLib
                 m_DragStartPoint.X - SystemInformation.DragSize.Width,
                 m_DragStartPoint.Y - SystemInformation.DragSize.Height,
                 SystemInformation.DragSize.Width * 2,
-                SystemInformation.DragSize.Height * 2);
+                SystemInformation.DragSize.Height * 2); //can't increase it past this much or else a drag won't start at all. This is because the system drag event is triggered while the cursor is still within the threshold and get's cancelled and then never fired again.
 
             if (dragRect.Contains(currentPoint))
             {

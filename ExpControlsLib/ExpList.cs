@@ -1785,7 +1785,7 @@ namespace ExpControlsLib
             {
                 if (args.ColumnData.TryGetValue(col.Text, out var value))
                 {
-                    item.ColumnDic[col.Name] = value;
+                    item.ColumnDic[col.Text] = value;
                 }
             }
         }
@@ -1805,9 +1805,6 @@ namespace ExpControlsLib
             {
                 string text = string.Empty;
                 object? tag = null;
-
-                if (item.ColumnDic.TryGetValue(col.Name, out ListViewSubitemData propInfo)) //maybe it was already fetched before
-                    return propInfo;
 
                 // 1. Try Tag Mapping
                 string mapping = col.Tag?.ToString().Trim();
@@ -1849,6 +1846,10 @@ namespace ExpControlsLib
                             else return new ListViewSubitemData(string.Empty, null);
                     }
 
+
+                    if (item.ColumnDic.TryGetValue(col.Text, out ListViewSubitemData propInfo)) //maybe it was already fetched before
+                        return propInfo;
+
                     // Fallback to reflection for other properties
                     if (mapping.StartsWith(".Tag")) //get the value from one of the fields within the custom Tag object property
                     {
@@ -1889,7 +1890,7 @@ namespace ExpControlsLib
                 {
                     // 2. Try bulk fetch if still not found
                     EnsureColumnDataFetched(item);
-                    if (item.ColumnDic.TryGetValue(col.Name, out propInfo))
+                    if (item.ColumnDic.TryGetValue(col.Text, out ListViewSubitemData propInfo))
                         return propInfo;
                 }
 
