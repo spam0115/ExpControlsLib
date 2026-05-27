@@ -1748,7 +1748,7 @@ namespace ExpControlsLib
         /// <param name="tag"></param>
         private ListViewSubitemData GetColumnData(CShellItem item, ColumnHeader col)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: GetColumnData Begin");
+            //System.Diagnostics.Debug.WriteLine("ExpList: GetColumnData Begin");
             try
             {
                 string text = string.Empty;
@@ -1854,7 +1854,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: GetColumnData End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: GetColumnData End");
             }
         }
 
