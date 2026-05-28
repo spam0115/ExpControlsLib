@@ -1,5 +1,6 @@
-﻿using WindowsApiLib.Shell;
+using WindowsApiLib.Shell;
 using System;
+using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
@@ -12,6 +13,9 @@ namespace ExpControlsLib
     {
         // The Control which is our client
         private readonly Control m_Client;
+
+        // The point where the mouse was pressed down
+        private Point m_DragStartPoint;
 
         // The pointer to the IDataObject being dragged
         private IntPtr dataObjectPtr;
@@ -57,6 +61,12 @@ namespace ExpControlsLib
             }
 
             m_Client = ctl;
+            m_Client.MouseDown += OnMouseDown;
+        }
+
+        private void OnMouseDown(object? sender, MouseEventArgs e)
+        {
+            m_DragStartPoint = e.Location;
         }
 
         /// <summary>
@@ -64,6 +74,19 @@ namespace ExpControlsLib
         /// </summary>
         private void ItemDrag(object sender, ItemDragEventArgs e)
         {
+            // Guard against accidental drags by checking if the mouse has moved beyond the system drag threshold
+            Point currentPoint = m_Client.PointToClient(Cursor.Position);
+            Rectangle dragRect = new Rectangle(
+                m_DragStartPoint.X - SystemInformation.DragSize.Width,
+                m_DragStartPoint.Y - SystemInformation.DragSize.Height,
+                SystemInformation.DragSize.Width * 2,
+                SystemInformation.DragSize.Height * 2); //can't increase it past this much or else a drag won't start at all. This is because the system drag event is triggered while the cursor is still within the threshold and get's cancelled and then never fired again.
+
+            if (dragRect.Contains(currentPoint))
+            {
+                return;
+            }
+
             ReleaseCom();
 
             startButton = e.Button;
@@ -84,16 +107,34 @@ namespace ExpControlsLib
                 if (ctl.SelectedIndices.Count == 0) return;
 
                 var items = new CShellItem[ctl.SelectedIndices.Count];
-                
+
                 // Get first item to establish parent
-                var firstItem = ctl.Items[ctl.SelectedIndices[0]].Tag as CShellItem;
+                CShellItem firstItem = null;
+                if (ctl.Parent is ExpList expList)
+                {
+                    firstItem = expList.GetItem(ctl.SelectedIndices[0]);
+                }
+                else if (!ctl.VirtualMode)
+                {
+                    firstItem = ctl.Items[ctl.SelectedIndices[0]].Tag as CShellItem;
+                }
+
                 if (firstItem == null) return;
                 var parent = firstItem.Parent;
 
                 for (int i = 0; i < ctl.SelectedIndices.Count; i++)
                 {
                     int index = ctl.SelectedIndices[i];
-                    var itemTag = ctl.Items[index].Tag as CShellItem;
+                    CShellItem itemTag = null;
+                    if (ctl.Parent is ExpList el)
+                    {
+                        itemTag = el.GetItem(index);
+                    }
+                    else if (!ctl.VirtualMode)
+                    {
+                        itemTag = ctl.Items[index].Tag as CShellItem;
+                    }
+
                     if (itemTag == null || !ReferenceEquals(parent, itemTag.Parent))
                         return;
 
@@ -168,6 +209,10 @@ namespace ExpControlsLib
         {
             if (!disposed)
             {
+                if (m_Client != null)
+                {
+                    m_Client.MouseDown -= OnMouseDown;
+                }
                 ReleaseCom();
                 GC.SuppressFinalize(this);
                 disposed = true;

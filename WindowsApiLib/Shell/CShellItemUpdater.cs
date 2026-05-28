@@ -926,12 +926,14 @@ namespace WindowsApiLib.Shell
                         if (csi.m_Directories is not null && UpdateFolders)
                         {
                             foreach (var item in csi.m_Directories.Items)
-                                oldCsiDic.Add(CPidl.ToString(item.LastPIDL, false) ?? string.Empty, item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
+                                oldCsiDic.TryAdd(CPidl.ToString(item.LastPIDL, false) ?? string.Empty, item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
                         }
                         if (csi.m_Files is not null && UpdateFiles)
                         {
                             foreach (var item in csi.m_Files.Items)
-                                oldCsiDic.Add(CPidl.ToString(item.LastPIDL, false) ?? string.Empty, item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
+                            {
+                                oldCsiDic.TryAdd(CPidl.ToString(item.LastPIDL, false) ?? string.Empty, item); //might want to save this dic between calls?  The problem with this is that we have to determine which items are orphans and that would require build a new dic to do the work in O(n) time so there's no benefit
+                            }
                         }
 
 #if DEBUG

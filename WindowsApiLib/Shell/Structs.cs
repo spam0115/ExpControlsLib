@@ -27,6 +27,7 @@ namespace WindowsApiLib.Shell
 
     public struct ListViewSubitemData
     {
+        public readonly static ListViewSubitemData Default = new ListViewSubitemData(null, null);
         public string Text;
         public object Tag;
 

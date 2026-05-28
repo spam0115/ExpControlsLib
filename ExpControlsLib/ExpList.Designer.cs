@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
+using WindowsApiLib.Shell;
 
 namespace ExpControlsLib
 { 
@@ -20,9 +21,13 @@ namespace ExpControlsLib
         {
             try
             {
-                if (disposing && components != null)
+                if (disposing)
                 {
-                    components.Dispose();
+                    CShellItemUpdater.UpdateEvent -= UpdateInvoke;
+                    if (components != null)
+                    {
+                        components.Dispose();
+                    }
                 }
             }
             finally

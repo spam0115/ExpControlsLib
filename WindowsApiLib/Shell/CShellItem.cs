@@ -88,11 +88,11 @@ namespace WindowsApiLib.Shell
         #region    Instance Private Fields
         // m_Folder and m_Pidl must be released/freed at Dispose time
         internal IntPtr m_Pidl;            // The Absolute PIDL for this item (not retained for files)
-        internal IShellFolder m_IShellFolder;    // if item is a folder, contains the Folder interface for this instance
-        internal CShellItem m_Parent;
+        internal IShellFolder? m_IShellFolder = null;    // if item is a folder, contains the Folder interface for this instance
+        internal CShellItem? m_Parent = null;
         internal string m_DisplayName = "";
-        internal string m_Path;
-        internal string m_TypeName;
+        internal string m_Path = null;
+        internal string m_TypeName = null;
         internal int m_IconIndexNormal = -1;        // index into the SystemImageListManager list for Normal icon
         internal int m_IconIndexOpen = -1;          // index into the SystemImageListManager list for Open icon
         internal int m_IconIndexNormalOrig = -1;    // index into the System Image list for Normal icon
@@ -466,7 +466,7 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                if (string.IsNullOrEmpty(m_Path))
+                if (m_Path is null)
                 {
                     m_Path = CShellItemFactory.GetFullPath(this);
                 }
@@ -580,6 +580,49 @@ namespace WindowsApiLib.Shell
                 return m_Files.ToArray();
             }
         }
+
+        private Dictionary<string, CShellItem> m_FileDic = null;
+        public Dictionary<string, CShellItem> FilesDic
+        {
+            get
+            {
+                if (!m_IsFolder) //only folders have child elements
+                {
+                    return new Dictionary<string, CShellItem>();
+                }
+                else if (m_FileDic == null)
+                {
+                    m_FileDic = new Dictionary<string, CShellItem>();
+                    foreach (var file in m_Files)
+                    {
+                        m_FileDic.Add(file.FullPath, file);
+                    }
+                }
+                return m_FileDic;
+            }
+        }
+
+        private Dictionary<string, CShellItem> m_DirectoriesDic = null;
+        public Dictionary<string, CShellItem> DirectoriesDic
+        {
+            get
+            {
+                if (!m_IsFolder) //only folders have child elements
+                {
+                    return new Dictionary<string, CShellItem>();
+                }
+                else if (m_DirectoriesDic == null)
+                {
+                    m_DirectoriesDic = new Dictionary<string, CShellItem>();
+                    foreach (var file in m_Files)
+                    {
+                        m_DirectoriesDic.Add(file.FullPath, file);
+                    }
+                }
+                return m_DirectoriesDic;
+            }
+        }
+
 
         /// <summary>
         /// Contains the CShellItem of this instance's Parent Folder
@@ -957,7 +1000,7 @@ namespace WindowsApiLib.Shell
 
         private bool _IsSystem_HaveSysInfo = default;
         private bool _IsSystem_m_IsSystem = default;
-        public int ImageIndex;
+        public int ImageIndex; //todo: store all the image indexes for all sizes and not just one at a time.
 
         /// <summary>True if this instance has been marked "System", False otherwise
         /// </summary>
@@ -1876,6 +1919,7 @@ namespace WindowsApiLib.Shell
             if (W32Data is not null && W32Data is W32Find_Data)
                 W32Data = null;
             ResetIconIndex();
+            m_columnDic?.Clear();
         }
         
         internal void ResetChildren()

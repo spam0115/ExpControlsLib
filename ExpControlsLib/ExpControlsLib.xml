@@ -500,26 +500,15 @@
             Occurs when an arrow key is released, changing the selection.
             </summary>
         </member>
-        <member name="T:ExpControlsLib.ExpList.ExpListFolderChangedEventHandler">
+        <member name="T:ExpControlsLib.ExpList.ExpListCurrentFolderChangedEventHandler">
             <summary>
-            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListFolderChanged"/> event.
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListCurrentFolderChanged"/> event.
             </summary>
             <param name="Item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> of the folder that was just loaded.</param>
         </member>
-        <member name="E:ExpControlsLib.ExpList.ExpListFolderChanged">
+        <member name="E:ExpControlsLib.ExpList.ExpListCurrentFolderChanged">
             <summary>
             Occurs after the currently loaded folder has changed.
-            </summary>
-        </member>
-        <member name="T:ExpControlsLib.ExpList.ExpListPathChangedEventHandler">
-            <summary>
-            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListPathChanged"/> event.
-            </summary>
-            <param name="Path">The new path of the ExpList.</param>
-        </member>
-        <member name="E:ExpControlsLib.ExpList.ExpListPathChanged">
-            <summary>
-            Occurs when the <see cref="P:ExpControlsLib.ExpList.CurrentPath"/> has changed.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ExpList.ExpListItemsChangedEventHandler">
@@ -567,9 +556,30 @@
             Occurs when the selection in the list view is requested.
             </summary>
         </member>
+        <member name="T:ExpControlsLib.ExpList.ExpListGetColumnDataEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListGetColumnData"/> event.
+            </summary>
+        </member>
         <member name="E:ExpControlsLib.ExpList.ExpListGetColumnData">
             <summary>
             Occurs when data for a custom column is requested.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ExpList.DisplayModeChangedEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.DisplayModeChanged"/> event.
+            </summary>
+            <param name="newMode">The new <see cref="T:ExpControlsLib.ListViewDisplayMode"/>.</param>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.DisplayModeChanged">
+            <summary>
+            Occurs when the <see cref="P:ExpControlsLib.ExpList.DisplayMode"/> has changed.
+            </summary>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.SortOrderChanged">
+            <summary>
+            Occurs when the sort column or order has changed.
             </summary>
         </member>
         <member name="P:ExpControlsLib.ExpList.DisplayMode">
@@ -719,27 +729,6 @@
             </summary>
             <param name="m">The Windows <see cref="T:System.Windows.Forms.Message"/> to process.</param>
         </member>
-        <member name="T:ExpControlsLib.ExpList.ExpListGetColumnDataEventHandler">
-            <summary>
-            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListGetColumnData"/> event.
-            </summary>
-        </member>
-        <member name="T:ExpControlsLib.ExpList.DisplayModeChangedEventHandler">
-            <summary>
-            Delegate for the <see cref="E:ExpControlsLib.ExpList.DisplayModeChanged"/> event.
-            </summary>
-            <param name="newMode">The new <see cref="T:ExpControlsLib.ListViewDisplayMode"/>.</param>
-        </member>
-        <member name="E:ExpControlsLib.ExpList.DisplayModeChanged">
-            <summary>
-            Occurs when the <see cref="P:ExpControlsLib.ExpList.DisplayMode"/> has changed.
-            </summary>
-        </member>
-        <member name="E:ExpControlsLib.ExpList.SortOrderChanged">
-            <summary>
-            Occurs when the sort column or order has changed.
-            </summary>
-        </member>
         <member name="M:ExpControlsLib.ExpList.DisplayFiles(System.String,WindowsApiLib.Shell.CShellItem,System.Boolean,System.Boolean)">
             <summary>
             Populates the list view with files and directories from the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
@@ -775,7 +764,7 @@
             Use this for ListView modification operations outside of DoItemUpdate.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.RequestListViewRefresh(System.Windows.Forms.ListViewItem[],System.Boolean)">
+        <member name="M:ExpControlsLib.ExpList.RequestListViewRepopulate(System.Windows.Forms.ListViewItem[],System.Boolean)">
             <summary>
             This refreshes the ListView with new items.
             This function marshals execution to the ui thread.  Also prevents double updating by gatekeeping 
@@ -784,6 +773,16 @@
             </summary>
             <param name="newItems"></param>
             <returns></returns>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.GetIndexFromFullPath(System.String)">
+            <summary>
+            Gets the zero-based index of the item identified by the specified full path.
+            </summary>
+            <remarks>Lookup is performed against an internal dictionary; -1 indicates no entry exists for
+            the provided path.  Probably only works for virtual mode.
+            </remarks>
+            <param name="fullPath">The full path identifying the item to look up.</param>
+            <returns>The zero-based index of the item if found; otherwise -1.</returns>
         </member>
         <member name="M:ExpControlsLib.ExpList.MakeLVItem(WindowsApiLib.Shell.CShellItem)">
             <summary>
@@ -827,6 +826,15 @@
             <param name="sender">The source of the event.</param>
             <param name="e">The <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the event data.</param>
         </member>
+        <member name="M:ExpControlsLib.ExpList.RecreateIndexMapping">
+            <summary>
+            Clears and recreates the entire mapping of item paths to their indices in the virtual list. 
+            This is necessary after any operation that can change the order of items, such as sorting or bulk updates.
+            This is an expensive operation (O(n)) and should be used judiciously.
+            Do not use this function when only a small number of inserts and deletes are made
+            , as it will be more efficient to update the index mapping incrementally in those cases..
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ExpList.UpdateLviUsingCsi(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Refreshes the list view item associated with data from the given shell item.
@@ -837,6 +845,15 @@
             <summary>
             Refreshes the display of a single item whose underlying filesystem data has changed.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.GetColumnData(WindowsApiLib.Shell.CShellItem,System.Windows.Forms.ColumnHeader)">
+            <summary>
+            Populates the text and tag for a single given column based on the provided shell item and column header.
+            </summary>
+            <param name="item"></param>
+            <param name="col"></param>
+            <param name="text"></param>
+            <param name="tag"></param>
         </member>
         <member name="M:ExpControlsLib.ExpList.RefreshItemByDisplayName(System.String)">
             <summary>
@@ -1002,7 +1019,7 @@
             Works in virtual and non-virtual mode.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.SetAndLoadImageList(ExpControlsLib.ListViewDisplayMode)">
+        <member name="M:ExpControlsLib.ExpList.SetImageListForMode(ExpControlsLib.ListViewDisplayMode)">
             <summary>
             Configures the image lists bound to the ListView for the given display mode.
             For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
@@ -1072,25 +1089,9 @@
             Gets the <see cref="T:WindowsApiLib.Shell.CShellItem"/> being displayed.
             </summary>
         </member>
-        <member name="P:ExpControlsLib.ExpListGetColumnDataEventArgs.Column">
+        <member name="P:ExpControlsLib.ExpListGetColumnDataEventArgs.ColumnData">
             <summary>
-            Gets the <see cref="T:System.Windows.Forms.ColumnHeader"/> for which data is requested.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpListGetColumnDataEventArgs.Text">
-            <summary>
-            Gets or sets the text to display in the column.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpListGetColumnDataEventArgs.Tag">
-            <summary>
-            Gets or sets the tag for the sub-item.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpListGetColumnDataEventArgs.Handled">
-            <summary>
-            Gets or sets a value indicating whether the event has been handled.
-            If true, the default property mapping logic will be skipped.
+            Gets the dictionary of column data, keyed by column name.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ExpTree">
@@ -1665,12 +1666,12 @@
             Gets or creates an ImageList for the specified thumbnail size
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnail(System.Windows.Forms.ListViewItem,System.String,System.Int32,System.Int32,WindowsApiLib.Shell.CShellItem)">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnail(WindowsApiLib.Shell.CShellItem,System.Int32,System.Int32)">
             <summary>
             Requests a thumbnail for a file and updates the ListView when ready
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnailFromCache(System.Windows.Forms.ListViewItem,System.String,System.Int32,System.Int32,WindowsApiLib.Shell.CShellItem)">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnailFromCache(WindowsApiLib.Shell.CShellItem,System.Int32,System.Int32)">
             <summary>
             Requests a thumbnail for a file and updates the ListView when ready
             </summary>
@@ -1678,17 +1679,22 @@
         <member name="M:ExpControlsLib.ThumbnailImageListManager.OnThumbnailReady(System.Object,ExpControlsLib.ThumbnailReadyEventArgs)">
             <summary>
             Handles thumbnail ready events and updates the ListView.
-            Image manipulation is done on the background thread, while UI updates
-            are marshalled to the UI thread.
+            Image manipulation is done on the background thread, while UI updates are marshalled to the UI thread.
+            
             </summary>
+            <remarks>
+            It is essential to remember that since thumbnail requests are lazy loaded, it is possible for the 
+            results to be invalid due to file deletions or navigating to different folders.  Cases like these
+            must be detected and thumbnail results should be ignored.
+            </remarks>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.ApplyThumbnailToUI(ExpControlsLib.ThumbnailImageListManager.ThumbnailRequestArgs,System.Drawing.Bitmap)">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.ApplyThumbnailToUI(ExpControlsLib.ThumbnailReadyEventArgs,System.Drawing.Bitmap)">
             <summary>
             Force thumbnail registration from the UI thread.  The active image list actually belongs to the 
             ListView so we can't event read the count without causing an exception unless we are running from 
             on the ui thread.
             </summary>
-            <param name="tag"></param>
+            <param name="reqArgs"></param>
             <param name="square"></param>
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.Clear">
@@ -1743,7 +1749,7 @@
             background thumbnail processor.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailProvider.EnqueueThumbnailRequest(WindowsApiLib.Shell.CShellItem,System.Int32,System.Object)">
+        <member name="M:ExpControlsLib.ThumbnailProvider.EnqueueThumbnailRequest(System.Int32,ExpControlsLib.ThumbnailRequestArgs)">
             <summary>
             Queues a thumbnail request that will be processed asynchronously for the specified shell
             item. If the thumbnail is already cached, <see cref="E:ExpControlsLib.ThumbnailProvider.ThumbnailReady"/>
@@ -1752,12 +1758,12 @@
             </summary>
             <param name="shellItem">The shell item to generate a thumbnail for.</param>
             <param name="size">Desired thumbnail size in pixels (e.g., 96, 256).</param>
-            <param name="tag">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
+            <param name="reqArgs">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailProvider.GenerateThumbnail(ExpControlsLib.ThumbnailProvider.ThumbnailRequest)">
+        <member name="M:ExpControlsLib.ThumbnailProvider.GenerateThumbnail(ExpControlsLib.ThumbnailRequestArgs)">
             <summary>
             Worker routine that produces the thumbnail for a single
-            <see cref="T:ExpControlsLib.ThumbnailProvider.ThumbnailRequest"/>, populates the cache, and raises
+            <see cref="!:ThumbnailRequest"/>, populates the cache, and raises
             <see cref="E:ExpControlsLib.ThumbnailProvider.ThumbnailReady"/>. A null thumbnail is reported on failure
             so consumers can fall back to an icon.
             </summary>
@@ -1823,11 +1829,6 @@
         <member name="M:ExpControlsLib.ThumbnailProvider.Dispose">
             <summary>
             Cleans up resources
-            </summary>
-        </member>
-        <member name="T:ExpControlsLib.ThumbnailProvider.ThumbnailRequest">
-            <summary>
-            Represents a thumbnail generation request
             </summary>
         </member>
         <member name="T:ExpControlsLib.ThumbnailReadyEventArgs">

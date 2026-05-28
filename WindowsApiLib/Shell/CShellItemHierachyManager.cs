@@ -48,6 +48,12 @@ namespace WindowsApiLib.Shell
             return FindCShItem(Root, ptr);
         }
 
+        public CShellItem FindCShItem(string fullFileName)
+        {
+            IntPtr pidl = ShellAPI.ILCreateFromPathW(fullFileName);
+            return FindCShItem(Root, pidl);
+        }
+
         /// <summary>
         /// FindCShItem attempts to locate a CShellItem in the internal tree. It will NOT expand the Tree during the
         /// search. If the Item identified by the Absolute PIDL parameter is not ALREADY in the internal tree, then
@@ -59,7 +65,6 @@ namespace WindowsApiLib.Shell
         public CShellItem FindCShItem(CShellItem BaseItem, IntPtr Abs)
         {
             CShellItem FindCShItemRet = default;
-            FindCShItemRet = null;
 
             if (CPidl.IsEqual(BaseItem.PIDL, Abs))
                 return BaseItem;
@@ -77,14 +82,24 @@ namespace WindowsApiLib.Shell
 
             if (BaseItem.FileList is not null && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
             {
-                foreach (CShellItem FItem in BaseItem.FileList)
+                var fullPath = CPidl.GetFileSystemPath(Abs);
+
+                if (BaseItem.FilesDic.TryGetValue(fullPath, out CShellItem fileItem))
                 {
-                    if (CPidl.IsEqual(FItem.PIDL, Abs))
-                        return FItem;
+                    return fileItem;
                 }
+                else return null;
+                //foreach (CShellItem FItem in BaseItem.FileList)
+                //{
+                //    //if (CPidl.IsEqual(FItem.PIDL, Abs)) //too slow
+                //    //    return FItem;
+
+                //    if (FItem.FullPath == fullPath)
+                //        return FItem;
+                //}
             }
 
-            return FindCShItemRet;
+            return null;
         }
 
         /// <summary>
@@ -205,15 +220,28 @@ namespace WindowsApiLib.Shell
                 return null;
             }
 
+            var fullPath = CPidl.GetFileSystemPath(absPidl);
             // Check for files in the current folder
-            foreach (var currentCSI in currentFolder.Files)
+            if (currentFolder.FilesDic.TryGetValue(fullPath, out CShellItem fileItem))
             {
-                if (CPidl.IsEqual(currentCSI.PIDL, absPidl))
-                {
-                    Parent = currentFolder;
-                    return currentCSI;
-                }
+                Parent = currentFolder;
+                return fileItem;
             }
+
+            //foreach (var currentCSI in currentFolder.Files) //this is really slow.  Is there a way to make this better?  are we going to have to store a dictionary at each folder to make lookup faster?
+            //{
+            //    if (currentCSI.FullPath == fullPath)
+            //    {
+            //        Parent = currentFolder;
+            //        return currentCSI;
+            //    }
+
+            //    //if (CPidl.IsEqual(currentCSI.PIDL, absPidl)) //too slow
+            //    //{
+            //    //    Parent = currentFolder;
+            //    //    return currentCSI;
+            //    //}
+            //}
 
             Debug.WriteLine("Could not find file in the current folder: '" + CPidl.ToString(absPidl) + "'");
             return null;
