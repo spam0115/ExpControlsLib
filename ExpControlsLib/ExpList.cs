@@ -73,6 +73,8 @@ namespace ExpControlsLib
         private const int LVM_FIRST = 0x1000;
         private const uint LVM_GETEDITCONTROL = LVM_FIRST + 24;
 
+        bool _isShuttingDown = false;
+
         // Avoid Globalization problem-- an empty timevalue
         private static readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
 
@@ -784,8 +786,6 @@ namespace ExpControlsLib
             }
         }
 
-
-        bool isShuttingDown = false;
         /// <summary>
         /// Overrides <see cref="Control.WndProc(ref Message)"/> to handle shell context menu messages.
         /// </summary>
@@ -801,9 +801,9 @@ namespace ExpControlsLib
             try
             {
                 if (m.Msg == WM_QUERYENDSESSION || m.Msg == WM_ENDSESSION || m.Msg == WM_CLOSE || m.Msg == WM_NCDESTORY)
-                    isShuttingDown = true;
+                    _isShuttingDown = true;
 
-                if (isShuttingDown) return;
+                if (_isShuttingDown) return;
 
                 int hr;
                 if (m.Msg == (int)WM.INITMENUPOPUP || m.Msg == (int)WM.MEASUREITEM || m.Msg == (int)WM.DRAWITEM)
@@ -2143,7 +2143,7 @@ namespace ExpControlsLib
 
         private void ExpFileList_Click(object sender, EventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_Click Begin");
+            Debug.WriteLine("ExpList: ExpFileList_Click Begin");
             try
             {
                 ListView listView = (ListView)sender;
@@ -2168,7 +2168,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_Click End");
+                Debug.WriteLine("ExpList: ExpFileList_Click End");
             }
         }
 
@@ -2219,56 +2219,62 @@ namespace ExpControlsLib
         private void ExpFileList_SelectedIndexChanged(object sender, EventArgs e)
         {
             System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_SelectedIndexChanged Begin");
+            
+            if (_isShuttingDown) return;
+
             try
             {
-                try
+                if (_listView.SelectedIndices.Count > 0)
                 {
-                    if (_listView.SelectedIndices.Count > 0)
+                    // If current _selectedItem is still selected, keep it.
+                    // This handles the case where multiple items are selected and we don't want to 
+                    // jump back to the first one in the list.
+                    if (_selectedItem != null && IsItemSelected(_selectedItem))
                     {
-                        // If current _selectedItem is still selected, keep it.
-                        // This handles the case where multiple items are selected and we don't want to 
-                        // jump back to the first one in the list.
-                        if (_selectedItem != null && IsItemSelected(_selectedItem))
-                        {
-                            // keep _selectedItem as is
-                        }
-                        else if (_listView.FocusedItem != null && _listView.FocusedItem.Selected)
-                        {
-                            _selectedItem = GetItem(_listView.FocusedItem.Index);
-                        }
-                        else
-                        {
-                            _selectedItem = GetItem(_listView.SelectedIndices[0]);
-                        }
+                        // keep _selectedItem as is
+                    }
+                    else if (_listView.FocusedItem != null && _listView.FocusedItem.Selected)
+                    {
+                        _selectedItem = GetItem(_listView.FocusedItem.Index);
                     }
                     else
                     {
-                        _selectedItem = null;
-                    }
-
-                    if (_useVirtualMode)
-                    {
-                        // In virtual mode, we pass null to because there are no items in _listView.SelectedItems
-                        // Consumers should use SelectedCShellItems property instead.
-                        SelectedIndexChanged?.Invoke(null);
-                    }
-                    else
-                    {
-                        SelectedIndexChanged?.Invoke(_listView.SelectedItems);
+                        _selectedItem = GetItem(_listView.SelectedIndices[0]);
                     }
                 }
-                catch (InvalidOperationException) { }
-                catch (NullReferenceException) { }
+                else
+                {
+                    _selectedItem = null;
+                }
+
+                if (_useVirtualMode)
+                {
+                    // In virtual mode, we pass null to because there are no items in _listView.SelectedItems
+                    // Consumers should use SelectedCShellItems property instead.
+                    SelectedIndexChanged?.Invoke(null);
+                }
+                else
+                {
+                    SelectedIndexChanged?.Invoke(_listView.SelectedItems);
+                }
+            }
+            catch (InvalidOperationException ex)
+            {
+                Debug.WriteLine("ExpList: InvalidOperationException in ExpFileList_SelectedIndexChanged: " + ex.ToString());
+            }
+            catch (NullReferenceException ex) 
+            { 
+                Debug.WriteLine("ExpList: NullReferenceException in ExpFileList_SelectedIndexChanged: " + ex.ToString());
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_SelectedIndexChanged End");
+                //Debug.WriteLine("ExpList: ExpFileList_SelectedIndexChanged End");
             }
         }
 
         private void ExpFileList_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_ItemSelectionChanged Begin");
+            Debug.WriteLine("ExpList: ExpFileList_ItemSelectionChanged Begin");
             try
             {
                 if (e.IsSelected)
@@ -2279,7 +2285,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_ItemSelectionChanged End");
+                //Debug.WriteLine("ExpList: ExpFileList_ItemSelectionChanged End");
             }
         }
 
@@ -4037,7 +4043,7 @@ namespace ExpControlsLib
         ///geometry calculations instead of rendering the list. The timer waits for a 200ms pause in scrolling before doing this
         ///calculation.
         /// </summary>
-        private System.Windows.Forms.Timer _scrollDebounceTimer;
+        private Timer _scrollDebounceTimer;
 
         /// <summary>
         /// Hook for capturing scroll and other events from the ListView to trigger lazy loading.
@@ -4135,6 +4141,7 @@ namespace ExpControlsLib
         private void OnListViewScroll()
         {
             System.Diagnostics.Debug.WriteLine("ExpList: OnListViewScroll Begin");
+            if (_isShuttingDown) return;
             try
             {
                 //issues a new request to get thumbnails after a brief debounce delay
@@ -4143,7 +4150,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: OnListViewScroll End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: OnListViewScroll End");
             }
         }
 

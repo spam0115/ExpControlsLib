@@ -27,6 +27,7 @@ namespace WindowsApiLib.Shell
         public const int NOERROR = 0;
         public const int S_OK = 0;
         public const int S_FALSE = 1;
+        public const int E_FAIL = -2147467259;
 
         public const int DRAGDROP_S_DROP = 0x40100;
         public const int DRAGDROP_S_CANCEL = 0x40101;

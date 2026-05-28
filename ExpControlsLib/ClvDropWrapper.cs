@@ -336,58 +336,64 @@ namespace ExpControlsLib
 
         #region    DragDrop
         /// <summary>
-    /// For internal use only
-    /// Entered when a DragDrop has occurred on the associated Control.
-    /// Normally simply passes the Drop on to the Dropped on Folder which is determined here
-    /// in conjuction with DragEnter.
-    /// </summary>
-    /// <param name="pDataObj">Pointer to the IDataObject</param>
-    /// <param name="grfKeyState">State of the keyboard Keys and Mouse Buttons</param>
-    /// <param name="pt">Where the Drop occurred on the Control</param>
-    /// <param name="pdwEffect">Result of the Drop - unreliable in case of Move</param>
-    /// <returns>S_OK</returns>
+        /// For internal use only
+        /// Entered when a DragDrop has occurred on the associated Control.
+        /// Normally simply passes the Drop on to the Dropped on Folder which is determined here
+        /// in conjuction with DragEnter.
+        /// </summary>
+        /// <param name="pDataObj">Pointer to the IDataObject</param>
+        /// <param name="grfKeyState">State of the keyboard Keys and Mouse Buttons</param>
+        /// <param name="pt">Where the Drop occurred on the Control</param>
+        /// <param name="pdwEffect">Result of the Drop - unreliable in case of Move</param>
+        /// <returns>S_OK</returns>
         public int DragDrop(IntPtr pDataObj, MK grfKeyState, POINT pt, ref DragDropEffects pdwEffect)
-
-
-
         {
-
-            // Debug.WriteLine("In DragDrop: Effect = " & pdwEffect & " Keystate = " & grfKeyState)
-            int res;
-            if (!(m_LastTarget == null))
+            try
             {
-                res = m_LastTarget.DragDrop(pDataObj, grfKeyState, pt, ref pdwEffect);
-                m_ParentTarget.DragLeave();            // Not dropping on it, so leave it
-                                                       // version 21 change 
-                if (res != 0 && res != 1)
+                // Debug.WriteLine("In DragDrop: Effect = " & pdwEffect & " Keystate = " & grfKeyState)
+                int res;
+                if (!(m_LastTarget == null))
                 {
-                    Debug.WriteLine("Error in dropping on DropTarget. res = " + res.ToString("X"));
-                } // No error on drop
-            }
-            // The documented norm for Optimized Moves is pdwEffect=None, so leave it
-            // RaiseEvent ShDragDrop(m_LastItem, grfKeyState, pdwEffect)
-            else if (m_ParentTarget is not null)
-            {
-                res = m_ParentTarget.DragDrop(pDataObj, grfKeyState, pt, ref pdwEffect);
-                if (res != 0 && res != 1)
+                    res = m_LastTarget.DragDrop(pDataObj, grfKeyState, pt, ref pdwEffect);
+                    m_ParentTarget.DragLeave();            // Not dropping on it, so leave it
+                                                           // version 21 change 
+                    if (res != 0 && res != 1)
+                    {
+                        Debug.WriteLine("Error in dropping on DropTarget. res = " + res.ToString("X"));
+                    } // No error on drop
+                }
+                // The documented norm for Optimized Moves is pdwEffect=None, so leave it
+                // RaiseEvent ShDragDrop(m_LastItem, grfKeyState, pdwEffect)
+                else if (m_ParentTarget is not null)
                 {
-                    Debug.WriteLine("Error in dropping on DropTarget. res = " + res.ToString("X"));
-                } // No error on drop
-            }
-            m_Original_Effect = DragDropEffects.None;
-            ResetPrevTarget();
-            m_DataObj = IntPtr.Zero;
-            if (m_ParentTarget is not null)
-            {
-                Marshal.ReleaseComObject(m_ParentTarget);
-            }
-            m_ParentItem = null;
+                    res = m_ParentTarget.DragDrop(pDataObj, grfKeyState, pt, ref pdwEffect);
+                    if (res != 0 && res != 1)
+                    {
+                        Debug.WriteLine("Error in dropping on DropTarget. res = " + res.ToString("X"));
+                    } // No error on drop
+                }
+                m_Original_Effect = DragDropEffects.None;
+                ResetPrevTarget();
+                m_DataObj = IntPtr.Zero;
 
-            if (m_DropHelper is not null)
-            {
-                m_DropHelper.Drop(pDataObj, ref pt, pdwEffect);
+                m_ParentItem = null;
+
+                if (m_DropHelper is not null)
+                {
+                    m_DropHelper.Drop(pDataObj, ref pt, pdwEffect);
+                }
+                return S_OK;
             }
-            return S_OK;
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.ToString());
+                return E_FAIL;
+            }
+            finally
+            {
+                if (m_ParentTarget is not null) Marshal.ReleaseComObject(m_ParentTarget);
+            }
+            
         }
         #endregion
 
