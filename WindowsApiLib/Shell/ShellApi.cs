@@ -916,12 +916,13 @@ namespace WindowsApiLib.Shell
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern bool SendMessage(IntPtr hWnd, uint wMsg, int wParam, ref LVITEM lParam);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
         #endregion
 
-        #region            DestroyIcon
         [DllImport("user32.dll")]
         public static extern bool DestroyIcon(IntPtr hIcon);
-        #endregion
 
         #region Menu related
 
@@ -949,12 +950,8 @@ namespace WindowsApiLib.Shell
         public static extern bool DestroyMenu(IntPtr hMenu);
         #endregion
 
-        #region            RegisterClipboardFormat
-
         [DllImport("User32", CharSet = CharSet.Auto)]
         public static extern int RegisterClipboardFormat(string lpszFormat);
-
-        #endregion
 
         #endregion
 

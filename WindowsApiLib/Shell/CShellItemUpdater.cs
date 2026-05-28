@@ -2,6 +2,8 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Threading;
+using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 using static WindowsApiLib.Shell.CShellItem;
@@ -22,8 +24,10 @@ namespace WindowsApiLib.Shell
     public class CShellItemUpdater : NativeWindow, IDisposable
     {
         private readonly CShellItemHierachyManager HierachyManager;
-        private readonly int m_notifyId;
+        private int m_notifyId;
         private uint _eventFlags = 0;
+        private Thread _backgroundThread;
+        private readonly AutoResetEvent _initializedEvent = new AutoResetEvent(false);
 
         public static event CShItemUpdateEventHandler UpdateEvent;
 
@@ -43,6 +47,20 @@ namespace WindowsApiLib.Shell
             _eventFlags = SHCNE_flags;
             DoUpdates = false;
 
+            _backgroundThread = new Thread(RunBackgroundMessageLoop)
+            {
+                IsBackground = true,
+                Name = "ShellItemUpdaterThread"
+            };
+            _backgroundThread.SetApartmentState(ApartmentState.STA);
+            _backgroundThread.Start();
+
+            // Wait until the HWND has been created and registered on the background thread
+            _initializedEvent.WaitOne();
+        }
+
+        private void RunBackgroundMessageLoop()
+        {
             // Create a message-only window (HWND_MESSAGE = -3)
             CreateParams cp = new CreateParams();
             cp.Caption = "CShellItemUpdaterMsgWindow";
@@ -64,6 +82,10 @@ namespace WindowsApiLib.Shell
             };
             m_notifyId = SHChangeNotifyRegister(Handle, SHCNRF.InterruptLevel | SHCNRF.ShellLevel | SHCNRF.NewDelivery
                 , (SHCNE)_eventFlags, (WM)((long)WM.USER + 200L), 1, new SHChangeNotifyEntry[] { entry });
+
+            _initializedEvent.Set();
+
+            Application.Run();
         }
 
         public new void Dispose()
@@ -74,10 +96,16 @@ namespace WindowsApiLib.Shell
             }
             if (Handle != IntPtr.Zero)
             {
-                DestroyHandle();
+                PostMessage(Handle, WindowsMessages.WM_DESTROY_THREAD_WINDOW, IntPtr.Zero, IntPtr.Zero);
+                if (_backgroundThread != null && _backgroundThread.IsAlive)
+                {
+                    _backgroundThread.Join(2000);
+                }
             }
+            _initializedEvent.Dispose();
             GC.SuppressFinalize(this);
         }
+
 
         #if DEBUG
         private int counter;
@@ -160,29 +188,36 @@ namespace WindowsApiLib.Shell
             if (pidl == IntPtr.Zero) return false;
 
             var recycleBinPidl = CShellItemFactory.RecycleBin.PIDL;
-            if (recycleBinPidl == IntPtr.Zero) return false;
+            if (recycleBinPidl == IntPtr.Zero) throw new Exception("The Recycle Bin PIDL has not been set up.");
 
-            // Read segment sizes from the Recycle Bin PIDL (cached pointer, stable for app lifetime)
-            ushort cb1 = (ushort)Marshal.ReadInt16(recycleBinPidl, 0);
-            if (cb1 == 0) return false; // empty pidl
-            ushort cb2 = (ushort)Marshal.ReadInt16(recycleBinPidl, cb1);
-            if (cb2 == 0) return false; // only one segment (desktop root)
-            int totalLen = cb1 + cb2;
+            var name = CPidl.ToString(pidl);
+            if (name.Contains(CShellItemFactory.StrRecycleBin))
+                return true;
+            else return false;
 
-            // Verify the incoming PIDL has at least as many bytes
-            ushort inCb1 = (ushort)Marshal.ReadInt16(pidl, 0);
-            if (inCb1 == 0) return false;
-            ushort inCb2 = (ushort)Marshal.ReadInt16(pidl, inCb1);
-            if (inCb2 == 0) return false;
+            //none of the following works because there are multiple recycle bins - one for each drive.
+            //// Read segment sizes from the Recycle Bin PIDL (cached pointer, stable for app lifetime)
+            //ushort cb1 = (ushort)Marshal.ReadInt16(recycleBinPidl, 0);
+            //if (cb1 == 0) return false; // empty pidl
+            //ushort cb2 = (ushort)Marshal.ReadInt16(recycleBinPidl, cb1);
+            //if (cb2 == 0) return false; // only one segment (desktop root)
+            //int totalLen = cb1 + cb2;
 
-            // Raw byte compare of the first two segments
-            byte* pRecycle = (byte*)recycleBinPidl;
-            byte* pIn = (byte*)pidl;
-            for (int i = 0; i < totalLen; i++)
-            {
-                if (pRecycle[i] != pIn[i]) return false;
-            }
-            return true;
+            //// Verify the incoming PIDL has at least as many bytes
+            //ushort inCb1 = (ushort)Marshal.ReadInt16(pidl, 0);
+            //if (inCb1 == 0) return false;
+            //ushort inCb2 = (ushort)Marshal.ReadInt16(pidl, inCb1);
+            //if (inCb2 == 0) return false;
+
+            //// Raw byte compare of the first two segments
+            //byte* pRecycle = (byte*)recycleBinPidl;
+            //byte* pIn = (byte*)pidl;
+            //for (int i = 0; i < totalLen; i++)
+            //{
+            //    if (pRecycle[i] != pIn[i]) return false;
+            //}
+
+            //return true;
         }
 
         /// <summary>
@@ -212,6 +247,13 @@ namespace WindowsApiLib.Shell
         /// </remarks>
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WindowsMessages.WM_DESTROY_THREAD_WINDOW)
+            {
+                DestroyHandle();
+                Application.ExitThread();
+                return;
+            }
+
             if (!DoUpdates) { 
                 base.WndProc(ref m); //the handle in the constructor can't be created unless this is called before exiting this wndproc
                 return;
@@ -264,8 +306,10 @@ namespace WindowsApiLib.Shell
                         ///Debug.WriteLine(", dwItem1: " + shNotify.dwItem1.ToString("X"));
 #endif
 
-                        switch (msgID)
+                        lock (HierachyManager.Lock)
                         {
+                            switch (msgID)
+                            {
                             // Item Changes
                             case SHCNE.CREATE:
                                 {
@@ -641,7 +685,8 @@ namespace WindowsApiLib.Shell
                         }
                     }
                 }
-                finally
+            }
+            finally
                 {
                     bool result = SHChangeNotification_Unlock(hLock) > 0;
                     if (!result)
@@ -690,7 +735,7 @@ namespace WindowsApiLib.Shell
                         // 'Me.ResetChildren()     'Original code
                         // 'Me.UpdateRefresh()     '6/3/2012
                         // End If
-                        UpdateEvent?.Invoke(csi.Parent, new ShellItemUpdateEventArgs(csi, changeType));
+                        RaiseUpdateEvent(csi.Parent, new ShellItemUpdateEventArgs(csi, changeType));
                         //todo: update thumbnail for item
                         break;
                     }
@@ -725,7 +770,7 @@ namespace WindowsApiLib.Shell
                                 {
                                     csi.ResetInfo();         // Added for fix to the fix
                                     csi.m_Path = CShellItemFactory.GetFullPath(csi); ;
-                                    UpdateEvent?.Invoke(oldParentCsi, new ShellItemUpdateEventArgs(csi, changeType));
+                                    RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, changeType));
                                 }
                                 else // item was moved, not renamed
                                 {
@@ -758,8 +803,8 @@ namespace WindowsApiLib.Shell
                                                 item.UpdateFolderPidlAndPath(); //update child paths
                                         }
                                     }
-                                    UpdateEvent?.Invoke(oldParentCsi, new ShellItemUpdateEventArgs(csi, changeType)); //tell both old and new locations about the change
-                                    UpdateEvent?.Invoke(allegedParentCsi, new ShellItemUpdateEventArgs(csi, changeType));
+                                    RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, changeType)); //tell both old and new locations about the change
+                                    RaiseUpdateEvent(allegedParentCsi, new ShellItemUpdateEventArgs(csi, changeType));
                                 }
                             }
                         }
@@ -779,7 +824,7 @@ namespace WindowsApiLib.Shell
                     {
                         // Debug.WriteLine("IconChange for " & Me.Path)
                         csi.ResetInfo();
-                        UpdateEvent?.Invoke(csi.Parent, new ShellItemUpdateEventArgs(csi, changeType));
+                        RaiseUpdateEvent(csi.Parent, new ShellItemUpdateEventArgs(csi, changeType));
                         //todo: update thumbnail for item
                         break;
                     }
@@ -789,7 +834,7 @@ namespace WindowsApiLib.Shell
                         csi.ClearItems(true, true);
                         csi.ResetInfo();
                         csi.m_Path = CShellItemFactory.GetFullPath(csi);
-                        UpdateEvent?.Invoke(csi.Parent, new ShellItemUpdateEventArgs(csi, changeType));
+                        RaiseUpdateEvent(csi.Parent, new ShellItemUpdateEventArgs(csi, changeType));
                         break;
                     }
             }
@@ -871,21 +916,21 @@ namespace WindowsApiLib.Shell
                         switch (type)
                         {
                             case CShItemUpdateType.Created:
-                                UpdateEvent?.Invoke(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Created));
+                                RaiseUpdateEvent(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Created));
                                 break;
                             case CShItemUpdateType.Updated:
-                                UpdateEvent?.Invoke(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Updated));
+                                RaiseUpdateEvent(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Updated));
                                 break;
                             case CShItemUpdateType.Deleted:
                             default:
-                                UpdateEvent?.Invoke(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
+                                RaiseUpdateEvent(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
                                 break;
                         }
                     }
                 }
                 else
                 {
-                    UpdateEvent?.Invoke(csi, new ShellItemUpdateEventArgs(null, CShItemUpdateType.UpdateDir));
+                    RaiseUpdateEvent(csi, new ShellItemUpdateEventArgs(null, CShItemUpdateType.UpdateDir));
                 }
             }
 
@@ -974,7 +1019,7 @@ namespace WindowsApiLib.Shell
                                         {
                                             oldCsi.ResetInfo();
                                             if (oldCsi.IsFolder) oldCsi.ResetChildren();
-                                            UpdateEvent?.Invoke(oldCsi.Parent, new ShellItemUpdateEventArgs(oldCsi, CShItemUpdateType.Updated)); //this happens even for items that aren't actually updated!
+                                            RaiseUpdateEvent(oldCsi.Parent, new ShellItemUpdateEventArgs(oldCsi, CShItemUpdateType.Updated)); //this happens even for items that aren't actually updated!
                                             operations.Add((oldCsi, CShItemUpdateType.Updated));
                                         }
                                     }
@@ -1023,9 +1068,34 @@ namespace WindowsApiLib.Shell
             return operations;
         }
 
-        public static void InvokeEvent(object sender, ShellItemUpdateEventArgs e) //todo: change this to add the events to a queue because this class will eventually run on a separate thread
+        public static void RaiseUpdateEvent(object sender, ShellItemUpdateEventArgs e)
         {
-            UpdateEvent.Invoke(sender, e);
+            var handlers = UpdateEvent?.GetInvocationList();
+            if (handlers == null) return;
+
+            foreach (var handler in handlers)
+            {
+                if (handler.Target is System.Windows.Forms.Control control && control.InvokeRequired)
+                {
+                    control.BeginInvoke(handler, new object[] { sender, e });
+                }
+                else
+                {
+                    try
+                    {
+                        handler.DynamicInvoke(sender, e);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("Error invoking event handler: " + ex.ToString());
+                    }
+                }
+            }
+        }
+
+        public static void InvokeEvent(object sender, ShellItemUpdateEventArgs e)
+        {
+            RaiseUpdateEvent(sender, e);
         }
 
     }

@@ -82,9 +82,11 @@ namespace WindowsApiLib.Shell
 
             if (BaseItem.FileList is not null && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
             {
-                var fullPath = CPidl.GetFileSystemPath(Abs);
+                var fullPath = CPidl.GetFileSystemPath(Abs);//doesn't work with dlna media servers
 
-                if (BaseItem.FilesDic.TryGetValue(fullPath, out CShellItem fileItem))
+                if (fullPath is null) return null;
+
+                if (BaseItem.FilesDic.TryGetValue(fullPath, out CShellItem fileItem)) 
                 {
                     return fileItem;
                 }

@@ -804,9 +804,16 @@ namespace ExpControlsLib
             // **********Added by Lukai-2021.12.02, If a folder is created by code "My.Computer.FileSystem.CreateDirectory(folderPath)", then this folder can't be shown automatically, I need to refresh it in here manually
             if (System.IO.Directory.Exists(CSI.FullPath))
             {
-                if (e.Node.GetNodeCount(false) != System.IO.Directory.GetDirectories(CSI.FullPath).Length)
+                try
                 {
-                    ShellController.Instance.ShellUpdater.SelectiveFolderUpdate(CSI, false, true);
+                    if (e.Node.GetNodeCount(false) != System.IO.Directory.GetDirectories(CSI.FullPath).Length)
+                    {
+                        ShellController.Instance.ShellUpdater.SelectiveFolderUpdate(CSI, false, true);
+                    }
+                }
+                catch (Exception ex)
+                { 
+                    Debug.WriteLine("Error reading folder: " + ex.Message);
                 }
             }
             // **********

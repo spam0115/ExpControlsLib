@@ -1,5 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 using WindowsApiLib.Shell;
+using static WindowsApiLib.Shell.ShellAPI;
 
 namespace WindowsApiLib
 {
@@ -50,6 +51,7 @@ namespace WindowsApiLib
         // Thread-safe pool for CoTaskMem allocations to reduce allocation overhead
         //internal static readonly CoTaskMemPool s_memPool_MaxPath = new CoTaskMemPool(MAX_PATH * 2 + 4);
         internal static readonly CoTaskMemPool s_memPool_MaxName = new CoTaskMemPool(MAX_PATH_NT * 2 + 4);
+
 
 
     }

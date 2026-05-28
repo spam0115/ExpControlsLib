@@ -36,6 +36,8 @@ namespace WindowsApiLib.Shell
         private static CShellItem? DesktopCSI { get; set; }
 
         private static readonly ConcurrentDictionary<string, string> s_typeNameCache = new(StringComparer.OrdinalIgnoreCase);
+
+
         // Optional cache for no-extension files
         private const string NoExtensionCacheKey = "<​NOEXT>";
 
@@ -51,9 +53,12 @@ namespace WindowsApiLib.Shell
         /// </summary>
         public static string? StrSystemFolder { get; private set; }
 
-        // To get My Documents sorted first, we need to know the Locale 
-        // specific name of that folder.
+        /// <summary>
+        /// To get My Documents sorted first, we need to know the Locale specific name of that folder.
+        /// </summary>
         public static string? StrMyDocuments { get; private set; }
+
+        public static string? StrRecycleBin { get; private set; }
 
         /// <summary>
         /// Contains a String with the Full Path of the Desktop Directory
@@ -88,6 +93,7 @@ namespace WindowsApiLib.Shell
             DeskTopDirectory = CreateCShItem(CSIDL.DESKTOPDIRECTORY);
 
             RecycleBin = CreateCShItem(CSIDL.BITBUCKET);
+            StrRecycleBin = RecycleBin.Name;
 
             MyDocuments = CreateCShItem(CSIDL.MYDOCUMENTS);
 

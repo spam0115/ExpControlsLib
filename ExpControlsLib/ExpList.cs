@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Text;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -73,7 +74,7 @@ namespace ExpControlsLib
         private const int LVM_FIRST = 0x1000;
         private const uint LVM_GETEDITCONTROL = LVM_FIRST + 24;
 
-        bool _isShuttingDown = false;
+        internal static bool _isShuttingDown = false;
 
         // Avoid Globalization problem-- an empty timevalue
         private static readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
@@ -793,14 +794,10 @@ namespace ExpControlsLib
         protected override void WndProc(ref Message m)
         {
             //System.Diagnostics.Debug.WriteLine("ExpList: WndProc Begin");
-            const int WM_QUERYENDSESSION = 0x0011;
-            const int WM_ENDSESSION = 0x0016;
-            const int WM_CLOSE = 0x0010;
-            const int WM_NCDESTORY = 0x0082;
 
             try
             {
-                if (m.Msg == WM_QUERYENDSESSION || m.Msg == WM_ENDSESSION || m.Msg == WM_CLOSE || m.Msg == WM_NCDESTORY)
+                if (m.Msg == WindowsMessages.WM_QUERYENDSESSION || m.Msg == WindowsMessages.WM_ENDSESSION || m.Msg == WindowsMessages.WM_CLOSE || m.Msg == WindowsMessages.WM_NCDESTORY)
                     _isShuttingDown = true;
 
                 if (_isShuttingDown) return;
@@ -4050,11 +4047,6 @@ namespace ExpControlsLib
         /// </summary>
         private class ListViewScrollHook : NativeWindow
         {
-            private const int WM_VSCROLL = 0x0115;
-            private const int WM_HSCROLL = 0x0114;
-            private const int WM_MOUSEWHEEL = 0x020A;
-            private const int WM_KEYDOWN = 0x0100;
-
             private readonly Action _onScroll;
             private readonly ListView _listView;
             private readonly ExpList _expList;
@@ -4080,6 +4072,11 @@ namespace ExpControlsLib
                 //System.Diagnostics.Debug.WriteLine("ExpList.WndProc Begin");
                 try
                 {
+                    if (m.Msg == WindowsMessages.WM_QUERYENDSESSION || m.Msg == WindowsMessages.WM_ENDSESSION || m.Msg == WindowsMessages.WM_CLOSE || m.Msg == WindowsMessages.WM_NCDESTORY)
+                        ExpList._isShuttingDown = true;
+
+                    if (ExpList._isShuttingDown) return;
+
                     try
                     {
                         base.WndProc(ref m);
@@ -4090,16 +4087,15 @@ namespace ExpControlsLib
                         _listView.SelectedIndices.Clear();
                     }
 
-
                     switch (m.Msg)
                     {
-                        case WM_VSCROLL:
-                        case WM_HSCROLL:
-                        case WM_MOUSEWHEEL:
+                        case WindowsMessages.WM_VSCROLL:
+                        case WindowsMessages.WM_HSCROLL:
+                        case WindowsMessages.WM_MOUSEWHEEL:
                             _expList._lastTopIndex = -1; //invalid due to a scroll moving items
                             QueueOnScroll();
                             break;
-                        case WM_KEYDOWN:
+                        case WindowsMessages.WM_KEYDOWN:
                             Keys key = (Keys)m.WParam.ToInt32();
                             if (key == Keys.PageUp || key == Keys.PageDown || key == Keys.Home || key == Keys.End || key == Keys.Up || key == Keys.Down)
                             {

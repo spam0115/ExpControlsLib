@@ -39,6 +39,7 @@ namespace WindowsApiLib.Shell
         public static readonly Guid AllTasks_GodMode = new("ED7BA470-8E54-465E-825C-99712043E01C");
         public static readonly Guid Music = new("1CF1260C-4DD0-4EBB-811F-33C572699FDE");
         public static readonly Guid MusicFolder = new("4BD8D571-6D19-48D3-BE97-422220080E43");
+        public static readonly Guid DLNAMediaServers = new("289AF617-1CC3-42A6-926C-E6A863F0E3BA");
 
         // convenient lookup table
         public static readonly IReadOnlyDictionary<string, Guid> DicByDisplayName = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase)
