@@ -15,6 +15,7 @@ namespace WindowsApiLib
         public const int WM_HSCROLL = 0x0114;
         public const int WM_MOUSEWHEEL = 0x020A;
         public const int WM_KEYDOWN = 0x0100;
+        public const int WM_DESTROY = 2;
         public const int WM_DESTROY_THREAD_WINDOW = (int)WM.USER + 500;
     }
 }

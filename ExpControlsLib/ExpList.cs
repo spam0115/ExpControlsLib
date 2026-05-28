@@ -393,7 +393,6 @@ namespace ExpControlsLib
         [Browsable(false)]
         public SortOrder SortOrder => (_listView.ListViewItemSorter as LVColSorter)?.OrderOfSort ?? SortOrder.None;
 
-
         /// <summary>
         /// Gets or sets a value indicating whether the list view is in virtual mode.
         /// </summary>
@@ -797,10 +796,14 @@ namespace ExpControlsLib
 
             try
             {
-                if (m.Msg == WindowsMessages.WM_QUERYENDSESSION || m.Msg == WindowsMessages.WM_ENDSESSION || m.Msg == WindowsMessages.WM_CLOSE || m.Msg == WindowsMessages.WM_NCDESTORY)
+                if (m.Msg == WindowsMessages.WM_QUERYENDSESSION || m.Msg == WindowsMessages.WM_ENDSESSION || m.Msg == WindowsMessages.WM_CLOSE || m.Msg == WindowsMessages.WM_DESTROY) // || m.Msg == WindowsMessages.WM_NCDESTORY WM_NCDESTORY get's called during creation as well as destruction so it's not really usable.
                     _isShuttingDown = true;
 
-                if (_isShuttingDown) return;
+                if (_isShuttingDown)
+                {
+                    base.WndProc(ref m); //must call before exit or you will get form creation errors.
+                    return;
+                }
 
                 int hr;
                 if (m.Msg == (int)WM.INITMENUPOPUP || m.Msg == (int)WM.MEASUREITEM || m.Msg == (int)WM.DRAWITEM)
@@ -1608,6 +1611,12 @@ namespace ExpControlsLib
         private void RetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e)
         {
             //System.Diagnostics.Debug.WriteLine("ExpList: RetrieveVirtualItem Begin: " + e.ItemIndex.ToString() + ", " + DateTime.Now.ToString("mm:ss.fff"));
+
+            if (_isShuttingDown)
+            {
+                return; //windows tries to retrieve every item during shutdown for some reason
+            }
+
             try
             {
                 e.Item = GetItemInternal(e.ItemIndex);
@@ -4072,20 +4081,20 @@ namespace ExpControlsLib
                 //System.Diagnostics.Debug.WriteLine("ExpList.WndProc Begin");
                 try
                 {
-                    if (m.Msg == WindowsMessages.WM_QUERYENDSESSION || m.Msg == WindowsMessages.WM_ENDSESSION || m.Msg == WindowsMessages.WM_CLOSE || m.Msg == WindowsMessages.WM_NCDESTORY)
-                        ExpList._isShuttingDown = true;
-
-                    if (ExpList._isShuttingDown) return;
-
                     try
                     {
-                        base.WndProc(ref m);
+                        base.WndProc(ref m); //must call before exit or you will get form creation errors.
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine(ex.ToString());
+                        Debug.WriteLine(ex.ToString()); 
                         _listView.SelectedIndices.Clear();
                     }
+
+                    if (m.Msg == WindowsMessages.WM_QUERYENDSESSION || m.Msg == WindowsMessages.WM_ENDSESSION || m.Msg == WindowsMessages.WM_CLOSE) // || m.Msg == WindowsMessages.WM_NCDESTORY WM_NCDESTORY get's called during startup
+                        ExpList._isShuttingDown = true;
+
+                    if (ExpList._isShuttingDown) return; 
 
                     switch (m.Msg)
                     {
