@@ -302,6 +302,26 @@
             <param name="pdwEffect">Result of the Drop - unreliable in case of Move</param>
             <returns>S_OK</returns>
         </member>
+        <member name="T:ExpControlsLib.CShellItemComparer">
+            <summary>
+            Implements IComparer for CShellItem to support custom sorting in ExpList, 
+            especially for virtual mode.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.CShellItemComparer.#ctor(ExpControlsLib.ExpList,System.Int32,System.Windows.Forms.SortOrder,System.Windows.Forms.ColumnHeader)">
+            <summary>
+            Initializes a new instance of the CShellItemComparer class.
+            </summary>
+            <param name="expList">The ExpList instance to fetch data from.</param>
+            <param name="column">The index of the column to sort on.</param>
+            <param name="order">The sort order.</param>
+            <param name="columnHeader">The ColumnHeader associated with the column.</param>
+        </member>
+        <member name="M:ExpControlsLib.CShellItemComparer.Compare(WindowsApiLib.Shell.CShellItem,WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Compares two CShellItems based on the specified column and order.
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.CtvDropWrapper">
             <summary>The CtvDropWrapper class deals with the mechanics of receiving a
             Drag/Drop operation for a TreeView Control. In effect, it implements the IDropTarget interface
@@ -818,6 +838,16 @@
             <param name="sender">The source of the event.</param>
             <param name="e">The <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the event data.</param>
         </member>
+        <member name="M:ExpControlsLib.ExpList.InsertVirtualItemInSortedOrder(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            
+            </summary>
+            <remarks>This is really inefficient because it re-sorts the entire list on every insert.
+            May need to fix this by doing a manual binary search to find the correct insertion point and only 
+            re-sorting when necessary (e.g. if the new item is out of order with respect to its neighbors).
+            </remarks>
+            <param name="item"></param>
+        </member>
         <member name="M:ExpControlsLib.ExpList.DoItemUpdate(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
             <summary>
             Performs the actual update of list view items in response to shell changes.
@@ -833,6 +863,13 @@
             This is an expensive operation (O(n)) and should be used judiciously.
             Do not use this function when only a small number of inserts and deletes are made
             , as it will be more efficient to update the index mapping incrementally in those cases..
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.InvalidateVirtualItemIndexes">
+            <summary>
+            Invalidates the image indices of all virtual items and cached ListViewItems.
+            This is necessary when switching between display modes to ensure that the correct
+            icons or thumbnails are loaded for the current view.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.UpdateLviUsingCsi(WindowsApiLib.Shell.CShellItem)">
@@ -1066,6 +1103,27 @@
             <summary>
             Hook for capturing scroll and other events from the ListView to trigger lazy loading.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.FindInsertionPoint(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
+            Returns the index where the item should be inserted to maintain sorted order.
+            </summary>
+            <typeparam name="T">Type of items in the list</typeparam>
+            <param name="list">The sorted HugeList to search</param>
+            <param name="item">The item to find an insertion point for</param>
+            <returns>The index where the item should be inserted</returns>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.FindInsertionPoint(WindowsApiLib.Shell.CShellItem,System.Collections.Generic.IComparer{WindowsApiLib.Shell.CShellItem},TreeLib.IHugeList{WindowsApiLib.Shell.CShellItem})">
+            <summary>
+            Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
+            Returns the index where the item should be inserted to maintain sorted order.
+            </summary>
+            <typeparam name="T">Type of items in the list</typeparam>
+            <param name="list">The sorted HugeList to search</param>
+            <param name="item">The item to find an insertion point for</param>
+            <param name="comparer">The comparer to use for comparing items</param>
+            <returns>The index where the item should be inserted</returns>
         </member>
         <member name="M:ExpControlsLib.ExpList.Dispose(System.Boolean)">
             <summary> 
@@ -1724,7 +1782,7 @@
         <member name="F:ExpControlsLib.ThumbnailProvider._thumbnailCache">
             <summary>
             In-memory cache of previously generated thumbnails keyed by
-            "path|size". Avoids repeated shell calls and HBITMAP marshaling.
+            "path|size". Stores raw pixel data to avoid GDI handle exhaustion.
             </summary>
         </member>
         <member name="F:ExpControlsLib.ThumbnailProvider._requestQueueRunner">
@@ -1818,7 +1876,8 @@
             <summary>
             Scales and pads a source bitmap to fit within a square of the given size, preserving
             aspect ratio, and centers it on a transparent background. The returned bitmap
-            is always exactly size x size, suitable for direct insertion into an ImageList.
+            is always exactly square of size size x size that is suitable for direct insertion into an 
+            ImageList.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ThumbnailProvider.ClearCache">

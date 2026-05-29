@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
@@ -10,6 +11,7 @@ namespace ExpControlsLib
     /// Implements IComparer for CShellItem to support custom sorting in ExpList, 
     /// especially for virtual mode.
     /// </summary>
+    [SupportedOSPlatform("windows")]
     public class CShellItemComparer : IComparer<CShellItem>
     {
         private readonly ExpList _expList;

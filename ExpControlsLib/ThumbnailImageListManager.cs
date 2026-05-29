@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
+using C5;
 using WindowsApiLib.Shell;
 using static System.Windows.Forms.ListView;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
@@ -22,9 +23,27 @@ namespace ExpControlsLib
         private readonly ExpList _expList;
         private int _activeSize;
         private int _generation = 0;
-        private readonly ConcurrentDictionary<string, int> _imageIndexByKey = new();
+        
+        private readonly HashedLinkedList<string> _lruKeys = new();
+        private readonly System.Collections.Generic.Dictionary<string, ThumbnailSlot> _slotByKey = new();
+        private const int MaxThumbnails = 5000;
+
         private bool _addingImage = false;
-        private readonly HashSet<ImageList> _corruptImageLists = new HashSet<ImageList>();
+        private readonly System.Collections.Generic.HashSet<ImageList> _corruptImageLists = new System.Collections.Generic.HashSet<ImageList>();
+
+        private class ThumbnailSlot
+        {
+            public int Index;
+            public CShellItem? Item;
+            public string Key;
+
+            public ThumbnailSlot(int index, CShellItem? item, string key)
+            {
+                Index = index;
+                Item = item;
+                Key = key;
+            }
+        }
 
         public ThumbnailImageListManager(ExpList expList)
         {
@@ -35,8 +54,14 @@ namespace ExpControlsLib
 
         public int GetThumbnailIndex(string filePath, int requestedSize)
         {
-            if (_imageIndexByKey.TryGetValue($"{filePath}|{requestedSize}", out int index))
-                return index;
+            if (_slotByKey.TryGetValue($"{filePath}|{requestedSize}", out var slot))
+            {
+                // Update LRU on access
+                string key = slot.Key;
+                _lruKeys.Remove(key);
+                _lruKeys.Add(key);
+                return slot.Index;
+            }
             return -1;
         }
 
@@ -69,7 +94,9 @@ namespace ExpControlsLib
 
             var imageList = GetImageList(thumbnailSize);
             imageList.Images.Clear();
-            _imageIndexByKey.Clear();
+            
+            _lruKeys.Clear();
+            _slotByKey.Clear();
 
             _expList._listView.LargeImageList = imageList;
 
@@ -143,9 +170,12 @@ namespace ExpControlsLib
             if (csi == null) return;
 
             string key = CreateKey(csi.FullPath, thumbnailSize);
-            if (_imageIndexByKey.TryGetValue(key, out int index))
+            if (_slotByKey.TryGetValue(key, out var slot))
             {
-                csi.ImageIndex = index;
+                // Update LRU
+                _lruKeys.Remove(key);
+                _lruKeys.Add(key);
+                csi.ImageIndex = slot.Index;
             }
             else
             {
@@ -218,32 +248,75 @@ namespace ExpControlsLib
                     _expList._listView.LargeImageList = imageList;
 
                 string key = CreateKey(reqArgs.Item.FullPath, reqArgs.Size);
-                if (!_imageIndexByKey.TryGetValue(key, out int index))
+                int index = -1;
+
+                if (_slotByKey.TryGetValue(key, out var existingSlot))
                 {
+                    index = existingSlot.Index;
+                    _lruKeys.Remove(key);
+                    _lruKeys.Add(key);
+
                     _addingImage = true;
-                    try { 
-                        imageList.Images.Add(square);
-                        index = imageList.Images.Count - 1;
-                        _imageIndexByKey[key] = index;
-                    }
-                    finally {
-                        square?.Dispose(); 
-                        _addingImage = false; 
+                    try { imageList.Images[index] = square; }
+                    finally
+                    {
+                        square?.Dispose();
+                        _addingImage = false;
                     }
                 }
                 else
                 {
-                    var oldImage = imageList.Images[index];
-                    _addingImage = true;
-                    try { imageList.Images[index] = square; }
-                    finally { 
-                        square?.Dispose(); 
-                        _addingImage = false; 
+                    bool reused = false;
+                    if (_lruKeys.Count >= MaxThumbnails)
+                    {
+                        string oldestKey = _lruKeys.RemoveFirst();
+                        if (_slotByKey.TryGetValue(oldestKey, out var oldestSlot))
+                        {
+                            _slotByKey.Remove(oldestKey);
+                            if (oldestSlot.Item != null)
+                            {
+                                oldestSlot.Item.ImageIndex = -1;
+                            }
+
+                            index = oldestSlot.Index;
+                            oldestSlot.Item = reqArgs.Item;
+                            oldestSlot.Key = key;
+
+                            _addingImage = true;
+                            try { imageList.Images[index] = square; }
+                            finally
+                            {
+                                square?.Dispose();
+                                _addingImage = false;
+                            }
+
+                            _lruKeys.Add(key);
+                            _slotByKey[key] = oldestSlot;
+                            reused = true;
+                        }
                     }
-                    //oldImage.Dispose(); //do not do this.  causes internal imageList state corruption
+
+                    if (!reused)
+                    {
+                        _addingImage = true;
+                        try
+                        {
+                            imageList.Images.Add(square);
+                            index = imageList.Images.Count - 1;
+                            var newSlot = new ThumbnailSlot(index, reqArgs.Item, key);
+                            _lruKeys.Add(key);
+                            _slotByKey[key] = newSlot;
+                        }
+                        finally
+                        {
+                            square?.Dispose();
+                            _addingImage = false;
+                        }
+                    }
                 }
 
-                reqArgs.Item.ImageIndex = index;
+                if (index != -1 && reqArgs.Item != null)
+                    reqArgs.Item.ImageIndex = index;
 
                 if (_expList.VirtualMode)
                 {
@@ -251,32 +324,19 @@ namespace ExpControlsLib
                     {
                         var location_index = _expList.GetIndexFromFullPath(reqArgs.Item.FullPath);
                         if (location_index > -1 && location_index < _expList.Count)
-                            _expList._listView.RedrawItems(reqArgs.Index, reqArgs.Index, false);
+                            _expList._listView.RedrawItems(location_index, location_index, false);
                     }
-                    else if (reqArgs.Index >= 0 && reqArgs.Index < _expList._listView.Items.Count)
+                    else if (reqArgs.Index >= 0 && reqArgs.Index < _expList._listView.VirtualListSize)
                     {
                         var location_index = _expList.GetIndexFromFullPath(reqArgs.Item.FullPath);
-                        if (location_index == reqArgs.Index && location_index > -1 && location_index < _expList.Count)
+                        if (location_index == reqArgs.Index)
                             _expList._listView.RedrawItems(reqArgs.Index, reqArgs.Index, false);
-                        // If the index doesn't match, it means the item has likely been removed or the list has changed, so we should ignore this thumbnail.
                     }
                 }
                 else
                 {
-                    if (reqArgs.Index == -1)
-                    {
-                        var lvi = _expList.FindItemByPath(reqArgs.Item.FullPath);
-                        if (lvi != null) lvi.ImageIndex = index;
-                    }
-                    else if (reqArgs.Index < _expList._listView.Items.Count)
-                    {
-                        var lvi = _expList.FindItemByPath(reqArgs.Item.FullPath);
-                        if (lvi == null) return;
-                        if (lvi.Index == reqArgs.Index)
-                        {
-                            lvi.ImageIndex = index;
-                        }
-                    }
+                    var lvi = _expList.FindItemByPath(reqArgs.Item.FullPath);
+                    if (lvi != null) lvi.ImageIndex = index;
                 }
             }
             catch (Exception ex)
@@ -284,7 +344,6 @@ namespace ExpControlsLib
                 square?.Dispose();
 #if DEBUG
                 Console.WriteLine("Error applying thumbnail to UI: " + ex.Message);
-                throw;
 #endif
                 if (imageList != null)
                     _corruptImageLists.Add(imageList);
@@ -301,6 +360,9 @@ namespace ExpControlsLib
                 imageList?.Dispose();
             }
             _imageLists.Clear();
+
+            _lruKeys.Clear();
+            _slotByKey.Clear();
 
             if (_expList != null && _expList._listView != null)
             {
