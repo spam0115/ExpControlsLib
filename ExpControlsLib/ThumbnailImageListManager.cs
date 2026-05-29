@@ -14,7 +14,7 @@ namespace ExpControlsLib
     /// Manages ImageLists for thumbnail display modes in the ListView control.
     /// Creates and maintains separate ImageLists for different thumbnail sizes.
     /// </summary>
-    [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
+    [SupportedOSPlatform("windows")]
     public class ThumbnailImageListManager : IDisposable
     {
         private readonly ConcurrentDictionary<int, ImageList> _imageLists = new();
