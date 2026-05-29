@@ -295,6 +295,8 @@ namespace ExpControlsLib
                 }
                 field = value;
 
+                if (_useVirtualMode) InvalidateVirtualItemIndexes();
+
                 SetImageListForMode(value);
                 if (_useVirtualMode) LoadImagesForItems();
 
@@ -1681,6 +1683,34 @@ namespace ExpControlsLib
             finally
             {
                 System.Diagnostics.Debug.WriteLine("ExpList: UpdateIndexMapping End");
+            }
+        }
+
+        /// <summary>
+        /// Invalidates the image indices of all virtual items and cached ListViewItems.
+        /// This is necessary when switching between display modes to ensure that the correct
+        /// icons or thumbnails are loaded for the current view.
+        /// </summary>
+        private void InvalidateVirtualItemIndexes()
+        {
+            System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes Begin");
+            try
+            {
+                if (!_useVirtualMode) return;
+
+                foreach (var item in _virtualItems)
+                {
+                    if (item != null) item.ImageIndex = -1;
+                }
+
+                foreach (var lvi in _itemCache.Values)
+                {
+                    if (lvi != null) lvi.ImageIndex = -1;
+                }
+            }
+            finally
+            {
+                System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes End");
             }
         }
 

@@ -230,21 +230,6 @@ namespace WindowsApiLib.Shell
                 return fileItem;
             }
 
-            //foreach (var currentCSI in currentFolder.Files) //this is really slow.  Is there a way to make this better?  are we going to have to store a dictionary at each folder to make lookup faster?
-            //{
-            //    if (currentCSI.FullPath == fullPath)
-            //    {
-            //        Parent = currentFolder;
-            //        return currentCSI;
-            //    }
-
-            //    //if (CPidl.IsEqual(currentCSI.PIDL, absPidl)) //too slow
-            //    //{
-            //    //    Parent = currentFolder;
-            //    //    return currentCSI;
-            //    //}
-            //}
-
             Debug.WriteLine("Could not find file in the current folder: '" + CPidl.ToString(absPidl) + "'");
             return null;
         }
@@ -279,6 +264,9 @@ namespace WindowsApiLib.Shell
             return ShellAPI.ILIsParent(AncestorPidl, ChildPidl, fParent);
         }
 
-
+        internal void Remove(CShellItem newItem)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

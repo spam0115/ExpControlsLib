@@ -752,10 +752,15 @@ namespace WindowsApiLib.Shell
             return iShFolder;
         }
 
-        public static bool TryGetLastWriteTimeForPidl(
-        IShellFolder folder,
-        IntPtr childPidl,              // relative PIDL (child of folder)
-        out FILETIME lastWriteTime)
+        /// <summary>
+        /// Get's the last write time for a PIDL by calling SHGetDataFromIDListW with the SHGDFIL_FINDDATA flag 
+        /// and extracting the FILETIME from the returned WIN32_FIND_DATAW structure.
+        /// </summary>
+        /// <param name="folder"></param>
+        /// <param name="childPidl">relative PIDL (child of folder)</param>
+        /// <param name="lastWriteTime"></param>
+        /// <returns></returns>
+        public static bool TryGetLastWriteTimeForPidl(IShellFolder folder, IntPtr childPidl, out FILETIME lastWriteTime)
         {
             lastWriteTime = default;
 

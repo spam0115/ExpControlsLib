@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.Versioning;
@@ -16,12 +17,12 @@ namespace ExpControlsLib
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
     public class ThumbnailImageListManager : IDisposable
     {
-        private readonly Dictionary<int, ImageList> _imageLists = new Dictionary<int, ImageList>();
+        private readonly ConcurrentDictionary<int, ImageList> _imageLists = new();
         private readonly ThumbnailProvider _thumbnailProvider;
         private readonly ExpList _expList;
         private int _activeSize;
         private int _generation = 0;
-        private readonly Dictionary<string, int> _imageIndexByKey = new Dictionary<string, int>();
+        private readonly ConcurrentDictionary<string, int> _imageIndexByKey = new();
         private bool _addingImage = false;
         private readonly HashSet<ImageList> _corruptImageLists = new HashSet<ImageList>();
 
@@ -96,7 +97,7 @@ namespace ExpControlsLib
             {
                 _corruptImageLists.Remove(imageList);
                 imageList.Dispose();
-                _imageLists.Remove(thumbnailSize);
+                _imageLists.TryRemove(thumbnailSize, out _);
             }
 
 #if DEBUG
@@ -298,6 +299,7 @@ namespace ExpControlsLib
                 square?.Dispose();
 #if DEBUG
                 Console.WriteLine("Error applying thumbnail to UI: " + ex.Message);
+                throw;
 #endif
                 if (imageList != null)
                     _corruptImageLists.Add(imageList);

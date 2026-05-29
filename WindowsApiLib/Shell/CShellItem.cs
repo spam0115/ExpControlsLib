@@ -1574,6 +1574,7 @@ namespace WindowsApiLib.Shell
             m_IconIndexOpen = -1;          // index into the SystemImageListManager list for Open icon
             m_IconIndexNormalOrig = -1;    // index into the System Image list for Normal icon
             m_IconIndexOpenOrig = -1;      // index into the SystemImage list for Open icon
+            ImageIndex = -1;
             SystemImageListManager.GetIconIndex(this, false);
             SystemImageListManager.GetIconIndex(this, true);
         }

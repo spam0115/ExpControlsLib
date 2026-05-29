@@ -187,37 +187,16 @@ namespace WindowsApiLib.Shell
         {
             if (pidl == IntPtr.Zero) return false;
 
+            var name = CPidl.ToString(pidl);
+
+            if (name.ToUpper().Contains("$RECYCLE.BIN")) return true;
+
             var recycleBinPidl = CShellItemFactory.RecycleBin.PIDL;
             if (recycleBinPidl == IntPtr.Zero) throw new Exception("The Recycle Bin PIDL has not been set up.");
 
-            var name = CPidl.ToString(pidl);
             if (name.Contains(CShellItemFactory.StrRecycleBin))
                 return true;
             else return false;
-
-            //none of the following works because there are multiple recycle bins - one for each drive.
-            //// Read segment sizes from the Recycle Bin PIDL (cached pointer, stable for app lifetime)
-            //ushort cb1 = (ushort)Marshal.ReadInt16(recycleBinPidl, 0);
-            //if (cb1 == 0) return false; // empty pidl
-            //ushort cb2 = (ushort)Marshal.ReadInt16(recycleBinPidl, cb1);
-            //if (cb2 == 0) return false; // only one segment (desktop root)
-            //int totalLen = cb1 + cb2;
-
-            //// Verify the incoming PIDL has at least as many bytes
-            //ushort inCb1 = (ushort)Marshal.ReadInt16(pidl, 0);
-            //if (inCb1 == 0) return false;
-            //ushort inCb2 = (ushort)Marshal.ReadInt16(pidl, inCb1);
-            //if (inCb2 == 0) return false;
-
-            //// Raw byte compare of the first two segments
-            //byte* pRecycle = (byte*)recycleBinPidl;
-            //byte* pIn = (byte*)pidl;
-            //for (int i = 0; i < totalLen; i++)
-            //{
-            //    if (pRecycle[i] != pIn[i]) return false;
-            //}
-
-            //return true;
         }
 
         /// <summary>
@@ -702,24 +681,13 @@ namespace WindowsApiLib.Shell
             {
                 case CShItemUpdateType.UpdateDir: // raised when content of a dir changes
                     {
-                        DoUpdateDir(csi); // recursively check this Folder and all known sub-Folders for change     '5/21/2012
+                        DoUpdateDir(csi);
                         break;
                     }
                 case CShItemUpdateType.Updated: // raised when Attributes (Item or Items under a Folder) change
                     {
-                        // Debug.WriteLine("Updated for " & Me.Path)
                         csi.ResetInfo();
-                        // Previous versions called ResetChildren. Changed to UpdateRefresh - which impacts performance.
-                        // Decided for now (6/12/2012) to do neither, so commented it out. This message is often closely followed or preceeded
-                        // by an UPDATEDIR which will, in fact call UpdateRefresh which will also call ResetChildren in many cases.
-                        // Performance impact is greatly aggravated by the (common on Win7) closely paired UPDATEDIR and UPDATEITEM messages
-                        // on the same Folder, caused by the same change! Removing this code limits the impact.
-                        // If Me.IsFolder Then
-                        // 'Me.ResetChildren()     'Original code
-                        // 'Me.UpdateRefresh()     '6/3/2012
-                        // End If
                         RaiseUpdateEvent(csi.Parent, new ShellItemUpdateEventArgs(csi, changeType));
-                        //todo: update thumbnail for item
                         break;
                     }
                 case CShItemUpdateType.Deleted:
@@ -891,22 +859,26 @@ namespace WindowsApiLib.Shell
             {
                 var folder = csi.IsFolder ? csi : csi.Parent;
 
-                if (operations.Count < 100)
+                if (operations.Count < 400)
                 {
                     foreach (var (item, type) in operations)
                     {
-                        
                         switch (type)
                         {
                             case CShItemUpdateType.Created:
                                 RaiseUpdateEvent(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Created));
                                 break;
-                            case CShItemUpdateType.Updated:
-                                RaiseUpdateEvent(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Updated));
-                                break;
                             case CShItemUpdateType.Deleted:
-                            default:
                                 RaiseUpdateEvent(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
+                                break;
+                            case CShItemUpdateType.Renamed:
+                                RaiseUpdateEvent(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Renamed));
+                                break;
+                            case CShItemUpdateType.IconChange:
+                            case CShItemUpdateType.Updated:
+                            case CShItemUpdateType.MediaChange:
+                            default:
+                                RaiseUpdateEvent(csi, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Updated));
                                 break;
                         }
                     }
@@ -971,6 +943,7 @@ namespace WindowsApiLib.Shell
                         for (int i = 0; i < newPidls.Count; i++)
                         {
                             IntPtr newPidl = newPidls[i];
+                            if (newPidl == IntPtr.Zero) continue;
                             //uint hash = CPidl.HashPidlFastLastFull(newPidl);
 
                             string newPidlText = CPidl.ToString(newPidl, false) ?? string.Empty;
@@ -986,17 +959,18 @@ namespace WindowsApiLib.Shell
                                 {   // found the same item
                                     if (!ReferenceEquals(csi, CShellItemFactory.RecycleBin))
                                     {
-                                        bool doupdate = true;
+                                        bool doupdate = false;
                                         if (csi.IsFileSystem)
                                         {
                                             if (ShellHelper.TryGetLastWriteTimeForPidl(csi.Folder, newPidl, out FILETIME lastWriteTime))
                                             {
                                                 var newTime = ShellHelper.FileTimeToLong(lastWriteTime);
-                                                if (newTime <= csi.LastWriteTime.ToFileTimeUtc())
-                                                    doupdate = false;
+                                                if (newTime > csi.LastWriteTime.ToFileTimeUtc())
+                                                    doupdate = true;
                                             }
                                             //todo: maybe also do a date check for virtual items since people might be using their onedrives
                                         }
+                                        else doupdate = true;
 
                                         if (doupdate)
                                         {
@@ -1016,17 +990,14 @@ namespace WindowsApiLib.Shell
                             }
                             else //new item
                             {
-                                if (newPidl == IntPtr.Zero) continue;
-
-                                try
+                                var newItem = CShellItemFactory.CreateCShItem(newPidl, csi);
+                                var result = HierachyManager.Add(newItem);
+                                if (result is null) //this can happen for files that are deleted from outside this app
                                 {
-                                    var NewItem = CShellItemFactory.CreateCShItem(newPidl, csi);
-                                    HierachyManager.Add(NewItem);
-                                    operations.Add((NewItem, CShItemUpdateType.Created));
+                                    //HierachyManager.Remove(newItem); not sure if we need this yet
                                 }
-                                catch (Exception ex)
-                                {
-                                    Debug.WriteLine("ERROR - Failed to add new CShellItem to internal tree.  : " + ex.ToString());
+                                else { 
+                                    operations.Add((newItem, CShItemUpdateType.Created));
                                 }
                             }
                         }
