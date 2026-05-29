@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -30,10 +31,10 @@ namespace ExpControlsLib
     {
         /// <summary>
         /// In-memory cache of previously generated thumbnails keyed by
-        /// "path|size". Avoids repeated shell calls and HBITMAP marshaling.
+        /// "path|size". Stores raw pixel data to avoid GDI handle exhaustion.
         /// </summary>
-        private readonly ConcurrentDictionary<string, Image> _thumbnailCache =
-            new ConcurrentDictionary<string, Image>();
+        private readonly ConcurrentDictionary<string, byte[]> _thumbnailCache =
+            new ConcurrentDictionary<string, byte[]>();
 
         /// <summary>
         /// queue for holding pending thumbnail requests that will be processed by the background worker.
@@ -142,17 +143,19 @@ namespace ExpControlsLib
         /// <param name="request">The request to process.</param>
         private void GenerateThumbnail(ThumbnailRequestArgs request)
         {
+            Bitmap? thumbnail = null;
             try
             {
 #if DEBUG
                 Console.WriteLine("Attempting to generate thumbnail for: " + request.Item.DisplayName);
 #endif
 
-                Image thumbnail = GetThumbnailFromOS(request.Item.PIDL, request.Size);
+                thumbnail = (Bitmap?)GetThumbnailFromOS(request.Item.PIDL, request.Size);
 
                 if (thumbnail != null)
                 {
-                    _thumbnailCache.TryAdd(ConstructCacheKey(request.Item.FullPath, request.Size), thumbnail);
+                    byte[] bytes = BitmapToBytes(thumbnail);
+                    _thumbnailCache.TryAdd(ConstructCacheKey(request.Item.FullPath, request.Size), bytes);
                 }
                 else
                 {
@@ -162,13 +165,46 @@ namespace ExpControlsLib
 #endif
                 }
 
-                //send event back to the consumer
+                //send event back to the consumer.  Subscriber is responsible for disposing thumbnail.
                 ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.Item, thumbnail, request.Size, request.Index));
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error generating thumbnail for {request.Item.FullPath}: {ex}");
+                thumbnail?.Dispose();
                 ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.Item, null, request.Size, request.Index));
+            }
+        }
+
+        private byte[] BitmapToBytes(Bitmap bmp)
+        {
+            int size = bmp.Width;
+            BitmapData data = bmp.LockBits(new Rectangle(0, 0, size, size), ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
+            try
+            {
+                int byteCount = data.Stride * size;
+                byte[] bytes = new byte[byteCount];
+                Marshal.Copy(data.Scan0, bytes, 0, byteCount);
+                return bytes;
+            }
+            finally
+            {
+                bmp.UnlockBits(data);
+            }
+        }
+
+        private Bitmap BytesToBitmap(byte[] bytes, int size)
+        {
+            Bitmap bmp = new Bitmap(size, size, PixelFormat.Format32bppPArgb);
+            BitmapData data = bmp.LockBits(new Rectangle(0, 0, size, size), ImageLockMode.WriteOnly, PixelFormat.Format32bppPArgb);
+            try
+            {
+                Marshal.Copy(bytes, 0, data.Scan0, bytes.Length);
+                return bmp;
+            }
+            finally
+            {
+                bmp.UnlockBits(data);
             }
         }
 
@@ -309,13 +345,12 @@ namespace ExpControlsLib
                         Console.WriteLine("Failed to get image from shell item factory for");
                         return null;
                     }
-
                 }
 
-                using (var raw = BitmapHelper.HBitmapToBitmapWithAlpha(hbm))
+                using (var bmp = BitmapHelper.HBitmapToBitmapWithAlpha(hbm))
                 {
-                    if (raw == null) return null;
-                    return ApplyLetterbox(raw, size);
+                    if (bmp == null) return null;
+                    return ApplyLetterbox(bmp, size);
                 }
             }
             finally 
@@ -333,9 +368,15 @@ namespace ExpControlsLib
         /// <param name="size">Pixel size that was originally requested.</param>
         /// <param name="thumbnail">When this method returns, contains the cached image if found; otherwise <c>null</c>.</param>
         /// <returns><c>true</c> if a cached thumbnail was found; otherwise <c>false</c>.</returns>
-        public bool TryGetCachedThumbnail(string filePath, int size, out Image thumbnail)
+        public bool TryGetCachedThumbnail(string filePath, int size, out Image? thumbnail)
         {
-            return _thumbnailCache.TryGetValue(ConstructCacheKey(filePath, size), out thumbnail);
+            if (_thumbnailCache.TryGetValue(ConstructCacheKey(filePath, size), out byte[]? bytes))
+            {
+                thumbnail = BytesToBitmap(bytes, size);
+                return true;
+            }
+            thumbnail = null;
+            return false;
         }
 
 
@@ -343,7 +384,8 @@ namespace ExpControlsLib
         /// <summary>
         /// Scales and pads a source bitmap to fit within a square of the given size, preserving
         /// aspect ratio, and centers it on a transparent background. The returned bitmap
-        /// is always exactly size x size, suitable for direct insertion into an ImageList.
+        /// is always exactly square of size size x size that is suitable for direct insertion into an 
+        /// ImageList.
         /// </summary>
         private static Bitmap ApplyLetterbox(Image source, int size)
         {
@@ -352,7 +394,7 @@ namespace ExpControlsLib
             int srcW = source.Width;
             int srcH = source.Height;
 
-            // If the shell already returned a square at the requested size, just copy it.
+            // If the shell already returned a square image at the requested size, just copy it and return.
             if (srcW == size && srcH == size)
             {
                 using (var graphic = Graphics.FromImage(destBmp))
@@ -386,10 +428,6 @@ namespace ExpControlsLib
         /// </summary>
         public void ClearCache()
         {
-            foreach (var kvp in _thumbnailCache)
-            {
-                kvp.Value?.Dispose();
-            }
             _thumbnailCache.Clear();
         }
 

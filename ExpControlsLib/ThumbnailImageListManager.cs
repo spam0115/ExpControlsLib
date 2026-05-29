@@ -165,42 +165,27 @@ namespace ExpControlsLib
         /// </remarks>
         private void OnThumbnailReady(object sender, ThumbnailReadyEventArgs e)
         {
-            if (_expList._listView.IsDisposed || _expList._listView.Disposing || !_expList._listView.IsHandleCreated) return;
-
-            //if (tag.Generation != _generation)
-            //    return;
-
-            if (e.Size != _activeSize) //this can happen if we switch display modes while thumbnail requests are outstanding
-                return;
-
-            //// safety: ensure item still points to same shell object/path
-            //if (!(tag.Item.Tag is CShellItem csi) || !string.Equals(csi.FullPath, tag.FilePath, StringComparison.OrdinalIgnoreCase))
-            //    return;
-
-            Bitmap? square = null;
-
-            if (e.Thumbnail != null)
+            if (_expList._listView.IsDisposed || _expList._listView.Disposing || !_expList._listView.IsHandleCreated)
             {
-                // Image manipulation on background thread
-                // Use Format32bppPArgb to match what the shell produced (premultiplied alpha)
-                square = new Bitmap(e.Size, e.Size, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-
-                using (var g = Graphics.FromImage(square))
-                {
-                    g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
-                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Low;
-                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.None;
-                    g.DrawImage(e.Thumbnail, new Rectangle(0, 0, e.Size, e.Size));
-                }
+                e.Thumbnail?.Dispose();
+                return;
             }
 
-            if (square != null && !_expList._listView.IsDisposed && _expList._listView.IsHandleCreated)
+            if (e.Size != _activeSize) //this can happen if we switch display modes while thumbnail requests are outstanding
             {
-                _expList._listView.BeginInvoke(new Action(() => ApplyThumbnailToUI(e, square)));
+                e.Thumbnail?.Dispose();
+                return;
+            }
+
+            if (e.Thumbnail != null && !_expList._listView.IsDisposed && _expList._listView.IsHandleCreated)
+            {
+                // The thumbnail from ThumbnailProvider is already square and in the correct format.
+                // We pass it directly to the UI thread. ApplyThumbnailToUI will dispose it.
+                _expList._listView.BeginInvoke(new Action(() => ApplyThumbnailToUI(e, (Bitmap)e.Thumbnail)));
             }
             else
             {
-                square?.Dispose();
+                e.Thumbnail?.Dispose();
             }
         }
 
