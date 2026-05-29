@@ -101,6 +101,7 @@ namespace ExpControlsLib
         TreeLib.HugeList<CShellItem> _virtualItems = new();
         private Dictionary<int, ListViewItem> _itemCache = new();
         private Dictionary<string, int> _pathToIndex = new(StringComparer.OrdinalIgnoreCase);
+        private LVColSorter _sorter; //only works in non-virtual mode
 
         // Reentrancy guard: prevents DoItemUpdate from modifying _listView.Items
         // while an enumeration is in progress (Invoke() pumps messages and can trigger
@@ -1804,7 +1805,7 @@ namespace ExpControlsLib
         /// <param name="col"></param>
         /// <param name="text"></param>
         /// <param name="tag"></param>
-        private ListViewSubitemData GetColumnData(CShellItem item, ColumnHeader col)
+        internal ListViewSubitemData GetColumnData(CShellItem item, ColumnHeader col)
         {
             //Debug.WriteLine("ExpList: GetColumnData Begin");
             try
@@ -4139,13 +4140,13 @@ namespace ExpControlsLib
             LVColSorter? sorter = (LVColSorter?)_listView.ListViewItemSorter;
 
             if (sorter is null || sorter.OrderOfSort == SortOrder.None)
-                return _virtualItems.Count; // if no sort, new items go at end
+                return (int)_virtualItems.Count; // if no sort, new items go at end
 
             var column = sorter.SortColumn;
             var order = sorter.OrderOfSort;
             var colHeader = _listView.Columns[column];
-            var comparer = new CShellItemComparer(column, order, colHeader);
-            return FindInsertionPoint(item, comparer);
+            var comparer = new CShellItemComparer(this, column, order, colHeader);
+            return (int)FindInsertionPoint(item, comparer);
         }
 
         /// <summary>
@@ -4157,13 +4158,13 @@ namespace ExpControlsLib
         /// <param name="item">The item to find an insertion point for</param>
         /// <param name="comparer">The comparer to use for comparing items</param>
         /// <returns>The index where the item should be inserted</returns>
-        public int FindInsertionPoint(CShellItem item, IComparer<CShellItem> comparer = null, IHugeList<CShellItem> list = null)
+        public long FindInsertionPoint(CShellItem item, IComparer<CShellItem> comparer = null, IHugeList<CShellItem> list = null)
         {
             if (list == null)
                 list = this._virtualItems;
 
             // Search the entire list
-            int result = list.BinarySearch(0, list.Count, item, comparer);
+            long result = list.BinarySearch(0, list.Count, item, comparer);
 
             // If item is found, result will be the index of the item
             // If item is not found, result will be negative and we need to bitwise complement it
@@ -4189,17 +4190,23 @@ namespace ExpControlsLib
                 if (order == SortOrder.None || _virtualItems.Count == 0) return;
 
                 var col = _listView.Columns[column];
-                var comparer = new CShellItemComparer(column, order, col);
+                var comparer = new CShellItemComparer(this, column, order, col);
 
-                //_virtualItems.Sort(comparer);
-                var array = _virtualItems.ToArray();
-                array.Sort(comparer);
+                // Copy to a List for sorting because HugeList (B-Tree) sort is impractical in-place
+                var list = new List<CShellItem>((int)_virtualItems.Count);
+                foreach (var item in _virtualItems)
+                {
+                    list.Add(item);
+                }
+
+                list.Sort(comparer);
+
                 _virtualItems.Clear();
-                _virtualItems.AddRange(array);
+                _virtualItems.AddRange(list);
 
                 RecreateIndexMapping();
                 _itemCache.Clear();
-                _listView.Invalidate();
+                _listView.Refresh(); 
             }
             finally
             {

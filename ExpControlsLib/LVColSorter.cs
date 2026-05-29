@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
+using WindowsApiLib;
 
 namespace ExpControlsLib
 {
@@ -79,12 +80,9 @@ namespace ExpControlsLib
         /// 
         public int Compare(object x, object y)
         {
-            if (x == null || y == null) return 0; //if you browse to network, you will get a null value for unknown reasons
+            if (x == null || y == null) return 0;
 
-            int CompareRet = default;
-
-            // If m_ColOrder(m_Col) = 0 Then Exit Function 'First time thru with no columnclick. Retain original order 6/13/2012 - Allow use as standalone ie Insert with no Col Click
-            CompareRet = 0;
+            int CompareRet = 0;
             ListViewItem LVX = (ListViewItem)x;
             ListViewItem LVY = (ListViewItem)y;
 
@@ -94,35 +92,33 @@ namespace ExpControlsLib
             }
             if (CompareRet == 0)
             {
-                // Note that in some cases the SubItem Tags may not yet be set up (eg doing set up of some lvi's  in background thread)
-                // in other words, the first lvi may have tags but not all lvi's have tags yet.
                 if (OKToCompare(LVX.SubItems[m_Col].Tag, LVY.SubItems[m_Col].Tag))
                 {
                     CompareRet = CompareUsingCompareTo(LVX.SubItems[m_Col].Tag, LVY.SubItems[m_Col].Tag);
                 }
                 else
                 {
-                    CompareRet = string.Compare(LVX.SubItems[m_Col].Text, LVY.SubItems[m_Col].Text);
+                    CompareRet = StringLogicalComparer.CompareStrings(LVX.SubItems[m_Col].Text, LVY.SubItems[m_Col].Text);
                 }
             }
-            if (CompareRet == 0 && m_Col != 0)      // always use the original ordering as a second key (if not the primary)
+            if (CompareRet == 0 && m_Col != 0)
             {
-                if (m_Col == 0 && OKToCompare(LVX.Tag, LVY.Tag))
+                if (OKToCompare(LVX.Tag, LVY.Tag))
                 {
                     CompareRet = CompareUsingCompareTo(LVX.Tag, LVY.Tag);
                 }
-                else if (OKToCompare(LVX.SubItems[0].Tag, LVY.SubItems[0].Tag))   // 6/13/2012 - fixed coding error
+                else if (OKToCompare(LVX.SubItems[0].Tag, LVY.SubItems[0].Tag))
                 {
                     CompareRet = CompareUsingCompareTo(LVX.SubItems[0].Tag, LVY.SubItems[0].Tag);
                 }
                 else
                 {
-                    CompareRet = LVX.SubItems[0].Text.CompareTo(LVY.SubItems[0].Text);
+                    CompareRet = StringLogicalComparer.CompareStrings(LVX.SubItems[0].Text, LVY.SubItems[0].Text);
                 }
             }
             if (m_ColOrder.Length == 0) return CompareRet;
             if (m_ColOrder[m_Col] != 0)
-                CompareRet *= m_ColOrder[m_Col]; // 6/13/2012 - Allow use as standalone ie Insert with no Col Click
+                CompareRet *= m_ColOrder[m_Col];
             return CompareRet;
         }
 
@@ -198,6 +194,12 @@ namespace ExpControlsLib
         {
             if (a is null)
                 return (b is null) ? 0 : -1;
+
+            if (a is IComparable comp)
+            {
+                try { return comp.CompareTo(b); } catch { }
+            }
+
             try
             {
                 var methods = a.GetType().GetMethods();
