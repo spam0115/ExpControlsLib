@@ -130,10 +130,38 @@ namespace ExpControlsLib
             PruneActiveTasks(); 
 
             _activeTasks.Clear(); //this might be a memory leak because tasks don't get canceled instantaneously
-        } 
+        }
 
-#endregion
 
+        /// <summary>
+        /// Clears the thumbnail cache
+        /// </summary>
+        public void ClearCache()
+        {
+            _thumbnailCache.Clear();
+        }
+
+        /// <summary>
+        /// Cleans up resources
+        /// </summary>
+        public void Dispose()
+        {
+            _cancellationTokenSource?.Cancel();
+            _requestQueueRunner.CancelPending();
+            _requestQueueRunner.Dispose();
+
+            ClearCache();
+
+            PruneActiveTasks();
+            _activeTasks.Clear();
+
+            _cancellationTokenSource?.Dispose();
+        }
+
+
+        #endregion
+
+        #region Private Methods
         /// <summary>
         /// Worker routine that produces the thumbnail for a single
         /// <see cref="ThumbnailRequest"/>, populates the cache, and raises
@@ -289,7 +317,7 @@ namespace ExpControlsLib
         /// A <see cref="Bitmap"/> letterboxed to <paramref name="size"/> x
         /// <paramref name="size"/>, or <c>null</c> if no image could be obtained.
         /// </returns>
-        public Image? GetThumbnailFromOS(IntPtr pidl, int size)
+        public Bitmap? GetThumbnailFromOS(IntPtr pidl, int size)
         {
             if (pidl == IntPtr.Zero) return null;
 
@@ -325,7 +353,7 @@ namespace ExpControlsLib
             }
         }
 
-        private static Image GetThumbnailFromOsBase(IShellItemImageFactory factory, int size)
+        private static Bitmap GetThumbnailFromOsBase(IShellItemImageFactory factory, int size)
         {
             int hr;
             IntPtr hbm = IntPtr.Zero;
@@ -423,31 +451,6 @@ namespace ExpControlsLib
             return destBmp;
         }
 
-        /// <summary>
-        /// Clears the thumbnail cache
-        /// </summary>
-        public void ClearCache()
-        {
-            _thumbnailCache.Clear();
-        }
-
-        /// <summary>
-        /// Cleans up resources
-        /// </summary>
-        public void Dispose()
-        {
-            _cancellationTokenSource?.Cancel();
-            _requestQueueRunner.CancelPending();
-            _requestQueueRunner.Dispose();
-
-            ClearCache();
-
-            PruneActiveTasks();
-            _activeTasks.Clear();
-
-            _cancellationTokenSource?.Dispose();
-        }
-
         private void PruneActiveTasks(bool thorough = true)
         {
             for (int i = 0; i < _activeTasks.Count;)
@@ -460,10 +463,14 @@ namespace ExpControlsLib
                 else if (thorough == false) //sometimes, we don't want to thoroughly prune.  A rough prune is good enough because it will soon be pruned again
                 {
                     return;
-                } 
+                }
                 else i++;
             }
         }
+
+
+        #endregion 
+
 
         #region P/Invoke Declarations
 
