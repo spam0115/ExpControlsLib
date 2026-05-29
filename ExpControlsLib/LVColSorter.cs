@@ -238,15 +238,15 @@ namespace ExpControlsLib
             }
         }
         /// <summary>
-    /// The ListView column on which the ListView was last sorted. Setting this property to a valid
-    /// value will cause the ListView to be sorted on that column in the order based on OrderOfSort rules.
-    /// Specifically, the column will be sorted in reverse of the order it was last sorted.
-    /// </summary>
-    /// <returns>The ListView column on which the ListView was last sorted.</returns>
-    /// <remarks>Unsorted ListViews will return 0 for the SortColumn.
-    /// The Properties OrderOfSort and SortColumn may be used if the application wishes to Draw Sort
-    /// glyphs on the ColumnHeaders.
-    /// </remarks>
+        /// The ListView column on which the ListView was last sorted. Setting this property to a valid
+        /// value will cause the ListView to be sorted on that column in the order based on OrderOfSort rules.
+        /// Specifically, the column will be sorted in reverse of the order it was last sorted.
+        /// </summary>
+        /// <returns>The ListView column on which the ListView was last sorted.</returns>
+        /// <remarks>Unsorted ListViews will return 0 for the SortColumn.
+        /// The Properties OrderOfSort and SortColumn may be used if the application wishes to Draw Sort
+        /// glyphs on the ColumnHeaders.
+        /// </remarks>
         public int SortColumn
         {
             get

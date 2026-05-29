@@ -5,19 +5,19 @@ namespace WindowsApiLib
 {
 
     /// <summary>
-/// Compares string such that strings containing numeric values will, assuming that non-numeric leading portions
-/// are equal, will sort in numeric order. Specifically, the strings: "a1", "a101", "a3" will sort as:
-/// "a1", "a3", "a101"
-/// </summary>
-/// <remarks><list type="bullet">
-/// <item><description>Article, code, and forum additions are found at:</description></item>
-/// <item><description>http://www.codeproject.com/cs/algorithms/csnsort.asp</description></item>
-/// <item><description>Original C# code by Vasian Cepa</description></item>
-/// <item><description>Optimized C# code by Richard Deeming</description></item>
-/// <item><description>Translated to VB.Net by Mike Cattle</description></item>
-/// <item><description>Corrected version of CompareNumbers by Jim Parsells</description></item>
-/// </list>
-/// </remarks>
+    /// Compares string such that strings containing numeric values will, assuming that non-numeric leading portions
+    /// are equal, will sort in numeric order. Specifically, the strings: "a1", "a101", "a3" will sort as:
+    /// "a1", "a3", "a101"
+    /// </summary>
+    /// <remarks><list type="bullet">
+    /// <item><description>Article, code, and forum additions are found at:</description></item>
+    /// <item><description>http://www.codeproject.com/cs/algorithms/csnsort.asp</description></item>
+    /// <item><description>Original C# code by Vasian Cepa</description></item>
+    /// <item><description>Optimized C# code by Richard Deeming</description></item>
+    /// <item><description>Translated to VB.Net by Mike Cattle</description></item>
+    /// <item><description>Corrected version of CompareNumbers by Jim Parsells</description></item>
+    /// </list>
+    /// </remarks>
     public sealed class StringLogicalComparer : IComparer
     {
         private static readonly StringLogicalComparer _default = new StringLogicalComparer();
@@ -27,9 +27,9 @@ namespace WindowsApiLib
         } // New
 
         /// <summary>
-    /// Returns an Instance of StringLogicalComparer
-    /// </summary>
-    /// <returns>an Instance of StringLogicalComparer</returns>
+        /// Returns an Instance of StringLogicalComparer
+        /// </summary>
+        /// <returns>an Instance of StringLogicalComparer</returns>
         public static IComparer Default
         {
             get
@@ -39,14 +39,14 @@ namespace WindowsApiLib
         }
 
         /// <summary>
-    /// Compares two Objects which must be Strings. Allows for and Compares properly if one or both Strings are Nothing. 
-    /// <para>When given two initialized Strings, Compares them using 
-    /// <see cref="WindowsApiLib.StringLogicalComparer.CompareStrings">the CompareStrings function of this Class</see></para>
-    /// </summary>
-    /// <param name="x">First String to Compare</param>
-    /// <param name="y">Second String to Compare</param>
-    /// <returns>Negative value if x less than y, 0 if x=y, or a positive value if x greater than y</returns>
-    /// <remarks></remarks>
+        /// Compares two Objects which must be Strings. Allows for and Compares properly if one or both Strings are Nothing. 
+        /// <para>When given two initialized Strings, Compares them using 
+        /// <see cref="WindowsApiLib.StringLogicalComparer.CompareStrings">the CompareStrings function of this Class</see></para>
+        /// </summary>
+        /// <param name="x">First String to Compare</param>
+        /// <param name="y">Second String to Compare</param>
+        /// <returns>Negative value if x less than y, 0 if x=y, or a positive value if x greater than y</returns>
+        /// <remarks></remarks>
         public int Compare(object x, object y)
         {
             if (x is null && y is null)
@@ -69,14 +69,14 @@ namespace WindowsApiLib
         } // Compare
 
         /// <summary>
-    /// Compares string such that strings containing numeric values will, assuming that non-numeric leading portions
-    /// are equal, will sort in numeric order. Specifically, the strings: "a1", "a101", "a3" will sort as:
-    /// "a1", "a3", "a101"
-    /// </summary>
-    /// <param name="s1">First String to Compare</param>
-    /// <param name="s2">Second String to Compare</param>
-    /// <returns>Negative value if s1 less than s2, 0 if s1=s2, positive value if s1 greater than s2</returns>
-    /// <remarks>Note that negative return values may be other than -1 and that positive return values may be other than 1</remarks>
+        /// Compares string such that strings containing numeric values will, assuming that non-numeric leading portions
+        /// are equal, will sort in numeric order. Specifically, the strings: "a1", "a101", "a3" will sort as:
+        /// "a1", "a3", "a101"
+        /// </summary>
+        /// <param name="s1">First String to Compare</param>
+        /// <param name="s2">Second String to Compare</param>
+        /// <returns>Negative value if s1 less than s2, 0 if s1=s2, positive value if s1 greater than s2</returns>
+        /// <remarks>Note that negative return values may be other than -1 and that positive return values may be other than 1</remarks>
         public static int CompareStrings(string s1, string s2)
         {
             if (s1 is null || s1.Length == 0)

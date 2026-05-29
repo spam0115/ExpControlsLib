@@ -14,6 +14,7 @@ using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
+using TreeLib;
 using static System.Windows.Forms.ListView;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
@@ -96,10 +97,10 @@ namespace ExpControlsLib
         private ShellController? _shellController = null;
 
         private bool _useVirtualMode;
-        private List<CShellItem> _virtualItems = new();
+        //private List<CShellItem> _virtualItems = new();
+        TreeLib.HugeList<CShellItem> _virtualItems = new();
         private Dictionary<int, ListViewItem> _itemCache = new();
         private Dictionary<string, int> _pathToIndex = new(StringComparer.OrdinalIgnoreCase);
-        private LVColSorter _sorter;
 
         // Reentrancy guard: prevents DoItemUpdate from modifying _listView.Items
         // while an enumeration is in progress (Invoke() pumps messages and can trigger
@@ -946,7 +947,8 @@ namespace ExpControlsLib
 
                     if (_useVirtualMode)
                     {
-                        _virtualItems = combinedList;
+                        _virtualItems.Clear();
+                        _virtualItems.AddRange(combinedList);
                         RecreateIndexMapping();
                         _itemCache.Clear();
                         _listView.VirtualListSize = _virtualItems.Count;
@@ -1334,29 +1336,27 @@ namespace ExpControlsLib
             }
         }
 
-        private void InsertVirtualItem(CShellItem item)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <remarks>This is really inefficient because it re-sorts the entire list on every insert.
+        /// May need to fix this by doing a manual binary search to find the correct insertion point and only 
+        /// re-sorting when necessary (e.g. if the new item is out of order with respect to its neighbors).
+        /// </remarks>
+        /// <param name="item"></param>
+        private void InsertVirtualItemInSortedOrder(CShellItem item)
         {
             System.Diagnostics.Debug.WriteLine("ExpList: InsertVirtualItem Begin");
             try
             {
-                _virtualItems.Add(item);
-                _listView.VirtualListSize = _virtualItems.Count;
+                var index = this.FindInsertionPoint(item);
 
-                if (_listView.ListViewItemSorter is LVColSorter sorter && sorter.OrderOfSort != SortOrder.None)
-                {
-                    SortVirtualItems(sorter.SortColumn, sorter.OrderOfSort);
-                }
-                else
-                {
-                    _virtualItems.Sort();
-                    RecreateIndexMapping();
-                    _itemCache.Clear();
-                    _listView.Invalidate();
-                }
+                _virtualItems.Insert(index, item);
+                _listView.VirtualListSize = _virtualItems.Count;
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: InsertVirtualItem End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: InsertVirtualItem End");
             }
         }
 
@@ -1401,7 +1401,7 @@ namespace ExpControlsLib
 
                                 if (_useVirtualMode)
                                 {
-                                    InsertVirtualItem(e.Item);
+                                    InsertVirtualItemInSortedOrder(e.Item);
                                 }
                                 else
                                 {
@@ -2129,7 +2129,6 @@ namespace ExpControlsLib
         public bool CanGoUp => _currentFolderCsi?.Parent != null;
 
         #endregion
-
 
         private bool IsItemSelected(CShellItem item)
         {
@@ -4000,43 +3999,6 @@ namespace ExpControlsLib
             }
         }
 
-        private void SortVirtualItems(int column, SortOrder order)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: SortVirtualItems Begin");
-            try
-            {
-                if (order == SortOrder.None || _virtualItems.Count == 0) return;
-
-                var col = _listView.Columns[column];
-
-                _virtualItems.Sort((x, y) =>
-                {
-                    var xInfo = GetColumnData(x, col);
-                    var yInfo = GetColumnData(y, col);
-
-                    int result = 0;
-                    if (xInfo.Tag is IComparable compX && yInfo.Tag is IComparable compY && xInfo.Tag.GetType() == yInfo.Tag.GetType())
-                    {
-                        result = compX.CompareTo(compY);
-                    }
-                    else
-                    {
-                        result = string.Compare(xInfo.Text, yInfo.Text, StringComparison.OrdinalIgnoreCase);
-                    }
-
-                    return order == SortOrder.Descending ? -result : result;
-                });
-
-                RecreateIndexMapping();
-                _itemCache.Clear();
-                _listView.Invalidate();
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: SortVirtualItems End");
-            }
-        }
-
         private ListViewScrollHook _scrollHook;
         /// <summary>
         /// The _thumbnailTimer is a debounce timer used to implement Lazy Loading. Even though the actual thumbnail generation
@@ -4158,6 +4120,93 @@ namespace ExpControlsLib
                 //System.Diagnostics.Debug.WriteLine("ExpList: OnListViewScroll End");
             }
         }
+
+        #endregion
+
+
+        #region Hugelist stuff
+
+        /// <summary>
+        /// Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
+        /// Returns the index where the item should be inserted to maintain sorted order.
+        /// </summary>
+        /// <typeparam name="T">Type of items in the list</typeparam>
+        /// <param name="list">The sorted HugeList to search</param>
+        /// <param name="item">The item to find an insertion point for</param>
+        /// <returns>The index where the item should be inserted</returns>
+        public int FindInsertionPoint(CShellItem item)
+        {
+            LVColSorter? sorter = (LVColSorter?)_listView.ListViewItemSorter;
+
+            if (sorter is null || sorter.OrderOfSort == SortOrder.None)
+                return _virtualItems.Count; // if no sort, new items go at end
+
+            var column = sorter.SortColumn;
+            var order = sorter.OrderOfSort;
+            var colHeader = _listView.Columns[column];
+            var comparer = new CShellItemComparer(column, order, colHeader);
+            return FindInsertionPoint(item, comparer);
+        }
+
+        /// <summary>
+        /// Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
+        /// Returns the index where the item should be inserted to maintain sorted order.
+        /// </summary>
+        /// <typeparam name="T">Type of items in the list</typeparam>
+        /// <param name="list">The sorted HugeList to search</param>
+        /// <param name="item">The item to find an insertion point for</param>
+        /// <param name="comparer">The comparer to use for comparing items</param>
+        /// <returns>The index where the item should be inserted</returns>
+        public int FindInsertionPoint(CShellItem item, IComparer<CShellItem> comparer = null, IHugeList<CShellItem> list = null)
+        {
+            if (list == null)
+                list = this._virtualItems;
+
+            // Search the entire list
+            int result = list.BinarySearch(0, list.Count, item, comparer);
+
+            // If item is found, result will be the index of the item
+            // If item is not found, result will be negative and we need to bitwise complement it
+            // to get the insertion point
+            if (result < 0)
+            {
+                // Bitwise complement to get the insertion point
+                return ~result;
+            }
+            else
+            {
+                // Item was found, return the index where it was found
+                // This maintains consistency with typical insertion point behavior
+                return result;
+            }
+        }
+
+        private void SortVirtualItems(int column, SortOrder order)
+        {
+            System.Diagnostics.Debug.WriteLine("ExpList: SortVirtualItems Begin");
+            try
+            {
+                if (order == SortOrder.None || _virtualItems.Count == 0) return;
+
+                var col = _listView.Columns[column];
+                var comparer = new CShellItemComparer(column, order, col);
+
+                //_virtualItems.Sort(comparer);
+                var array = _virtualItems.ToArray();
+                array.Sort(comparer);
+                _virtualItems.Clear();
+                _virtualItems.AddRange(array);
+
+                RecreateIndexMapping();
+                _itemCache.Clear();
+                _listView.Invalidate();
+            }
+            finally
+            {
+                System.Diagnostics.Debug.WriteLine("ExpList: SortVirtualItems End");
+            }
+        }
+
 
         #endregion
 
