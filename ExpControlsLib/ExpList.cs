@@ -598,6 +598,8 @@ namespace ExpControlsLib
         /// </summary>
         public void RemoveAt(int index)
         {
+            if (index < 0 || index >= Count) return;
+
             System.Diagnostics.Debug.WriteLine("ExpList: RemoveAt Begin");
             try
             {
@@ -1385,7 +1387,7 @@ namespace ExpControlsLib
                     return;
                 }
 
-                var senderCsi = (CShellItem)sender;
+                var senderCsi = e.Item;
 
                 // For Created/Deleted/UpdateDir, sender is the Folder containing the item.
                 // For Updated/Renamed/IconChange, sender is the Item itself.
@@ -3400,7 +3402,11 @@ namespace ExpControlsLib
         {
             if (VirtualMode)
             {
-                return _pathToIndex[item.FullPath]; 
+                if (_pathToIndex.TryGetValue(item.FullPath, out int index))
+                {
+                    return index;
+                }
+                return -1;
             }
             else
             {

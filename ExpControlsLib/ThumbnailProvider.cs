@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
+using ImageMagick;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
@@ -178,19 +179,18 @@ namespace ExpControlsLib
                 Console.WriteLine("Attempting to generate thumbnail for: " + request.Item.DisplayName);
 #endif
 
-                thumbnail = (Bitmap?)GetThumbnailFromOS(request.Item.PIDL, request.Size);
+                using (var magickImage = GetMagickThumbnailFromOS(request.Item.PIDL, request.Size))
+                {
+                    if (magickImage != null)
+                    {
+                        // Store in cache as raw PArgb bytes to maintain compatibility with BytesToBitmap
+                        magickImage.Alpha(AlphaOption.Associate);
+                        byte[] bytes = magickImage.ToByteArray(MagickFormat.Bgra);
+                        _thumbnailCache.TryAdd(ConstructCacheKey(request.Item.FullPath, request.Size), bytes);
 
-                if (thumbnail != null)
-                {
-                    byte[] bytes = BitmapToBytes(thumbnail);
-                    _thumbnailCache.TryAdd(ConstructCacheKey(request.Item.FullPath, request.Size), bytes);
-                }
-                else
-                {
-#if DEBUG
-                    // No thumbnail available, return null to indicate fallback to icon
-                    Console.WriteLine("\tFailed to generate thumbnail");
-#endif
+                        // Final output stage: convert to Bitmap
+                        thumbnail = magickImage.ToBitmap();
+                    }
                 }
 
                 //send event back to the consumer.  Subscriber is responsible for disposing thumbnail.
@@ -201,23 +201,6 @@ namespace ExpControlsLib
                 System.Diagnostics.Debug.WriteLine($"Error generating thumbnail for {request.Item.FullPath}: {ex}");
                 thumbnail?.Dispose();
                 ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.Item, null, request.Size, request.Index));
-            }
-        }
-
-        private byte[] BitmapToBytes(Bitmap bmp)
-        {
-            int size = bmp.Width;
-            BitmapData data = bmp.LockBits(new Rectangle(0, 0, size, size), ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
-            try
-            {
-                int byteCount = data.Stride * size;
-                byte[] bytes = new byte[byteCount];
-                Marshal.Copy(data.Scan0, bytes, 0, byteCount);
-                return bytes;
-            }
-            finally
-            {
-                bmp.UnlockBits(data);
             }
         }
 
@@ -258,6 +241,34 @@ namespace ExpControlsLib
         /// </returns>
         public Image? GetThumbnailFromOS(string fileName, int size)
         {
+            using (var magickImage = GetMagickThumbnailFromOS(fileName, size))
+            {
+                return magickImage?.ToBitmap();
+            }
+        }
+
+
+        /// <summary>
+        /// Synchronously extracts a thumbnail for a shell item identified by an
+        /// absolute PIDL. This overload supports virtual (non-file-system) shell
+        /// items such as Control Panel entries or library roots.
+        /// </summary>
+        /// <param name="pidl">Absolute item identifier list (PIDL) of the shell item.</param>
+        /// <param name="size">Desired thumbnail size in pixels (square).</param>
+        /// <returns>
+        /// A <see cref="Bitmap"/> letterboxed to <paramref name="size"/> x
+        /// <paramref name="size"/>, or <c>null</c> if no image could be obtained.
+        /// </returns>
+        public Bitmap? GetThumbnailFromOS(IntPtr pidl, int size)
+        {
+            using (var magickImage = GetMagickThumbnailFromOS(pidl, size))
+            {
+                return magickImage?.ToBitmap();
+            }
+        }
+
+        private MagickImage? GetMagickThumbnailFromOS(string fileName, int size)
+        {
             if (string.IsNullOrWhiteSpace(fileName))
                 return null;
 
@@ -288,7 +299,7 @@ namespace ExpControlsLib
 
                 var factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(factoryPtr);
 
-                var result = GetThumbnailFromOsBase(factory, size);
+                var result = GetThumbnailFromOsBaseMagick(factory, size);
                 if (result == null)
                 {
                     Console.WriteLine("Failed to get thumbnail from OS for " + fileName);
@@ -305,19 +316,7 @@ namespace ExpControlsLib
             }
         }
 
-
-        /// <summary>
-        /// Synchronously extracts a thumbnail for a shell item identified by an
-        /// absolute PIDL. This overload supports virtual (non-file-system) shell
-        /// items such as Control Panel entries or library roots.
-        /// </summary>
-        /// <param name="pidl">Absolute item identifier list (PIDL) of the shell item.</param>
-        /// <param name="size">Desired thumbnail size in pixels (square).</param>
-        /// <returns>
-        /// A <see cref="Bitmap"/> letterboxed to <paramref name="size"/> x
-        /// <paramref name="size"/>, or <c>null</c> if no image could be obtained.
-        /// </returns>
-        public Bitmap? GetThumbnailFromOS(IntPtr pidl, int size)
+        private MagickImage? GetMagickThumbnailFromOS(IntPtr pidl, int size)
         {
             if (pidl == IntPtr.Zero) return null;
 
@@ -336,7 +335,7 @@ namespace ExpControlsLib
 
                 var factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(shellItemImageFactory);
 
-                var result = GetThumbnailFromOsBase(factory, size);
+                var result = GetThumbnailFromOsBaseMagick(factory, size);
                 if (result == null)
                 {
                     Console.WriteLine("Failed to get thumbnail from OS for " + fileName);
@@ -353,14 +352,13 @@ namespace ExpControlsLib
             }
         }
 
-        private static Bitmap GetThumbnailFromOsBase(IShellItemImageFactory factory, int size)
+        private static MagickImage? GetThumbnailFromOsBaseMagick(IShellItemImageFactory factory, int size)
         {
             int hr;
             IntPtr hbm = IntPtr.Zero;
 
             try
             {
-                //int flags = SIIGBF_ICONONLY | SIIGBF_THUMBNAILONLY; //SIIGBF_BIGGERSIZEOK - don't use SIIGBF_BIGGERSIZEOK you'll just get no thumbnail back;
                 uint flags = (uint)ShellAPI.SIIGBF.THUMBNAILONLY;
                 hr = factory.GetImage(new SIZE { cx = size, cy = size }, flags, out hbm);
 
@@ -370,16 +368,14 @@ namespace ExpControlsLib
                     hr = factory.GetImage(new SIZE { cx = size, cy = size }, flags, out hbm);
                     if (hr != 0 || hbm == IntPtr.Zero)
                     {
-                        Console.WriteLine("Failed to get image from shell item factory for");
+                        Console.WriteLine("Failed to get image from shell item factory");
                         return null;
                     }
                 }
 
-                using (var bmp = BitmapHelper.HBitmapToBitmapWithAlpha(hbm))
-                {
-                    if (bmp == null) return null;
-                    return ApplyLetterbox(bmp, size);
-                }
+                var image = BitmapHelper.HBitmapToMagickImage(hbm);
+                if (image == null) return null;
+                return ApplyLetterboxMagick(image, size);
             }
             finally 
             {
@@ -410,45 +406,19 @@ namespace ExpControlsLib
 
 
         /// <summary>
-        /// Scales and pads a source bitmap to fit within a square of the given size, preserving
-        /// aspect ratio, and centers it on a transparent background. The returned bitmap
-        /// is always exactly square of size size x size that is suitable for direct insertion into an 
-        /// ImageList.
+        /// Scales and pads a source image to fit within a square of the given size, preserving
+        /// aspect ratio, and centers it on a transparent background using ImageMagick.
         /// </summary>
-        private static Bitmap ApplyLetterbox(Image source, int size)
+        private static MagickImage ApplyLetterboxMagick(MagickImage source, int size)
         {
-            var destBmp = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            // Resize to fit inside the square while preserving aspect ratio
+            source.Resize(new MagickGeometry((uint)size, (uint)size) { IgnoreAspectRatio = false });
 
-            int srcW = source.Width;
-            int srcH = source.Height;
+            // Set background to transparent and extent to square size, centering the image
+            source.BackgroundColor = MagickColors.Transparent;
+            source.Extent((uint)size, (uint)size, Gravity.Center);
 
-            // If the shell already returned a square image at the requested size, just copy it and return.
-            if (srcW == size && srcH == size)
-            {
-                using (var graphic = Graphics.FromImage(destBmp))
-                {
-                    graphic.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
-                    graphic.DrawImage(source, 0, 0);
-                }
-                return destBmp;
-            }
-
-            float scale = Math.Min((float)size / srcW, (float)size / srcH);
-            int dstW = Math.Max(1, (int)Math.Round(srcW * scale));
-            int dstH = Math.Max(1, (int)Math.Round(srcH * scale));
-            int dstX = (size - dstW) / 2;
-            int dstY = (size - dstH) / 2;
-
-            using (var g = Graphics.FromImage(destBmp))
-            {
-                g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
-                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
-                g.DrawImage(source, new Rectangle(dstX, dstY, dstW, dstH));
-            }
-
-            return destBmp;
+            return source;
         }
 
         private void PruneActiveTasks(bool thorough = true)

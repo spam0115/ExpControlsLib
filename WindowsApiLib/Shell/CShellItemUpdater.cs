@@ -822,18 +822,28 @@ namespace WindowsApiLib.Shell
                         Debug.WriteLine("oldCsiDic size: " + oldCsiDic.Count());
                         Debug.WriteLine("newPidls size: " + newPidls.Count());
 #endif
+
+                        Dictionary<string, FileInfo> fileInfos = null;
+                        if (csi.IsFileSystem)
+                        {
+                            DirectoryInfo directoryInfo = new DirectoryInfo(csi.FullPath);
+
+                            // Get all files in the directory
+                            fileInfos = directoryInfo.GetFiles().ToDictionary(file => file.Name, file => file);
+                        }
+
                         for (int i = 0; i < newPidls.Count; i++)
                         {
                             IntPtr newPidl = newPidls[i];
                             if (newPidl == IntPtr.Zero) continue;
                             //uint hash = CPidl.HashPidlFastLastFull(newPidl);
 
-                            string newPidlText = CPidl.ToString(newPidl, false) ?? string.Empty;
-                            if (oldCsiDic.TryGetValue(newPidlText, out CShellItem? oldCsi))
+                            string newFileName = CPidl.ToString(newPidl, false) ?? string.Empty;
+                            if (oldCsiDic.TryGetValue(newFileName, out CShellItem? oldCsi))
                             {
                                 if (oldCsi is null)
                                 {
-                                    Debug.WriteLine("ERROR: oldCsiDic contained a null value for key '" + newPidlText + "'");
+                                    Debug.WriteLine("ERROR: oldCsiDic contained a null value for key '" + newFileName + "'");
                                     continue;
                                 }
                                 
@@ -844,12 +854,12 @@ namespace WindowsApiLib.Shell
                                         bool doupdate = false;
                                         if (csi.IsFileSystem)
                                         {
-                                            if (ShellHelper.TryGetLastWriteTimeForPidl(csi.Folder, newPidl, out FILETIME lastWriteTime))
+                                            if (fileInfos.TryGetValue(newFileName, out FileInfo fi))
                                             {
-                                                var newTime = ShellHelper.FileTimeToLong(lastWriteTime);
-                                                if (newTime > csi.LastWriteTime.ToFileTimeUtc())
+                                                if (fi.LastWriteTime > csi.LastWriteTime)
                                                     doupdate = true;
                                             }
+                                            else doupdate = true;
                                             //todo: maybe also do a date check for virtual items since people might be using their onedrives
                                         }
                                         else doupdate = true;
@@ -865,7 +875,7 @@ namespace WindowsApiLib.Shell
 
                                     Marshal.FreeCoTaskMem(newPidl);
                                     newPidls[i] = IntPtr.Zero; // Mark as processed
-                                    oldCsiDic.Remove(newPidlText);
+                                    oldCsiDic.Remove(newFileName);
 
                                     continue;
                                 }

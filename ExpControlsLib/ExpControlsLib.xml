@@ -4,6 +4,20 @@
         <name>ExpControlsLib</name>
     </assembly>
     <members>
+        <member name="T:ExpControlsLib.BitmapHelper">
+            <summary>
+            Converts an HBITMAP returned by the shell into a MagickImage
+            while preserving its 32-bit alpha channel.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.BitmapHelper.HBitmapToMagickImage(System.IntPtr)">
+            <summary>
+            Converts an HBITMAP returned by the shell into a MagickImage
+            while preserving its 32-bit alpha channel.
+            </summary>
+            <param name="hbm">Handle to the GDI bitmap to convert. Ownership is not transferred.</param>
+            <returns>A MagickImage, or <c>null</c> if the conversion fails.</returns>
+        </member>
         <member name="E:ExpControlsLib.CDragWrapper.DragStart">
             <summary>
             Event Raised when a Drag is started from the associated Control
@@ -700,7 +714,7 @@
         <member name="P:ExpControlsLib.ExpList.SelectedCShellItems">
             <summary>
             Gets an enumerable collection of selected CShellItems.
-            This is more efficient than using SelectedItems in virtual mode.
+            ListView.SelectedItems can't be used in virtual mode.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.GetItem(System.Int32)">
@@ -1818,6 +1832,16 @@
             <param name="size">Desired thumbnail size in pixels (e.g., 96, 256).</param>
             <param name="reqArgs">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
         </member>
+        <member name="M:ExpControlsLib.ThumbnailProvider.ClearCache">
+            <summary>
+            Clears the thumbnail cache
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ThumbnailProvider.Dispose">
+            <summary>
+            Cleans up resources
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ThumbnailProvider.GenerateThumbnail(ExpControlsLib.ThumbnailRequestArgs)">
             <summary>
             Worker routine that produces the thumbnail for a single
@@ -1872,22 +1896,10 @@
             <param name="thumbnail">When this method returns, contains the cached image if found; otherwise <c>null</c>.</param>
             <returns><c>true</c> if a cached thumbnail was found; otherwise <c>false</c>.</returns>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailProvider.ApplyLetterbox(System.Drawing.Image,System.Int32)">
+        <member name="M:ExpControlsLib.ThumbnailProvider.ApplyLetterboxMagick(ImageMagick.MagickImage,System.Int32)">
             <summary>
-            Scales and pads a source bitmap to fit within a square of the given size, preserving
-            aspect ratio, and centers it on a transparent background. The returned bitmap
-            is always exactly square of size size x size that is suitable for direct insertion into an 
-            ImageList.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ThumbnailProvider.ClearCache">
-            <summary>
-            Clears the thumbnail cache
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ThumbnailProvider.Dispose">
-            <summary>
-            Cleans up resources
+            Scales and pads a source image to fit within a square of the given size, preserving
+            aspect ratio, and centers it on a transparent background using ImageMagick.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ThumbnailReadyEventArgs">
