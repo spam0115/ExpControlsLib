@@ -552,7 +552,7 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Gets an enumerable collection of selected CShellItems.
-        /// This is more efficient than using SelectedItems in virtual mode.
+        /// ListView.SelectedItems can't be used in virtual mode.
         /// </summary>
         [Browsable(false)]
         public IEnumerable<CShellItem> SelectedCShellItems
@@ -3087,8 +3087,6 @@ namespace ExpControlsLib
                 else if (e.KeyCode == Keys.Delete)
                 {
                     WinMenu("delete");
-                    if (SelectedCount > 150)
-                        _shellController.ShellUpdater.SelectiveFolderUpdate(_currentFolderCsi);
                 }
 
                 OnKeyUp(e);
@@ -3155,6 +3153,7 @@ namespace ExpControlsLib
                 IntPtr lpVerbAnsi = IntPtr.Zero;
                 IntPtr lpVerbUni = IntPtr.Zero;
                 List<IntPtr>? pidls = null;
+                CShellItem[] selectedItems = Array.Empty<CShellItem>();
 
                 try
                 {
@@ -3207,7 +3206,15 @@ namespace ExpControlsLib
                                 return;
                             }
 
-                            var selectedItems = SelectedCShellItems.ToArray();
+                            if (VirtualMode)
+                            {
+                                selectedItems = SelectedCShellItems.ToArray(); //materialize selection to array for consistent processing
+                            }
+                            else
+                            {
+                                selectedItems = _listView?.SelectedItems?.Cast<ListViewItem>()?.Select(item => item.Tag as CShellItem)?.ToArray() ?? new CShellItem[0];
+                            }
+                            
                             pidls = new List<IntPtr>(selectedItems.Length);
 
                             for (int i = 0; i < selectedItems.Length; i++)
@@ -3317,12 +3324,26 @@ namespace ExpControlsLib
                         int topItemIndex = -1;
                         bool hasItems = _useVirtualMode ? _listView.VirtualListSize > 0 : _listView.Items.Count > 0;
                         if (cmd == "delete" && hasItems)
-                        { //prevent null references from invalid selections that were deleted
+                        { //prevent null references from invalid selections that are about to be deleted
                             topItemIndex = GetTopIndex();
                             _listView.SelectedIndices.Clear();
+                            if (!VirtualMode)
+                            {
+                                _listView.SelectedItems.Clear();
+                            }
                         }
                         // Execute the shell command
-                        int invokeHR = m_WindowsContextMenu.winMenu.InvokeCommand(cmi);
+                        int invokeHR = m_WindowsContextMenu.winMenu.InvokeCommand(cmi); //the important part
+
+                        if (cmd == "delete" && hasItems)
+                        {
+                            foreach (var item in selectedItems)
+                            {
+                                _shellController.HierachyManager.Remove(item);
+                                
+                                this.RemoveAt(GetIndex(item));
+                            }
+                        }
 
                         if (topItemIndex >= 0)
                         {
@@ -3372,6 +3393,18 @@ namespace ExpControlsLib
             finally
             {
                 System.Diagnostics.Debug.WriteLine("ExpList: WinMenu End");
+            }
+        }
+
+        private int GetIndex(CShellItem item)
+        {
+            if (VirtualMode)
+            {
+                return _pathToIndex[item.FullPath]; 
+            }
+            else
+            {
+                return item.LVItem?.Index ?? -1;
             }
         }
 

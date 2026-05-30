@@ -88,142 +88,6 @@ namespace WindowsApiLib.Shell
             Application.Run();
         }
 
-        public new void Dispose()
-        {
-            if (m_notifyId > 0)
-            {
-                SHChangeNotifyDeregister(m_notifyId);
-            }
-            if (Handle != IntPtr.Zero)
-            {
-                PostMessage(Handle, WindowsMessages.WM_DESTROY_THREAD_WINDOW, IntPtr.Zero, IntPtr.Zero);
-                if (_backgroundThread != null && _backgroundThread.IsAlive)
-                {
-                    _backgroundThread.Join(2000);
-                }
-            }
-            _initializedEvent.Dispose();
-            GC.SuppressFinalize(this);
-        }
-
-
-        #if DEBUG
-        private int counter;
-
-        private bool EventDump(string txtID, SHNOTIFYSTRUCT shNotify, CShItemUpdateEventArgs e, SHCNE msgID)
-        {
-            bool EventDumpRet = default;
-            EventDumpRet = false;
-            string id = " -- Counter = " + e.Tag + " ";
-            Debug.WriteLine(txtID + id + Enum.GetName(typeof(SHCNE), msgID));
-            CShellItem csi1, csi2;
-            var parent1 = default(CShellItem);
-            if (shNotify.dwItem1 != IntPtr.Zero)     // 5/26/2012
-            {
-                csi1 = HierachyManager.FindCShItem(shNotify.dwItem1);
-                if (csi1 is not null)
-                {
-                    // If csi1.Path.IndexOf("ntuser.dat", StringComparison.InvariantCultureIgnoreCase) > -1 Then  '6/6/2012 - No longer needed
-                    // Return True
-                    // End If
-                    parent1 = csi1.Parent;
-                    Debug.WriteLine(id + "dwItem1: " + " (" + shNotify.dwItem1.ToString() + ")" + csi1.ItemPath);
-                    // DumpPidl(shNotify.dwItem1)
-                    if (parent1 is not null)
-                    {
-                        Debug.WriteLine(id + "parent1: " + parent1.ItemPath);
-                    }
-                }
-                else
-                {
-                    Debug.WriteLine(id + "dwItem1: " + " (" + shNotify.dwItem1.ToString() + ")" + " Not Found");
-                    // DumpPidl(shNotify.dwItem1)
-                    if (parent1 is not null)
-                    {
-                        Debug.WriteLine(id + "parent1: " + parent1.ItemPath);
-                    }
-                }
-            }
-            else
-            {
-                Debug.WriteLine(id + "dwItem1: Is Empty");
-            }
-            if (shNotify.dwItem2 != IntPtr.Zero)     // 5/26/2012
-            {
-                csi2 = HierachyManager.FindCShItem(shNotify.dwItem2);    // 5/26/2012
-                if (csi2 is not null)
-                {
-                    Debug.WriteLine(id + "dwItem2: " + " (" + shNotify.dwItem2.ToString() + ")" + csi2.ItemPath);
-                }
-                else
-                {
-                    Debug.WriteLine(id + "dwItem2: " + " (" + shNotify.dwItem2.ToString() + ")" + " Not Found");
-                }
-            }
-            else
-            {
-                Debug.WriteLine(id + "dwItem2: Is Empty");
-            }
-
-            return EventDumpRet;
-
-        }
-#endif
-
-        private bool IsItemNotificationEvent(SHCNE lEvent)
-        {
-            return !(
-                (lEvent & (SHCNE.ASSOCCHANGED | SHCNE.EXTENDED_EVENT | SHCNE.FREESPACE | SHCNE.DRIVEADDGUI | SHCNE.SERVERDISCONNECT)) > 0
-                );
-        }
-
-        /// <summary>
-        /// Returns true if the given absolute PIDL belongs to (is a descendant of) the Recycle Bin,
-        /// or IS the Recycle Bin itself.
-        /// Compares only the first two PIDL segments (Desktop + Recycle Bin) using raw byte comparison
-        /// to avoid shell API calls (ILIsEqual/ILIsParent).
-        /// </summary>
-        private static unsafe bool IsInRecycleBin(IntPtr pidl)
-        {
-            if (pidl == IntPtr.Zero) return false;
-
-            var name = CPidl.ToString(pidl);
-
-            if (name.ToUpper().Contains("$RECYCLE.BIN")) return true;
-
-            var recycleBinPidl = CShellItemFactory.RecycleBin.PIDL;
-            if (recycleBinPidl == IntPtr.Zero) throw new Exception("The Recycle Bin PIDL has not been set up.");
-
-            if (name.Contains(CShellItemFactory.StrRecycleBin))
-                return true;
-            else return false;
-        }
-
-        /// <summary>
-        /// CShItemUpdater.WndProc processes WM.SH_NOTIFY messages requested by the SHChangeNotifyRegister 
-        /// API call in the CShItemUpdater constructor.
-        /// Messages are processed as follows:
-        /// 1.Folder/File Create or Delete: If Parent of Item is not in internal tree, ignore message. If
-        /// located, then add or remove the item from the internal tree, which raises an appropriate event to
-        /// notify interested controls.
-        /// 2.Folder/File Rename, Update, UpdateDir, MediaInserted, MediaRemoved: 
-        /// If Item itself is not in the internal tree, ignore message. 
-        /// If located, then call Item.Update for further processing. 
-        /// If appropriate, Item.Update will raise an appropriate event to notify
-        /// interested controls.
-        /// 
-        /// </summary>
-        /// <param name="m">A Windows Message</param>
-        /// <remarks>The use of SHGetRealIDL appears non-essential and wasteful. It is NOT.
-        /// SHGetRealIDL appears specifically designed for use in this situation, returning an 
-        /// Absolute real PIDL in CoTaskMemory. The pidls given in dwItem1 and dwItem2 are owned and
-        /// released by the Message Class. 
-        /// The entire shell messaging system in windows is retarded and lame.  You will get nonsense events
-        /// and events that didn't happen.  It will duplicate events.  It will drop events.  It will coalesce 
-        /// events.  It will send events under the wrong category.  It will send events in the wrong order.
-        /// It will send arguments that are incomplete.
-        /// 
-        /// </remarks>
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == WindowsMessages.WM_DESTROY_THREAD_WINDOW)
@@ -403,15 +267,8 @@ namespace WindowsApiLib.Shell
                                 Debug.WriteLine("  [UPDATEDIR] processing...");
                                 if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0)
                                 {
-                                    if (HierachyManager?.CurrentFolder != null)
-                                    {
-                                        Debug.WriteLine("  [UPDATEDIR] Recieved UPDATEDIR message with no location specified. Trying to update current folder: " + HierachyManager.CurrentFolder.ItemPath);
-                                        Update(HierachyManager.CurrentFolder, default, CShItemUpdateType.UpdateDir);
-                                    }
-                                    else
-                                    {
-                                        Debug.WriteLine("  [UPDATEDIR] No location and no CurrentFolder.");
-                                    }
+                                    Debug.WriteLine("  [UPDATEDIR] message with no location specified.");
+                                    return;
                                 }
                                 else if (CPidl.SegmentCount(shNotify.dwItem1) == 1)
                                 {
@@ -430,7 +287,7 @@ namespace WindowsApiLib.Shell
                                     var upCSI = HierachyManager.FindCShItem(shNotify.dwItem1);
                                     if (upCSI is not null)
                                     {
-                                        Debug.WriteLine("  [UPDATEDIR] Found item: " + upCSI.ItemPath + ". Updating dir.");
+                                        Debug.WriteLine("  [UPDATEDIR] Found item: " + upCSI.ItemPath + ".  Updating dir.");
                                         Update(upCSI, default, CShItemUpdateType.UpdateDir);
                                     }
                                     else
@@ -661,7 +518,6 @@ namespace WindowsApiLib.Shell
             base.WndProc(ref m);
         }
 
-
         //todo:move this into ShellController and CShellHierarchyManager
         /// <summary>For internal use only<br />
         /// Update is called by the CShItemUpdater Class when that Class receives a WM_Notify message. The purpose 
@@ -681,7 +537,7 @@ namespace WindowsApiLib.Shell
             {
                 case CShItemUpdateType.UpdateDir: // raised when content of a dir changes
                     {
-                        DoUpdateDir(csi);
+                        DoUpdateDir(csi); //todo: might want to keep track of possibly 'dirty' folders for UpdateDirs that come in with a blank pidl
                         break;
                     }
                 case CShItemUpdateType.Updated: // raised when Attributes (Item or Items under a Folder) change
@@ -698,77 +554,7 @@ namespace WindowsApiLib.Shell
                     }
                 case CShItemUpdateType.Renamed:      // Item has been renamed or moved
                     {
-                        IntPtr pidlRel = IntPtr.Zero, newIShellFolderPtr = IntPtr.Zero;
-                        var splitPidl = CPidl.Split(changedPidl);
-                        var oldParentCsi = csi.Parent;    // Save in case "renamed" to a new directory
-                        var allegedParentCsi = ShellController.Instance.HierachyManager.FindCShItem(splitPidl.ParentPidl);
-
-                        try
-                        {
-                            if (allegedParentCsi is null) // moved to a dir that is not yet in internal tree
-                            {
-                                csi.Parent.RemoveItem(csi);
-                                csi.m_Parent = null;
-                                csi.m_Pidl = changedPidl;
-                                //todo: shouldn't we add the newParentCsi to the tree at this point?
-                            }
-                            else if (SHGetRealIDL(allegedParentCsi.Folder, splitPidl.ChildPidl, out pidlRel) == S_OK) // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
-                            {
-                                Marshal.FreeCoTaskMem(csi.m_Pidl);
-                                csi.m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, pidlRel);  //Must do this!  newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID //don't do this: m_Pidl = changedPidl;
-
-                                if (ReferenceEquals(allegedParentCsi, csi.Parent)) //renamed
-                                {
-                                    csi.ResetInfo();         // Added for fix to the fix
-                                    csi.m_Path = CShellItemFactory.GetFullPath(csi); ;
-                                    RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, changeType));
-                                }
-                                else // item was moved, not renamed
-                                {
-                                    csi.Parent.RemoveItem(csi);
-                                    allegedParentCsi.AddItem(csi);
-
-                                    csi.m_Parent = allegedParentCsi;
-
-                                    csi.ResetInfo();
-                                    csi.m_Path = CShellItemFactory.GetFullPath(csi);
-
-                                    if (csi.IsFolder) //update children for folders
-                                    {
-                                        if (allegedParentCsi.Folder.BindToObject(pidlRel, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref newIShellFolderPtr) != S_OK) //get new ishellfolder interface object
-                                        {
-                                            Marshal.Release(newIShellFolderPtr);
-                                            return;
-                                        }
-                                        csi.m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newIShellFolderPtr, typeof(IShellFolder));
-                                        Marshal.Release(newIShellFolderPtr);
-
-                                        if (csi.m_Files is not null)
-                                        {
-                                            foreach (CShellItem item in csi.m_Files)
-                                                item.UpdateFolderPidlAndPath(); //update child paths
-                                        }
-                                        if (csi.m_Directories is not null)
-                                        {
-                                            foreach (CShellItem item in csi.m_Directories)
-                                                item.UpdateFolderPidlAndPath(); //update child paths
-                                        }
-                                    }
-                                    RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, changeType)); //tell both old and new locations about the change
-                                    RaiseUpdateEvent(allegedParentCsi, new ShellItemUpdateEventArgs(csi, changeType));
-                                }
-                            }
-                        }
-                        finally
-                        {
-                            // Note: FreeCoTaskMem will ignore IntPtr.Zero
-                            if (pidlRel != IntPtr.Zero)
-                            {
-                                Marshal.FreeCoTaskMem(pidlRel);
-                            }
-                            Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
-                            Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
-                        }
+                        bool flowControl = DoRenameOrMove(csi, changedPidl, changeType);
                         break;
                     }
                 case CShItemUpdateType.IconChange:
@@ -776,7 +562,7 @@ namespace WindowsApiLib.Shell
                         // Debug.WriteLine("IconChange for " & Me.Path)
                         csi.ResetInfo();
                         RaiseUpdateEvent(csi.Parent, new ShellItemUpdateEventArgs(csi, changeType));
-                        //todo: update thumbnail for item
+                        
                         break;
                     }
                 case CShItemUpdateType.MediaChange:          // CD/DVD/External Drive/Etc Added or Removed
@@ -789,6 +575,102 @@ namespace WindowsApiLib.Shell
                         break;
                     }
             }
+        }
+
+        /// <summary>
+        /// Windows has this weird thing where a rename event can be either a rename or a move.  
+        /// In the case of a move, the item is removed from the old location and added to the new location.  
+        /// In the case of a rename, the item stays in the same location but changes name.  
+        /// The PIDL passed to us in a rename event is the new PIDL, which is not necessarily the same as the old PIDL.  
+        /// This function determines whether this is a move or a rename and updates the internal cache accordingly.  
+        /// It also raises appropriate events to notify clients of changes.
+        /// </summary>
+        /// <param name="csi"></param>
+        /// <param name="changedPidl"></param>
+        /// <param name="changeType"></param>
+        /// <returns>True for rename, false for move</returns>
+        private static bool DoRenameOrMove(CShellItem csi, nint changedPidl, CShItemUpdateType changeType)
+        {
+            IntPtr pidlRel = IntPtr.Zero, newIShellFolderPtr = IntPtr.Zero;
+            var splitPidl = CPidl.Split(changedPidl);
+            var oldParentCsi = csi.Parent;    // Save in case "renamed" to a new directory
+            var allegedParentCsi = ShellController.Instance.HierachyManager.FindCShItem(splitPidl.ParentPidl);
+
+            try
+            {
+                if (allegedParentCsi is null) // moved to a dir that is not yet in internal tree
+                {
+                    csi.Parent.RemoveItem(csi);
+                    csi.m_Parent = null;
+                    csi.m_Pidl = changedPidl;
+                    return false;
+                    //todo: shouldn't we add the newParentCsi to the tree at this point?
+                }
+                else if (SHGetRealIDL(allegedParentCsi.Folder, splitPidl.ChildPidl, out pidlRel) == S_OK) // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
+                {
+                    Marshal.FreeCoTaskMem(csi.m_Pidl);
+                    csi.m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, pidlRel);  //Must do this!  newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID //don't do this: m_Pidl = changedPidl;
+
+                    if (ReferenceEquals(allegedParentCsi, csi.Parent)) //renamed
+                    {
+                        csi.ResetInfo();         // Added for fix to the fix
+                        csi.m_Path = CShellItemFactory.GetFullPath(csi); ;
+                        RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, changeType));
+                        return true;
+                    }
+                    else // item was moved, not renamed
+                    {
+                        csi.Parent.RemoveItem(csi);
+                        allegedParentCsi.AddItem(csi);
+
+                        csi.m_Parent = allegedParentCsi;
+
+                        csi.ResetInfo();
+                        csi.m_Path = CShellItemFactory.GetFullPath(csi);
+
+                        if (csi.IsFolder) //update children for folders
+                        {
+                            if (allegedParentCsi.Folder.BindToObject(pidlRel, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref newIShellFolderPtr) != S_OK) //get new ishellfolder interface object
+                            {
+                                Marshal.Release(newIShellFolderPtr);
+                                return false;
+                            }
+                            csi.m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newIShellFolderPtr, typeof(IShellFolder));
+                            Marshal.Release(newIShellFolderPtr);
+
+                            if (csi.m_Files is not null)
+                            {
+                                foreach (CShellItem item in csi.m_Files)
+                                    item.UpdateFolderPidlAndPath(); //update child paths
+                            }
+                            if (csi.m_Directories is not null)
+                            {
+                                foreach (CShellItem item in csi.m_Directories)
+                                    item.UpdateFolderPidlAndPath(); //update child paths
+                            }
+                        }
+                        RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, changeType)); //tell both old and new locations about the change
+                        RaiseUpdateEvent(allegedParentCsi, new ShellItemUpdateEventArgs(csi, changeType));
+                        
+                        return false;
+                    }
+                }
+                else
+                {
+                    throw new Exception("Unhandaled condition in DoRenameOrMove");
+                }
+            }
+            finally
+            {
+                // Note: FreeCoTaskMem will ignore IntPtr.Zero
+                if (pidlRel != IntPtr.Zero)
+                {
+                    Marshal.FreeCoTaskMem(pidlRel);
+                }
+                Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
+                Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
+            }
+
         }
 
         private void DoUpdateDir(CShellItem CSI)
@@ -1052,6 +934,144 @@ namespace WindowsApiLib.Shell
             RaiseUpdateEvent(sender, e);
         }
 
+        private bool IsItemNotificationEvent(SHCNE lEvent)
+        {
+            return !(
+                (lEvent & (SHCNE.ASSOCCHANGED | SHCNE.EXTENDED_EVENT | SHCNE.FREESPACE | SHCNE.DRIVEADDGUI | SHCNE.SERVERDISCONNECT)) > 0
+                );
+        }
+
+        /// <summary>
+        /// Returns true if the given absolute PIDL belongs to (is a descendant of) the Recycle Bin,
+        /// or IS the Recycle Bin itself.
+        /// Compares only the first two PIDL segments (Desktop + Recycle Bin) using raw byte comparison
+        /// to avoid shell API calls (ILIsEqual/ILIsParent).
+        /// </summary>
+        private static unsafe bool IsInRecycleBin(IntPtr pidl)
+        {
+            if (pidl == IntPtr.Zero) return false;
+
+            var name = CPidl.ToString(pidl);
+
+            if (name.ToUpper().Contains("$RECYCLE.BIN")) return true;
+
+            var recycleBinPidl = CShellItemFactory.RecycleBin.PIDL;
+            if (recycleBinPidl == IntPtr.Zero) throw new Exception("The Recycle Bin PIDL has not been set up.");
+
+            if (name.Contains(CShellItemFactory.StrRecycleBin))
+                return true;
+            else return false;
+        }
+
+        /// <summary>
+        /// CShItemUpdater.WndProc processes WM.SH_NOTIFY messages requested by the SHChangeNotifyRegister 
+        /// API call in the CShItemUpdater constructor.
+        /// Messages are processed as follows:
+        /// 1.Folder/File Create or Delete: If Parent of Item is not in internal tree, ignore message. If
+        /// located, then add or remove the item from the internal tree, which raises an appropriate event to
+        /// notify interested controls.
+        /// 2.Folder/File Rename, Update, UpdateDir, MediaInserted, MediaRemoved: 
+        /// If Item itself is not in the internal tree, ignore message. 
+        /// If located, then call Item.Update for further processing. 
+        /// If appropriate, Item.Update will raise an appropriate event to notify
+        /// interested controls.
+        /// 
+        /// </summary>
+        /// <param name="m">A Windows Message</param>
+        /// <remarks>The use of SHGetRealIDL appears non-essential and wasteful. It is NOT.
+        /// SHGetRealIDL appears specifically designed for use in this situation, returning an 
+        /// Absolute real PIDL in CoTaskMemory. The pidls given in dwItem1 and dwItem2 are owned and
+        /// released by the Message Class. 
+        /// The entire shell messaging system in windows is retarded and lame.  You will get nonsense events
+        /// and events that didn't happen.  It will duplicate events.  It will drop events.  It will coalesce 
+        /// events.  It will send events under the wrong category.  It will send events in the wrong order.
+        /// It will send arguments that are incomplete.
+        /// 
+        /// </remarks>
+
+
+        public new void Dispose()
+        {
+            if (m_notifyId > 0)
+            {
+                SHChangeNotifyDeregister(m_notifyId);
+            }
+            if (Handle != IntPtr.Zero)
+            {
+                PostMessage(Handle, WindowsMessages.WM_DESTROY_THREAD_WINDOW, IntPtr.Zero, IntPtr.Zero);
+                if (_backgroundThread != null && _backgroundThread.IsAlive)
+                {
+                    _backgroundThread.Join(2000);
+                }
+            }
+            _initializedEvent.Dispose();
+            GC.SuppressFinalize(this);
+        }
+
+
+#if DEBUG
+        private int counter;
+
+        private bool EventDump(string txtID, SHNOTIFYSTRUCT shNotify, CShItemUpdateEventArgs e, SHCNE msgID)
+        {
+            bool EventDumpRet = default;
+            EventDumpRet = false;
+            string id = " -- Counter = " + e.Tag + " ";
+            Debug.WriteLine(txtID + id + Enum.GetName(typeof(SHCNE), msgID));
+            CShellItem csi1, csi2;
+            var parent1 = default(CShellItem);
+            if (shNotify.dwItem1 != IntPtr.Zero)     // 5/26/2012
+            {
+                csi1 = HierachyManager.FindCShItem(shNotify.dwItem1);
+                if (csi1 is not null)
+                {
+                    // If csi1.Path.IndexOf("ntuser.dat", StringComparison.InvariantCultureIgnoreCase) > -1 Then  '6/6/2012 - No longer needed
+                    // Return True
+                    // End If
+                    parent1 = csi1.Parent;
+                    Debug.WriteLine(id + "dwItem1: " + " (" + shNotify.dwItem1.ToString() + ")" + csi1.ItemPath);
+                    // DumpPidl(shNotify.dwItem1)
+                    if (parent1 is not null)
+                    {
+                        Debug.WriteLine(id + "parent1: " + parent1.ItemPath);
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine(id + "dwItem1: " + " (" + shNotify.dwItem1.ToString() + ")" + " Not Found");
+                    // DumpPidl(shNotify.dwItem1)
+                    if (parent1 is not null)
+                    {
+                        Debug.WriteLine(id + "parent1: " + parent1.ItemPath);
+                    }
+                }
+            }
+            else
+            {
+                Debug.WriteLine(id + "dwItem1: Is Empty");
+            }
+            if (shNotify.dwItem2 != IntPtr.Zero)     // 5/26/2012
+            {
+                csi2 = HierachyManager.FindCShItem(shNotify.dwItem2);    // 5/26/2012
+                if (csi2 is not null)
+                {
+                    Debug.WriteLine(id + "dwItem2: " + " (" + shNotify.dwItem2.ToString() + ")" + csi2.ItemPath);
+                }
+                else
+                {
+                    Debug.WriteLine(id + "dwItem2: " + " (" + shNotify.dwItem2.ToString() + ")" + " Not Found");
+                }
+            }
+            else
+            {
+                Debug.WriteLine(id + "dwItem2: Is Empty");
+            }
+
+            return EventDumpRet;
+
+        }
+#endif
+
     }
 
 #if DEBUG
@@ -1100,6 +1120,8 @@ namespace WindowsApiLib.Shell
         }
     }
 #endif
+
+
 
     /// <summary>
     /// CShItemUpdateType is an Enum of the various types of change that will be reported in a ShellItemUpdateEventArgs.

@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.Design;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using WindowsApiLib;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 
 
 namespace WindowsApiLib.Shell
@@ -27,13 +29,11 @@ namespace WindowsApiLib.Shell
                 return CPidl.ToString(CurrentFolder.PIDL);
             } }
 
-
         public CShellItemHierachyManager(CShellItem? root = null) {
             this.Root = root;
 
             //todo: move the item hierarchy code from cshellitem to over here.
         }
-
 
         /// <summary>
         /// FindCShItem attempts to locate a CShellItem in the internal tree. It will NOT expand the Tree during the
@@ -126,7 +126,6 @@ namespace WindowsApiLib.Shell
             Marshal.FreeCoTaskMem(thisPidl);
             return FindCShItemRet;
         }
-
 
         public CShellItem Add(CShellItem csi)
         {
@@ -248,6 +247,7 @@ namespace WindowsApiLib.Shell
         {
             return IsAncestorOf(ancestor.PIDL, current.PIDL, fParent);
         }
+
         /// <summary> Compares a candidate Ancestor PIDL with a Child PIDL and
         /// returns True if Ancestor is an ancestor of the child.
         /// if fParent is True, then only return True if Ancestor is the immediate
@@ -264,9 +264,65 @@ namespace WindowsApiLib.Shell
             return ShellAPI.ILIsParent(AncestorPidl, ChildPidl, fParent);
         }
 
-        internal void Remove(CShellItem newItem)
+
+        /// <summary>
+        /// Removes an item from the hierarchy if it is found.
+        /// </summary>
+        /// <param name="item"></param>
+        /// <returns></returns>
+        public bool Remove(CShellItem item)
         {
-            throw new NotImplementedException();
+            CShellItem target = null;
+
+            lock (this.Lock)
+            {
+                try
+                {
+                    target = FindCShItem(item.PIDL);
+                    if (target == null) return false;
+
+                    if (target.IsFolder)
+                    {
+                        if (target.FilesInitialized)
+                        {
+                            foreach (var child in target.m_Files)
+                            {
+                                child.m_Parent = null;
+                            }
+
+                            target.m_Files.Clear();
+                        }
+                        if (target.FoldersInitialized)
+                        {
+                            foreach (var child in target.m_Files)
+                            {
+                                child.m_Parent = null;
+                            }
+
+                            target.m_Directories.Clear(); //should we recursively unlink items?
+                        }
+
+                        target.Parent.m_Directories.Remove(target);
+                    }
+                    else
+                    {
+                        target.Parent.m_Files.Remove(target);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("Error in CShellItemHierarchyManager.RemoveItem: " + ex.ToString());
+                }
+            }
+
+            if (target != null)
+            {
+                CShellItemUpdater.InvokeEvent(this, new ShellItemUpdateEventArgs(target, CShItemUpdateType.Deleted));
+            }
+
+            return true;
         }
     }
+
+
 }

@@ -1355,7 +1355,10 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-       /// </summary>
+        /// 
+        /// </summary>
+        /// <param name="item"></param>
+        /// <returns></returns>
         internal bool RemoveItem(CShellItem item)
         {
             bool changed = false;
