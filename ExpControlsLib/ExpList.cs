@@ -96,7 +96,7 @@ namespace ExpControlsLib
 
         private ShellController? _shellController = null;
 
-        private VirtualListViewWrapper _virtualListView;
+        private VirtualListViewWrapper _listViewWrapper;
         private bool _useVirtualMode;
         TreeLib.HugeList<CShellItem> _virtualItems = new();
         private Dictionary<int, ListViewItem> _itemCache = new();
@@ -698,7 +698,7 @@ namespace ExpControlsLib
                 _listView.SelectedIndexChanged += ExpFileList_SelectedIndexChanged;
                 _listView.ItemSelectionChanged += ExpFileList_ItemSelectionChanged;
 
-                _virtualListView = new VirtualListViewWrapper(_listView);
+                _listViewWrapper = new VirtualListViewWrapper(_listView);
             }
             finally
             {
