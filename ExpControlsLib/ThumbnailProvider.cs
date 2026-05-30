@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -46,7 +47,7 @@ namespace ExpControlsLib
         /// <summary>Cancellation source used to stop the background processor on dispose.</summary>
         private CancellationTokenSource _cancellationTokenSource;
         private CancellationToken _cancellationToken;
-        private List<Task> _activeTasks = new(); //strictly speaking, we don't really need this but just in case //todo: change this to a queue or linked list
+        private LinkedList<Task> _activeTasks = new(); //strictly speaking, we don't really need this but just in case
 
         private int _maxThreads = 1;  /// <summary>Maximum number of thumbnails generated concurrently</summary>
 
@@ -97,6 +98,12 @@ namespace ExpControlsLib
         /// <param name="reqArgs">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
         public void EnqueueThumbnailRequest(int size, ThumbnailRequestArgs reqArgs)
         {
+            if (ThumbnailReady == null)
+            {
+                Debug.WriteLine("No subscribers for ThumbnailReady event; skipping thumbnail generation.");
+                return;
+            }
+
             var csi = reqArgs.Item;
 
             if (csi is null && string.IsNullOrWhiteSpace(reqArgs.FilePath)) return;
@@ -117,14 +124,20 @@ namespace ExpControlsLib
 
             var task = _requestQueueRunner.InvokeAsync(_cancellationToken => { 
                 if (_cancellationToken.IsCancellationRequested) return; 
-                GenerateThumbnail(reqArgs); }
+                GenerateThumbnailAndNotify(reqArgs); }
                 , _cancellationToken);
 
-            _activeTasks.Add(task);
-
-            PruneActiveTasks(false); //don't need to thouroughly here
+            lock (_activeTasks)
+            {
+                _activeTasks.AddLast(task);
+            }
+            PruneActiveTasks(false); //don't need to be thouroughl here
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <remarks>After cancellation, already-running tasks may still finish and create bitmaps which may not have gdi resources released correctly.</remarks>
         public void CancelAllPendingOperations() { 
             _cancellationTokenSource.Cancel();
 
@@ -153,7 +166,6 @@ namespace ExpControlsLib
 
             ClearCache();
 
-            PruneActiveTasks();
             _activeTasks.Clear();
 
             _cancellationTokenSource?.Dispose();
@@ -170,14 +182,14 @@ namespace ExpControlsLib
         /// so consumers can fall back to an icon.
         /// </summary>
         /// <param name="request">The request to process.</param>
-        private void GenerateThumbnail(ThumbnailRequestArgs request)
+        private void GenerateThumbnailAndNotify(ThumbnailRequestArgs request)
         {
             Bitmap? thumbnail = null;
             try
             {
-#if DEBUG
-                Console.WriteLine("Attempting to generate thumbnail for: " + request.Item.DisplayName);
-#endif
+                Debug.WriteLine("Attempting to generate thumbnail for: " + request.Item.DisplayName);
+
+                if (ThumbnailReady == null) return;
 
                 using (var magickImage = GetMagickThumbnailFromOS(request.Item.PIDL, request.Size))
                 {
@@ -195,12 +207,11 @@ namespace ExpControlsLib
 
                 //send event back to the consumer.  Subscriber is responsible for disposing thumbnail.
                 ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.Item, thumbnail, request.Size, request.Index));
+                thumbnail = null; // ownership transferred to subscriber
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error generating thumbnail for {request.Item.FullPath}: {ex}");
-                thumbnail?.Dispose();
-                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.Item, null, request.Size, request.Index));
             }
         }
 
@@ -284,7 +295,7 @@ namespace ExpControlsLib
             }
 
             IntPtr factoryPtr = IntPtr.Zero;
-
+            IShellItemImageFactory factory = null;
             try
             {
 #if DEBUG
@@ -297,7 +308,7 @@ namespace ExpControlsLib
                 if (hr != 0 || factoryPtr == IntPtr.Zero)
                     return null;
 
-                var factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(factoryPtr);
+                factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(factoryPtr);
 
                 var result = GetThumbnailFromOsBaseMagick(factory, size);
                 if (result == null)
@@ -313,6 +324,7 @@ namespace ExpControlsLib
             finally
             {
                 if (factoryPtr != IntPtr.Zero) Marshal.Release(factoryPtr);
+                if (factory != null) Marshal.ReleaseComObject(factory);
             }
         }
 
@@ -421,20 +433,33 @@ namespace ExpControlsLib
             return source;
         }
 
+        /// <summary>
+        /// Prunes active tasks.  
+        /// If thorough is false, it will just immediately return as soon as it finds 1 still active task.
+        /// </summary>
+        /// <param name="thorough"></param>
         private void PruneActiveTasks(bool thorough = true)
         {
-            for (int i = 0; i < _activeTasks.Count;)
+            lock (_activeTasks)
             {
-                var t = _activeTasks[i];
-                if (t.IsCompleted || t.IsCanceled)
+                var currentNode = _activeTasks.First;
+
+                while (currentNode != null)
                 {
-                    _activeTasks.Remove(t);
+                    var nextNode = currentNode.Next; // Cache the next node
+                    var task = currentNode.Value;
+
+                    if (task.IsCompleted || task.IsCanceled)
+                    {
+                        _activeTasks.Remove(currentNode);
+                    }
+                    else if (!thorough)
+                    {
+                        break; // Early exit for non-thorough pruning
+                    }
+
+                    currentNode = nextNode;
                 }
-                else if (thorough == false) //sometimes, we don't want to thoroughly prune.  A rough prune is good enough because it will soon be pruned again
-                {
-                    return;
-                }
-                else i++;
             }
         }
 

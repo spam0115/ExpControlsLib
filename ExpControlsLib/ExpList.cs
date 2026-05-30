@@ -282,7 +282,8 @@ namespace ExpControlsLib
          DefaultValue(View.Details)]
         public ListViewDisplayMode DisplayMode
         {
-            get; set
+            get; 
+            set
             {
                 if (field == value) return;
                 if (value <= ListViewDisplayMode.Tile) // View values native to the ListView control 
@@ -291,7 +292,7 @@ namespace ExpControlsLib
                 }
                 else
                 {
-                    _listView.View = View.LargeIcon; //XP kludge for thumbnail mode
+                    _listView.View = View.LargeIcon; //XP era kludge for thumbnail mode
                 }
                 field = value;
 
@@ -669,7 +670,7 @@ namespace ExpControlsLib
 
                 // Initialize thumbnail timer for lazy loading
                 _scrollDebounceTimer = new System.Windows.Forms.Timer();
-                _scrollDebounceTimer.Interval = 200;
+                _scrollDebounceTimer.Interval = 100;
                 _scrollDebounceTimer.Tick += (s, e) =>
                 {
                     _scrollDebounceTimer.Stop();
@@ -681,7 +682,7 @@ namespace ExpControlsLib
                 VisibleChanged += ExpList_VisibleChanged;
 
                 _listView.HandleCreated += ExpFileList_HandleCreated;
-                _listView.Resize += (s, e) => OnListViewScroll();
+                _listView.Resize += (s, e) => OnScroll();
                 _listView.Click += ExpFileList_Click;
                 _listView.DoubleClick += ExpFileList_DoubleClick;
                 _listView.BeforeLabelEdit += ExpFileList_BeforeLabelEdit;
@@ -741,7 +742,7 @@ namespace ExpControlsLib
                         SortVirtualItems(sorter.SortColumn, sorter.OrderOfSort);
                     }
                     SortOrderChanged?.Invoke(this, EventArgs.Empty);
-                    OnListViewScroll();
+                    OnScroll();
                 };
                 _listView.ListViewItemSorter = sorter;
 
@@ -767,7 +768,7 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_HandleCreated Begin");
             try
             {
-                _scrollHook = new ListViewScrollHook(this, OnListViewScroll);
+                _scrollHook = new ListViewScrollHook(this, OnScroll);
             }
             finally
             {
@@ -986,7 +987,7 @@ namespace ExpControlsLib
                     }
                 }
 
-                OnListViewScroll(); //this lazy loads the visible icons/thumbnails and is called here to ensure they are loaded on initial display
+                OnScroll(); //this lazy loads the visible icons/thumbnails and is called here to ensure they are loaded on initial display
 
                 if (!samePath) ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
             }
@@ -3345,6 +3346,8 @@ namespace ExpControlsLib
                                 
                                 this.RemoveAt(GetIndex(item));
                             }
+                            if (selectedItems.Length > this.GetApproxVisibleCount())
+                                OnScroll();
                         }
 
                         if (topItemIndex >= 0)
@@ -4175,7 +4178,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void OnListViewScroll()
+        private void OnScroll()
         {
             System.Diagnostics.Debug.WriteLine("ExpList: OnListViewScroll Begin");
             if (_isShuttingDown) return;

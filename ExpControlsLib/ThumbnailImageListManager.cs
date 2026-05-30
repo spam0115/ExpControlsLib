@@ -26,7 +26,7 @@ namespace ExpControlsLib
         
         private readonly HashedLinkedList<string> _lruKeys = new();
         private readonly System.Collections.Generic.Dictionary<string, ThumbnailSlot> _slotByKey = new();
-        private const int MaxThumbnails = 5000;
+        private const int MaxThumbnails = 3000;
 
         private bool _addingImage = false;
         private readonly System.Collections.Generic.HashSet<ImageList> _corruptImageLists = new System.Collections.Generic.HashSet<ImageList>();
@@ -240,6 +240,12 @@ namespace ExpControlsLib
                 return;
             }
 
+            if (reqArgs.Item.Parent.FullPath != _expList.CurrentPath)
+            {
+                square?.Dispose();
+                return; //orphaned background tasks from before a patch change happened
+            }
+
             ImageList imageList = null;
             try
             {
@@ -250,7 +256,7 @@ namespace ExpControlsLib
                 string key = CreateKey(reqArgs.Item.FullPath, reqArgs.Size);
                 int index = -1;
 
-                if (_slotByKey.TryGetValue(key, out var existingSlot))
+                if (_slotByKey.TryGetValue(key, out var existingSlot)) //replace existing thumbnail
                 {
                     index = existingSlot.Index;
                     _lruKeys.Remove(key);
@@ -261,10 +267,11 @@ namespace ExpControlsLib
                     finally
                     {
                         square?.Dispose();
+                        square = null;
                         _addingImage = false;
                     }
                 }
-                else
+                else //new thumbnail
                 {
                     bool reused = false;
                     if (_lruKeys.Count >= MaxThumbnails)
