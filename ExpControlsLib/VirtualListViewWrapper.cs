@@ -478,7 +478,7 @@ namespace ExpControlsLib
                     Debug.WriteLine("Failed to create listview item");
 
                     var si = new ListViewItem.ListViewSubItem();
-                    si.Text = "error";
+                    si.Text = string.Empty;
                     si.Tag = null;
                     lvi.SubItems.Add(si); // Placeholder for subitems, UpdateItemCallback should fill these in
                 }
