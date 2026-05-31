@@ -1217,30 +1217,6 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// 
-        /// </summary>
-        /// <remarks>This is really inefficient because it re-sorts the entire list on every insert.
-        /// May need to fix this by doing a manual binary search to find the correct insertion point and only 
-        /// re-sorting when necessary (e.g. if the new item is out of order with respect to its neighbors).
-        /// </remarks>
-        /// <param name="item"></param>
-        //private void InsertVirtualItemInSortedOrder(CShellItem item)
-        //{
-        //    System.Diagnostics.Debug.WriteLine("ExpList: InsertVirtualItem Begin");
-        //    try
-        //    {
-        //        var index = this.FindInsertionPoint(item);
-
-        //        _virtualItems.Insert(index, item);
-        //        _listView.VirtualListSize = _virtualItems.Count;
-        //    }
-        //    finally
-        //    {
-        //        //System.Diagnostics.Debug.WriteLine("ExpList: InsertVirtualItem End");
-        //    }
-        //}
-
-        /// <summary>
         /// Performs the actual update of list view items in response to shell changes.
         /// Handles creation, deletion, renaming, and other updates of files and folders.
         /// </summary>
@@ -1559,6 +1535,32 @@ namespace ExpControlsLib
         //    }
         //}
 
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <remarks>This is really inefficient because it re-sorts the entire list on every insert.
+        /// May need to fix this by doing a manual binary search to find the correct insertion point and only 
+        /// re-sorting when necessary (e.g. if the new item is out of order with respect to its neighbors).
+        /// </remarks>
+        /// <param name="item"></param>
+        //private void InsertVirtualItemInSortedOrder(CShellItem item)
+        //{
+        //    System.Diagnostics.Debug.WriteLine("ExpList: InsertVirtualItem Begin");
+        //    try
+        //    {
+        //        var index = this.FindInsertionPoint(item);
+
+        //        _virtualItems.Insert(index, item);
+        //        _listView.VirtualListSize = _virtualItems.Count;
+        //    }
+        //    finally
+        //    {
+        //        //System.Diagnostics.Debug.WriteLine("ExpList: InsertVirtualItem End");
+        //    }
+        //}
+
+
         /// <summary>
         /// Refreshes the display of a single item whose underlying filesystem data has changed.
         /// </summary>
@@ -1746,6 +1748,7 @@ namespace ExpControlsLib
                 //System.Diagnostics.Debug.WriteLine("ExpList: GetColumnData End");
             }
         }
+
 
         /// <summary>
         /// Refresh by display name string.  This is very inefficient.  Avoid this function.
@@ -3242,7 +3245,6 @@ namespace ExpControlsLib
                 //System.Diagnostics.Debug.WriteLine("ExpList: FindItemByPath End");
             }
         }
-
 
         private const int LVM_GETNEXTITEM = LVM_FIRST + 12;
         private const int LVM_GETITEMRECT = LVM_FIRST + 14;

@@ -1,13 +1,15 @@
+using C5;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
-using C5;
 using WindowsApiLib.Shell;
 using static System.Windows.Forms.ListView;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
+using static WindowsApiLib.Shell.ShellAPI;
 
 namespace ExpControlsLib
 {
@@ -238,6 +240,8 @@ namespace ExpControlsLib
         /// <param name="square"></param>
         private void ApplyThumbnailToUI(ThumbnailReadyEventArgs reqArgs, Bitmap square)
         {
+            Debug.WriteLine("ThumbnailImageListManager: ApplyThumbnailToUI begin");
+
             if (square == null)
             {
                 if (reqArgs.Item != null) reqArgs.Item.ImageIndex = -1;
@@ -396,15 +400,16 @@ namespace ExpControlsLib
             _thumbnailProvider?.ClearCache();
         }
 
+        private string CreateKey(string fullFileName, int size)
+        {
+            return $"{fullFileName}|{size}";
+        }
+
         public void Dispose()
         {
             Clear();
             _thumbnailProvider?.Dispose();
         }
 
-        private string CreateKey(string fullFileName, int size)
-        {
-            return $"{fullFileName}|{size}";
-        }
     }
 }

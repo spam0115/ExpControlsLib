@@ -10,6 +10,7 @@ using TreeLib;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static System.Runtime.InteropServices.JavaScript.JSType;
+using static WindowsApiLib.Shell.ShellAPI;
 
 namespace ExpControlsLib
 {
@@ -17,6 +18,7 @@ namespace ExpControlsLib
     /// Encapsulates the messy behavior of the ListView control when switching between
     /// Virtual and Regular modes. Provides a unified interface for data manipulation.
     /// </summary>
+    [SupportedOSPlatform("windows")]
     internal class VirtualListViewWrapper
     {
         private readonly ListView _listView;
@@ -139,7 +141,7 @@ namespace ExpControlsLib
                 }
                 field = value;
 
-                if (VirtualMode) InvalidateVirtualItemIndexes();
+                if (VirtualMode) InvalidateVirtualItemImagesIndexes();
 
                 //SetImageListForMode(value);
                 //if (VirtualMode) LoadImagesForItems();
@@ -401,9 +403,9 @@ namespace ExpControlsLib
         /// This is necessary when switching between display modes to ensure that the correct
         /// icons or thumbnails are loaded for the current view.
         /// </summary>
-        private void InvalidateVirtualItemIndexes()
+        private void InvalidateVirtualItemImagesIndexes()
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes Begin");
+            //System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes Begin");
             try
             {
                 if (!VirtualMode) return;
@@ -420,7 +422,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes End");
+                //System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes End");
             }
         }
 
@@ -569,6 +571,276 @@ namespace ExpControlsLib
         /// <returns>True if in a thumbnail view mode.</returns>
         public bool IsThumbnailViewMode() => DisplayMode == ListViewDisplayMode.Thumbnail || DisplayMode == ListViewDisplayMode.LargeThumbnail || DisplayMode == ListViewDisplayMode.ExtraLargeThumbnail;
 
+
+        private const int LVM_GETNEXTITEM = LVM_FIRST + 12;
+        private const int LVM_GETITEMRECT = LVM_FIRST + 14;
+        private const int LVM_HITTEST = LVM_FIRST + 18;
+        private const int LVM_GETITEMSPACING = LVM_FIRST + 51; // returns packed x/y in LPARAM
+        private const int LVM_GETTOPINDEX = LVM_FIRST + 39;
+
+        private const int LVNI_VISIBLE = 0x0008;
+        private const int LVIR_BOUNDS = 0; // for LVM_GETITEMRECT
+        private const int LVM_GETCOUNTPERPAGE = 0x1000 + 40;
+
+
+
+        private int _lastTopIndex = -1;
+
+        /// <summary>
+        /// Returns a "top-like" index for any ListView mode.
+        /// - Details/List: effectively top row index
+        /// - LargeIcon/SmallIcon/Tile: top-left visible item index
+        /// Works in virtual and non-virtual mode.
+        /// </summary>
+        public int GetTopIndex()
+        {
+            System.Diagnostics.Debug.WriteLine("ExpList: GetTopIndex Begin");
+            try
+            {
+                if (_listView == null || !_listView.IsHandleCreated) return -1;
+
+                int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+                if (total <= 0) return -1;
+
+                if (_lastTopIndex > -1) return _lastTopIndex; // cache for repeated calls.  The OS will sometimes make tons of redundant calls
+
+                int top = 0;
+                if (!_listView.VirtualMode && _listView.TopItem != null)
+                {
+                    _lastTopIndex = _listView.TopItem.Index;
+                    return _listView.TopItem.Index;
+                }
+
+                // 2) Try visible enumeration (works in many non-virtual cases)
+                int byVisibleEnum = FindTopLeftByVisibleEnumeration(total);
+                if (byVisibleEnum >= 0) return byVisibleEnum;
+
+                // 3) Virtual-safe fallback: scan viewport by hit-test
+                int byHitTestScan = FindTopLeftByHitTestScan(total);
+                if (byHitTestScan >= 0) return byHitTestScan;
+
+                // 4) Last fallback
+                _lastTopIndex = (top >= 0 && top < total) ? top : -1;
+                return _lastTopIndex;
+            }
+            finally
+            {
+                System.Diagnostics.Debug.WriteLine("ExpList: GetTopIndex End");
+            }
+        }
+
+
+        private int FindTopLeftByVisibleEnumeration(int total)
+        {
+            System.Diagnostics.Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration Begin");
+            try
+            {
+                int bestIndex = -1;
+                int bestTop = int.MaxValue;
+                int bestLeft = int.MaxValue;
+
+                int i = -1;
+                while (true)
+                {
+                    i = (int)SendMessage(_listView.Handle, LVM_GETNEXTITEM, (IntPtr)i, (IntPtr)LVNI_VISIBLE);
+                    if (i < 0) break;
+                    if (i >= total) continue;
+
+                    RECT rc = new RECT { left = LVIR_BOUNDS };
+                    if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)i, ref rc) == IntPtr.Zero)
+                        continue;
+
+                    if (rc.top < bestTop || (rc.top == bestTop && rc.left < bestLeft))
+                    {
+                        bestTop = rc.top;
+                        bestLeft = rc.left;
+                        bestIndex = i;
+                    }
+                }
+
+                return bestIndex;
+            }
+            finally
+            {
+                System.Diagnostics.Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration End");
+            }
+        }
+
+        private int FindTopLeftByHitTestScan(int total)
+        {
+            System.Diagnostics.Debug.WriteLine("ExpList: FindTopLeftByHitTestScan Begin");
+            try
+            {
+                var client = _listView.ClientRectangle;
+                if (client.Width <= 0 || client.Height <= 0) return -1;
+
+                int step = Math.Max(6, _listView.Font.Height / 2);
+
+                int bestIndex = -1;
+                int bestTop = int.MaxValue;
+                int bestLeft = int.MaxValue;
+
+                for (int y = 0; y < client.Height; y += step)
+                {
+                    for (int x = 0; x < client.Width; x += step)
+                    {
+                        int idx = HitTestIndex(x, y);
+                        if (idx < 0 || idx >= total) continue;
+
+                        RECT rc = new RECT { left = LVIR_BOUNDS };
+                        if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)idx, ref rc) != IntPtr.Zero)
+                        {
+                            if (rc.top < bestTop || (rc.top == bestTop && rc.left < bestLeft))
+                            {
+                                bestTop = rc.top;
+                                bestLeft = rc.left;
+                                bestIndex = idx;
+                            }
+                        }
+                        else
+                        {
+                            // fallback ordering if rect unavailable
+                            if (y < bestTop || (y == bestTop && x < bestLeft))
+                            {
+                                bestTop = y;
+                                bestLeft = x;
+                                bestIndex = idx;
+                            }
+                        }
+                    }
+                }
+
+                return bestIndex;
+            }
+            finally
+            {
+                System.Diagnostics.Debug.WriteLine("ExpList: FindTopLeftByHitTestScan End");
+            }
+        }
+
+        private int HitTestIndex(int x, int y)
+        {
+            //System.Diagnostics.Debug.WriteLine("ExpList: HitTestIndex Begin");
+            try
+            {
+                LVHITTESTINFO ht = new LVHITTESTINFO
+                {
+                    pt = new POINT { x = x, y = y }
+                };
+
+                int result = (int)SendMessage(_listView.Handle, LVM_HITTEST, IntPtr.Zero, ref ht);
+                return result; // -1 if none
+            }
+            finally
+            {
+                //System.Diagnostics.Debug.WriteLine("ExpList: HitTestIndex End");
+            }
+        }
+
+        private int GetApproxVisibleCount()
+        {
+            System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCount Begin");
+            try
+            {
+                if (_listView == null || !_listView.IsHandleCreated)
+                    return 0;
+
+                return _listView.View == View.LargeIcon
+                    ? GetApproxVisibleCountLargeIcon()
+                    : GetAnyVisibleCount();
+            }
+            finally
+            {
+                System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCount End");
+            }
+        }
+
+        private int GetAnyVisibleCount()
+        {
+            if (_listView == null || !_listView.IsHandleCreated || _listView.View == View.LargeIcon)
+                return 0;
+
+            int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+            if (total <= 0) return 0;
+
+            switch (_listView.View)
+            {
+                case View.Details:
+                case View.List:
+                    // LVM_GETCOUNTPERPAGE is geometry-based and works in virtual mode
+                    int perPage = (int)SendMessage(_listView.Handle, LVM_GETCOUNTPERPAGE, IntPtr.Zero, IntPtr.Zero);
+                    return Math.Min(total, Math.Max(0, perPage));
+
+                case View.SmallIcon:
+                case View.Tile:
+                    // LVM_GETCOUNTPERPAGE returns total item count for these views, so use spacing math instead
+                    return EstimateVisibleBySpacing(_listView, total, largeIcon: false);
+
+                default:
+                    return 0;
+            }
+        }
+
+        private static int EstimateVisibleBySpacing(ListView lv, int total, bool largeIcon)
+        {
+            int packed = (int)SendMessage(lv.Handle, LVM_GETITEMSPACING,
+                largeIcon ? IntPtr.Zero : (IntPtr)1, IntPtr.Zero);
+
+            int cellW = packed & 0xFFFF;
+            int cellH = (packed >> 16) & 0xFFFF;
+
+            if (cellW <= 0 || cellH <= 0)
+            {
+                var img = (largeIcon ? lv.LargeImageList?.ImageSize : lv.SmallImageList?.ImageSize)
+                          ?? new System.Drawing.Size(16, 16);
+                cellW = Math.Max(1, img.Width + 16);
+                cellH = Math.Max(1, img.Height + lv.Font.Height + 8);
+            }
+
+            int cols = Math.Max(1, (int)Math.Ceiling(lv.ClientSize.Width / (double)cellW));
+            int rows = Math.Max(1, (int)Math.Ceiling(lv.ClientSize.Height / (double)cellH));
+
+            return Math.Min(total, cols * rows);
+        }
+
+        private int GetApproxVisibleCountLargeIcon()
+        {
+            System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon Begin");
+            try
+            {
+                if (_listView == null || !_listView.IsHandleCreated || _listView.View != View.LargeIcon)
+                    return 0;
+
+                int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+                if (total <= 0) return 0;
+
+                // FALSE => large icon spacing
+                int packed = (int)SendMessage(_listView.Handle, LVM_GETITEMSPACING, IntPtr.Zero, IntPtr.Zero);
+                int cellW = packed & 0xFFFF;
+                int cellH = (packed >> 16) & 0xFFFF;
+
+                // Fallback if spacing couldn't be read
+                if (cellW <= 0 || cellH <= 0)
+                {
+                    var img = _listView.LargeImageList?.ImageSize ?? new System.Drawing.Size(32, 32);
+                    cellW = Math.Max(1, img.Width + 32);                   // rough label/padding allowance
+                    cellH = Math.Max(1, img.Height + _listView.Font.Height * 2 + 16);
+                }
+
+                int vw = Math.Max(1, _listView.ClientSize.Width);
+                int vh = Math.Max(1, _listView.ClientSize.Height);
+
+                int cols = Math.Max(1, (int)Math.Ceiling(vw / (double)cellW));
+                int rows = Math.Max(1, (int)Math.Ceiling(vh / (double)cellH));
+
+                int approx = cols * rows;
+                return Math.Min(total, approx);
+            }
+            finally
+            {
+                System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon End");
+            }
+        }
 
         ///// <summary>
         ///// Configures the image lists bound to the ListView for the given display mode.
