@@ -1614,25 +1614,6 @@ namespace ExpControlsLib
             }
         }
 
-        private void EnsureColumnDataFetched(CShellItem item)
-        {
-            if (ExpListGetColumnData == null) return;
-            if (item.ColumnDic.ContainsKey("__BulkEventFired")) return;
-
-            var args = new ExpListGetColumnDataEventArgs(item);
-            ExpListGetColumnData(this, args);
-            item.ColumnDic["__BulkEventFired"] = ListViewSubitemData.Default;
-
-            foreach (ColumnHeader col in _listView.Columns)
-            {
-                if (args.ColumnData.TryGetValue(col.Text, out var value))
-                {
-                    item.ColumnDic[col.Text] = value;
-                }
-            }
-        }
-
-
         /// <summary>
         /// Populates the text and tag for a single given column based on the provided shell item and column header.
         /// </summary>
@@ -1731,7 +1712,7 @@ namespace ExpControlsLib
                 else
                 {
                     // 2. Try bulk fetch if still not found
-                    EnsureColumnDataFetched(item);
+                    EnsureCustomColumnDataFetched(item);
                     if (item.ColumnDic.TryGetValue(col.Text, out ListViewSubitemData propInfo))
                         return propInfo;
                 }
@@ -1749,6 +1730,28 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Loads all special custom column data that isn't part of CShellItem's default properties by firing
+        /// the ExpListGetColumnData event.  This allows external handlers to provide bulk data for all columns 
+        /// in one shot, which is more efficient than firing GetColumnData for each individual column.
+        /// </summary>
+        /// <param name="item"></param>
+        private void EnsureCustomColumnDataFetched(CShellItem item)
+        {
+            if (ExpListGetColumnData == null) return;
+            if (item.ColumnDic.Count > 0) return;
+
+            var args = new ExpListGetColumnDataEventArgs(item);
+            ExpListGetColumnData(this, args);
+
+            foreach (ColumnHeader col in _listView.Columns)
+            {
+                if (args.ColumnData.TryGetValue(col.Text, out var value))
+                {
+                    item.ColumnDic[col.Text] = value;
+                }
+            }
+        }
 
         /// <summary>
         /// Refresh by display name string.  This is very inefficient.  Avoid this function.

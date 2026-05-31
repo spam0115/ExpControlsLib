@@ -440,10 +440,11 @@ namespace ExpControlsLib
 
             var item = _virtualItems[index];
 
-            if (item.Updated)
+            if (item.NeedsRefresh)
             {
                 var lvi = CreateLviFromCsi(item);
                 _itemCache[index] = lvi;
+                item.NeedsRefresh = false;
                 return lvi;
             }
             else
@@ -470,7 +471,7 @@ namespace ExpControlsLib
         private ListViewItem CreateLviFromCsi(CShellItem item)
         {
             var lvi = CreateItemCallback?.Invoke(item);
-            if (lvi != null)
+            if (lvi == null)
             {   //this shouldn't ever happen, but just in case the callback fails, create a basic ListViewItem to avoid crashing the ListView
                 lvi = new ListViewItem(item.DisplayName) { Tag = item };
                 foreach (var col in _listView.Columns)

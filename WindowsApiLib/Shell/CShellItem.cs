@@ -1048,7 +1048,7 @@ namespace WindowsApiLib.Shell
         /// This indicates if the item has been updated since the last time it was consumed.
         /// Not currently in use but may be needed for the future.
         /// </summary>
-        public bool Updated;
+        public bool NeedsRefresh;
 
 
         #endregion
