@@ -52,9 +52,9 @@ namespace ExpControlsLib
             _thumbnailProvider.ThumbnailReady += OnThumbnailReady;
         }
 
-        public int GetThumbnailIndex(string filePath, int requestedSize)
+        public int GetThumbnailIndex(CShellItem csi, int requestedSize)
         {
-            if (_slotByKey.TryGetValue($"{filePath}|{requestedSize}", out var slot))
+            if (_slotByKey.TryGetValue($"{csi.FullPath}|{requestedSize}", out var slot))
             {
                 // Update LRU on access
                 string key = slot.Key;
@@ -62,10 +62,14 @@ namespace ExpControlsLib
                 _lruKeys.Add(key);
                 return slot.Index;
             }
-            return -1;
+            else
+            {
+                RequestThumbnail(csi, requestedSize);
+                return -1;
+            }
         }
 
-        public void SetImageListSize(int thumbnailSize)
+        public void SetImageListForSize(int thumbnailSize)
         {
             if (_addingImage) return;
 
@@ -74,16 +78,22 @@ namespace ExpControlsLib
             var imageList = GetImageList(thumbnailSize);
 
             _expList._listView.BeginUpdate();
-            _expList._listView.LargeImageList = imageList;
-            if (!_expList._listView.VirtualMode)
+            try
             {
-                foreach (ListViewItem item in _expList._listView.Items)
+                _expList._listView.LargeImageList = imageList;
+                if (!_expList._listView.VirtualMode)
                 {
-                    if (item is null) continue;
-                    item.ImageIndex = -1;
+                    foreach (ListViewItem item in _expList._listView.Items)
+                    {
+                        if (item is null) continue;
+                        item.ImageIndex = -1;
+                    }
                 }
             }
-            _expList._listView.EndUpdate();
+            finally
+            {
+                _expList._listView.EndUpdate();
+            }
         }
 
 
@@ -266,7 +276,7 @@ namespace ExpControlsLib
                     try { imageList.Images[index] = square; }
                     finally
                     {
-                        square?.Dispose();
+                        //square?.Dispose();
                         square = null;
                         _addingImage = false;
                     }
@@ -293,7 +303,7 @@ namespace ExpControlsLib
                             try { imageList.Images[index] = square; }
                             finally
                             {
-                                square?.Dispose();
+                                //square?.Dispose();
                                 _addingImage = false;
                             }
 

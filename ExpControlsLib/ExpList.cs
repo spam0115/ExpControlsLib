@@ -92,16 +92,16 @@ namespace ExpControlsLib
         private ClvDropWrapper DropWrap; // Wrapper for Drop ops targeting ExpFileList
 
         private bool m_CreateNew = false; // Flag for NewMenu processing of "New" item
+        
+        private ShellController? _shellController = null;
         private ThumbnailImageListManager _thumbnailManager; // Manager for thumbnail display modes
 
-        private ShellController? _shellController = null;
-
+        
         private VirtualListViewWrapper _listViewWrapper;
-        private bool _useVirtualMode;
-        TreeLib.HugeList<CShellItem> _virtualItems = new();
-        private Dictionary<int, ListViewItem> _itemCache = new();
-        private Dictionary<string, int> _pathToIndex = new(StringComparer.OrdinalIgnoreCase);
-        private LVColSorter _sorter; //only works in non-virtual mode
+        //TreeLib.HugeList<CShellItem> _virtualItems = new();
+        //private Dictionary<int, ListViewItem> _itemCache = new();
+        //private Dictionary<string, int> _pathToIndex = new(StringComparer.OrdinalIgnoreCase);
+        //private LVColSorter _sorter; //only works in non-virtual mode
 
         // Reentrancy guard: prevents DoItemUpdate from modifying _listView.Items
         // while an enumeration is in progress (Invoke() pumps messages and can trigger
@@ -282,24 +282,13 @@ namespace ExpControlsLib
          DefaultValue(View.Details)]
         public ListViewDisplayMode DisplayMode
         {
-            get; 
+            get => _listViewWrapper.DisplayMode;
             set
             {
-                if (field == value) return;
-                if (value <= ListViewDisplayMode.Tile) // View values native to the ListView control 
-                {
-                    _listView.View = (View)value;
-                }
-                else
-                {
-                    _listView.View = View.LargeIcon; //XP era kludge for thumbnail mode
-                }
-                field = value;
-
-                if (_useVirtualMode) InvalidateVirtualItemIndexes();
+                _listViewWrapper.DisplayMode = value;
 
                 SetImageListForMode(value);
-                if (_useVirtualMode) LoadImagesForItems();
+                if (_listViewWrapper.VirtualMode) LoadImagesForItems();
 
                 DisplayModeChanged?.Invoke(value);
             }
@@ -404,30 +393,14 @@ namespace ExpControlsLib
         [Browsable(true), Category("Behavior"), DefaultValue(false)]
         public bool VirtualMode
         {
-            get => _useVirtualMode;
+            get => _listViewWrapper.VirtualMode;
             set
             {
-                if (_useVirtualMode == value) return;
-                _useVirtualMode = value;
-                _listView.VirtualMode = value;
+                if (_listViewWrapper.VirtualMode == value) return;
+                _listViewWrapper.VirtualMode = value;
 
-                if (value)
-                {
-                    _listView.RetrieveVirtualItem -= RetrieveVirtualItem; //just in case
-                    _listView.RetrieveVirtualItem += RetrieveVirtualItem;
-                    _listView.Items.Clear();
-                    _itemIndex.Clear();
-                }
-                else
-                {
-                    _listView.RetrieveVirtualItem -= RetrieveVirtualItem;
-                    _virtualItems.Clear();
-                    _itemCache.Clear();
-                    _pathToIndex.Clear();
-                }
-
-                if (_currentFolderCsi != null)
-                    DisplayFiles(_currentPath, _currentFolderCsi, true, reload: true);
+                //if (_currentFolderCsi != null)
+                //    DisplayFiles(_currentPath, _currentFolderCsi, true, reload: true);
             }
         }
 
@@ -449,7 +422,7 @@ namespace ExpControlsLib
                     if (needsUpdate)
                     {
                         _listView.BeginUpdate();
-                        ClearListInternal();
+                        _listViewWrapper.Clear();
                     }
                     _currentPath = value;
 
@@ -473,7 +446,7 @@ namespace ExpControlsLib
                     else
                     {
                         _listView.BeginUpdate();
-                        ClearListInternal();
+                        _listViewWrapper.Clear();
                         _currentPath = value;
                         _currentFolderCsi = null;
                         ExpListCurrentFolderChanged?.Invoke(newCsi, oldCsi);
@@ -481,23 +454,6 @@ namespace ExpControlsLib
                     }
                 }
             }
-        }
-
-        private void ClearListInternal() //todo: move this to the privates area
-        {
-            _listView.SelectedIndices.Clear();
-            if (_useVirtualMode)
-            {
-                _listView.VirtualListSize = 0;
-            }
-            else
-            {
-                _listView.Items.Clear();
-            }
-            _virtualItems.Clear();
-            _itemCache.Clear();
-            _pathToIndex.Clear();
-            _itemIndex.Clear();
         }
 
         /// <summary>
@@ -537,100 +493,36 @@ namespace ExpControlsLib
         /// Gets the number of items in the list view.
         /// </summary>
         [Browsable(false)]
-        public int Count => _useVirtualMode ? _virtualItems.Count : _listView.Items.Count;
+        public int Count => _listViewWrapper.Count;
 
         /// <summary>
         /// Gets the number of selected items in the list view.
         /// </summary>
         [Browsable(false)]
-        public int SelectedCount => _listView.SelectedIndices.Count;
+        public int SelectedCount => _listViewWrapper.SelectedCount;
 
         /// <summary>
         /// Gets the indices of the selected items.
         /// </summary>
         [Browsable(false)]
-        public ListView.SelectedIndexCollection SelectedIndices => _listView.SelectedIndices;
+        public ListView.SelectedIndexCollection SelectedIndices => _listViewWrapper.SelectedIndices;
 
         /// <summary>
         /// Gets an enumerable collection of selected CShellItems.
         /// ListView.SelectedItems can't be used in virtual mode.
         /// </summary>
         [Browsable(false)]
-        public IEnumerable<CShellItem> SelectedCShellItems
-        {
-            get
-            {
-                foreach (int index in _listView.SelectedIndices)
-                {
-                    var item = GetItem(index);
-                    if (item != null) yield return item;
-                }
-            }
-        }
+        public IEnumerable<CShellItem> SelectedCShellItems => _listViewWrapper.SelectedCShellItems;
 
         /// <summary>
         /// Gets the CShellItem at the specified index.
         /// </summary>
-        public CShellItem? GetItem(int index)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: GetItem Begin");
-            try
-            {
-                if (_useVirtualMode)
-                {
-                    if (index >= 0 && index < _virtualItems.Count)
-                        return _virtualItems[index];
-                }
-                else
-                {
-                    if (index >= 0 && index < _listView.Items.Count)
-                        return _listView.Items[index].Tag as CShellItem;
-                }
-                return null;
-            }
-            finally
-            {
-                //System.Diagnostics.Debug.WriteLine("ExpList: GetItem End");
-            }
-        }
+        public CShellItem? GetItem(int index) => _listViewWrapper.GetItem(index);
 
         /// <summary>
         /// Removes the item at the specified index.
         /// </summary>
-        public void RemoveAt(int index)
-        {
-            if (index < 0 || index >= Count) return;
-
-            System.Diagnostics.Debug.WriteLine("ExpList: RemoveAt Begin");
-            try
-            {
-                if (_useVirtualMode)
-                {
-                    if (index >= 0 && index < _virtualItems.Count)
-                    {
-                        _virtualItems.RemoveAt(index);
-                        RecreateIndexMapping();
-                        _itemCache.Clear();
-                        _listView.VirtualListSize = _virtualItems.Count;
-                        _listView.Invalidate();
-                    }
-                }
-                else
-                {
-                    if (index >= 0 && index < _listView.Items.Count)
-                    {
-                        var lvi = _listView.Items[index];
-                        if (lvi.Tag is CShellItem csi)
-                            _itemIndex.Remove(csi.FullPath);
-                        _listView.Items.RemoveAt(index);
-                    }
-                }
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: RemoveAt End");
-            }
-        }
+        public void RemoveAt(int index) => _listViewWrapper.RemoveAt(index);
 
         /// <summary>
         /// Sets the sort column and order.
@@ -642,8 +534,7 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: SetSort Begin");
             try
             {
-                if (_listView.ListViewItemSorter is LVColSorter sorter)
-                    sorter.SetSort(column, order);
+                _listViewWrapper.Sort(column, order);
             }
             finally
             {
@@ -677,7 +568,6 @@ namespace ExpControlsLib
                     LoadImagesForItems();
                 };
 
-                // Converted from Handles clauses in VB
                 Load += ExpList_Load;
                 VisibleChanged += ExpList_VisibleChanged;
 
@@ -699,6 +589,13 @@ namespace ExpControlsLib
                 _listView.ItemSelectionChanged += ExpFileList_ItemSelectionChanged;
 
                 _listViewWrapper = new VirtualListViewWrapper(_listView);
+                _listViewWrapper.CreateItemCallback = MakeLVItem;
+                _listViewWrapper.UpdateItemCallback = UpdateLviUsingCsi;
+                _listViewWrapper.GetComparerCallback = (col, order) =>
+                {
+                    var colHeader = _listView.Columns[col];
+                    return new CShellItemComparer(this, col, order, colHeader);
+                };
             }
             finally
             {
@@ -739,9 +636,9 @@ namespace ExpControlsLib
                 var sorter = new LVColSorter(_listView);
                 sorter.SortOrderChanged += (s, e) =>
                 {
-                    if (_useVirtualMode)
+                    if (VirtualMode)
                     {
-                        SortVirtualItems(sorter.SortColumn, sorter.OrderOfSort);
+                        _listViewWrapper.Sort(sorter.SortColumn, sorter.OrderOfSort);
                     }
                     SortOrderChanged?.Invoke(this, EventArgs.Empty);
                     OnScroll();
@@ -751,10 +648,10 @@ namespace ExpControlsLib
                 // Setup Change Notification
                 CShellItemUpdater.UpdateEvent += UpdateInvoke;
 
-                DisplayMode = (ListViewDisplayMode)_listView.View;
+                //DisplayMode = (ListViewDisplayMode)_listView.View;
 
-		          SetImageListForMode(DisplayMode);
-		          //LoadImagesForItems();
+                //SetImageListForMode(DisplayMode);
+                //LoadImagesForItems();
             }
             finally
             {
@@ -873,7 +770,7 @@ namespace ExpControlsLib
                 if (csi is null)
                 {
                     _listView.BeginUpdate();
-                    ClearListInternal();
+                    _listViewWrapper.Clear();
                     var oldCsi_null = _currentFolderCsi;
                     _currentFolderCsi = null;
                     _currentPath = pathName;
@@ -900,7 +797,7 @@ namespace ExpControlsLib
                 {
                     // If loading fails, clear the list instead of throwing
                     _listView.BeginUpdate();
-                    ClearListInternal();
+                    _listViewWrapper.Clear();
                     _currentFolderCsi = null;
                     _currentPath = pathName;
                     ExpListCurrentFolderChanged?.Invoke(null, oldCsi);
@@ -928,7 +825,7 @@ namespace ExpControlsLib
                 if ((dirList.Count + fileList.Count) == 0) //no items
                 {
                     _listView.BeginUpdate();
-                    ClearListInternal();
+                    _listViewWrapper.Clear();
                     _listView.EndUpdate();
 
                     if (!samePath) ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
@@ -953,39 +850,16 @@ namespace ExpControlsLib
                     if (includeFolder) combinedList.AddRange(dirList);
                     combinedList.AddRange(fileList);
 
-                    if (_useVirtualMode)
+                    _listView.BeginUpdate();
+                    try
                     {
-                        _virtualItems.Clear();
-                        _virtualItems.AddRange(combinedList);
-                        RecreateIndexMapping();
-                        _itemCache.Clear();
-                        _listView.VirtualListSize = _virtualItems.Count;
+                        _listViewWrapper.Clear();
+                        _listViewWrapper.AddRange(combinedList);
                         _listView.Tag = _currentFolderCsi;
-                        // Removed LoadVisibleIcons call: the 200ms debounce timer started by 
-                        // OnListViewScroll will handle the initial load correctly after layout.
                     }
-                    else
+                    finally
                     {
-                        int initialFillLim = Math.Min(combinedList.Count, InitialLoadLimit);
-                        var combinedLvi = new List<ListViewItem>(combinedList.Count);
-                        int topIndex = GetTopIndex();
-
-                        Console.WriteLine("\tMaking ListViewItems...");
-                        _itemIndex.Clear();
-                        foreach (CShellItem item in combinedList)
-                        {
-                            ListViewItem lvi = MakeLVItem(item);
-                            if (!_itemIndex.TryAdd(item.FullPath, lvi))
-                            {
-                                _itemIndex[item.FullPath] = lvi;
-                            }
-
-                            combinedLvi.Add(lvi);
-                        }
-                        Console.WriteLine("\tDone making ListViewItems.");
-
-                        _listView.Tag = _currentFolderCsi;
-                        if (!RequestListViewRepopulate(combinedLvi.ToArray(), !samePath)) return;
+                        _listView.EndUpdate();
                     }
                 }
 
@@ -1153,7 +1027,7 @@ namespace ExpControlsLib
                     {
                         _itemIndex.Clear();
 
-                        if (_useVirtualMode)
+                        if (VirtualMode)
                         {
                             int count = newItems == null ? 0 : newItems.Length;
 
@@ -1210,9 +1084,7 @@ namespace ExpControlsLib
         /// <returns>The zero-based index of the item if found; otherwise -1.</returns>
         public int GetIndexFromFullPath(string fullPath)
         {
-            if (_pathToIndex.TryGetValue(fullPath, out int index))
-                return index;
-            return -1;
+            return _listViewWrapper.GetIndexFromFullPath(fullPath);
         }
 
         #endregion
@@ -1352,21 +1224,21 @@ namespace ExpControlsLib
         /// re-sorting when necessary (e.g. if the new item is out of order with respect to its neighbors).
         /// </remarks>
         /// <param name="item"></param>
-        private void InsertVirtualItemInSortedOrder(CShellItem item)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: InsertVirtualItem Begin");
-            try
-            {
-                var index = this.FindInsertionPoint(item);
+        //private void InsertVirtualItemInSortedOrder(CShellItem item)
+        //{
+        //    System.Diagnostics.Debug.WriteLine("ExpList: InsertVirtualItem Begin");
+        //    try
+        //    {
+        //        var index = this.FindInsertionPoint(item);
 
-                _virtualItems.Insert(index, item);
-                _listView.VirtualListSize = _virtualItems.Count;
-            }
-            finally
-            {
-                //System.Diagnostics.Debug.WriteLine("ExpList: InsertVirtualItem End");
-            }
-        }
+        //        _virtualItems.Insert(index, item);
+        //        _listView.VirtualListSize = _virtualItems.Count;
+        //    }
+        //    finally
+        //    {
+        //        //System.Diagnostics.Debug.WriteLine("ExpList: InsertVirtualItem End");
+        //    }
+        //}
 
         /// <summary>
         /// Performs the actual update of list view items in response to shell changes.
@@ -1407,16 +1279,8 @@ namespace ExpControlsLib
                             {
                                 if (!isTargetFolder) return;
 
-                                if (_useVirtualMode)
-                                {
-                                    InsertVirtualItemInSortedOrder(e.Item);
-                                }
-                                else
-                                {
-                                    var lvi = MakeLVItem(e.Item);
-                                    InsertLvi(lvi, _listView);
-                                    m_CreateNew = false; //finished create new handling.  I don't think this is even used?
-                                }
+                                _listViewWrapper.InsertSorted(e.Item);
+                                m_CreateNew = false; //finished create new handling.  I don't think this is even used?
 
                                 break;
                             }
@@ -1429,41 +1293,20 @@ namespace ExpControlsLib
                                     return;
                                 }
 
-                                if (_useVirtualMode)
+                                int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
+                                if (index >= 0)
                                 {
-                                    if (_pathToIndex.TryGetValue(e.Item.FullPath, out int index))
-                                    {
-                                        _listView.SelectedIndices.Clear();
-                                        RemoveAt(index);
-                                    }
-                                }
-                                else
-                                {
-                                    //var lvi = FindLVItem(e.Item);
-                                    var lvi = e.Item.LVItem;
-                                    if (lvi == null) //deletion messages get sent twice.  The second time the item has an index of -1
-                                    {
-                                        lvi = FindLVItem(e.Item);
-                                    }
+                                    bool wasSelected = _listViewWrapper.IsItemSelected(e.Item);
+                                    _listViewWrapper.RemoveAt(index);
 
-                                    if (lvi != null && lvi.Index >= 0) //deletion messages get sent twice.  The second time the item has an index of -1
+                                    if (wasSelected && SelectedCount == 0 && Count > 0)
                                     {
-                                        int index = lvi.Index;
-                                        bool wasSelected = lvi.Selected;
-                                        _itemIndex.Remove(e.Item.FullPath);
-                                        try
+                                        int nextIndex = Math.Min(index, Count - 1);
+                                        var nextLvi = _listViewWrapper.GetListViewItem(nextIndex);
+                                        if (nextLvi != null)
                                         {
-                                            _listView.Items.Remove(lvi);
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Debug.WriteLine("Exception while removing item from listview.  " + ex.ToString());
-                                        }
-                                        if (wasSelected && _listView.SelectedItems.Count == 0 && _listView.Items.Count > 0)
-                                        {
-                                            int nextIndex = Math.Min(index, _listView.Items.Count - 1);
-                                            _listView.Items[nextIndex].Selected = true;
-                                            _listView.Items[nextIndex].Focused = true;
+                                            nextLvi.Selected = true;
+                                            nextLvi.Focused = true;
                                         }
                                     }
                                 }
@@ -1471,38 +1314,33 @@ namespace ExpControlsLib
                                 break;
                             }
 
-                        case CShItemUpdateType.Renamed:
+                        case CShItemUpdateType.Renamed: // This event can be raised in various rename scenarios - file rename, folder rename, drag-drop move with rename, etc.  The structure of the event (which properties are populated) can vary based on the scenario, so the handling needs to be robust to these variations.
                             {
-                                if (_useVirtualMode)
+                                var csi = e.Item;
+
+                                if (e.Item.Parent.FullPath != _currentFolderCsi.FullPath) return;
+                                        
+                                if (VirtualMode)
                                 {
-                                    // Re-load and re-sort
-                                    DisplayFiles(_currentPath, _currentFolderCsi, true, reload: true);
+                                    var index = _listViewWrapper.FindInsertionPoint(csi);
+
+                                    if (index >= 0)
+                                    {
+                                        _listViewWrapper.RemoveAt(index);
+                                        _listViewWrapper.InsertSorted(csi);
+                                    }
                                 }
                                 else
                                 {
-                                    // On Rename, we must find the item by its tag (CShellItem) because the path has changed.
+                                    // On Rename, we must find the item by its LVItem because the name has changed.
                                     // However, we can use the lvi.Name which stores the OLD path used in our dictionary.
-                                    var lvi = e.Item.LVItem;
-                                    if (lvi == null || !ReferenceEquals(lvi.Tag, e.Item))
-                                    {
-                                        lvi = _itemIndex.Values.FirstOrDefault(x => ReferenceEquals(x.Tag, e.Item));
-                                    }
+                                    var lvi = csi.LVItem;
+                                    if (lvi is null) throw new Exception("ListViewItem not found for renamed item"); // This should never happen because we only subscribe to updates for items in the current folder, but just in case...
 
-                                    if (lvi != null)
+                                    if (lvi.Index >= 0)
                                     {
-                                        _itemIndex.Remove(lvi.Name); // Remove old path key
-                                        if (!ReferenceEquals(e.Item.Parent, _currentFolderCsi))
-                                        {
-                                            _listView.Items.Remove(lvi);
-                                        }
-                                        else
-                                        {
-                                            lvi.Text = e.Item.DisplayName;
-                                            lvi.Name = e.Item.FullPath; // Update lvi.Name to NEW path
-                                            lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
-                                            _listView.Items.Remove(lvi);
-                                            InsertLvi(lvi, _listView); // InsertLvi will add NEW path to index
-                                        }
+                                        _listViewWrapper.RemoveAt(lvi.Index);
+                                        _listViewWrapper.InsertSorted(csi);
                                     }
                                 }
                                 break;
@@ -1514,75 +1352,37 @@ namespace ExpControlsLib
 
                         case CShItemUpdateType.Updated:
                             {
-                                if (_useVirtualMode)
+                                int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
+                                if (index >= 0)
                                 {
-                                    if (_pathToIndex.TryGetValue(e.Item.FullPath, out int index))
-                                    {
-                                        _itemCache.Remove(index);
-                                        _listView.RedrawItems(index, index, false);
-                                    }
+                                    _listViewWrapper.RedrawItem(index);
                                 }
-                                else
-                                {
-                                    var lvi = FindLVItem(e.Item);
-                                    if (lvi != null)
-                                    {
-                                        UpdateLviUsingCsi(lvi, e.Item);
-                                    }
-                                }
+                                
                                 break;
                             }
 
                         case CShItemUpdateType.IconChange:
                             {
-                                if (_useVirtualMode)
+                                int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
+                                if (index >= 0)
                                 {
-                                    if (_pathToIndex.TryGetValue(e.Item.FullPath, out int index))
-                                    {
-                                        _itemCache.Remove(index);
-                                        if (IsThumbnailViewMode())
-                                            _thumbnailManager.RequestThumbnail(e.Item, GetThumbnailSizeForMode(), index);
-                                        else
-                                            _listView.RedrawItems(index, index, false);
-                                    }
-                                }
-                                else
-                                {
-                                    var lvi = FindLVItem(e.Item);
-                                    if (lvi != null)
-                                    {
-                                        if (IsThumbnailViewMode())
-                                            _thumbnailManager.RequestThumbnail(e.Item, GetThumbnailSizeForMode());
-                                        else
-                                            lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
-                                    }
+                                    if (IsThumbnailViewMode())
+                                        _thumbnailManager.RequestThumbnail(e.Item, GetThumbnailSizeForMode(), index);
+                                    else
+                                        _listViewWrapper.RedrawItem(index);
                                 }
                                 break;
                             }
 
                         case CShItemUpdateType.MediaChange:
                             {
-                                if (_useVirtualMode)
+                                int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
+                                if (index >= 0)
                                 {
-                                    if (_pathToIndex.TryGetValue(e.Item.FullPath, out int index))
-                                    {
-                                        _itemCache.Remove(index);
-                                        if (IsThumbnailViewMode())
-                                            _thumbnailManager.RequestThumbnail(e.Item, GetThumbnailSizeForMode(), index);
-                                        else
-                                            _listView.RedrawItems(index, index, false);
-                                    }
-                                }
-                                else
-                                {
-                                    var lvi = FindLVItem(e.Item);
-                                    if (lvi != null)
-                                    {
-                                        lvi.Text = e.Item.DisplayName;
-                                        if (IsThumbnailViewMode())
-                                            _thumbnailManager.RequestThumbnail(e.Item, GetThumbnailSizeForMode());
-                                        else lvi.ImageIndex = ((CShellItem)e.Item).IconIndexNormal;
-                                    }
+                                    if (IsThumbnailViewMode())
+                                        _thumbnailManager.RequestThumbnail(e.Item, GetThumbnailSizeForMode(), index);
+                                    else
+                                        _listViewWrapper.RedrawItem(index);
                                 }
                                 break;
                             }
@@ -1616,55 +1416,55 @@ namespace ExpControlsLib
             }
         }
 
-        private void RetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e)
-        {
-            //System.Diagnostics.Debug.WriteLine("ExpList: RetrieveVirtualItem Begin: " + e.ItemIndex.ToString() + ", " + DateTime.Now.ToString("mm:ss.fff"));
+        //private void RetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e)
+        //{
+        //    //System.Diagnostics.Debug.WriteLine("ExpList: RetrieveVirtualItem Begin: " + e.ItemIndex.ToString() + ", " + DateTime.Now.ToString("mm:ss.fff"));
 
-            if (_isShuttingDown)
-            {
-                return; //windows tries to retrieve every item during shutdown for some reason
-            }
+        //    if (_isShuttingDown)
+        //    {
+        //        return; //windows tries to retrieve every item during shutdown for some reason
+        //    }
 
-            try
-            {
-                e.Item = GetItemInternal(e.ItemIndex);
-            }
-            finally
-            {
-                //System.Diagnostics.Debug.WriteLine("ExpList: RetrieveVirtualItem End " + DateTime.Now.ToString("mm:ss.fff"));
-            }
-        }
+        //    try
+        //    {
+        //        e.Item = GetLviFromVirtual(e.ItemIndex);
+        //    }
+        //    finally
+        //    {
+        //        //System.Diagnostics.Debug.WriteLine("ExpList: RetrieveVirtualItem End " + DateTime.Now.ToString("mm:ss.fff"));
+        //    }
+        //}
 
-        private ListViewItem? GetItemInternal(int index)
-        {
-            if (index < 0 || index >= _virtualItems.Count) return null;
+        //private ListViewItem? GetLviFromVirtual(int index)
+        //{
+        //    if (index < 0 || index >= _virtualItems.Count) return null;
 
-            if (_itemCache.TryGetValue(index, out var lvi))
-            {
-                var csi = _virtualItems[index];
+        //    if (_itemCache.TryGetValue(index, out var lvi))
+        //    {
+        //        var csi = _virtualItems[index];
 
-                // Sync ImageIndex if it was updated in the background while item was cached
-                if (IsThumbnailViewMode() && lvi.ImageIndex == -1) //could be a sync problem to not run this each time because this data will not be populate for when the listview transitions from details to thumbnail modes
-                {
-                    int thumbIndex = _thumbnailManager.GetThumbnailIndex(csi.FullPath, GetThumbnailSizeForMode());
-                    lvi.ImageIndex = thumbIndex;
-                }
+        //        // Sync ImageIndex if it was updated in the background while item was cached
+        //        if (IsThumbnailViewMode() && lvi.ImageIndex == -1) //could be a sync problem to not run this each time because this data will not be populate for when the listview transitions from details to thumbnail modes
+        //        {
+        //            int thumbIndex = _thumbnailManager.GetThumbnailIndex(csi, GetThumbnailSizeForMode());
+        //            lvi.ImageIndex = thumbIndex;
+        //        }
 
-                //if (DisplayMode == ListViewDisplayMode.Details && (csi.ColumnDic == null || csi.ColumnDic.Count == 0))
-                //{
-                //}
+        //        //if (DisplayMode == ListViewDisplayMode.Details && (csi.ColumnDic == null || csi.ColumnDic.Count == 0))
+        //        //{
+        //        //}
 
-                PopulateColumnData(lvi, csi); //need to populate this even in thumbnail modes for sorting and because the listview doesn't call RetrieveVirtualItem again if it transitions to other display modes.
+        //        PopulateColumnData(lvi, csi); //need to populate this even in thumbnail modes for sorting and because the listview doesn't call RetrieveVirtualItem again if it transitions to other display modes.
 
-                return lvi;
-            }
+        //        return lvi;
+        //    }
 
-            var item = _virtualItems[index];
-            lvi = MakeLVItem(item);
+        //    var item = _virtualItems[index];
+        //    lvi = MakeLVItem(item);
 
-            _itemCache[index] = lvi;
-            return lvi;
-        }
+        //    _itemCache[index] = lvi;
+        //    return lvi;
+        //}
 
 
         /// <summary>
@@ -1674,118 +1474,116 @@ namespace ExpControlsLib
         /// Do not use this function when only a small number of inserts and deletes are made
         /// , as it will be more efficient to update the index mapping incrementally in those cases..
         /// </summary>
-        private void RecreateIndexMapping()
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: UpdateIndexMapping Begin");
-            try
-            {
-                _pathToIndex.Clear();
-                for (int i = 0; i < _virtualItems.Count; i++)
-                {
-                    _pathToIndex[_virtualItems[i].FullPath] = i;
-                }
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: UpdateIndexMapping End");
-            }
-        }
+        //private void RecreateIndexMapping()
+        //{
+        //    System.Diagnostics.Debug.WriteLine("ExpList: UpdateIndexMapping Begin");
+        //    try
+        //    {
+        //        _pathToIndex.Clear();
+        //        for (int i = 0; i < _virtualItems.Count; i++)
+        //        {
+        //            _pathToIndex[_virtualItems[i].FullPath] = i;
+        //        }
+        //    }
+        //    finally
+        //    {
+        //        System.Diagnostics.Debug.WriteLine("ExpList: UpdateIndexMapping End");
+        //    }
+        //}
 
         /// <summary>
         /// Invalidates the image indices of all virtual items and cached ListViewItems.
         /// This is necessary when switching between display modes to ensure that the correct
         /// icons or thumbnails are loaded for the current view.
         /// </summary>
-        private void InvalidateVirtualItemIndexes()
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes Begin");
-            try
-            {
-                if (!_useVirtualMode) return;
+        //private void InvalidateVirtualItemIndexes()
+        //{
+        //    System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes Begin");
+        //    try
+        //    {
+        //        if (!VirtualMode) return;
 
-                foreach (var item in _virtualItems)
-                {
-                    if (item != null) item.ImageIndex = -1;
-                }
+        //        foreach (var item in _virtualItems)
+        //        {
+        //            if (item != null) item.ImageIndex = -1;
+        //        }
 
-                foreach (var lvi in _itemCache.Values)
-                {
-                    if (lvi != null) lvi.ImageIndex = -1;
-                }
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes End");
-            }
-        }
+        //        foreach (var lvi in _itemCache.Values)
+        //        {
+        //            if (lvi != null) lvi.ImageIndex = -1;
+        //        }
+        //    }
+        //    finally
+        //    {
+        //        System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes End");
+        //    }
+        //}
 
         /// <summary>
         /// Refreshes the list view item associated with data from the given shell item.
         /// </summary>
         /// <param name="csi">The shell item whose corresponding list view item will be refreshed. Cannot be null.</param>
-        public void UpdateLviUsingCsi(CShellItem csi)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi Begin");
-            try
-            {
-                if (csi == null) return;
+        //public void UpdateLviUsingCsi(CShellItem csi)
+        //{
+        //    System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi Begin");
+        //    try
+        //    {
+        //        if (csi == null) return;
 
-                if (!_pathToIndex.TryGetValue(csi.FullPath, out int index))
-                {
-                    Debug.WriteLine("ExpList: UpdateLviUsingCsi - item not found in index for path: " + csi.FullPath);
-                    return;
-                }
+        //        if (!_pathToIndex.TryGetValue(csi.FullPath, out int index))
+        //        {
+        //            Debug.WriteLine("ExpList: UpdateLviUsingCsi - item not found in index for path: " + csi.FullPath);
+        //            return;
+        //        }
 
-                if (_useVirtualMode)
-                {
-                    {
-                        var lvi = GetItemInternal(index);
-                        UpdateLviUsingCsi(lvi, csi); //ensure the columns have been populated because they are not in some other view modes
-                    }
+        //        if (VirtualMode)
+        //        {
+        //            {
+        //                var lvi = GetLviFromVirtual(index);
+        //                UpdateLviUsingCsi(lvi, csi); //ensure the columns have been populated because they are not in some other view modes
+        //            }
 
-                    _listView.RedrawItems(index, index, false);
-                }
-                else
-                {
-                    var lvi = FindLVItem(csi);
-                    if (lvi == null) return;
+        //            _listView.RedrawItems(index, index, false);
+        //        }
+        //        else
+        //        {
+        //            var lvi = FindLVItem(csi);
+        //            if (lvi == null) return;
 
-                    UpdateLviUsingCsi(lvi, csi);
-                }
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi End");
-            }
-        }
+        //            UpdateLviUsingCsi(lvi, csi);
+        //        }
+        //    }
+        //    finally
+        //    {
+        //        System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi End");
+        //    }
+        //}
 
         /// <summary>
         /// Refreshes the display of a single item whose underlying filesystem data has changed.
         /// </summary>
-        public void UpdateLviUsingCsi(ListViewItem lvi, CShellItem item)
+        public void UpdateLviUsingCsi(ListViewItem lvi, CShellItem csi)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi Begin");
+            //System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi Begin");
             try
             {
-                if (lvi == null || item == null) return;
+                if (lvi == null || csi == null) return;
 
                 // Update primary text
-                lvi.Text = item.DisplayName;
-                lvi.Name = item.FullPath;
-                lvi.Tag = item;
-                item.LVItem = lvi;
+                lvi.Text = csi.DisplayName;
+                lvi.Name = csi.FullPath;
+                lvi.Tag = csi;
+                csi.LVItem = lvi;
 
-                if (DisplayMode == ListViewDisplayMode.Details)
+                PopulateColumnData(lvi, csi); //you need this even in non-details mode to facilitate sorting
+                
+                if (IsThumbnailViewMode())
                 {
-                    PopulateColumnData(lvi, item);
-                }
-                else if (IsThumbnailViewMode())
-                {
-                    int index = _thumbnailManager.GetThumbnailIndex(item.FullPath, GetThumbnailSizeForMode());
+                    int index = _thumbnailManager.GetThumbnailIndex(csi, GetThumbnailSizeForMode());
                     lvi.ImageIndex = index;
                 }
                 else
-                    lvi.ImageIndex = SystemImageListManager.GetIconIndex(item, DisplayMode == ListViewDisplayMode.LargeIcon);
+                    lvi.ImageIndex = SystemImageListManager.GetIconIndex(csi, _listViewWrapper.DisplayMode == ListViewDisplayMode.LargeIcon);
             }
             finally
             {
@@ -1957,34 +1755,16 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: RefreshItemByDisplayName Begin");
             try
             {
-                if (_useVirtualMode)
+                for (int i = 0; i < _listViewWrapper.Count; i++)
                 {
-                    for (int i = 0; i < _virtualItems.Count; i++)
+                    var item = _listViewWrapper.GetItem(i);
+                    if (item != null && string.Equals(item.DisplayName, fileName, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (string.Equals(_virtualItems[i].DisplayName, fileName, StringComparison.OrdinalIgnoreCase))
-                        {
-                            _itemCache.Remove(i);
-                            _listView.RedrawItems(i, i, false);
-                            return GetItemInternal(i);
-                        }
+                        _listViewWrapper.RedrawItem(i);
+                        return _listViewWrapper.GetListViewItem(i);
                     }
-                    return null;
                 }
-
-                // Try to find the item by its display name using the index values
-                var key = _itemIndex.Keys.FirstOrDefault(k => k.EndsWith(Path.DirectorySeparatorChar + fileName));
-
-                if (key is not null)
-                {
-                    var lvi = _itemIndex[key];
-                    if (lvi is null) return null;
-
-                    if (lvi.Tag is CShellItem csi)
-                        UpdateLviUsingCsi(lvi, csi);
-
-                    return lvi;
-                }
-                else return null;
+                return null;
             }
             finally
             {
@@ -1997,32 +1777,15 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: RefreshItemByFullPath Begin");
             try
             {
-                if (_useVirtualMode)
+                int index = _listViewWrapper.GetIndexFromFullPath(path);
+                if (index >= 0)
                 {
-                    if (_pathToIndex.TryGetValue(path, out int index))
-                    {
-                        var csi = _virtualItems[index]; //crash when index == count+1.  it's possible for _pathToIndex to become descynchronized from _virtualItems
-                        csi.ColumnDic.Clear();
-                        _itemCache.Remove(index);
-                        _listView.RedrawItems(index, index, false);
-                        return GetItemInternal(index);
-                    }
-                    return null;
+                    var csi = _listViewWrapper.GetItem(index);
+                    csi?.ColumnDic.Clear();
+                    _listViewWrapper.RedrawItem(index);
+                    return _listViewWrapper.GetListViewItem(index);
                 }
-
-                if (_itemIndex.TryGetValue(path, out ListViewItem? lvi))
-                {
-                    if (lvi is null) return null;
-
-                    if (lvi.Tag is CShellItem csi)
-                    {
-                        csi.ColumnDic.Clear();
-                        UpdateLviUsingCsi(lvi, csi);
-                    }
-
-                    return lvi;
-                }
-                else return null;
+                return null;
             }
             finally
             {
@@ -2039,26 +1802,13 @@ namespace ExpControlsLib
 
                 item.ColumnDic.Clear();
 
-                if (_useVirtualMode)
+                int index = _listViewWrapper.GetIndexFromFullPath(item.FullPath);
+                if (index >= 0)
                 {
-                    if (_pathToIndex.TryGetValue(item.FullPath, out int index))
-                    {
-                        _itemCache.Remove(index);
-                        _listView.RedrawItems(index, index, false);
-                        return GetItemInternal(index);
-                    }
-                    return null;
+                    _listViewWrapper.RedrawItem(index);
+                    return _listViewWrapper.GetListViewItem(index);
                 }
-
-                if (_itemIndex.TryGetValue(item.FullPath, out ListViewItem? lvi))
-                {
-                    if (lvi is null) return null;
-
-                    UpdateLviUsingCsi(lvi, item);
-
-                    return lvi;
-                }
-                else return null;
+                return null;
             }
             finally
             {
@@ -2166,21 +1916,21 @@ namespace ExpControlsLib
 
         #endregion
 
-        private bool IsItemSelected(CShellItem item)
-        {
-            if (item == null) return false;
-            if (_useVirtualMode)
-            {
-                if (_pathToIndex.TryGetValue(item.FullPath, out int index))
-                    return _listView.SelectedIndices.Contains(index);
-                return false;
-            }
-            else
-            {
-                var lvi = FindLVItem(item);
-                return lvi?.Selected ?? false;
-            }
-        }
+        //private bool IsItemSelected(CShellItem item)
+        //{
+        //    if (item == null) return false;
+        //    if (VirtualMode)
+        //    {
+        //        if (_pathToIndex.TryGetValue(item.FullPath, out int index))
+        //            return _listView.SelectedIndices.Contains(index);
+        //        return false;
+        //    }
+        //    else
+        //    {
+        //        var lvi = FindLVItem(item);
+        //        return lvi?.Selected ?? false;
+        //    }
+        //}
 
         private void ExpFileList_Click(object sender, EventArgs e)
         {
@@ -2270,7 +2020,7 @@ namespace ExpControlsLib
                     // If current _selectedItem is still selected, keep it.
                     // This handles the case where multiple items are selected and we don't want to 
                     // jump back to the first one in the list.
-                    if (_selectedItem != null && IsItemSelected(_selectedItem))
+                    if (_selectedItem != null && _listViewWrapper.IsItemSelected(_selectedItem))
                     {
                         // keep _selectedItem as is
                     }
@@ -2288,7 +2038,7 @@ namespace ExpControlsLib
                     _selectedItem = null;
                 }
 
-                if (_useVirtualMode)
+                if (VirtualMode)
                 {
                     // In virtual mode, we pass null to because there are no items in _listView.SelectedItems
                     // Consumers should use SelectedCShellItems property instead.
@@ -2466,11 +2216,11 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: SortLVItems Begin");
             try
             {
-                if (_useVirtualMode)
+                if (VirtualMode)
                 {
                     if (_listView.ListViewItemSorter is LVColSorter sorter)
                     {
-                        SortVirtualItems(sorter.SortColumn, sorter.OrderOfSort);
+                        _listViewWrapper.Sort(sorter.SortColumn, sorter.OrderOfSort);
                     }
                     return;
                 }
@@ -2853,7 +2603,7 @@ namespace ExpControlsLib
                             goto CLEANUP;
                         case CMD.SELECT_ALL:
                             // Select all items in the ListView.
-                            if (_useVirtualMode)
+                            if (VirtualMode)
                             {
                                 _listView.BeginUpdate();
                                 try
@@ -2975,7 +2725,7 @@ namespace ExpControlsLib
             {
                 if (e.Control && e.KeyCode == Keys.A)
                 {
-                    if (_useVirtualMode)
+                    if (VirtualMode)
                     {
                         _listView.BeginUpdate();
                         try
@@ -3020,7 +2770,7 @@ namespace ExpControlsLib
 
                 if (e.KeyCode == Keys.F2 && _listView.SelectedIndices.Count > 0)
                 {
-                    if (_useVirtualMode)
+                    if (VirtualMode)
                     {
                         // In virtual mode, we must ensure the item is cached or retrieved
                         _listView.FocusedItem?.BeginEdit();
@@ -3327,7 +3077,7 @@ namespace ExpControlsLib
                         };
 
                         int topItemIndex = -1;
-                        bool hasItems = _useVirtualMode ? _listView.VirtualListSize > 0 : _listView.Items.Count > 0;
+                        bool hasItems = VirtualMode ? _listView.VirtualListSize > 0 : _listView.Items.Count > 0;
                         if (cmd == "delete" && hasItems)
                         { //prevent null references from invalid selections that are about to be deleted
                             topItemIndex = GetTopIndex();
@@ -3346,7 +3096,7 @@ namespace ExpControlsLib
                             {
                                 _shellController.HierachyManager.Remove(item);
                                 
-                                this.RemoveAt(GetIndex(item));
+                                this.RemoveAt(_listViewWrapper.GetIndex(item));
                             }
                             if (selectedItems.Length > this.GetApproxVisibleCount())
                                 OnScroll();
@@ -3356,10 +3106,10 @@ namespace ExpControlsLib
                         {
                             _listView.BeginInvoke(new Action(() =>
                             {
-                                int count = _useVirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+                                int count = VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
                                 if (topItemIndex < count)
                                 {
-                                    if (_useVirtualMode)
+                                    if (VirtualMode)
                                         _listView.EnsureVisible(topItemIndex);
                                     else
                                         _listView.Items[topItemIndex].EnsureVisible();
@@ -3403,21 +3153,21 @@ namespace ExpControlsLib
             }
         }
 
-        private int GetIndex(CShellItem item)
-        {
-            if (VirtualMode)
-            {
-                if (_pathToIndex.TryGetValue(item.FullPath, out int index))
-                {
-                    return index;
-                }
-                return -1;
-            }
-            else
-            {
-                return item.LVItem?.Index ?? -1;
-            }
-        }
+        //private int GetIndex(CShellItem item)
+        //{
+        //    if (VirtualMode)
+        //    {
+        //        if (_pathToIndex.TryGetValue(item.FullPath, out int index))
+        //        {
+        //            return index;
+        //        }
+        //        return -1;
+        //    }
+        //    else
+        //    {
+        //        return item.LVItem?.Index ?? -1;
+        //    }
+        //}
 
         /// <summary>
         /// Determines if the current display mode is a thumbnail-based view.
@@ -3438,20 +3188,11 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: FindItemByName Begin");
             try
             {
-                if (_useVirtualMode)
+                for (int i = 0; i < _listViewWrapper.Count; i++)
                 {
-                    for (int i = 0; i < _virtualItems.Count; i++)
-                    {
-                        if (string.Equals(_virtualItems[i].DisplayName, name, StringComparison.OrdinalIgnoreCase))
-                            return GetItemInternal(i);
-                    }
-                    return null;
-                }
-
-                foreach (var lvi in _itemIndex.Values)
-                {
-                    if (string.Equals(lvi.Text, name, StringComparison.OrdinalIgnoreCase))
-                        return lvi;
+                    var item = _listViewWrapper.GetItem(i);
+                    if (item != null && string.Equals(item.DisplayName, name, StringComparison.OrdinalIgnoreCase))
+                        return _listViewWrapper.GetListViewItem(i);
                 }
                 return null;
             }
@@ -3469,20 +3210,11 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: FindItemByID Begin");
             try
             {
-                if (_useVirtualMode)
+                for (int i = 0; i < _listViewWrapper.Count; i++)
                 {
-                    for (int i = 0; i < _virtualItems.Count; i++)
-                    {
-                        if (CPidl.IsEqual(_virtualItems[i].PIDL, pidl))
-                            return GetItemInternal(i);
-                    }
-                    return null;
-                }
-
-                foreach (var lvi in _itemIndex.Values)
-                {
-                    if (lvi.Tag is CShellItem csi && CPidl.IsEqual(csi.PIDL, pidl))
-                        return lvi;
+                    var item = _listViewWrapper.GetItem(i);
+                    if (item != null && CPidl.IsEqual(item.PIDL, pidl))
+                        return _listViewWrapper.GetListViewItem(i);
                 }
                 return null;
             }
@@ -3500,15 +3232,9 @@ namespace ExpControlsLib
             System.Diagnostics.Debug.WriteLine("ExpList: FindItemByPath Begin");
             try
             {
-                if (_useVirtualMode)
-                {
-                    if (_pathToIndex.TryGetValue(path, out int index))
-                        return GetItemInternal(index);
-                    return null;
-                }
-
-                if (_itemIndex.TryGetValue(path, out var lvi))
-                    return lvi;
+                int index = _listViewWrapper.GetIndexFromFullPath(path);
+                if (index >= 0)
+                    return _listViewWrapper.GetListViewItem(index);
                 return null;
             }
             finally
@@ -3829,9 +3555,6 @@ namespace ExpControlsLib
 
         #region Lazy Thumbnail Loading Support
 
-        //private bool _smallImageListInitialized = false;
-        //private bool _largeImageListInitialized = false;
-        //private bool _thumbnailImageListInitialized = false;
         /// <summary>
         /// Configures the image lists bound to the ListView for the given display mode.
         /// For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
@@ -3859,7 +3582,7 @@ namespace ExpControlsLib
                     EnterListViewEnumeration();
                     try
                     {
-                        _thumbnailManager.SetImageListSize(GetThumbnailSizeForMode(value));
+                        _thumbnailManager.SetImageListForSize(GetThumbnailSizeForMode(value));
                     }
                     finally
                     {
@@ -3912,10 +3635,10 @@ namespace ExpControlsLib
                 EnterListViewEnumeration();
                 try
                 {
-                    if (_useVirtualMode)
+                    if (VirtualMode)
                     {
                         int startIndex = 0;
-                        int endIndex = _virtualItems.Count - 1;
+                        int endIndex = _listViewWrapper.Count - 1;
 
                         if (onlyVisible)
                         {
@@ -3923,7 +3646,7 @@ namespace ExpControlsLib
                             int countPerPage = GetApproxVisibleCount();
                             // Use a reasonable buffer (1 page above/below) for smoother scrolling
                             startIndex = Math.Max(0, topIndex - countPerPage);
-                            endIndex = Math.Min(_virtualItems.Count - 1, topIndex + countPerPage * 2);
+                            endIndex = Math.Min(_listViewWrapper.Count - 1, topIndex + countPerPage * 2);
                         }
 
                         for (int i = startIndex; i <= endIndex; i++)
@@ -3936,7 +3659,7 @@ namespace ExpControlsLib
                             }
                             csi.ImageIndex = SystemImageListManager.GetIconIndex(csi, isLarge);
 
-                            var lvi = GetItemInternal(i);
+                            var lvi = _listViewWrapper.GetLviFromVirtual(i);
 
                             if (lvi is null)
                             {
@@ -4021,10 +3744,10 @@ namespace ExpControlsLib
                 EnterListViewEnumeration();
                 try
                 {
-                    if (_useVirtualMode)
+                    if (VirtualMode)
                     {
                         int startIndex = 0;
-                        int endIndex = _virtualItems.Count - 1;
+                        int endIndex = _listViewWrapper.Count - 1;
 
                         if (onlyVisible)
                         {
@@ -4032,17 +3755,17 @@ namespace ExpControlsLib
                             int countPerPage = GetApproxVisibleCount();
                             // Use a reasonable buffer (1 page above/below) for smoother scrolling
                             startIndex = Math.Max(0, topIndex - countPerPage);
-                            endIndex = Math.Min(_virtualItems.Count - 1, topIndex + countPerPage * 2);
+                            endIndex = Math.Min(_listViewWrapper.Count - 1, topIndex + countPerPage * 2);
                         }
 
                         for (int i = startIndex; i <= endIndex; i++)
                         {
-                            var item = _virtualItems[i];
+                            var csi = _listViewWrapper.GetItem(i);
                             // Skip if already in image list (GetThumbnailIndex will return != -1)
-                            if (_thumbnailManager.GetThumbnailIndex(item.FullPath, thumbnailSize) != -1)
+                            if (_thumbnailManager.GetThumbnailIndex(csi, thumbnailSize) != -1)
                                 continue;
 
-                            _thumbnailManager.RequestThumbnail(item, thumbnailSize, i);
+                            _thumbnailManager.RequestThumbnail(csi, thumbnailSize, i);
                             Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
                         }
                     }
@@ -4205,88 +3928,85 @@ namespace ExpControlsLib
         /// Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
         /// Returns the index where the item should be inserted to maintain sorted order.
         /// </summary>
-        /// <typeparam name="T">Type of items in the list</typeparam>
-        /// <param name="list">The sorted HugeList to search</param>
         /// <param name="item">The item to find an insertion point for</param>
         /// <returns>The index where the item should be inserted</returns>
-        public int FindInsertionPoint(CShellItem item)
-        {
-            LVColSorter? sorter = (LVColSorter?)_listView.ListViewItemSorter;
+        //public int FindInsertionPoint(CShellItem item)
+        //{
+        //    LVColSorter? sorter = (LVColSorter?)_listView.ListViewItemSorter;
 
-            if (sorter is null || sorter.OrderOfSort == SortOrder.None)
-                return (int)_virtualItems.Count; // if no sort, new items go at end
+        //    if (sorter is null || sorter.OrderOfSort == SortOrder.None)
+        //        return (int)_virtualItems.Count; // if no sort, new items go at end
 
-            var column = sorter.SortColumn;
-            var order = sorter.OrderOfSort;
-            var colHeader = _listView.Columns[column];
-            var comparer = new CShellItemComparer(this, column, order, colHeader);
-            return (int)FindInsertionPoint(item, comparer);
-        }
+        //    var column = sorter.SortColumn;
+        //    var order = sorter.OrderOfSort;
+        //    var colHeader = _listView.Columns[column];
+        //    var comparer = new CShellItemComparer(this, column, order, colHeader);
+        //    return FindInsertionPoint(item, comparer);
+        //}
 
-        /// <summary>
-        /// Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
-        /// Returns the index where the item should be inserted to maintain sorted order.
-        /// </summary>
-        /// <typeparam name="T">Type of items in the list</typeparam>
-        /// <param name="list">The sorted HugeList to search</param>
-        /// <param name="item">The item to find an insertion point for</param>
-        /// <param name="comparer">The comparer to use for comparing items</param>
-        /// <returns>The index where the item should be inserted</returns>
-        public long FindInsertionPoint(CShellItem item, IComparer<CShellItem> comparer = null, IHugeList<CShellItem> list = null)
-        {
-            if (list == null)
-                list = this._virtualItems;
+        ///// <summary>
+        ///// Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
+        ///// Returns the index where the item should be inserted to maintain sorted order.
+        ///// </summary>
+        ///// <param name="item">The item to find an insertion point for</param>
+        ///// <param name="comparer">The comparer to use for comparing items</param>
+        ///// <param name="list">The sorted HugeList to search</param>
+        ///// <returns>The index where the item should be inserted</returns>
+        //public int FindInsertionPoint(CShellItem item, IComparer<CShellItem> comparer = null, IHugeList<CShellItem> list = null)
+        //{
+        //    if (list == null)
+        //        list = this._virtualItems;
 
-            // Search the entire list
-            long result = list.BinarySearch(0, list.Count, item, comparer);
+        //    // Search the entire list
+        //    int result = list.BinarySearch(0, list.Count, item, comparer);
 
-            // If item is found, result will be the index of the item
-            // If item is not found, result will be negative and we need to bitwise complement it
-            // to get the insertion point
-            if (result < 0)
-            {
-                // Bitwise complement to get the insertion point
-                return ~result;
-            }
-            else
-            {
-                // Item was found, return the index where it was found
-                // This maintains consistency with typical insertion point behavior
-                return result;
-            }
-        }
+        //    // If item is found, result will be the index of the item
+        //    // If item is not found, result will be negative and we need to bitwise complement it
+        //    // to get the insertion point
+        //    if (result < 0)
+        //    {
+        //        // Bitwise complement to get the insertion point
+        //        return ~result;
+        //    }
+        //    else
+        //    {
+        //        // Item was found, return the index where it was found
+        //        // This maintains consistency with typical insertion point behavior
+        //        return result;
+        //    }
+        //}
 
-        private void SortVirtualItems(int column, SortOrder order)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: SortVirtualItems Begin");
-            try
-            {
-                if (order == SortOrder.None || _virtualItems.Count == 0) return;
+        //private void SortVirtualItems(int column, SortOrder order)
+        //{
+        //    System.Diagnostics.Debug.WriteLine("ExpList: SortVirtualItems Begin");
+        //    try
+        //    {
+        //        if (order == SortOrder.None || _virtualItems.Count == 0) return;
 
-                var col = _listView.Columns[column];
-                var comparer = new CShellItemComparer(this, column, order, col);
+        //        var col = _listView.Columns[column];
+        //        var comparer = new CShellItemComparer(this, column, order, col);
 
-                // Copy to a List for sorting because HugeList (B-Tree) sort is impractical in-place
-                var list = new List<CShellItem>((int)_virtualItems.Count);
-                foreach (var item in _virtualItems)
-                {
-                    list.Add(item);
-                }
+        //        // Copy to a List for sorting because HugeList (B-Tree) sort is impractical in-place
+        //        var list = new List<CShellItem>((int)_virtualItems.Count);
+        //        foreach (var item in _virtualItems)
+        //        {
+        //            list.Add(item);
+        //        }
 
-                list.Sort(comparer);
+        //        list.Sort(comparer);
 
-                _virtualItems.Clear();
-                _virtualItems.AddRange(list);
+        //        _virtualItems.Clear();
+        //        _virtualItems.AddRange(list);
 
-                RecreateIndexMapping();
-                _itemCache.Clear();
-                _listView.Refresh(); 
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: SortVirtualItems End");
-            }
-        }
+        //        RecreateIndexMapping();
+        //        _itemCache.Clear();
+        //        _listView.Refresh(); 
+        //    }
+        //    finally
+        //    {
+        //        System.Diagnostics.Debug.WriteLine("ExpList: SortVirtualItems End");
+        //    }
+        //}
 
 
         #endregion

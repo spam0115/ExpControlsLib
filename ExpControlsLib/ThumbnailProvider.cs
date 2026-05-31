@@ -82,8 +82,8 @@ namespace ExpControlsLib
             _maxThreads = Environment.ProcessorCount;
 #endif
             //in testing, moving from 1 to 2 to 4 provided improvements.  Going from 4 to 6 and to 8 both provided a slowdown.
-            if (_maxThreads > 4) _maxThreads = 4; //I don't think the OS can handle more than 4 or 8 requests at a time
-
+            if (_maxThreads > 4) _maxThreads = 4;
+            _maxThreads = 1;
             _requestQueueRunner = new StaThreadRunner(staThreadCount: _maxThreads, threadNamePrefix: "StaThreadRunner_");
         }
 

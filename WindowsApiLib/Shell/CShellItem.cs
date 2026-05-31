@@ -1000,7 +1000,7 @@ namespace WindowsApiLib.Shell
 
         private bool _IsSystem_HaveSysInfo = default;
         private bool _IsSystem_m_IsSystem = default;
-        public int ImageIndex; //todo: store all the image indexes for all sizes and not just one at a time.
+        public int ImageIndex = -1; //todo: store all the image indexes for all sizes and not just one at a time.
 
         /// <summary>True if this instance has been marked "System", False otherwise
         /// </summary>
@@ -1031,6 +1031,7 @@ namespace WindowsApiLib.Shell
         }
 
         private Dictionary<string, ListViewSubitemData> m_columnDic = null;
+        
         public Dictionary<string, ListViewSubitemData> ColumnDic
         {
             get
@@ -1042,6 +1043,13 @@ namespace WindowsApiLib.Shell
                 return m_columnDic;
             }
         }
+
+        /// <summary>
+        /// This indicates if the item has been updated since the last time it was consumed.
+        /// Not currently in use but may be needed for the future.
+        /// </summary>
+        public bool Updated;
+
 
         #endregion
 

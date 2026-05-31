@@ -611,11 +611,11 @@ namespace WindowsApiLib.Shell
                     Marshal.FreeCoTaskMem(csi.m_Pidl);
                     csi.m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, pidlRel);  //Must do this!  newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID //don't do this: m_Pidl = changedPidl;
 
-                    if (ReferenceEquals(allegedParentCsi, csi.Parent)) //renamed
+                    if (ReferenceEquals(allegedParentCsi, csi.Parent)) //renamed (does this really work?)
                     {
                         csi.ResetInfo();         // Added for fix to the fix
                         csi.m_Path = CShellItemFactory.GetFullPath(csi); ;
-                        RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, changeType));
+                        RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Renamed));
                         return true;
                     }
                     else // item was moved, not renamed
@@ -649,8 +649,8 @@ namespace WindowsApiLib.Shell
                                     item.UpdateFolderPidlAndPath(); //update child paths
                             }
                         }
-                        RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, changeType)); //tell both old and new locations about the change
-                        RaiseUpdateEvent(allegedParentCsi, new ShellItemUpdateEventArgs(csi, changeType));
+                        RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Moved)); //tell both old and new locations about the change
+                        RaiseUpdateEvent(allegedParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Moved));
                         
                         return false;
                     }
@@ -1144,6 +1144,7 @@ namespace WindowsApiLib.Shell
         IconChange,
         Updated,
         UpdateDir,
+        Moved,
         Renamed,
         Deleted,
         MediaChange

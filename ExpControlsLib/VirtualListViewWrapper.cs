@@ -2,11 +2,14 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
-using WindowsApiLib.Shell;
 using TreeLib;
+using WindowsApiLib;
+using WindowsApiLib.Shell;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace ExpControlsLib
 {
@@ -22,7 +25,6 @@ namespace ExpControlsLib
         private readonly Dictionary<string, int> _pathToIndex = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, ListViewItem> _itemIndex = new(StringComparer.OrdinalIgnoreCase);
 
-        private bool _useVirtualMode;
         private SortOrder _sortOrder = SortOrder.None;
         private int _sortColumn = 0;
 
@@ -44,7 +46,6 @@ namespace ExpControlsLib
         public VirtualListViewWrapper(ListView listView)
         {
             _listView = listView ?? throw new ArgumentNullException(nameof(listView));
-            _useVirtualMode = _listView.VirtualMode;
 
             _listView.RetrieveVirtualItem += OnRetrieveVirtualItem;
         }
@@ -52,20 +53,22 @@ namespace ExpControlsLib
         [Browsable(true), Category("Behavior"), DefaultValue(false)]
         public bool VirtualMode
         {
-            get => _useVirtualMode;
+            get => _listView.VirtualMode;
             set
             {
-                if (_useVirtualMode == value) return;
-                _useVirtualMode = value;
+                if (_listView.VirtualMode == value) return;
                 _listView.VirtualMode = value;
 
                 if (value)
                 {
+                    _listView.RetrieveVirtualItem -= OnRetrieveVirtualItem; //just in case
+                    _listView.RetrieveVirtualItem += OnRetrieveVirtualItem;
                     _listView.Items.Clear();
                     _itemIndex.Clear();
                 }
                 else
                 {
+                    _listView.RetrieveVirtualItem -= OnRetrieveVirtualItem;
                     _virtualItems.Clear();
                     _itemCache.Clear();
                     _pathToIndex.Clear();
@@ -73,7 +76,7 @@ namespace ExpControlsLib
             }
         }
 
-        public int Count => _useVirtualMode ? _virtualItems.Count : _listView.Items.Count;
+        public int Count => VirtualMode ? _virtualItems.Count : _listView.Items.Count;
 
         public int SelectedCount => _listView.SelectedIndices.Count;
 
@@ -95,25 +98,60 @@ namespace ExpControlsLib
         {
             get
             {
-                if (_useVirtualMode)
+                if (VirtualMode)
                     return _sortOrder;
                 else
                     return _listView.Sorting;
             }
             set
             {
-                if (_useVirtualMode)
+                if (VirtualMode)
                     _sortOrder = value;
                 else
                     _listView.Sorting = value;
             }
         }
 
+        /// <summary>
+        /// Gets or sets the display mode used to present items in the list view.
+        /// The native ListView dates from Windows 95 and doesn't support thumbnails.  Support for thumbnails 
+        /// was a kludge introduced in XP.
+        /// </summary>
+        /// <remarks>Use this property to select among multiple visual representations for items,
+        /// including standard views and thumbnail modes. Changing the display mode updates the appearance of the list
+        /// view accordingly.</remarks>
+        [Browsable(true), Category("Appearance"),
+         Description("Selects one of 8 different views that items can be shown in."),
+         DefaultValue(View.Details)]
+        public ListViewDisplayMode DisplayMode
+        {
+            get;
+            set
+            {
+                if (field == value) return;
+                if (value <= ListViewDisplayMode.Tile) // View values native to the ListView control 
+                {
+                    _listView.View = (View)value;
+                }
+                else
+                {
+                    _listView.View = View.LargeIcon; //XP era kludge for thumbnail mode
+                }
+                field = value;
+
+                if (VirtualMode) InvalidateVirtualItemIndexes();
+
+                //SetImageListForMode(value);
+                //if (VirtualMode) LoadImagesForItems();
+
+                //DisplayModeChanged?.Invoke(value);
+            }
+        }
 
         public void Clear()
         {
             _listView.SelectedIndices.Clear();
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
                 _listView.VirtualListSize = 0;
             }
@@ -129,7 +167,7 @@ namespace ExpControlsLib
 
         public void AddRange(IEnumerable<CShellItem> items)
         {
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
                 _virtualItems.AddRange(items);
                 UpdateVirtualListSize();
@@ -150,7 +188,7 @@ namespace ExpControlsLib
 
         public void Add(CShellItem item)
         {
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
                 _virtualItems.Add(item);
                 UpdateVirtualListSize();
@@ -168,7 +206,7 @@ namespace ExpControlsLib
         {
             int index = FindInsertionPoint(item);
 
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
                 _virtualItems.Insert(index, item);
                 UpdateVirtualListSize();
@@ -187,7 +225,7 @@ namespace ExpControlsLib
         {
             if (index < 0 || index >= Count) return;
 
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
                 _virtualItems.RemoveAt(index);
                 UpdateVirtualListSize();
@@ -206,7 +244,7 @@ namespace ExpControlsLib
 
         public CShellItem GetItem(int index)
         {
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
                 if (index >= 0 && index < _virtualItems.Count)
                     return _virtualItems[index];
@@ -221,9 +259,9 @@ namespace ExpControlsLib
 
         public ListViewItem GetListViewItem(int index)
         {
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
-                return GetItemInternal(index);
+                return GetLviFromVirtual(index);
             }
             else
             {
@@ -236,7 +274,7 @@ namespace ExpControlsLib
         public bool IsItemSelected(CShellItem item)
         {
             if (item == null) return false;
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
                 if (_pathToIndex.TryGetValue(item.FullPath, out int index))
                     return _listView.SelectedIndices.Contains(index);
@@ -269,9 +307,25 @@ namespace ExpControlsLib
             }
         }
 
+        public int GetIndex(CShellItem item)
+        {
+            if (VirtualMode)
+            {
+                if (_pathToIndex.TryGetValue(item.FullPath, out int index))
+                {
+                    return index;
+                }
+                return -1;
+            }
+            else
+            {
+                return item.LVItem?.Index ?? -1;
+            }
+        }
+
         public int GetIndexFromFullPath(string fullPath)
         {
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
                 if (_pathToIndex.TryGetValue(fullPath, out int index))
                     return index;
@@ -289,7 +343,7 @@ namespace ExpControlsLib
             _sortColumn = column;
             _sortOrder = order;
 
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
                 SortVirtualItems(column, order);
             }
@@ -304,7 +358,7 @@ namespace ExpControlsLib
 
         public void RedrawItem(int index)
         {
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
                 _itemCache.Remove(index);
                 _listView.RedrawItems(index, index, false);
@@ -321,7 +375,7 @@ namespace ExpControlsLib
 
         public void RedrawAll()
         {
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
                 _itemCache.Clear();
                 _listView.Invalidate();
@@ -342,27 +396,91 @@ namespace ExpControlsLib
             _itemCache.Clear();
         }
 
-        private void OnRetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e)
+        /// <summary>
+        /// Invalidates the image indices of all virtual items and cached ListViewItems.
+        /// This is necessary when switching between display modes to ensure that the correct
+        /// icons or thumbnails are loaded for the current view.
+        /// </summary>
+        private void InvalidateVirtualItemIndexes()
         {
-            if (ExpList._isShuttingDown) return;
+            System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes Begin");
+            try
+            {
+                if (!VirtualMode) return;
 
-            e.Item = GetItemInternal(e.ItemIndex);
+                foreach (var item in _virtualItems)
+                {
+                    if (item != null) item.ImageIndex = -1;
+                }
+
+                foreach (var lvi in _itemCache.Values)
+                {
+                    if (lvi != null) lvi.ImageIndex = -1;
+                }
+            }
+            finally
+            {
+                System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes End");
+            }
         }
 
-        private ListViewItem GetItemInternal(int index)
+        private void OnRetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e)
+        {
+            if (ExpList._isShuttingDown) return; //windows tries to retrieve every item during shutdown for some reason
+
+            e.Item = GetLviFromVirtual(e.ItemIndex);
+        }
+
+        public ListViewItem GetLviFromVirtual(int index)
         {
             if (index < 0 || index >= _virtualItems.Count) return null;
 
-            if (_itemCache.TryGetValue(index, out var lvi))
+            var item = _virtualItems[index];
+
+            if (item.Updated)
             {
-                var csi = _virtualItems[index];
-                UpdateItemCallback?.Invoke(lvi, csi);
+                var lvi = CreateLviFromCsi(item);
+                _itemCache[index] = lvi;
                 return lvi;
             }
+            else
+            {
+                if (_itemCache.TryGetValue(index, out var lvi))
+                {
+                    // Sync ImageIndex if it was updated in the background while item was cached
+                    if (lvi.ImageIndex == -1) //could be a sync problem to not run this each time because this data will not be populate for when the listview transitions from details to thumbnail modes
+                    {
+                        lvi.ImageIndex = item.ImageIndex;
+                    }
 
-            var item = _virtualItems[index];
-            lvi = CreateItemCallback?.Invoke(item) ?? new ListViewItem(item.DisplayName) { Tag = item };
-            _itemCache[index] = lvi;
+                    return lvi;
+                }
+                else
+                {
+                    lvi = CreateLviFromCsi(item);
+                    _itemCache[index] = lvi;
+                    return lvi;
+                }
+            }
+        }
+
+        private ListViewItem CreateLviFromCsi(CShellItem item)
+        {
+            var lvi = CreateItemCallback?.Invoke(item);
+            if (lvi != null)
+            {   //this shouldn't ever happen, but just in case the callback fails, create a basic ListViewItem to avoid crashing the ListView
+                lvi = new ListViewItem(item.DisplayName) { Tag = item };
+                foreach (var col in _listView.Columns)
+                {
+                    Debug.WriteLine("Failed to create listview item");
+
+                    var si = new ListViewItem.ListViewSubItem();
+                    si.Text = "error";
+                    si.Tag = null;
+                    lvi.SubItems.Add(si); // Placeholder for subitems, UpdateItemCallback should fill these in
+                }
+            }
+
             return lvi;
         }
 
@@ -404,6 +522,12 @@ namespace ExpControlsLib
             _listView.Refresh();
         }
 
+        /// <summary>
+        /// Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
+        /// Returns the index where the item should be inserted to maintain sorted order.
+        /// </summary>
+        /// <param name="item">The item to find an insertion point for</param>
+        /// <returns>The index where the item should be inserted</returns>
         public int FindInsertionPoint(CShellItem item)
         {
             var comparer = GetComparerCallback?.Invoke(_sortColumn, _sortOrder);
@@ -411,7 +535,7 @@ namespace ExpControlsLib
             if (comparer == null || _sortOrder == SortOrder.None)
                 return Count;
 
-            if (_useVirtualMode)
+            if (VirtualMode)
             {
                 long result = _virtualItems.BinarySearch(0, _virtualItems.Count, item, comparer);
                 return (int)(result < 0 ? ~result : result);
@@ -438,5 +562,69 @@ namespace ExpControlsLib
                 return low;
             }
         }
+
+        /// <summary>
+        /// Determines if the current display mode is a thumbnail-based view.
+        /// </summary>
+        /// <returns>True if in a thumbnail view mode.</returns>
+        public bool IsThumbnailViewMode() => DisplayMode == ListViewDisplayMode.Thumbnail || DisplayMode == ListViewDisplayMode.LargeThumbnail || DisplayMode == ListViewDisplayMode.ExtraLargeThumbnail;
+
+
+        ///// <summary>
+        ///// Configures the image lists bound to the ListView for the given display mode.
+        ///// For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
+        ///// list is applied and each item's <see cref="ListViewItem.ImageIndex"/> is refreshed.
+        ///// For custom thumbnail modes, the ListView is switched to LargeIcon view and
+        ///// <see cref="LoadThumbnailsForItems"/> is called to populate thumbnail images.
+        ///// </summary>
+        ///// <param name="value">The <see cref="ListViewDisplayMode"/> to configure for.</param>
+        //private void SetImageListForMode(ListViewDisplayMode value)
+        //{
+        //    System.Diagnostics.Debug.WriteLine("ExpList: SetAndLoadImageList Begin");
+        //    try
+        //    {
+        //        if (value <= ListViewDisplayMode.Tile) //built-in Windows 95 Shell view modes
+        //        {
+        //            bool large = (value == ListViewDisplayMode.LargeIcon);
+
+        //            if (large)
+        //                SystemImageListManager.SetListViewImageList(_listView, true, false);
+        //            else
+        //                SystemImageListManager.SetListViewImageList(_listView, false, false);
+        //        }
+        //        else //custom thumbnail view modes
+        //        {
+        //            _thumbnailManager.SetImageListSize(GetThumbnailSizeForMode(value));
+        //        }
+        //    }
+        //    finally
+        //    {
+        //        System.Diagnostics.Debug.WriteLine("ExpList: SetAndLoadImageList End");
+        //    }
+        //}
+
+        ///// <summary>
+        ///// Gets the pixel size for a given thumbnail display mode
+        ///// </summary>
+        //private int GetThumbnailSizeForMode(ListViewDisplayMode? mode = null)
+        //{
+        //    //System.Diagnostics.Debug.WriteLine("ExpList: GetThumbnailSizeForMode Begin");
+        //    try
+        //    {
+        //        mode ??= DisplayMode;
+        //        return mode switch
+        //        {
+        //            ListViewDisplayMode.Thumbnail => 48,
+        //            ListViewDisplayMode.LargeThumbnail => 96,
+        //            ListViewDisplayMode.ExtraLargeThumbnail => 256,
+        //            _ => 48 // Default to 48 for non-thumbnail modes, though this should never be used
+        //        };
+        //    }
+        //    finally
+        //    {
+        //        //System.Diagnostics.Debug.WriteLine("ExpList: GetThumbnailSizeForMode End");
+        //    }
+        //}
+
     }
 }
