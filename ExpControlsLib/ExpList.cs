@@ -1578,11 +1578,11 @@ namespace ExpControlsLib
                 csi.LVItem = lvi;
 
                 PopulateColumnData(lvi, csi); //you need this even in non-details mode to facilitate sorting
-                
-                if (IsThumbnailViewMode())
+
+                if (IsThumbnailViewMode()) 
                 {
-                    int index = _thumbnailManager.GetThumbnailIndex(csi, GetThumbnailSizeForMode());
-                    lvi.ImageIndex = index;
+                    //int index = _thumbnailManager.GetThumbnailIndex(csi, GetThumbnailSizeForMode()); //do not do this because sometimes windows will request all items from the listview for no reason
+                    lvi.ImageIndex = -1;
                 }
                 else
                     lvi.ImageIndex = SystemImageListManager.GetIconIndex(csi, _listViewWrapper.DisplayMode == ListViewDisplayMode.LargeIcon);

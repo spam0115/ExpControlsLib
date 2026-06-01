@@ -81,7 +81,7 @@ namespace ExpControlsLib
         public Task<T> InvokeAsync<T>(Func<T> work)
         {
             if (work == null) throw new ArgumentNullException(nameof(work));
-            return InvokeAsync(_ => work(), CancellationToken.None);
+            return EnqueueWork(_ => work(), CancellationToken.None);
         }
 
         /// <summary>
@@ -101,13 +101,13 @@ namespace ExpControlsLib
         /// Convenience overload for non-returning operations. Internally forwards to <see cref="InvokeAsync{T}(Func{T})"/>.
         /// Any exception thrown by <paramref name="work"/> is captured and rethrown when awaiting the returned task.
         /// </remarks>
-        public Task InvokeAsync(Action work)
+        public Task EnqueueWork(Action work)
         {
             if (work == null) throw new ArgumentNullException(nameof(work));
-            return InvokeAsync(_ => work(), CancellationToken.None);
+            return EnqueueWork(_ => work(), CancellationToken.None);
         }
 
-        public Task<T> InvokeAsync<T>(Func<CancellationToken, T> work, CancellationToken cancellationToken = default)
+        public Task<T> EnqueueWork<T>(Func<CancellationToken, T> work, CancellationToken cancellationToken = default)
         {
             if (work == null) throw new ArgumentNullException(nameof(work));
             ThrowIfDisposed();
@@ -130,11 +130,11 @@ namespace ExpControlsLib
             return item.Task;
         }
 
-        public Task InvokeAsync(Action<CancellationToken> work, CancellationToken cancellationToken = default)
+        public Task EnqueueWork(Action<CancellationToken> work, CancellationToken cancellationToken = default)
         {
             if (work == null) throw new ArgumentNullException(nameof(work));
 
-            return InvokeAsync(token =>
+            return EnqueueWork(token =>
             {
                 work(token);
                 return true;

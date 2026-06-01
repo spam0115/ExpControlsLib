@@ -104,6 +104,8 @@ namespace ExpControlsLib
                 return;
             }
 
+            Debug.WriteLine("EnqueueThumbnailRequest: " + reqArgs.FilePath);
+
             var csi = reqArgs.Item;
 
             if (csi is null && string.IsNullOrWhiteSpace(reqArgs.FilePath)) return;
@@ -122,7 +124,7 @@ namespace ExpControlsLib
             Console.WriteLine("\tAttempting to add to thumbnail request queue: " + csi.DisplayName);
 #endif
 
-            var task = _requestQueueRunner.InvokeAsync(_cancellationToken => { 
+            var task = _requestQueueRunner.EnqueueWork(_cancellationToken => { 
                 if (_cancellationToken.IsCancellationRequested) return; 
                 GenerateThumbnailAndNotify(reqArgs); }
                 , _cancellationToken);

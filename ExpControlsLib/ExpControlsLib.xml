@@ -852,16 +852,6 @@
             <param name="sender">The source of the event.</param>
             <param name="e">The <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the event data.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.InsertVirtualItemInSortedOrder(WindowsApiLib.Shell.CShellItem)">
-            <summary>
-            
-            </summary>
-            <remarks>This is really inefficient because it re-sorts the entire list on every insert.
-            May need to fix this by doing a manual binary search to find the correct insertion point and only 
-            re-sorting when necessary (e.g. if the new item is out of order with respect to its neighbors).
-            </remarks>
-            <param name="item"></param>
-        </member>
         <member name="M:ExpControlsLib.ExpList.DoItemUpdate(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
             <summary>
             Performs the actual update of list view items in response to shell changes.
@@ -869,28 +859,6 @@
             </summary>
             <param name="sender">The source of the event.</param>
             <param name="e">The <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the event data.</param>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.RecreateIndexMapping">
-            <summary>
-            Clears and recreates the entire mapping of item paths to their indices in the virtual list. 
-            This is necessary after any operation that can change the order of items, such as sorting or bulk updates.
-            This is an expensive operation (O(n)) and should be used judiciously.
-            Do not use this function when only a small number of inserts and deletes are made
-            , as it will be more efficient to update the index mapping incrementally in those cases..
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.InvalidateVirtualItemIndexes">
-            <summary>
-            Invalidates the image indices of all virtual items and cached ListViewItems.
-            This is necessary when switching between display modes to ensure that the correct
-            icons or thumbnails are loaded for the current view.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.UpdateLviUsingCsi(WindowsApiLib.Shell.CShellItem)">
-            <summary>
-            Refreshes the list view item associated with data from the given shell item.
-            </summary>
-            <param name="csi">The shell item whose corresponding list view item will be refreshed. Cannot be null.</param>
         </member>
         <member name="M:ExpControlsLib.ExpList.UpdateLviUsingCsi(System.Windows.Forms.ListViewItem,WindowsApiLib.Shell.CShellItem)">
             <summary>
@@ -905,6 +873,14 @@
             <param name="col"></param>
             <param name="text"></param>
             <param name="tag"></param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.EnsureCustomColumnDataFetched(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Loads all special custom column data that isn't part of CShellItem's default properties by firing
+            the ExpListGetColumnData event.  This allows external handlers to provide bulk data for all columns 
+            in one shot, which is more efficient than firing GetColumnData for each individual column.
+            </summary>
+            <param name="item"></param>
         </member>
         <member name="M:ExpControlsLib.ExpList.RefreshItemByDisplayName(System.String)">
             <summary>
@@ -1117,27 +1093,6 @@
             <summary>
             Hook for capturing scroll and other events from the ListView to trigger lazy loading.
             </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.FindInsertionPoint(WindowsApiLib.Shell.CShellItem)">
-            <summary>
-            Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
-            Returns the index where the item should be inserted to maintain sorted order.
-            </summary>
-            <typeparam name="T">Type of items in the list</typeparam>
-            <param name="list">The sorted HugeList to search</param>
-            <param name="item">The item to find an insertion point for</param>
-            <returns>The index where the item should be inserted</returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.FindInsertionPoint(WindowsApiLib.Shell.CShellItem,System.Collections.Generic.IComparer{WindowsApiLib.Shell.CShellItem},TreeLib.IHugeList{WindowsApiLib.Shell.CShellItem})">
-            <summary>
-            Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
-            Returns the index where the item should be inserted to maintain sorted order.
-            </summary>
-            <typeparam name="T">Type of items in the list</typeparam>
-            <param name="list">The sorted HugeList to search</param>
-            <param name="item">The item to find an insertion point for</param>
-            <param name="comparer">The comparer to use for comparing items</param>
-            <returns>The index where the item should be inserted</returns>
         </member>
         <member name="M:ExpControlsLib.ExpList.Dispose(System.Boolean)">
             <summary> 
@@ -1832,6 +1787,12 @@
             <param name="size">Desired thumbnail size in pixels (e.g., 96, 256).</param>
             <param name="reqArgs">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
         </member>
+        <member name="M:ExpControlsLib.ThumbnailProvider.CancelAllPendingOperations">
+            <summary>
+            
+            </summary>
+            <remarks>After cancellation, already-running tasks may still finish and create bitmaps which may not have gdi resources released correctly.</remarks>
+        </member>
         <member name="M:ExpControlsLib.ThumbnailProvider.ClearCache">
             <summary>
             Clears the thumbnail cache
@@ -1842,7 +1803,7 @@
             Cleans up resources
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailProvider.GenerateThumbnail(ExpControlsLib.ThumbnailRequestArgs)">
+        <member name="M:ExpControlsLib.ThumbnailProvider.GenerateThumbnailAndNotify(ExpControlsLib.ThumbnailRequestArgs)">
             <summary>
             Worker routine that produces the thumbnail for a single
             <see cref="!:ThumbnailRequest"/>, populates the cache, and raises
@@ -1902,9 +1863,83 @@
             aspect ratio, and centers it on a transparent background using ImageMagick.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ThumbnailProvider.PruneActiveTasks(System.Boolean)">
+            <summary>
+            Prunes active tasks.  
+            If thorough is false, it will just immediately return as soon as it finds 1 still active task.
+            </summary>
+            <param name="thorough"></param>
+        </member>
         <member name="T:ExpControlsLib.ThumbnailReadyEventArgs">
             <summary>
             Event arguments for thumbnail ready notifications
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.VirtualListViewWrapper">
+            <summary>
+            Encapsulates the messy behavior of the ListView control when switching between
+            Virtual and Regular modes. Provides a unified interface for data manipulation.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.CreateItemCallback">
+            <summary>
+            Callback to create a new ListViewItem for a given CShellItem.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.UpdateItemCallback">
+            <summary>
+            Callback to update an existing ListViewItem with data from a CShellItem.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.GetComparerCallback">
+            <summary>
+            Callback to get a comparer for sorting.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.DisplayMode">
+            <summary>
+            Gets or sets the display mode used to present items in the list view.
+            The native ListView dates from Windows 95 and doesn't support thumbnails.  Support for thumbnails 
+            was a kludge introduced in XP.
+            </summary>
+            <remarks>Use this property to select among multiple visual representations for items,
+            including standard views and thumbnail modes. Changing the display mode updates the appearance of the list
+            view accordingly.</remarks>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.FindLVItem(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Finds the <see cref="T:System.Windows.Forms.ListViewItem"/> corresponding to a specific <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
+            </summary>
+            <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to search for.</param>
+            <returns>The matching <see cref="T:System.Windows.Forms.ListViewItem"/>, or null if not found.</returns>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.InvalidateVirtualItemImagesIndexes">
+            <summary>
+            Invalidates the image indices of all virtual items and cached ListViewItems.
+            This is necessary when switching between display modes to ensure that the correct
+            icons or thumbnails are loaded for the current view.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.FindInsertionPoint(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
+            Returns the index where the item should be inserted to maintain sorted order.
+            </summary>
+            <param name="item">The item to find an insertion point for</param>
+            <returns>The index where the item should be inserted</returns>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.IsThumbnailViewMode">
+            <summary>
+            Determines if the current display mode is a thumbnail-based view.
+            </summary>
+            <returns>True if in a thumbnail view mode.</returns>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.GetTopIndex">
+            <summary>
+            Returns a "top-like" index for any ListView mode.
+            - Details/List: effectively top row index
+            - LargeIcon/SmallIcon/Tile: top-left visible item index
+            Works in virtual and non-virtual mode.
             </summary>
         </member>
     </members>

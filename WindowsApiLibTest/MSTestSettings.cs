@@ -16,7 +16,7 @@ namespace WindowsApiLibTest
         public static void AssemblyInit(TestContext context)
         {
             _runner = new StaThreadRunner(1, "Global STA Test Runner");
-            _runner.InvokeAsync(() =>
+            _runner.EnqueueWork(() =>
             {
                 CShellItemFactory.Initialize();
             }).Wait();

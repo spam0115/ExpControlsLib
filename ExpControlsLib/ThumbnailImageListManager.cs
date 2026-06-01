@@ -177,7 +177,7 @@ namespace ExpControlsLib
         public void RequestThumbnailFromCache(CShellItem csi, int thumbnailSize, int itemIndex = -1)
         {
 #if DEBUG
-            Console.WriteLine("\tRequesting thumbnail: " + csi.Text);
+            Console.WriteLine("Requesting thumbnail: " + csi.Text);
 #endif
             if (csi == null) return;
 

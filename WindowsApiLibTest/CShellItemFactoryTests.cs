@@ -16,7 +16,7 @@ namespace WindowsApiLibTest
         [TestMethod]
         public async Task TestInitializeAndProperties()
         {
-            await Runner.InvokeAsync(() =>
+            await Runner.EnqueueWork(() =>
             {
                 // Assert that Instance is correctly initialized
                 Assert.IsNotNull(CShellItemFactory.Instance, "Instance should not be null after initialization.");
@@ -42,7 +42,7 @@ namespace WindowsApiLibTest
         [TestMethod]
         public async Task TestCreateCShItemFromSpecialFolder()
         {
-            await Runner.InvokeAsync(() =>
+            await Runner.EnqueueWork(() =>
             {
                 // Test creation from CSIDL
                 var myComputer = CShellItemFactory.CreateCShItem(CSIDL.DRIVES);
@@ -58,7 +58,7 @@ namespace WindowsApiLibTest
         [TestMethod]
         public async Task TestCreateCShItemFromPath()
         {
-            await Runner.InvokeAsync(() =>
+            await Runner.EnqueueWork(() =>
             {
                 // Test creation from a common path
                 string windir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
@@ -73,7 +73,7 @@ namespace WindowsApiLibTest
         [TestMethod]
         public async Task TestCreateDesktopItem()
         {
-            await Runner.InvokeAsync(() =>
+            await Runner.EnqueueWork(() =>
             {
                 // Test creation of Desktop item
                 var desktop = CShellItemFactory.CreateCShItem(CSIDL.DESKTOP);
