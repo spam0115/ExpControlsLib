@@ -175,7 +175,7 @@ namespace WindowsApiLib.Shell
                                                 if (newItem is not null)
                                                 {
                                                     Debug.WriteLine("  [CREATE] Created newItem: " + newItem.ItemPath);
-                                                    parentItem.AddItem(newItem);
+                                                    AddItem(parentItem, newItem);
                                                 }
                                                 else
                                                 {
@@ -368,7 +368,7 @@ namespace WindowsApiLib.Shell
                                                 if (newItem is not null)
                                                 {
                                                     Debug.WriteLine("  [MKDIR] Created newItem: " + newItem.ItemPath);
-                                                    parentItem.AddItem(newItem);
+                                                    AddItem(parentItem, newItem);
                                                     // Debug.WriteLine("MKDIR: " & newItem.Path)
                                                 }
                                                 else
@@ -447,7 +447,7 @@ namespace WindowsApiLib.Shell
                                         if (indx > -1)
                                         {
                                             Debug.WriteLine("  [RMDIR] Found item in DirectoryList. Removing: " + parentItem.DirectoryList[indx].ItemPath);
-                                            parentItem.RemoveItem(parentItem.DirectoryList[indx]);   // 7/2/2012 - incorrectly used Directories
+                                            RemoveItem(parentItem, parentItem.DirectoryList[indx]);   // 7/2/2012 - incorrectly used Directories
                                         }
                                         else
                                         {
@@ -548,7 +548,7 @@ namespace WindowsApiLib.Shell
                     }
                 case CShItemUpdateType.Deleted:
                     {
-                        csi.Parent?.RemoveItem(csi);
+                        RemoveItem(csi?.Parent, csi);
                         //UpdateEvent?.Invoke(this, new ShellItemUpdateEventArgs(this, changeType)); //removeitem will invoke the event
                         break;
                     }
@@ -589,7 +589,7 @@ namespace WindowsApiLib.Shell
         /// <param name="changedPidl"></param>
         /// <param name="changeType"></param>
         /// <returns>True for rename, false for move</returns>
-        private static bool DoRenameOrMove(CShellItem csi, nint changedPidl, CShItemUpdateType changeType)
+        private bool DoRenameOrMove(CShellItem csi, nint changedPidl, CShItemUpdateType changeType)
         {
             IntPtr pidlRel = IntPtr.Zero, newIShellFolderPtr = IntPtr.Zero;
             var splitPidl = CPidl.Split(changedPidl);
@@ -600,7 +600,7 @@ namespace WindowsApiLib.Shell
             {
                 if (allegedParentCsi is null) // moved to a dir that is not yet in internal tree
                 {
-                    csi.Parent.RemoveItem(csi);
+                    RemoveItem(csi.Parent, csi);
                     csi.m_Parent = null;
                     csi.m_Pidl = changedPidl;
                     return false;
@@ -620,8 +620,8 @@ namespace WindowsApiLib.Shell
                     }
                     else // item was moved, not renamed
                     {
-                        csi.Parent.RemoveItem(csi);
-                        allegedParentCsi.AddItem(csi);
+                        RemoveItem(csi.Parent, csi);
+                        AddItem(allegedParentCsi,csi);
 
                         csi.m_Parent = allegedParentCsi;
 
@@ -796,7 +796,7 @@ namespace WindowsApiLib.Shell
                         {
                             foreach (var item in invalidItems)
                             {
-                                csi.RemoveItem(item);
+                                RemoveItem(csi, item);
                                 operations.Add((item, CShItemUpdateType.Deleted));
                             }
                         }
@@ -899,7 +899,7 @@ namespace WindowsApiLib.Shell
                         {
                             foreach (var item in oldCsiDic.Values)
                             {
-                                csi.RemoveItem(item);
+                                RemoveItem(csi, item);
                                 operations.Add((item, CShItemUpdateType.Deleted));
                                 Debug.WriteLine("removed item from hierarchy '" + item.DisplayName + "'");
                             }
@@ -912,6 +912,87 @@ namespace WindowsApiLib.Shell
             } //end lock
 
             return operations;
+        }
+
+        /// <summary>
+        /// For internal use only
+        /// </summary>
+        internal void AddItem(CShellItem parent, CShellItem item)
+        {
+            bool Changed = false;
+            lock (HierachyManager.Lock)
+            {
+                try
+                {
+                    item.m_Parent = parent;
+                    if (parent.IsFolder)
+                    {
+                        if (!parent.DirectoryList.Contains(item.PIDL))
+                        {
+                            parent.m_Directories.Append(item);
+                            Changed = true;
+                        }
+                        if (!parent.FileList.Contains(item.PIDL))
+                        {
+                            parent.m_Files.Add(item);
+                            Changed = true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("Error in CShellItem.AddItem -- " + ex.ToString());
+                }
+            }
+            if (Changed)
+            {
+                CShellItemUpdater.RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Created));
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="item"></param>
+        /// <returns></returns>
+        public bool RemoveItem(CShellItem parent, CShellItem item)
+        {
+            bool changed = false;
+            if (parent == null || item == null) return false;
+
+            lock (HierachyManager.Lock)
+            {
+                try
+                {
+                    if (parent.IsFolder)
+                    {
+                        if (parent.FoldersInitialized && parent.m_Directories.Contains(item))
+                        {
+                            // Debug.WriteLine("Removing " & item.Path & " From " & Me.Path)
+                            parent.m_Directories.Remove(item);
+                            changed = true;
+                        }
+
+                        if (parent.FilesInitialized && parent.m_Files.Contains(item))
+                        {
+                            parent.m_Files.Remove(item);
+                            changed = true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("Error in CShellItem.RemoveItem -- " + ex.ToString());
+                }
+            }
+
+            if (changed)
+            {
+                RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
+                RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(parent, CShItemUpdateType.Updated));
+            }
+
+            return changed;
         }
 
         public static void RaiseUpdateEvent(object sender, ShellItemUpdateEventArgs e)
@@ -937,11 +1018,6 @@ namespace WindowsApiLib.Shell
                     }
                 }
             }
-        }
-
-        public static void InvokeEvent(object sender, ShellItemUpdateEventArgs e)
-        {
-            RaiseUpdateEvent(sender, e);
         }
 
         private bool IsItemNotificationEvent(SHCNE lEvent)

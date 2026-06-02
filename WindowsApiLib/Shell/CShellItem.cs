@@ -513,13 +513,13 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// For internal use only
         /// </summary>
-        public CShellItemCollection DirectoryList => m_Directories;
+        public CShellItemCollection DirectoryList => m_Directories; //todo: get rid of this
 
         /// <summary>
         /// Returns an Array of CShItems containing the sub Directories of this instance.
         /// </summary>
         /// <returns>Array of CShItems containing the sub Directories of this instance.</returns>
-        public CShellItem[] Directories //todo: why is this an array and not a list?  having an array requires more converting
+        public CShellItem[] Directories //todo: why is this an array and not a list?  change this to a hugelist
         {
             get
             {
@@ -1048,7 +1048,7 @@ namespace WindowsApiLib.Shell
         /// This indicates if the item has been updated since the last time it was consumed.
         /// Not currently in use but may be needed for the future.
         /// </summary>
-        public bool NeedsRefresh;
+        public bool NeedsRefresh = true;
 
 
         #endregion
@@ -1337,28 +1337,24 @@ namespace WindowsApiLib.Shell
                 try
                 {
                     item.m_Parent = this;
-                    if (item.IsFolder)
+                    if (IsFolder)
                     {
-                        if (FoldersInitialized && !m_Directories.Contains(item.PIDL))
+                        if (!DirectoryList.Contains(item.PIDL))
                         {
-                            m_Directories.Add(item);
+                            DirectoryList.Append(item);
                             Changed = true;
                         }
-                    }
-                    else if (FilesInitialized && !m_Files.Contains(item.PIDL))
-                    {
-                        m_Files.Add(item);
-                        Changed = true;
+                        if (!FileList.Contains(item.PIDL))
+                        {
+                            m_Files.Add(item);
+                            Changed = true;
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine("Error in CShellItem.AddItem -- " + ex.ToString());
                 }
-            }
-            if (Changed)
-            {
-                CShellItemUpdater.InvokeEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Created));
             }
         }
 
@@ -1374,7 +1370,7 @@ namespace WindowsApiLib.Shell
             {
                 try
                 {
-                    if (item.IsFolder)
+                    if (IsFolder)
                     {
                         if (FoldersInitialized && m_Directories.Contains(item))
                         {
@@ -1382,22 +1378,18 @@ namespace WindowsApiLib.Shell
                             m_Directories.Remove(item);
                             changed = true;
                         }
-                    }
-                    else if (FilesInitialized && m_Files.Contains(item))
-                    {
-                        m_Files.Remove(item);
-                        changed = true;
+
+                        if (FilesInitialized && m_Files.Contains(item))
+                        {
+                            m_Files.Remove(item);
+                            changed = true;
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine("Error in CShellItem.RemoveItem -- " + ex.ToString());
                 }
-            }
-
-            if (changed)
-            {
-                CShellItemUpdater.InvokeEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
             }
 
             return changed;

@@ -317,7 +317,7 @@ namespace WindowsApiLib.Shell
 
             if (target != null)
             {
-                CShellItemUpdater.InvokeEvent(this, new ShellItemUpdateEventArgs(target, CShItemUpdateType.Deleted));
+                CShellItemUpdater.RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(target, CShItemUpdateType.Deleted));
             }
 
             return true;

@@ -9,7 +9,7 @@ using WindowsApiLib;
 namespace ExpControlsLib
 {
     /// <summary>
-    /// LVColSorter is a Class to be used as a ListViewItemSorter. 
+    /// LVColSorter is ListView in non-virtual mode to sort items.  (not used in virtual mode) 
     /// LVColSorter may be used as the ListViewItemSorter for ListViews populated by any means, but works
     /// best when the .Tag properties of the ListViewItems and SubItems are set as described in Remarks.
     /// </summary>
@@ -22,11 +22,13 @@ namespace ExpControlsLib
     /// the .Tag property may be set to provide this class with the information needed for a proper Sort.</para>
     /// <para>Set the .Tags as follows:
     /// <list type="table">
-    /// <item><term>Each ListViewItem</term><description>The Class instance or DataRow from which the ListViewItem is built.
-    ///                                                  The instance should support the IComparable Interface,
-    ///                                                  if not, it is ignored for Sort purposes and may be omitted.</description></item>
-    /// <item><term>Each SubItem</term><description>If the .Text property will not Sort correctly, then the .Tag should be
-    ///                                set to the original Value (Date, Double, etc.)</description></item>
+    /// <item><term>Each ListViewItem</term>
+    /// <description>The Class instance or DataRow from which the ListViewItem is built.
+    ///     The instance should support the IComparable Interface,
+    ///     if not, it is ignored for Sort purposes and may be omitted.</description></item>
+    /// <item><term>Each SubItem</term>
+    /// <description>If the .Text property will not Sort correctly, then the .Tag should be
+    ///     set to the original Value (Date, Double, etc.)</description></item>
     /// </list>See the documentation of the Compare Method of this Class for the actual Sort rules.</para>
     /// <para>Class Properties
     /// or DataRow Fields whose Value is a String will Sort based on that String. String
@@ -47,6 +49,32 @@ namespace ExpControlsLib
         /// Occurs when the sort column or order has changed.
         /// </summary>
         public event EventHandler SortOrderChanged;
+
+        #region    Private Fields
+        private readonly ListView m_View;
+        private readonly int[] m_ColOrder;
+        private int m_Col;
+
+        #endregion
+
+        #region    Constructor
+
+        /// <summary>
+        /// Creates a new instance of LVColSorter based on a fully populated
+        /// ListView, with ColumnHeaders defined. Assigns its own Handler for ListView.ColumnClick Events.
+        /// </summary>
+        /// <param name="lv">A fully populated ListView, preferably set up by SetUpListView, which will
+        /// be using this instance as the ListViewItemSorter.</param>
+        /// <remarks></remarks>
+        public LVColSorter(ListView lv)
+        {
+            m_View = lv;
+            m_ColOrder = new int[lv.Columns.Count];
+            for (int i = 0, loopTo = lv.Columns.Count - 1; i <= loopTo; i++)
+                ListViewSortGlyph.SetSortIcon(lv, i, SortOrder.None);
+            lv.ListViewItemSorter = null;
+            lv.ColumnClick += ListView_ColumnClick;
+        }
 
         /// <summary>
         /// Compares two ListViewItems from the same ListView in accordance to the Sort rules of the Class.
@@ -77,7 +105,6 @@ namespace ExpControlsLib
         ///                    Ascending or Decending. This sort order is determined by reversing the
         ///                    sort order of the last click on this column.</description></item>
         /// </list></remarks>
-        /// 
         public int Compare(object x, object y)
         {
             if (x == null || y == null) return 0;
@@ -120,32 +147,6 @@ namespace ExpControlsLib
             if (m_ColOrder[m_Col] != 0)
                 CompareRet *= m_ColOrder[m_Col];
             return CompareRet;
-        }
-
-        #region    Private Fields
-        private readonly ListView m_View;
-        private readonly int[] m_ColOrder;
-        private int m_Col;
-
-        #endregion
-
-        #region    Constructor
-
-        /// <summary>
-        /// Creates a new instance of LVColSorter based on a fully populated
-        /// ListView, with ColumnHeaders defined. Assigns its own Handler for ListView.ColumnClick Events.
-        /// </summary>
-        /// <param name="lv">A fully populated ListView, preferably set up by SetUpListView, which will
-        /// be using this instance as the ListViewItemSorter.</param>
-        /// <remarks></remarks>
-        public LVColSorter(ListView lv)
-        {
-            m_View = lv;
-            m_ColOrder = new int[lv.Columns.Count];
-            for (int i = 0, loopTo = lv.Columns.Count - 1; i <= loopTo; i++)
-                ListViewSortGlyph.SetSortIcon(lv, i, SortOrder.None);
-            lv.ListViewItemSorter = null;
-            lv.ColumnClick += ListView_ColumnClick;
         }
 
         private bool OKToCompare(object X, object Y)

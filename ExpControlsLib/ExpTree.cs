@@ -132,8 +132,44 @@ namespace ExpControlsLib
 
             StartUpDirectoryChanged += OnStartUpDirectoryChanged;
 
-            CShellItemUpdater.UpdateEvent += OnItemUpdate;            // 7/1/2012
+            CShellItemUpdater.UpdateEvent += OnItemUpdate;
             expandNodeTimer.Tick += ExpandNodeTimer_Tick;
+        }
+
+
+        /// <summary>
+        /// Windows Message Handler for receiving Messages associated with a System Menu. 
+        /// This is what causes Cascading menus to Display
+        /// </summary>
+        /// <param name="m">A Windows Message</param>
+        /// <remarks>Only Handles Messages relating to Windows Context Menus</remarks>
+        protected override void WndProc(ref Message m)
+        {
+            // For send to menu in the explorer context menu
+            int hr;
+            if (m.Msg == (long)WM.INITMENUPOPUP | m.Msg == (long)WM.MEASUREITEM | m.Msg == (long)WM.DRAWITEM)
+            {
+                if (m_windowsContextMenu.winMenu2 is not null)
+                {
+                    hr = m_windowsContextMenu.winMenu2.HandleMenuMsg(m.Msg, m.WParam, m.LParam);
+                    if (hr == 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            else if (m.Msg == (long)WM.MENUCHAR)
+            {
+                if (m_windowsContextMenu.winMenu3 is not null)
+                {
+                    hr = m_windowsContextMenu.winMenu3.HandleMenuMsg2(m.Msg, m.WParam, m.LParam, IntPtr.Zero);
+                    if (hr == 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            base.WndProc(ref m);
         }
 
         #endregion
@@ -426,7 +462,6 @@ namespace ExpControlsLib
 
         #region    Public Methods
 
-        #region        ExpandANode
         /// <summary>
         /// Expands TreeNodes from the tree root through the input Path. All intermediate nodes between the
         /// Tree Root and the input Path are Expanded. If the Optional Property SelectExpandedNode is True (the Default),
@@ -534,11 +569,277 @@ namespace ExpControlsLib
             baseNode.EnsureVisible();       // 12/18/13
             return ExpandANodeRet;
         }
-        #endregion
+
+        public void ExpCollapseAll(bool collapse = true)
+        {
+            if (collapse == true)
+            {
+                _TreeView.CollapseAll();
+            }
+        }
+
+        #region Navigation
+
+        /// <summary>
+        /// Navigates back to the previous folder in the history.
+        /// </summary>
+        public void GoBack()
+        {
+            if (_backHistory.Count > 0)
+            {
+                _forwardHistory.Push(_lastSelectedCSI);
+                var prev = _backHistory.Pop();
+                _isNavigatingHistory = true;
+                try
+                {
+                    ExpandANode(prev, true);
+                }
+                finally
+                {
+                    _isNavigatingHistory = false;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Navigates forward to the next folder in the history.
+        /// </summary>
+        public void GoForward()
+        {
+            if (_forwardHistory.Count > 0)
+            {
+                _backHistory.Push(_lastSelectedCSI);
+                var next = _forwardHistory.Pop();
+                _isNavigatingHistory = true;
+                try
+                {
+                    ExpandANode(next, true);
+                }
+                finally
+                {
+                    _isNavigatingHistory = false;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Navigates to the parent folder of the currently loaded folder.
+        /// </summary>
+        public void GoUp()
+        {
+            if (_lastSelectedCSI?.Parent != null)
+            {
+                ExpandANode(_lastSelectedCSI.Parent, true);
+            }
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether there is a folder to navigate back to.
+        /// </summary>
+        public bool CanGoBack => _backHistory.Count > 0;
+
+        /// <summary>
+        /// Gets a value indicating whether there is a folder to navigate forward to.
+        /// </summary>
+        public bool CanGoForward => _forwardHistory.Count > 0;
+
+        /// <summary>
+        /// Gets a value indicating whether the current folder has a parent folder to navigate to.
+        /// </summary>
+        public bool CanGoUp => _lastSelectedCSI?.Parent != null;
 
         #endregion
 
+        #endregion
 
+        #region    Dynamic Update Handler
+
+        // Private WithEvents DeskTopItem As CShellItem = CShellItem.GetDeskTop     '7/1/2012
+
+        private void OnItemUpdate(object sender, ShellItemUpdateEventArgs e)
+        {
+            // Debug.WriteLine("Enter ExpTree OnItemUpdate -- " & e.Item.DisplayName & " - " & e.UpdateType.ToString)
+            if (e.Item is not null && e.Item.IsFolder)  // no interest in non-folder events (or UpdateDir)
+            {
+                try
+                {
+                    //CShellItem parent = (CShellItem)sender;
+                    CShellItem parent = e.Item.Parent;
+                    TreeNode? pNode = default(TreeNode);
+                    if (GetTreeNode(parent, ref pNode))
+                    {
+                        // Debug.WriteLine("Located Parent Node " & pNode.Text & " of Item " & e.Item.Path)
+                        _TreeView.BeginUpdate();
+                        switch (e.UpdateType)
+                        {
+                            case CShItemUpdateType.Created:  // A new Dir has been created under Parent/pNode
+                                {
+                                    var Node = MakeNode(e.Item);
+                                    // Debug.WriteLine("Adding Node " & NodePath(Node))
+                                    InsertNode(Node, pNode); // 6/25/2012
+                                                             // pNode.Nodes.Add(Node)  '6/25/2012
+                                                             // tv1.Invalidate()   '6/18/2012 - Trust tv1 to do right thing on an Add
+                                    break;
+                                }
+                            case CShItemUpdateType.Deleted:  // An old Dir has been deleted from Parent/pNode
+                                {
+                                    bool exitSelect = false;
+                                    foreach (TreeNode Node in pNode.Nodes)
+                                    {
+                                        if (Node.Tag is not null && ReferenceEquals(Node.Tag, e.Item))
+                                        {
+                                            // Debug.WriteLine("Removing Node " & NodePath(Node))
+                                            pNode.Nodes.Remove(Node);
+                                            // tv1.Invalidate()   '6/18/2012 - Trust tv1 to do right thing on a Delete
+                                            exitSelect = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if (exitSelect)
+                                    {
+                                        break;
+                                    }
+
+                                    break;
+                                }
+                            // In the Renamed case, pnode is the Parent CShellItem Before the rename,
+                            // get the current Parent CShellItem from the renamed CShellItem(e.Item)
+                            case CShItemUpdateType.Renamed:  // A directory has been renamed under Parent/pNode
+                                {
+                                    var curPNode = default(TreeNode);
+                                    bool exitSelect1 = false;
+                                    foreach (TreeNode Node in pNode.Nodes)
+                                    {
+                                        if (Node.Tag is not null && ReferenceEquals(Node.Tag, e.Item))
+                                        {
+                                            bool wasSelected = ReferenceEquals(_TreeView.SelectedNode, Node);
+                                            Node.Text = e.Item.DisplayName;
+                                            pNode.Nodes.Remove(Node);
+                                            if (GetTreeNode(e.Item.Parent, ref curPNode))
+                                            {
+                                                InsertNode(Node, curPNode); // 6/25/2012
+                                                                            // curPNode.Nodes.Add(Node)  '6/25/2012
+                                                if (wasSelected)     // 6/25/2012
+                                                {
+                                                    _TreeView.SelectedNode = Node;
+                                                    Node.EnsureVisible();
+                                                }
+                                            }
+                                            // tv1.Invalidate()   '6/18/2012 - Trust tv1 to do right thing on an Add or Delete
+                                            exitSelect1 = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if (exitSelect1)
+                                    {
+                                        break;
+                                    }
+
+                                    break;
+                                }
+                            case CShItemUpdateType.MediaChange:  // Media has been added/removed
+                                {
+                                    bool exitSelect2 = false;
+                                    for (int indx = 0, loopTo = pNode.Nodes.Count - 1; indx <= loopTo; indx++)
+                                    {
+                                        if (pNode.Tag is not null && ReferenceEquals(pNode.Nodes[indx].Tag, e.Item))
+                                        {
+                                            var node = pNode.Nodes[indx];
+                                            CShellItem item = (CShellItem)node.Tag;
+                                            bool wasExpanded = node.IsExpanded;
+                                            if (wasExpanded)
+                                            {
+                                                node.ImageIndex = item.IconIndexOpen;
+                                            }
+                                            else
+                                            {
+                                                node.ImageIndex = item.IconIndexNormal;
+                                            }
+                                            node.Collapse(false);
+                                            node.Nodes.Clear();
+                                            if (ShouldHaveDummy(item))
+                                            {
+                                                node.Nodes.Add(new TreeNode(" : "));
+                                            }
+                                            if (wasExpanded)
+                                                node.Expand();
+                                            _TreeView.Invalidate();
+                                            if (ReferenceEquals(node, _TreeView.SelectedNode))
+                                            {
+                                                if (e.Item.FullPath.StartsWith(":"))
+                                                {
+                                                    ExpTreeNodeSelected?.Invoke(e.Item.DisplayName, e.Item);
+                                                }
+                                                else
+                                                {
+                                                    ExpTreeNodeSelected?.Invoke(e.Item.FullPath, e.Item);
+                                                }
+                                            }
+                                            exitSelect2 = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if (exitSelect2)
+                                    {
+                                        break;
+                                    }
+
+                                    break;
+                                }
+                            case CShItemUpdateType.Updated:  // 5/24/2012 - In this case, it is the Item that had some change. Check if Expandability has changed
+                                {
+                                    var UNode = default(TreeNode);
+                                    if (GetTreeNode(e.Item, ref UNode))    // otherwise don't care
+                                    {
+                                        // If UNode.IsExpanded Then        'Earlier msgs will update the nodes
+                                        // SortNodes(UNode)
+                                        // Else    '6/5/2012 - check Expandable - in case a Folder added or Deleted which may happen without another message (Async ops)
+                                        if (UNode.Nodes.Count == 0)     // Was not Expandable, should it be? (Folder may have been added)
+                                        {
+                                            if (ShouldHaveDummy(e.Item))
+                                            {
+                                                UNode.Nodes.Add(new TreeNode(" : "));
+                                            }
+                                            UNode.Collapse(false);   // 02/12/2014 can only have 0 or 1 (dummy) node - collapse to avoid showing dummy
+                                        }
+                                        // 02/12/2014 ElseIf Block recast and now uses DirCount rather than Directories
+                                        else if (UNode.Nodes.Count == 1 && UNode.Nodes[0].Text.Equals(" : ")) // Should it still have dummy? (Folder may have been Deleted)
+                                        {
+                                            if (!ShouldHaveDummy(e.Item))
+                                            {
+                                                UNode.Nodes.Clear();
+                                            }
+                                        }
+                                        // End If
+                                    }
+
+                                    break;
+                                }
+
+                            default:
+                                {
+                                    break;
+                                }
+                                // Don't care about any other type of change
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("ExpTree Update Error -- " + ex.ToString());
+                }
+                finally
+                {
+                    _TreeView.EndUpdate();
+                }
+            }
+            else { } // no find means that node not expanded and therefore of no interest
+        }
+
+        #endregion
 
         #region    Initial Dir Set Handler
 
@@ -677,66 +978,9 @@ namespace ExpControlsLib
         }
         #endregion
 
-        /// <summary>RefreshTree Method thanks to Calum McLellan</summary>
-        [Description("Refresh the Tree and all nodes through the currently selected item")]
-        private void RefreshTree(CShellItem rootCSI = null)
-        {
-            // Modified to use ExpandANode(CShellItem) rather than ExpandANode(path)
-            // Set refresh variable for BeforeExpand method
-            EnableEventPost = false;
-            // Begin Calum's change -- With some modification
-            TreeNode Selnode;
-            if (_TreeView.SelectedNode == null)
-            {
-                Selnode = Root;
-            }
-            else
-            {
-                Selnode = _TreeView.SelectedNode;
-            }
-            // End Calum's change
-            try
-            {
-                _TreeView.BeginUpdate();
-                CShellItem SelCSI = (CShellItem)Selnode.Tag;
-                // Set root node
-                if (rootCSI == null)
-                {
-                    RootItem = RootItem;
-                }
-                else
-                {
-                    RootItem = rootCSI;
-                }
-                // Try to expand the node
-                if (!ExpandANode(SelCSI))
-                {
-                    var nodeList = new List<TreeNode>();
-                    while (!(Selnode.Parent == null))
-                    {
-                        nodeList.Add(Selnode.Parent);
-                        Selnode = Selnode.Parent;
-                    }
 
-                    foreach (TreeNode currentSelnode in nodeList)
-                    {
-                        Selnode = currentSelnode;
-                        if (ExpandANode((CShellItem)Selnode.Tag))
-                            break;
-                    }
-                    // Reset refresh variable for BeforeExpand method
-                }
-            }
-            finally
-            {
-                _TreeView.EndUpdate();
-            }
-            EnableEventPost = true;
-            // We suppressed EventPosting during refresh, so give it one now
-            Tv1_AfterSelect(this, new TreeViewEventArgs(_TreeView.SelectedNode));
-        }
+        #region Event Handling
 
-        #region    TreeView BeforeExpand Event
 
         private void Tv1_BeforeExpand(object sender, TreeViewCancelEventArgs e)
         {
@@ -750,45 +994,6 @@ namespace ExpControlsLib
             Cursor = oldCursor;
         }
 
-        /// <summary>
-        /// Called to Populate the TreeNodes of a TreeNode that only contains a Dummy Node.
-        /// </summary>
-        /// <param name="NodeToFill">The unexpanded TreeNode to Fill</param>
-        /// <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
-        /// Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
-        private void PopulateNode(TreeNode NodeToFill)          // 8/26/2012
-        {
-            CShellItem CSI = (CShellItem)NodeToFill.Tag;
-            // 02/12/2014 - Setting of D changed at suggestion of Michael Ruby
-            List<CShellItem> D;
-            if (CSI.DirectoryList is null)
-            {
-                D = new List<CShellItem>(CSI.Directories); //todo: remove this conversion
-            }
-            else
-            {
-                D = new List<CShellItem>(CSI.DirectoryList);  //todo: remove this conversion
-            }
-            if (D.Count > 0)
-            {
-                D.Sort();    // uses the class comparer
-                NodeToFill.Nodes.Clear();    // 11/03/2012 DO NOT Clear out the dummy prior to calling .Directories which forces a UpdateRefresh!
-                foreach (CShellItem Item in D)
-                {
-                    if (!(Item.IsHidden & !m_showHiddenFolders))
-                    {
-                        NodeToFill.Nodes.Add(MakeNode(Item));
-                    }
-                }
-            }
-            else        // 11/03/2012 BUT DO get rid of any unnessesary Dummy
-            {
-                NodeToFill.Nodes.Clear();
-            }
-        }
-        #endregion
-
-        #region    TreeView AfterSelect Event
         private void Tv1_AfterSelect(object sender, TreeViewEventArgs e)
         {
             CShellItem CSI = (CShellItem)e.Node.Tag;
@@ -812,7 +1017,7 @@ namespace ExpControlsLib
                     }
                 }
                 catch (Exception ex)
-                { 
+                {
                     Debug.WriteLine("Error reading folder: " + ex.Message);
                 }
             }
@@ -830,81 +1035,131 @@ namespace ExpControlsLib
                 }
             }
         }
-
-        #region Navigation
-
-        /// <summary>
-        /// Navigates back to the previous folder in the history.
-        /// </summary>
-        public void GoBack()
+        private void ExpTree_MouseUp(object sender, MouseEventArgs e)
         {
-            if (_backHistory.Count > 0)
+            if (e.Button == MouseButtons.Right)
             {
-                _forwardHistory.Push(_lastSelectedCSI);
-                var prev = _backHistory.Pop();
-                _isNavigatingHistory = true;
-                try
+                TreeNode tn;
+                var pt = PointToClient(MousePosition);
+                tn = _TreeView.GetNodeAt(pt);
+                if (m_useWindowsContextMenu & !(tn == null))
                 {
-                    ExpandANode(prev, true);
-                }
-                finally
-                {
-                    _isNavigatingHistory = false;
+                    var itms = new CShellItem[1];
+                    itms[0] = (CShellItem)tn.Tag;
+                    CMInvokeCommandInfoEx cmi = default;
+                    if (m_windowsContextMenu.ShowMenu(Handle, itms, MousePosition, m_allowFolderRename, out cmi, m_minimalContextMenu))
+                    {
+                        // Check for rename
+                        var cmdBytes = new byte[257];
+                        m_windowsContextMenu.winMenu.GetCommandString(cmi.lpVerb.ToInt32(), (int)GCS.VERBA, 0, cmdBytes, 256);
+
+                        string cmdName = SzToString(cmdBytes).ToLower();
+                        if (cmdName.Equals("rename"))
+                        {
+                            _TreeView.LabelEdit = true;
+                            tn.BeginEdit();
+                        }
+                        else
+                        {
+                            string strPath;
+                            if (ReferenceEquals(itms[0], ShellController.DesktopCSI))
+                            {
+                                strPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                            }
+                            else
+                            {
+                                strPath = itms[0].Parent.FullPath;
+                            }
+                            m_windowsContextMenu.InvokeCommand(m_windowsContextMenu.winMenu, (uint)cmi.lpVerb, strPath, pt);
+                        }
+                        // Marshal.ReleaseComObject(m_windowsContextMenu.winMenu)
+                        m_windowsContextMenu.ReleaseMenu();
+                    }
                 }
             }
+            OnMouseUp(e);
         }
 
-        /// <summary>
-        /// Navigates forward to the next folder in the history.
-        /// </summary>
-        public void GoForward()
+        private void Tv1_MouseDown(object sender, MouseEventArgs e)
         {
-            if (_forwardHistory.Count > 0)
+            OnMouseDown(e);
+        }
+
+        private void Tv1_MouseMove(object sender, MouseEventArgs e)
+        {
+            OnMouseMove(e);
+        }
+
+        private void Tv1_MouseEnter(object sender, EventArgs e)
+        {
+            OnMouseEnter(e);
+        }
+
+        private void Tv1_MouseLeave(object sender, EventArgs e)
+        {
+            OnMouseLeave(e);
+        }
+        private void Tv1_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (e.KeyChar == '\u0003' | e.KeyChar == '\u0016' | e.KeyChar == '\u0018' | e.KeyChar == '\r')  // Ctrl + C
+                                                                                                            // Ctrl + V
+                                                                                                            // Ctrl + X
+                                                                                                            // Enter
             {
-                _backHistory.Push(_lastSelectedCSI);
-                var next = _forwardHistory.Pop();
-                _isNavigatingHistory = true;
-                try
+                e.Handled = true;  // Eliminate warning sound
+            }
+            OnKeyPress(e);
+        }
+
+        private void Tv1_KeyUp(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                if (_TreeView.SelectedNode.GetNodeCount(false) > 0 & _TreeView.SelectedNode.IsExpanded == false)
                 {
-                    ExpandANode(next, true);
-                }
-                finally
-                {
-                    _isNavigatingHistory = false;
+                    _TreeView.SelectedNode.Expand();
                 }
             }
-        }
-
-        /// <summary>
-        /// Navigates to the parent folder of the currently loaded folder.
-        /// </summary>
-        public void GoUp()
-        {
-            if (_lastSelectedCSI?.Parent != null)
+            if (e.KeyCode == Keys.Delete)
             {
-                ExpandANode(_lastSelectedCSI.Parent, true);
+                WinMenuCmd(SelectedItem, "delete");
             }
+            if (e.Control)
+            {
+                switch (e.KeyCode)
+                {
+                    case var @case when @case == Keys.X:
+                        {
+                            WinMenuCmd(SelectedItem, "cut");
+                            break;
+                        }
+                    case var case1 when case1 == Keys.C:
+                        {
+                            WinMenuCmd(SelectedItem, "copy");
+                            break;
+                        }
+                    case var case2 when case2 == Keys.V:
+                        {
+                            WinMenuCmd(SelectedItem, "paste");
+                            break;
+                        }
+                }
+            }
+            OnKeyUp(e);
         }
 
-        /// <summary>
-        /// Gets a value indicating whether there is a folder to navigate back to.
-        /// </summary>
-        public bool CanGoBack => _backHistory.Count > 0;
+        private void Tv1_KeyDown(object sender, KeyEventArgs e)
+        {
+            OnKeyDown(e);
+        }
 
-        /// <summary>
-        /// Gets a value indicating whether there is a folder to navigate forward to.
-        /// </summary>
-        public bool CanGoForward => _forwardHistory.Count > 0;
+        // Public Event TreeKeyDown(ByVal sender As Object, ByVal e As System.Windows.Forms.KeyEventArgs)
 
-        /// <summary>
-        /// Gets a value indicating whether the current folder has a parent folder to navigate to.
-        /// </summary>
-        public bool CanGoUp => _lastSelectedCSI?.Parent != null;
-
-        #endregion
-
-
-        #endregion
+        // Private Sub tv1_KeyDown(ByVal sender, ByVal e As System.Windows.Forms.KeyEventArgs) Handles tv1.KeyDown
+        // Debug.WriteLine("KeyDown in ExpTree Char = " & e.KeyData.ToString)
+        // If e.KeyData = Keys.Escape Then e.Handled = True
+        // RaiseEvent TreeKeyDown(sender, e)
+        // End Sub
 
         /// <summary>When a form containing this control is Hidden and then re-Shown,
         /// the association to the SystemImageList is lost.  Also lost is the
@@ -948,6 +1203,105 @@ namespace ExpControlsLib
                 e.Node.ImageIndex = ((CShellItem)e.Node.Tag).IconIndexNormal;
             }
         }
+
+
+        private bool m_allowFolderRename;
+        /// <summary>
+        /// Allow renaming of folders using LabelEdit
+        /// </summary>
+        /// <value></value>
+        /// <returns></returns>
+        /// <remarks></remarks>
+        [Category("Behavior")]
+        [Description("Allow renaming of folders using LabelEdit")]
+        public bool AllowFolderRename
+        {
+            get
+            {
+                return m_allowFolderRename;
+            }
+            set
+            {
+                m_allowFolderRename = value;
+                _TreeView.LabelEdit = value;
+            }
+        }
+
+        // Newest code from Calum for Before and After LabelEdit. His remarks are:
+        // I also made some changes to ExpTree, I added a check for a dummy node as after renaming a folder 
+        // that hadn't been expanded I would receive an error as a BeforeLabelEdit event was fired for the 
+        // dummyx node. This only happened with SharePoint folders 
+        // (Note that SharePoint folder ALWAYS return true for HasSubFolders and this was happening on 
+        // folders without subfolders...) I also replaced the IsFileSystem check (always false for SharePoint) 
+        // with a check for a special folder path - this seemed to cover everthing that CanRename didn't cover.
+        // I removed the character check in AfterLabelEdit as SetNameOf shows the user a message with illegal 
+        // characters if there are any. 
+        private void Tv1_BeforeLabelEdit(object sender, NodeLabelEditEventArgs e)
+        {
+            if (e.Node.Text == " : ")
+            {
+                e.CancelEdit = true;
+                return;
+            }
+            CShellItem item = (CShellItem)e.Node.Tag;
+            // If item.Path.StartsWith("::") Or item.IsDisk Or (Not m_allowFolderRename) Or _
+            // item.Path = CShellItem.GetCShItem(CSIDL.MYDOCUMENTS).Path Or _
+            // Not (item.CanRename) Then
+            // Changed 11/28/2010
+            if (item.FullPath.StartsWith("::") || item.IsDisk || !m_allowFolderRename
+                || (item.FullPath ?? "") == (CShellItemFactory.CreateCShItem(CSIDL.MYDOCUMENTS).FullPath ?? "")
+                || !item.CanRename)
+            {
+                System.Media.SystemSounds.Beep.Play();
+                e.CancelEdit = true;
+            }
+            // **********Added by Lukai-2020.06.19, only select the label without file name extension
+            if (e.CancelEdit == false)
+            {
+                var editWnd = SendMessage(_TreeView.Handle, TVM_GETEDITCONTROL, (IntPtr)0, IntPtr.Zero);
+                int textLen = System.IO.Path.GetFileNameWithoutExtension(item.FullPath).Length;
+                SendMessage(editWnd, EM_SETSEL, (IntPtr)0, (IntPtr)textLen);
+            }
+        }
+
+        private void Tv1_AfterLabelEdit(object sender, NodeLabelEditEventArgs e)
+        {
+            CShellItem item = (CShellItem)e.Node.Tag;
+            if (string.IsNullOrWhiteSpace(e.Label)) return;
+            var NewName = default(string);
+
+            try
+            {
+                NewName = e.Label.Trim();
+            }
+            catch (Exception ex)
+            {
+                e.CancelEdit = true;
+                // **********Added by Lukai-2020.06.19
+                if (string.IsNullOrEmpty(NewName) == false)
+                {
+                    System.Media.SystemSounds.Beep.Play();
+                }
+                // System.Media.SystemSounds.Beep.Play()
+                return;
+            }
+
+            var newPidl = IntPtr.Zero;
+            if (item.Parent.Folder.SetNameOf((int)_TreeView.Handle, CPidl.ILFindLastID(item.PIDL), NewName, SHGDN.NORMAL, ref newPidl) == S_OK)
+            {
+            }
+            // the following line is not needed since use of SetNameOf will cause a renamed WM_Notify msg 
+            // which will be handled thru normal change notification processes
+            // item.Update(newPidl, CShItemUpdater.CShItemUpdateType.Renamed)
+            else
+            {
+                System.Media.SystemSounds.Beep.Play();
+                e.CancelEdit = true;
+            }
+        }
+
+        #endregion Event Handling
+
 
         #region    CtvDropWrapper Event Handling
 
@@ -1121,106 +1475,6 @@ namespace ExpControlsLib
         }
         #endregion
 
-        #region    LabelEdit 
-
-        // V2.14: Added LabelEdit region -- Credit Calum
-
-        private bool m_allowFolderRename;
-        /// <summary>
-        /// Allow renaming of folders using LabelEdit
-        /// </summary>
-        /// <value></value>
-        /// <returns></returns>
-        /// <remarks></remarks>
-        [Category("Behavior")]
-        [Description("Allow renaming of folders using LabelEdit")]
-        public bool AllowFolderRename
-        {
-            get
-            {
-                return m_allowFolderRename;
-            }
-            set
-            {
-                m_allowFolderRename = value;
-                _TreeView.LabelEdit = value;
-            }
-        }
-
-        // Newest code from Calum for Before and After LabelEdit. His remarks are:
-        // I also made some changes to ExpTree, I added a check for a dummy node as after renaming a folder 
-        // that hadn't been expanded I would receive an error as a BeforeLabelEdit event was fired for the 
-        // dummyx node. This only happened with SharePoint folders 
-        // (Note that SharePoint folder ALWAYS return true for HasSubFolders and this was happening on 
-        // folders without subfolders...) I also replaced the IsFileSystem check (always false for SharePoint) 
-        // with a check for a special folder path - this seemed to cover everthing that CanRename didn't cover.
-        // I removed the character check in AfterLabelEdit as SetNameOf shows the user a message with illegal 
-        // characters if there are any. 
-        private void Tv1_BeforeLabelEdit(object sender, NodeLabelEditEventArgs e)
-        {
-            if (e.Node.Text == " : ")
-            {
-                e.CancelEdit = true;
-                return;
-            }
-            CShellItem item = (CShellItem)e.Node.Tag;
-            // If item.Path.StartsWith("::") Or item.IsDisk Or (Not m_allowFolderRename) Or _
-            // item.Path = CShellItem.GetCShItem(CSIDL.MYDOCUMENTS).Path Or _
-            // Not (item.CanRename) Then
-            // Changed 11/28/2010
-            if (item.FullPath.StartsWith("::") || item.IsDisk || !m_allowFolderRename 
-                || (item.FullPath ?? "") == (CShellItemFactory.CreateCShItem(CSIDL.MYDOCUMENTS).FullPath ?? "") 
-                || !item.CanRename)
-            {
-                System.Media.SystemSounds.Beep.Play();
-                e.CancelEdit = true;
-            }
-            // **********Added by Lukai-2020.06.19, only select the label without file name extension
-            if (e.CancelEdit == false)
-            {
-                var editWnd = SendMessage(_TreeView.Handle, TVM_GETEDITCONTROL, (IntPtr)0, IntPtr.Zero);
-                int textLen = System.IO.Path.GetFileNameWithoutExtension(item.FullPath).Length;
-                SendMessage(editWnd, EM_SETSEL, (IntPtr)0, (IntPtr)textLen);
-            }
-        }
-
-        private void Tv1_AfterLabelEdit(object sender, NodeLabelEditEventArgs e)
-        {
-            CShellItem item = (CShellItem)e.Node.Tag;
-            if (string.IsNullOrWhiteSpace(e.Label)) return;
-            var NewName = default(string);
-
-            try
-            {
-                NewName = e.Label.Trim();
-            }
-            catch (Exception ex)
-            {
-                e.CancelEdit = true;
-                // **********Added by Lukai-2020.06.19
-                if (string.IsNullOrEmpty(NewName) == false)
-                {
-                    System.Media.SystemSounds.Beep.Play();
-                }
-                // System.Media.SystemSounds.Beep.Play()
-                return;
-            }
-
-            var newPidl = IntPtr.Zero;
-            if (item.Parent.Folder.SetNameOf((int)_TreeView.Handle, CPidl.ILFindLastID(item.PIDL), NewName, SHGDN.NORMAL, ref newPidl) == S_OK)
-            {
-            }
-            // the following line is not needed since use of SetNameOf will cause a renamed WM_Notify msg 
-            // which will be handled thru normal change notification processes
-            // item.Update(newPidl, CShItemUpdater.CShItemUpdateType.Renamed)
-            else
-            {
-                System.Media.SystemSounds.Beep.Play();
-                e.CancelEdit = true;
-            }
-        }
-
-        #endregion
 
         #region    Context Menu Methods
         // Credit Calum 
@@ -1260,297 +1514,132 @@ namespace ExpControlsLib
             set => m_minimalContextMenu = value;
         }
 
-
-        private void ExpTree_MouseUp(object sender, MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Right)
-            {
-                TreeNode tn;
-                var pt = PointToClient(MousePosition);
-                tn = _TreeView.GetNodeAt(pt);
-                if (m_useWindowsContextMenu & !(tn == null))
-                {
-                    var itms = new CShellItem[1];
-                    itms[0] = (CShellItem)tn.Tag;
-                    CMInvokeCommandInfoEx cmi = default;
-                    if (m_windowsContextMenu.ShowMenu(Handle, itms, MousePosition, m_allowFolderRename, out cmi, m_minimalContextMenu))
-                    {
-                        // Check for rename
-                        var cmdBytes = new byte[257];
-                        m_windowsContextMenu.winMenu.GetCommandString(cmi.lpVerb.ToInt32(), (int)GCS.VERBA, 0, cmdBytes, 256);
-
-                        string cmdName = SzToString(cmdBytes).ToLower();
-                        if (cmdName.Equals("rename"))
-                        {   
-                            _TreeView.LabelEdit = true;
-                            tn.BeginEdit();
-                        }
-                        else
-                        {
-                            string strPath;
-                            if (ReferenceEquals(itms[0], ShellController.DesktopCSI))
-                            {
-                                strPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                            }
-                            else
-                            {
-                                strPath = itms[0].Parent.FullPath;
-                            }
-                            m_windowsContextMenu.InvokeCommand(m_windowsContextMenu.winMenu, (uint)cmi.lpVerb, strPath, pt);
-                        }
-                        // Marshal.ReleaseComObject(m_windowsContextMenu.winMenu)
-                        m_windowsContextMenu.ReleaseMenu();
-                    }
-                }
-            }
-            OnMouseUp(e);
-        }
-
-        private void Tv1_MouseDown(object sender, MouseEventArgs e)
-        {
-            OnMouseDown(e);
-        }
-
-        private void Tv1_MouseMove(object sender, MouseEventArgs e)
-        {
-            OnMouseMove(e);
-        }
-
-        private void Tv1_MouseEnter(object sender, EventArgs e)
-        {
-            OnMouseEnter(e);
-        }
-
-        private void Tv1_MouseLeave(object sender, EventArgs e)
-        {
-            OnMouseLeave(e);
-        }
-
-        /// <summary>
-        /// Windows Message Handler for receiving Messages associated with a System Menu. 
-        /// This is what causes Cascading menus to Display
-        /// </summary>
-        /// <param name="m">A Windows Message</param>
-        /// <remarks>Only Handles Messages relating to Windows Context Menus</remarks>
-        protected override void WndProc(ref Message m)
-        {
-            // For send to menu in the explorer context menu
-            int hr;
-            if (m.Msg == (long)WM.INITMENUPOPUP | m.Msg == (long)WM.MEASUREITEM | m.Msg == (long)WM.DRAWITEM)
-            {
-                if (m_windowsContextMenu.winMenu2 is not null)
-                {
-                    hr = m_windowsContextMenu.winMenu2.HandleMenuMsg(m.Msg, m.WParam, m.LParam);
-                    if (hr == 0)
-                    {
-                        return;
-                    }
-                }
-            }
-            else if (m.Msg == (long)WM.MENUCHAR)
-            {
-                if (m_windowsContextMenu.winMenu3 is not null)
-                {
-                    hr = m_windowsContextMenu.winMenu3.HandleMenuMsg2(m.Msg, m.WParam, m.LParam, IntPtr.Zero);
-                    if (hr == 0)
-                    {
-                        return;
-                    }
-                }
-            }
-            base.WndProc(ref m);
-        }
         #endregion
 
-        #region    Dynamic Update Handler
 
-        // Private WithEvents DeskTopItem As CShellItem = CShellItem.GetDeskTop     '7/1/2012
+        #region Private methods
 
-        private void OnItemUpdate(object sender, ShellItemUpdateEventArgs e) // Handles DeskTopItem.CShItemUpdate  '7/1/2012 removed Handles clause
+        /// <summary>RefreshTree Method thanks to Calum McLellan</summary>
+        [Description("Refresh the Tree and all nodes through the currently selected item")]
+        private void RefreshTree(CShellItem rootCSI = null)
         {
-            // Debug.WriteLine("Enter ExpTree OnItemUpdate -- " & e.Item.DisplayName & " - " & e.UpdateType.ToString)
-            if (e.Item is not null && e.Item.IsFolder)  // no interest in non-folder events (or UpdateDir)
+            // Modified to use ExpandANode(CShellItem) rather than ExpandANode(path)
+            // Set refresh variable for BeforeExpand method
+            EnableEventPost = false;
+            // Begin Calum's change -- With some modification
+            TreeNode Selnode;
+            if (_TreeView.SelectedNode == null)
             {
-                CShellItem Parent = (CShellItem)sender;
-                var pNode = default(TreeNode);
-                if (GetTreeNode(Parent, ref pNode))
+                Selnode = Root;
+            }
+            else
+            {
+                Selnode = _TreeView.SelectedNode;
+            }
+            // End Calum's change
+            try
+            {
+                _TreeView.BeginUpdate();
+                CShellItem SelCSI = (CShellItem)Selnode.Tag;
+                // Set root node
+                if (rootCSI == null)
                 {
-                    // Debug.WriteLine("Located Parent Node " & pNode.Text & " of Item " & e.Item.Path)
-                    try
-                    {
-                        _TreeView.BeginUpdate();
-                        switch (e.UpdateType)
-                        {
-                            case CShItemUpdateType.Created:  // A new Dir has been created under Parent/pNode
-                                {
-                                    var Node = MakeNode(e.Item);
-                                    // Debug.WriteLine("Adding Node " & NodePath(Node))
-                                    InsertNode(Node, pNode); // 6/25/2012
-                                                             // pNode.Nodes.Add(Node)  '6/25/2012
-                                                             // tv1.Invalidate()   '6/18/2012 - Trust tv1 to do right thing on an Add
-                                    break;
-                                }
-                            case CShItemUpdateType.Deleted:  // An old Dir has been deleted from Parent/pNode
-                                {
-                                    bool exitSelect = false;
-                                    foreach (TreeNode Node in pNode.Nodes)
-                                    {
-                                        if (Node.Tag is not null && ReferenceEquals(Node.Tag, e.Item))
-                                        {
-                                            // Debug.WriteLine("Removing Node " & NodePath(Node))
-                                            pNode.Nodes.Remove(Node);
-                                            // tv1.Invalidate()   '6/18/2012 - Trust tv1 to do right thing on a Delete
-                                            exitSelect = true;
-                                            break;
-                                        }
-                                    }
-
-                                    if (exitSelect)
-                                    {
-                                        break;
-                                    }
-
-                                    break;
-                                }
-                            // In the Renamed case, pnode is the Parent CShellItem Before the rename,
-                            // get the current Parent CShellItem from the renamed CShellItem(e.Item)
-                            case CShItemUpdateType.Renamed:  // A directory has been renamed under Parent/pNode
-                                {
-                                    var curPNode = default(TreeNode);
-                                    bool exitSelect1 = false;
-                                    foreach (TreeNode Node in pNode.Nodes)
-                                    {
-                                        if (Node.Tag is not null && ReferenceEquals(Node.Tag, e.Item))
-                                        {
-                                            bool wasSelected = ReferenceEquals(_TreeView.SelectedNode, Node);
-                                            Node.Text = e.Item.DisplayName;
-                                            pNode.Nodes.Remove(Node);
-                                            if (GetTreeNode(e.Item.Parent, ref curPNode))
-                                            {
-                                                InsertNode(Node, curPNode); // 6/25/2012
-                                                                            // curPNode.Nodes.Add(Node)  '6/25/2012
-                                                if (wasSelected)     // 6/25/2012
-                                                {
-                                                    _TreeView.SelectedNode = Node;
-                                                    Node.EnsureVisible();
-                                                }
-                                            }
-                                            // tv1.Invalidate()   '6/18/2012 - Trust tv1 to do right thing on an Add or Delete
-                                            exitSelect1 = true;
-                                            break;
-                                        }
-                                    }
-
-                                    if (exitSelect1)
-                                    {
-                                        break;
-                                    }
-
-                                    break;
-                                }
-                            case CShItemUpdateType.MediaChange:  // Media has been added/removed
-                                {
-                                    bool exitSelect2 = false;
-                                    for (int indx = 0, loopTo = pNode.Nodes.Count - 1; indx <= loopTo; indx++)
-                                    {
-                                        if (pNode.Tag is not null && ReferenceEquals(pNode.Nodes[indx].Tag, e.Item))
-                                        {
-                                            var node = pNode.Nodes[indx];
-                                            CShellItem item = (CShellItem)node.Tag;
-                                            bool wasExpanded = node.IsExpanded;
-                                            if (wasExpanded)
-                                            {
-                                                node.ImageIndex = item.IconIndexOpen;
-                                            }
-                                            else
-                                            {
-                                                node.ImageIndex = item.IconIndexNormal;
-                                            }
-                                            node.Collapse(false);
-                                            node.Nodes.Clear();
-                                            if (ShouldHaveDummy(item))
-                                            {
-                                                node.Nodes.Add(new TreeNode(" : "));
-                                            }
-                                            if (wasExpanded)
-                                                node.Expand();
-                                            _TreeView.Invalidate();
-                                            if (ReferenceEquals(node, _TreeView.SelectedNode))
-                                            {
-                                                if (e.Item.FullPath.StartsWith(":"))
-                                                {
-                                                    ExpTreeNodeSelected?.Invoke(e.Item.DisplayName, e.Item);
-                                                }
-                                                else
-                                                {
-                                                    ExpTreeNodeSelected?.Invoke(e.Item.FullPath, e.Item);
-                                                }
-                                            }
-                                            exitSelect2 = true;
-                                            break;
-                                        }
-                                    }
-
-                                    if (exitSelect2)
-                                    {
-                                        break;
-                                    }
-
-                                    break;
-                                }
-                            case CShItemUpdateType.Updated:  // 5/24/2012 - In this case, it is the Item that had some change. Check if Expandability has changed
-                                {
-                                    var UNode = default(TreeNode);
-                                    if (GetTreeNode(e.Item, ref UNode))    // otherwise don't care
-                                    {
-                                        // If UNode.IsExpanded Then        'Earlier msgs will update the nodes
-                                        // SortNodes(UNode)
-                                        // Else    '6/5/2012 - check Expandable - in case a Folder added or Deleted which may happen without another message (Async ops)
-                                        if (UNode.Nodes.Count == 0)     // Was not Expandable, should it be? (Folder may have been added)
-                                        {
-                                            if (ShouldHaveDummy(e.Item))
-                                            {
-                                                UNode.Nodes.Add(new TreeNode(" : "));
-                                            }
-                                            UNode.Collapse(false);   // 02/12/2014 can only have 0 or 1 (dummy) node - collapse to avoid showing dummy
-                                        }
-                                        // 02/12/2014 ElseIf Block recast and now uses DirCount rather than Directories
-                                        else if (UNode.Nodes.Count == 1 && UNode.Nodes[0].Text.Equals(" : ")) // Should it still have dummy? (Folder may have been Deleted)
-                                        {
-                                            if (!ShouldHaveDummy(e.Item))
-                                            {
-                                                UNode.Nodes.Clear();
-                                            }
-                                        }
-                                        // End If
-                                    }
-
-                                    break;
-                                }
-
-                            default:
-                                {
-                                    break;
-                                }
-                                // Don't care about any other type of change
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine("ExpTree Update Error -- " + ex.ToString());
-                    }
-                    finally
-                    {
-                        _TreeView.EndUpdate();
-                    }
+                    RootItem = RootItem;
                 }
                 else
                 {
-                }        // no find means that node not expanded and therefore of no interest
+                    RootItem = rootCSI;
+                }
+                // Try to expand the node
+                if (!ExpandANode(SelCSI))
+                {
+                    var nodeList = new List<TreeNode>();
+                    while (!(Selnode.Parent == null))
+                    {
+                        nodeList.Add(Selnode.Parent);
+                        Selnode = Selnode.Parent;
+                    }
+
+                    foreach (TreeNode currentSelnode in nodeList)
+                    {
+                        Selnode = currentSelnode;
+                        if (ExpandANode((CShellItem)Selnode.Tag))
+                            break;
+                    }
+                    // Reset refresh variable for BeforeExpand method
+                }
+            }
+            finally
+            {
+                _TreeView.EndUpdate();
+            }
+            EnableEventPost = true;
+            // We suppressed EventPosting during refresh, so give it one now
+            Tv1_AfterSelect(this, new TreeViewEventArgs(_TreeView.SelectedNode));
+        }
+
+        /// <summary>
+        /// NodePath returns the Text version of the full path of a TreeNode.
+        /// </summary>
+        /// <param name="node">The TreeNode to return the full path for.</param>
+        /// <returns>The full path to the input node within a tree</returns>
+        /// <remarks>Used only for some Debug.WriteLine statements.</remarks>
+        private string NodePath(TreeNode node)
+        {
+            var pathlist = new List<TreeNode>() { node };  // pathlist.Add(node)
+            while (node.Parent is not null)
+            {
+                pathlist.Add(node.Parent);
+                node = node.Parent;
+            }
+            pathlist.Reverse();
+            var SB = new StringBuilder();
+            foreach (TreeNode N in pathlist)
+            {
+                SB.Append(N.Text);
+                SB.Append(@"\");
+            }
+            return SB.ToString();
+        }
+
+        /// <summary>
+        /// Called to Populate the TreeNodes of a TreeNode that only contains a Dummy Node.
+        /// </summary>
+        /// <param name="NodeToFill">The unexpanded TreeNode to Fill</param>
+        /// <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
+        /// Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
+        private void PopulateNode(TreeNode NodeToFill)          // 8/26/2012
+        {
+            CShellItem CSI = (CShellItem)NodeToFill.Tag;
+            // 02/12/2014 - Setting of D changed at suggestion of Michael Ruby
+            List<CShellItem> D;
+            if (CSI.DirectoryList is null)
+            {
+                D = new List<CShellItem>(CSI.Directories); //todo: remove this conversion
+            }
+            else
+            {
+                D = new List<CShellItem>(CSI.DirectoryList);  //todo: remove this conversion
+            }
+            if (D.Count > 0)
+            {
+                D.Sort();    // uses the class comparer
+                NodeToFill.Nodes.Clear();    // 11/03/2012 DO NOT Clear out the dummy prior to calling .Directories which forces a UpdateRefresh!
+                foreach (CShellItem Item in D)
+                {
+                    if (!(Item.IsHidden & !m_showHiddenFolders))
+                    {
+                        NodeToFill.Nodes.Add(MakeNode(Item));
+                    }
+                }
+            }
+            else        // 11/03/2012 BUT DO get rid of any unnessesary Dummy
+            {
+                NodeToFill.Nodes.Clear();
             }
         }
 
-        private bool GetTreeNode(CShellItem shellItem, ref TreeNode treeNode)
+        private bool GetTreeNode(CShellItem shellItem, ref TreeNode? treeNode)
         {
             var pathList = new List<CShellItem>();
             if (shellItem is null)
@@ -1662,107 +1751,9 @@ namespace ExpControlsLib
                 // tv1.EndUpdate()        '6/18/2012 - not needed already in BeginUpdate when this rtn called
             }
         }
+
         #endregion
 
-        /// <summary>
-        /// NodePath returns the Text version of the full path of a TreeNode.
-        /// </summary>
-        /// <param name="node">The TreeNode to return the full path for.</param>
-        /// <returns>The full path to the input node within a tree</returns>
-        /// <remarks>Used only for some Debug.WriteLine statements.</remarks>
-        private string NodePath(TreeNode node)
-        {
-            var pathlist = new List<TreeNode>() { node };  // pathlist.Add(node)
-            while (node.Parent is not null)
-            {
-                pathlist.Add(node.Parent);
-                node = node.Parent;
-            }
-            pathlist.Reverse();
-            var SB = new StringBuilder();
-            foreach (TreeNode N in pathlist)
-            {
-                SB.Append(N.Text);
-                SB.Append(@"\");
-            }
-            return SB.ToString();
-        }
-
-        // Public Event TreeKeyDown(ByVal sender As Object, ByVal e As System.Windows.Forms.KeyEventArgs)
-
-        // Private Sub tv1_KeyDown(ByVal sender, ByVal e As System.Windows.Forms.KeyEventArgs) Handles tv1.KeyDown
-        // Debug.WriteLine("KeyDown in ExpTree Char = " & e.KeyData.ToString)
-        // If e.KeyData = Keys.Escape Then e.Handled = True
-        // RaiseEvent TreeKeyDown(sender, e)
-        // End Sub
-
-
-        // **********Added by Lukai-2015.04.20, to collapse all nodes
-        #region    CollapseAll Methods
-        public void ExpCollapseAll(bool collapse = true)
-        {
-            if (collapse == true)
-            {
-                _TreeView.CollapseAll();
-            }
-        }
-        #endregion
-
-        // **********Added by Lukai-2019.07.23
-        #region    Keyboard Events 
-        private void Tv1_KeyPress(object sender, KeyPressEventArgs e)
-        {
-            if (e.KeyChar == '\u0003' | e.KeyChar == '\u0016' | e.KeyChar == '\u0018' | e.KeyChar == '\r')  // Ctrl + C
-                                                                                                            // Ctrl + V
-                                                                                                            // Ctrl + X
-                                                                                                            // Enter
-            {
-                e.Handled = true;  // Eliminate warning sound
-            }
-            OnKeyPress(e);
-        }
-
-        private void Tv1_KeyUp(object sender, KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.Enter)
-            {
-                if (_TreeView.SelectedNode.GetNodeCount(false) > 0 & _TreeView.SelectedNode.IsExpanded == false)
-                {
-                    _TreeView.SelectedNode.Expand();
-                }
-            }
-            if (e.KeyCode == Keys.Delete)
-            {
-                WinMenuCmd(SelectedItem, "delete");
-            }
-            if (e.Control)
-            {
-                switch (e.KeyCode)
-                {
-                    case var @case when @case == Keys.X:
-                        {
-                            WinMenuCmd(SelectedItem, "cut");
-                            break;
-                        }
-                    case var case1 when case1 == Keys.C:
-                        {
-                            WinMenuCmd(SelectedItem, "copy");
-                            break;
-                        }
-                    case var case2 when case2 == Keys.V:
-                        {
-                            WinMenuCmd(SelectedItem, "paste");
-                            break;
-                        }
-                }
-            }
-            OnKeyUp(e);
-        }
-
-        private void Tv1_KeyDown(object sender, KeyEventArgs e)
-        {
-            OnKeyDown(e);
-        }
 
         // Only for delete, cut, copy, paste
         private void WinMenuCmd(CShellItem CSI, string cmd)
@@ -1811,6 +1802,5 @@ namespace ExpControlsLib
 
             }
         }
-        #endregion
     }
 }

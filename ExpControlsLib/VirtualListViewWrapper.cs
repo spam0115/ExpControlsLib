@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 using TreeLib;
@@ -30,6 +31,12 @@ namespace ExpControlsLib
 
         private SortOrder _sortOrder = SortOrder.None;
         private int _sortColumn = 0;
+        private SortOrder _prevSortOrder = SortOrder.None;
+        private int _prevSortColumn = -1;
+        private bool _inSort = false;
+
+        public int SortColumn => _sortColumn;
+        public SortOrder SortOrder => _sortOrder;
 
         /// <summary>
         /// Callback to create a new ListViewItem for a given CShellItem.
@@ -339,19 +346,39 @@ namespace ExpControlsLib
 
         public void Sort(int column, SortOrder order)
         {
-            _sortColumn = column;
-            _sortOrder = order;
+            if (_inSort) return;
+            _inSort = true;
+            try
+            {
+                if (column != _sortColumn && _sortOrder != SortOrder.None)
+                {
+                    _prevSortColumn = _sortColumn;
+                    _prevSortOrder = _sortOrder;
+                }
 
-            if (VirtualMode)
-            {
-                SortVirtualItems(column, order);
-            }
-            else
-            {
+                _sortColumn = column;
+                _sortOrder = order;
+
+                if (VirtualMode)
+                {
+                    SortVirtualItems(column, order);
+                }
+
+                // Update the sorter state so the UI (context menu, header glyph) reflects the current sort.
+                // When in VirtualMode, we must do this explicitly because the sorter isn't sorting the items.
+                // If NOT in VirtualMode, LVColSorter.SetSort will also perform the sort via m_View.Sort().
                 if (_listView.ListViewItemSorter is LVColSorter sorter)
                 {
                     sorter.SetSort(column, order);
                 }
+                else if (!VirtualMode)
+                {
+                    _listView.Sort();
+                }
+            }
+            finally
+            {
+                _inSort = false;
             }
         }
 
@@ -433,6 +460,8 @@ namespace ExpControlsLib
         /// <param name="e"></param>
         private void OnRetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e)
         {
+            //Console.WriteLine("Retrieve virtual item: " + e.ItemIndex);
+
             if (ExpList._isShuttingDown) return; //windows tries to retrieve every item during shutdown for some reason
 
             e.Item = GetLviFromVirtual(e.ItemIndex);
@@ -444,11 +473,10 @@ namespace ExpControlsLib
 
             var item = _virtualItems[index];
 
-            if (item.NeedsRefresh)
+            if (item.NeedsRefresh) //item has been updated in the background and needs to be recreated as a new ListViewItem to reflect changes
             {
                 var lvi = CreateLviFromCsi(item);
                 _itemCache[index] = lvi;
-                item.NeedsRefresh = false;
                 return lvi;
             }
             else
@@ -493,6 +521,7 @@ namespace ExpControlsLib
                     lvi.SubItems.Add(si); // Placeholder for subitems, UpdateItemCallback should fill these in
                 }
             }
+            item.NeedsRefresh = false;
 
             return lvi;
         }
@@ -511,13 +540,72 @@ namespace ExpControlsLib
             }
         }
 
+        private (int index, ColumnHeader header) GetDisplayNameColumn()
+        {
+            for (int i = 0; i < _listView.Columns.Count; i++)
+            {
+                var col = _listView.Columns[i];
+                if (col.Tag?.ToString().Trim() == ".DisplayName")
+                {
+                    return (i, col);
+                }
+            }
+            if (_listView.Columns.Count > 0)
+            {
+                return (0, _listView.Columns[0]);
+            }
+            return (-1, null);
+        }
+
+        private CShellItemComparer GetSecondaryComparer(int primaryColumn)
+        {
+            if (primaryColumn >= 0 && primaryColumn < _listView.Columns.Count)
+            {
+                var primCol = _listView.Columns[primaryColumn];
+                string primMapping = primCol.Tag?.ToString().Trim() ?? string.Empty;
+                if (primMapping.StartsWith(".") && primMapping.Substring(1) == "DisplayName")
+                {
+                    return null;
+                }
+            }
+
+            int secColIndex = -1;
+            SortOrder secOrder = SortOrder.None;
+            ColumnHeader secColHeader = null;
+
+            if (_prevSortColumn >= 0 && _prevSortColumn < _listView.Columns.Count && _prevSortOrder != SortOrder.None)
+            {
+                secColIndex = _prevSortColumn;
+                secOrder = _prevSortOrder;
+                secColHeader = _listView.Columns[secColIndex];
+            }
+            else
+            {
+                var dn = GetDisplayNameColumn();
+                if (dn.index >= 0)
+                {
+                    secColIndex = dn.index;
+                    secOrder = SortOrder.Ascending;
+                    secColHeader = dn.header;
+                }
+            }
+
+            if (secColIndex >= 0 && secColHeader != null && secOrder != SortOrder.None)
+            {
+                return new CShellItemComparer(_expList, secColIndex, secOrder, secColHeader, null);
+            }
+
+            return null;
+        }
+
         private void SortVirtualItems(int column, SortOrder order)
         {
             if (order == SortOrder.None || _virtualItems.Count == 0) return;
 
             if (column < 0 || column >= _listView.Columns.Count) return;
             var colHeader = _listView.Columns[column];
-            var comparer = new CShellItemComparer(_expList, column, order, colHeader);
+            var secondaryComparer = GetSecondaryComparer(column);
+            var comparer = new CShellItemComparer(_expList, column, order, colHeader, secondaryComparer);
 
             // Copy to a List for sorting because HugeList (B-Tree) sort is impractical in-place
             var list = new List<CShellItem>((int)_virtualItems.Count);
@@ -528,11 +616,13 @@ namespace ExpControlsLib
 
             list.Sort(comparer);
 
+            _listView.BeginUpdate();
             _virtualItems.Clear();
             _virtualItems.AddRange(list);
 
             RecreateIndexMapping();
             _itemCache.Clear();
+            _listView.EndUpdate();
             _listView.Refresh();
         }
 
@@ -548,7 +638,8 @@ namespace ExpControlsLib
                 return Count;
 
             var colHeader = _listView.Columns[_sortColumn];
-            var comparer = new CShellItemComparer(_expList, _sortColumn, _sortOrder, colHeader);
+            var secondaryComparer = GetSecondaryComparer(_sortColumn);
+            var comparer = new CShellItemComparer(_expList, _sortColumn, _sortOrder, colHeader, secondaryComparer);
 
             if (VirtualMode)
             {

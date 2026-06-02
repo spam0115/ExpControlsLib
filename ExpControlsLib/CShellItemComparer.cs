@@ -19,6 +19,7 @@ namespace ExpControlsLib
         private readonly SortOrder _order;
         private readonly ColumnHeader _columnHeader;
         private readonly string _mapping;
+        private readonly CShellItemComparer _secondaryComparer;
 
         /// <summary>
         /// Initializes a new instance of the CShellItemComparer class.
@@ -27,13 +28,15 @@ namespace ExpControlsLib
         /// <param name="column">The index of the column to sort on.</param>
         /// <param name="order">The sort order.</param>
         /// <param name="columnHeader">The ColumnHeader associated with the column.</param>
-        public CShellItemComparer(ExpList expList, int column, SortOrder order, ColumnHeader columnHeader)
+        /// <param name="secondaryComparer">The secondary comparer to use when primary comparison is equal.</param>
+        public CShellItemComparer(ExpList expList, int column, SortOrder order, ColumnHeader columnHeader, CShellItemComparer secondaryComparer = null)
         {
             _expList = expList;
             _column = column;
             _order = order;
             _columnHeader = columnHeader;
             _mapping = columnHeader?.Tag?.ToString().Trim() ?? string.Empty;
+            _secondaryComparer = secondaryComparer;
         }
 
         /// <summary>
@@ -58,28 +61,32 @@ namespace ExpControlsLib
             int result = CompareInternal(x, y);
 
             if (_order == SortOrder.Descending)
-                return -result;
+                result = -result;
+
+            if (result == 0 && _secondaryComparer != null)
+            {
+                result = _secondaryComparer.Compare(x, y);
+            }
 
             return result;
         }
 
         private int CompareInternal(CShellItem x, CShellItem y)
         {
-            // 1. Try Tag Mapping
+            // 1. Try built in fields
             if (_mapping.StartsWith("."))
             {
-                string propName = _mapping.Substring(1);
-                switch (propName)
+                switch (_mapping)
                 {
-                    case "DisplayName":
+                    case ".DisplayName":
                         return StringLogicalComparer.CompareStrings(x.DisplayName, y.DisplayName);
-                    case "TypeName":
+                    case ".TypeName":
                         return string.Compare(x.TypeName, y.TypeName, StringComparison.OrdinalIgnoreCase);
-                    case "Size": 
+                    case ".Size": 
                         return x.Length.CompareTo(y.Length);
-                    case "LastWriteTime":
+                    case ".LastWriteTime":
                         return x.LastWriteTime.CompareTo(y.LastWriteTime);
-                    case "CreationTime":
+                    case ".CreationTime":
                         return x.CreationTime.CompareTo(y.CreationTime);
                 }
             }
@@ -96,7 +103,7 @@ namespace ExpControlsLib
 
             // Fallback to text comparison (natural)
             int res = StringLogicalComparer.CompareStrings(xData.Text, yData.Text);
-            if (res == 0)
+            if (res == 0 && _secondaryComparer == null)
                 res = StringLogicalComparer.CompareStrings(x.DisplayName, y.DisplayName);
             return res;
         }
