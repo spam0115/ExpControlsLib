@@ -588,14 +588,9 @@ namespace ExpControlsLib
                 _listView.SelectedIndexChanged += ExpFileList_SelectedIndexChanged;
                 _listView.ItemSelectionChanged += ExpFileList_ItemSelectionChanged;
 
-                _listViewWrapper = new VirtualListViewWrapper(_listView);
+                _listViewWrapper = new VirtualListViewWrapper(this, _listView);
                 _listViewWrapper.CreateItemCallback = MakeLVItem;
                 _listViewWrapper.UpdateItemCallback = UpdateLviUsingCsi;
-                _listViewWrapper.GetComparerCallback = (col, order) =>
-                {
-                    var colHeader = _listView.Columns[col];
-                    return new CShellItemComparer(this, col, order, colHeader);
-                };
             }
             finally
             {

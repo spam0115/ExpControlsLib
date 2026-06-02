@@ -1657,7 +1657,7 @@
             Any exception thrown by <paramref name="work"/> is captured and rethrown when awaiting the returned task.
             </remarks>
         </member>
-        <member name="M:ExpControlsLib.StaThreadRunner.InvokeAsync(System.Action)">
+        <member name="M:ExpControlsLib.StaThreadRunner.EnqueueWork(System.Action)">
             <summary>
             Queues void work to run on the dedicated STA thread and returns a Task that completes when done.
             </summary>
@@ -1863,13 +1863,6 @@
             aspect ratio, and centers it on a transparent background using ImageMagick.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailProvider.PruneActiveTasks(System.Boolean)">
-            <summary>
-            Prunes active tasks.  
-            If thorough is false, it will just immediately return as soon as it finds 1 still active task.
-            </summary>
-            <param name="thorough"></param>
-        </member>
         <member name="T:ExpControlsLib.ThumbnailReadyEventArgs">
             <summary>
             Event arguments for thumbnail ready notifications
@@ -1889,11 +1882,6 @@
         <member name="P:ExpControlsLib.VirtualListViewWrapper.UpdateItemCallback">
             <summary>
             Callback to update an existing ListViewItem with data from a CShellItem.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.VirtualListViewWrapper.GetComparerCallback">
-            <summary>
-            Callback to get a comparer for sorting.
             </summary>
         </member>
         <member name="P:ExpControlsLib.VirtualListViewWrapper.DisplayMode">
@@ -1919,6 +1907,16 @@
             This is necessary when switching between display modes to ensure that the correct
             icons or thumbnails are loaded for the current view.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.OnRetrieveVirtualItem(System.Object,System.Windows.Forms.RetrieveVirtualItemEventArgs)">
+            <summary>
+            Retrieves items for Windows while in virtual list view mode.  
+            </summary>
+            <remarks>
+            Windows will send multiple requests for the same item for no particular reason.
+            </remarks>
+            <param name="sender"></param>
+            <param name="e"></param>
         </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.FindInsertionPoint(WindowsApiLib.Shell.CShellItem)">
             <summary>

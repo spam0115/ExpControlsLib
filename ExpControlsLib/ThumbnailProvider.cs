@@ -47,7 +47,7 @@ namespace ExpControlsLib
         /// <summary>Cancellation source used to stop the background processor on dispose.</summary>
         private CancellationTokenSource _cancellationTokenSource;
         private CancellationToken _cancellationToken;
-        private LinkedList<Task> _activeTasks = new(); //strictly speaking, we don't really need this but just in case
+        private readonly Dictionary<string, Task> _activeTasks = new();
 
         private int _maxThreads = 1;  /// <summary>Maximum number of thumbnails generated concurrently</summary>
 
@@ -104,24 +104,47 @@ namespace ExpControlsLib
                 return;
             }
 
-            Debug.WriteLine("EnqueueThumbnailRequest: " + reqArgs.FilePath);
-
-            var csi = reqArgs.Item;
-
-            if (csi is null && string.IsNullOrWhiteSpace(reqArgs.FilePath)) return;
-
-            // Check cache first
-            if (TryGetCachedThumbnail(csi.FullPath, size, out var cachedImage))
+            string? filePath = reqArgs.FilePath;
+            if (string.IsNullOrEmpty(filePath) && reqArgs.Item != null)
             {
-#if DEBUG
-                Console.WriteLine("\tFound cached thumbnail: " + csi.DisplayName);
-#endif
-                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(csi, cachedImage, reqArgs.Index, size));
+                filePath = reqArgs.Item.FullPath;
+                reqArgs.FilePath = filePath;
+            }
+
+            if (string.IsNullOrEmpty(filePath))
+            {
                 return;
             }
 
+            Debug.WriteLine("EnqueueThumbnailRequest: " + filePath);
+
+            var csi = reqArgs.Item;
+
+            // Check cache first
+            if (TryGetCachedThumbnail(filePath, size, out var cachedImage))
+            {
 #if DEBUG
-            Console.WriteLine("\tAttempting to add to thumbnail request queue: " + csi.DisplayName);
+                Console.WriteLine("\tFound cached thumbnail: " + (csi?.DisplayName ?? filePath));
+#endif
+                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(csi, cachedImage, size, reqArgs.Index));
+                return;
+            }
+
+            string key = ConstructCacheKey(filePath, size);
+
+            lock (_activeTasks)
+            {
+                if (_activeTasks.ContainsKey(key))
+                {
+#if DEBUG
+                    Console.WriteLine($"\tDuplicate thumbnail request ignored for: {filePath} ({size}px)");
+#endif
+                    return;
+                }
+            }
+
+#if DEBUG
+            Console.WriteLine("\tAttempting to add to thumbnail request queue: " + (csi?.DisplayName ?? filePath));
 #endif
 
             var task = _requestQueueRunner.EnqueueWork(_cancellationToken => { 
@@ -131,9 +154,20 @@ namespace ExpControlsLib
 
             lock (_activeTasks)
             {
-                _activeTasks.AddLast(task);
+                _activeTasks[key] = task;
             }
-            PruneActiveTasks(false); //don't need to be thouroughl here
+
+            // Automatically remove the task from the active tasks dictionary upon completion
+            task.ContinueWith(t =>
+            {
+                lock (_activeTasks)
+                {
+                    if (_activeTasks.TryGetValue(key, out var activeTask) && activeTask == t)
+                    {
+                        _activeTasks.Remove(key);
+                    }
+                }
+            }, TaskContinuationOptions.ExecuteSynchronously);
         }
 
         /// <summary>
@@ -143,9 +177,10 @@ namespace ExpControlsLib
         public void CancelAllPendingOperations() { 
             _cancellationTokenSource.Cancel();
 
-            PruneActiveTasks(); 
-
-            _activeTasks.Clear(); //this might be a memory leak because tasks don't get canceled instantaneously
+            lock (_activeTasks)
+            {
+                _activeTasks.Clear();
+            }
         }
 
 
@@ -168,7 +203,10 @@ namespace ExpControlsLib
 
             ClearCache();
 
-            _activeTasks.Clear();
+            lock (_activeTasks)
+            {
+                _activeTasks.Clear();
+            }
 
             _cancellationTokenSource?.Dispose();
         }
@@ -435,35 +473,7 @@ namespace ExpControlsLib
             return source;
         }
 
-        /// <summary>
-        /// Prunes active tasks.  
-        /// If thorough is false, it will just immediately return as soon as it finds 1 still active task.
-        /// </summary>
-        /// <param name="thorough"></param>
-        private void PruneActiveTasks(bool thorough = true)
-        {
-            lock (_activeTasks)
-            {
-                var currentNode = _activeTasks.First;
 
-                while (currentNode != null)
-                {
-                    var nextNode = currentNode.Next; // Cache the next node
-                    var task = currentNode.Value;
-
-                    if (task.IsCompleted || task.IsCanceled)
-                    {
-                        _activeTasks.Remove(currentNode);
-                    }
-                    else if (!thorough)
-                    {
-                        break; // Early exit for non-thorough pruning
-                    }
-
-                    currentNode = nextNode;
-                }
-            }
-        }
 
 
         #endregion 

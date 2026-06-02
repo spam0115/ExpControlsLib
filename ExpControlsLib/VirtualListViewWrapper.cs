@@ -10,7 +10,6 @@ using System.Windows.Forms;
 using TreeLib;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 using static WindowsApiLib.Shell.ShellAPI;
 
 namespace ExpControlsLib
@@ -22,6 +21,7 @@ namespace ExpControlsLib
     [SupportedOSPlatform("windows")]
     internal class VirtualListViewWrapper
     {
+        private readonly ExpList _expList;
         private readonly ListView _listView;
         private readonly HugeList<CShellItem> _virtualItems = new();
         private readonly Dictionary<int, ListViewItem> _itemCache = new();
@@ -41,13 +41,9 @@ namespace ExpControlsLib
         /// </summary>
         public Action<ListViewItem, CShellItem> UpdateItemCallback { get; set; }
 
-        /// <summary>
-        /// Callback to get a comparer for sorting.
-        /// </summary>
-        public Func<int, SortOrder, IComparer<CShellItem>> GetComparerCallback { get; set; }
-
-        public VirtualListViewWrapper(ListView listView)
+        public VirtualListViewWrapper(ExpList expList, ListView listView)
         {
+            _expList = expList ?? throw new ArgumentNullException(nameof(expList));
             _listView = listView ?? throw new ArgumentNullException(nameof(listView));
 
             _listView.RetrieveVirtualItem += OnRetrieveVirtualItem;
@@ -427,6 +423,14 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Retrieves items for Windows while in virtual list view mode.  
+        /// </summary>
+        /// <remarks>
+        /// Windows will send multiple requests for the same item for no particular reason.
+        /// </remarks>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void OnRetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e)
         {
             if (ExpList._isShuttingDown) return; //windows tries to retrieve every item during shutdown for some reason
@@ -452,9 +456,14 @@ namespace ExpControlsLib
                 if (_itemCache.TryGetValue(index, out var lvi))
                 {
                     // Sync ImageIndex if it was updated in the background while item was cached
-                    if (lvi.ImageIndex == -1) //could be a sync problem to not run this each time because this data will not be populate for when the listview transitions from details to thumbnail modes
+                    if (lvi.ImageIndex == -1)
                     {
-                        lvi.ImageIndex = item.ImageIndex;
+                        if (item.ImageIndex > -1)
+                            lvi.ImageIndex = item.ImageIndex;
+                        else
+                        {
+                            //don't create the thumbnail yet because windows will ask for items that aren't even on the screen.
+                        }
                     }
 
                     return lvi;
@@ -506,8 +515,9 @@ namespace ExpControlsLib
         {
             if (order == SortOrder.None || _virtualItems.Count == 0) return;
 
-            var comparer = GetComparerCallback?.Invoke(column, order);
-            if (comparer == null) return;
+            if (column < 0 || column >= _listView.Columns.Count) return;
+            var colHeader = _listView.Columns[column];
+            var comparer = new CShellItemComparer(_expList, column, order, colHeader);
 
             // Copy to a List for sorting because HugeList (B-Tree) sort is impractical in-place
             var list = new List<CShellItem>((int)_virtualItems.Count);
@@ -534,10 +544,11 @@ namespace ExpControlsLib
         /// <returns>The index where the item should be inserted</returns>
         public int FindInsertionPoint(CShellItem item)
         {
-            var comparer = GetComparerCallback?.Invoke(_sortColumn, _sortOrder);
-
-            if (comparer == null || _sortOrder == SortOrder.None)
+            if (_sortOrder == SortOrder.None || _sortColumn < 0 || _sortColumn >= _listView.Columns.Count)
                 return Count;
+
+            var colHeader = _listView.Columns[_sortColumn];
+            var comparer = new CShellItemComparer(_expList, _sortColumn, _sortOrder, colHeader);
 
             if (VirtualMode)
             {
