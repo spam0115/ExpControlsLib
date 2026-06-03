@@ -30,7 +30,6 @@ namespace ExpControlsLib
         private readonly System.Collections.Generic.Dictionary<string, ThumbnailSlot> _slotByKey = new();
         private const int MaxThumbnails = 3000;
 
-        private bool _addingImage = false;
         private readonly System.Collections.Generic.HashSet<ImageList> _corruptImageLists = new System.Collections.Generic.HashSet<ImageList>();
 
         private class ThumbnailSlot
@@ -46,6 +45,8 @@ namespace ExpControlsLib
                 Key = key;
             }
         }
+
+        public event EventHandler<ThumbnailReadyEventArgs> ThumbnailReady;
 
         public ThumbnailImageListManager(ExpList expList)
         {
@@ -73,8 +74,6 @@ namespace ExpControlsLib
 
         public void SetImageListForSize(int thumbnailSize)
         {
-            if (_addingImage) return;
-
             _activeSize = thumbnailSize;
 
             var imageList = GetImageList(thumbnailSize);
@@ -99,28 +98,28 @@ namespace ExpControlsLib
         }
 
 
-        public void BeginSession(int thumbnailSize)
-        {
-            _generation++;
-            _activeSize = thumbnailSize;
+        //public void BeginSession(int thumbnailSize)
+        //{
+        //    _generation++;
+        //    _activeSize = thumbnailSize;
 
-            var imageList = GetImageList(thumbnailSize);
-            imageList.Images.Clear();
+        //    var imageList = GetImageList(thumbnailSize);
+        //    imageList.Images.Clear();
             
-            _lruKeys.Clear();
-            _slotByKey.Clear();
+        //    _lruKeys.Clear();
+        //    _slotByKey.Clear();
 
-            _expList._listView.LargeImageList = imageList;
+        //    _expList._listView.LargeImageList = imageList;
 
-            if (!_expList._listView.VirtualMode)
-            {
-                foreach (ListViewItem item in _expList._listView.Items)
-                {
-                    if (item is null) continue;
-                    item.ImageIndex = -1;
-                }
-            }
-        }
+        //    if (!_expList._listView.VirtualMode)
+        //    {
+        //        foreach (ListViewItem item in _expList._listView.Items)
+        //        {
+        //            if (item is null) continue;
+        //            item.ImageIndex = -1;
+        //        }
+        //    }
+        //}
 
         /// <summary>
         /// Gets or creates an ImageList for the specified thumbnail size
@@ -207,57 +206,32 @@ namespace ExpControlsLib
         /// </remarks>
         private void OnThumbnailReady(object sender, ThumbnailReadyEventArgs e)
         {
-            if (_expList._listView.IsDisposed || _expList._listView.Disposing || !_expList._listView.IsHandleCreated)
-            {
-                e.Thumbnail?.Dispose();
-                return;
-            }
-
-            if (e.Size != _activeSize) //this can happen if we switch display modes while thumbnail requests are outstanding
-            {
-                e.Thumbnail?.Dispose();
-                return;
-            }
-
-            if (e.Thumbnail != null && !_expList._listView.IsDisposed && _expList._listView.IsHandleCreated)
-            {
-                // The thumbnail from ThumbnailProvider is already square and in the correct format.
-                // We pass it directly to the UI thread. ApplyThumbnailToUI will dispose it.
-                _expList._listView.BeginInvoke(new Action(() => ApplyThumbnailToUI(e, (Bitmap)e.Thumbnail)));
-            }
+            if (ThumbnailReady != null)
+                ThumbnailReady(this, e);
             else
-            {
                 e.Thumbnail?.Dispose();
-            }
         }
 
         /// <summary>
-        /// Force thumbnail registration from the UI thread.  The active image list actually belongs to the 
-        /// ListView so we can't event read the count without causing an exception unless we are running from 
-        /// on the ui thread.
+        /// Adds a thumbnail to the internal ImageList and updates the item's ImageIndex.
+        /// This method must be called on the UI thread as it accesses the ImageList.
         /// </summary>
-        /// <param name="reqArgs"></param>
-        /// <param name="square"></param>
-        private void ApplyThumbnailToUI(ThumbnailReadyEventArgs reqArgs, Bitmap square)
+        /// <param name="reqArgs">The thumbnail ready arguments.</param>
+        /// <param name="square">The square thumbnail bitmap.</param>
+        /// <returns>The index of the thumbnail in the ImageList, or -1 if it could not be added.</returns>
+        public int AddThumbnail(ThumbnailReadyEventArgs reqArgs, Bitmap square)
         {
-            Debug.WriteLine("ThumbnailImageListManager: ApplyThumbnailToUI begin");
+            Debug.WriteLine("ThumbnailImageListManager: AddThumbnail begin");
 
             if (square == null)
             {
                 if (reqArgs.Item != null) reqArgs.Item.ImageIndex = -1;
-                return;
+                return -1;
             }
 
             if (reqArgs is null || reqArgs.Item is null)
             {
-                square?.Dispose();
-                return;
-            }
-
-            if (reqArgs.Item.Parent.FullPath != _expList.CurrentPath)
-            {
-                square?.Dispose();
-                return; //orphaned background tasks from before a patch change happened
+                return -1;
             }
 
             ImageList imageList = null;
@@ -276,13 +250,9 @@ namespace ExpControlsLib
                     _lruKeys.Remove(key);
                     _lruKeys.Add(key);
 
-                    _addingImage = true;
-                    try { imageList.Images[index] = square; }
-                    finally
+                    lock(imageList)
                     {
-                        //square?.Dispose();
-                        square = null;
-                        _addingImage = false;
+                        imageList.Images[index] = square;
                     }
                 }
                 else //new thumbnail
@@ -303,12 +273,9 @@ namespace ExpControlsLib
                             oldestSlot.Item = reqArgs.Item;
                             oldestSlot.Key = key;
 
-                            _addingImage = true;
-                            try { imageList.Images[index] = square; }
-                            finally
+                            lock (imageList)
                             {
-                                //square?.Dispose();
-                                _addingImage = false;
+                                imageList.Images[index] = square;
                             }
 
                             _lruKeys.Add(key);
@@ -319,8 +286,7 @@ namespace ExpControlsLib
 
                     if (!reused)
                     {
-                        _addingImage = true;
-                        try
+                        lock (imageList)
                         {
                             imageList.Images.Add(square);
                             index = imageList.Images.Count - 1;
@@ -328,48 +294,25 @@ namespace ExpControlsLib
                             _lruKeys.Add(key);
                             _slotByKey[key] = newSlot;
                         }
-                        finally
-                        {
-                            square?.Dispose();
-                            _addingImage = false;
-                        }
                     }
                 }
 
                 if (index != -1 && reqArgs.Item != null)
                     reqArgs.Item.ImageIndex = index;
 
-                if (_expList.VirtualMode)
-                {
-                    if (reqArgs.Index < 0)
-                    {
-                        var location_index = _expList.GetIndexFromFullPath(reqArgs.Item.FullPath);
-                        if (location_index > -1 && location_index < _expList.Count)
-                            _expList._listView.RedrawItems(location_index, location_index, false);
-                    }
-                    else if (reqArgs.Index >= 0 && reqArgs.Index < _expList._listView.VirtualListSize)
-                    {
-                        var location_index = _expList.GetIndexFromFullPath(reqArgs.Item.FullPath);
-                        if (location_index == reqArgs.Index)
-                            _expList._listView.RedrawItems(reqArgs.Index, reqArgs.Index, false);
-                    }
-                }
-                else
-                {
-                    var lvi = _expList.FindItemByPath(reqArgs.Item.FullPath);
-                    if (lvi != null) lvi.ImageIndex = index;
-                }
+                return index;
             }
             catch (Exception ex)
             {
-                square?.Dispose();
 #if DEBUG
-                Console.WriteLine("Error applying thumbnail to UI: " + ex.Message);
+                Console.WriteLine("Error adding thumbnail: " + ex.Message);
 #endif
                 if (imageList != null)
                     _corruptImageLists.Add(imageList);
+                return -1;
             }
         }
+
 
         /// <summary>
         /// Clears all ImageLists and resets the ListView

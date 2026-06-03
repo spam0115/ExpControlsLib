@@ -619,6 +619,7 @@ namespace ExpControlsLib
 
                 // Initialize Thumbnail Manager
                 _thumbnailManager = new ThumbnailImageListManager(this);
+                _thumbnailManager.ThumbnailReady += ThumbnailManager_ThumbnailReady;
 
                 //create sorter
                 var sorter = new LVColSorter(_listView);
@@ -3316,6 +3317,73 @@ namespace ExpControlsLib
         }
 
         #endregion
+
+        private void ThumbnailManager_ThumbnailReady(object sender, ThumbnailReadyEventArgs e)
+        {
+            if (InvokeRequired)
+            {
+                if (!IsDisposed && IsHandleCreated)
+                    BeginInvoke(new Action(() => ThumbnailManager_ThumbnailReady(sender, e)));
+                else
+                    e.Thumbnail?.Dispose();
+                return;
+            }
+
+            if (e.Size != GetThumbnailSizeForMode()) // check if mode changed
+            {
+                e.Thumbnail?.Dispose();
+                return;
+            }
+
+            if (e.Item == null || e.Item.Parent == null || e.Item.Parent.FullPath != CurrentPath)
+            {
+                e.Thumbnail?.Dispose();
+                return;
+            }
+
+            lock (_shellController.HierachyManager.Lock)
+            {
+                int image_index = -1;
+                if (e.Thumbnail != null)
+                {
+                    using (var bitmap = (Bitmap)e.Thumbnail)
+                    {
+                        image_index = _thumbnailManager.AddThumbnail(e, bitmap);
+                    }
+                }
+                else
+                {
+                    image_index = _thumbnailManager.AddThumbnail(e, null);
+                }
+                if (image_index == -1)
+                {
+                    // Failed to add thumbnail, likely due to disposal or mode change. Just exit.
+                    Debug.WriteLine("Failed to add thumbnail for item: " + e.Item.DisplayName);
+                    return;
+                }
+
+                //can't use e.Index because some items might have been deleted or added since the thumbnail request was made, so find index by path as fallback
+                e.Item.ImageIndex = image_index;
+                int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
+                if (index == -1)
+                {
+                    // Failed to add thumbnail, likely due to disposal or mode change. Just exit.
+                    Debug.WriteLine("Failed to find the item in the listview: " + e.Item.DisplayName);
+                    return;
+                }
+
+                if (VirtualMode)
+                {
+                    _listView.RedrawItems(index, index, false);
+                }
+                else
+                {
+                    var lvi = _listViewWrapper.GetItem(index);
+                    if (lvi != null) lvi.ImageIndex = image_index;
+                }
+            }
+
+        }
 
         #region Lazy Thumbnail Loading Support
 
