@@ -64,3 +64,56 @@ Items are double created.  First in Treeview and then in listview.
 
 todo: we need bulk delete updating instead of doing thigs 1 at a time which is too inefficient
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+So are you saying that if I had a dictionary which indexed the nodes of the hugelist tree and the hugelist nodes
+   were changed so that rank information was made visible, I could do a dictionary lookup in O(1) time and the node
+   looked up would have the index (the rank)?  And insertions and deltions would take O(logN) time like they already do
+   with the hugelist.  And I wouldn
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+✦ Yes, that is exactly correct. You have hit on the core "magic" of an Order Statistic Tree.
+
+  To clarify the mechanics of how it would work for you:
+
+  1. The Lookup (ID -> Index)
+   * Step A (O(1)): You look up your FullPath in a Dictionary<string, Node>. This gives you a direct reference to the
+     memory location of the tree node.
+   * Step B (O(log N)): You follow the Parent pointers from that node up to the root. As you climb, you sum up the sizes
+     of all subtrees that are "to the left" of your current path.
+   * Total Time: O(log N).
+
+  2. The Benefit: No Mass Updates
+  When you remove an item at index 0:
+   * In a Dictionary/Array approach, you have to tell items 1 through 1,000,000 "Your new index is i-1". This is O(N).
+   * In an Order Statistic Tree, you just remove the node and update the SubtreeSize count of its ancestors (O(log N)).
+     The items don't "know" their index changed; the tree's geometry simply changed. When you ask for the rank of the
+     next item, the math naturally results in a lower number.
+
+  3. The "Gotcha" with HugeList<T>
+  While HugeList<T> uses a tree and stores SubtreeSize (which it uses to find items by index), it has a significant
+  limitation for this specific plan:
+   * No Parent Pointers: Standard HugeList nodes only point down (Left/Right). They don't point up.
+   * The Result: You can find "What is at index 500?" in O(log N), but you cannot find "What is the index of this Node?"
+     without starting from the root and searching for it.
+
+  What are your options?
+
+  Option A: Keep the list Sorted
+  If you keep the list sorted (e.g., by Name), you don't need to track indices. You can just do a Binary Search in the
+  tree. The tree will use the sorting logic to find the item and its index in O(log N).
+
+  Option B: The "Parallel Index" (Sqrt Decomposition)
+  If your list isn't sorted and you don't want to rewrite the HugeList internals to add parent pointers, use the Block
+  List approach.
+   * Divide the items into blocks of 500.
+   * The dictionary stores (BlockReference, OffsetInBlock).
+   * Removal only shifts 500 items (O(1) practically) and updates the starting index of the blocks after it (O(N/500)).
+   * This is the standard way highly efficient "Virtual Lists" (like those in VS Code or Chrome) handle millions of
+     items with arbitrary order.
+
+  Option C: Modify HugeList
+  If you are comfortable with the auto-generated code in TreeLib, adding Parent pointers to the nodes would make your
+  O(log N) Rank lookup possible. However, HugeList is quite complex due to its "Chunked" (RangeMap) nature—it doesn't
+  store 1 node per item, but 1 node per contiguous array of items. This makes "Rank" calculation even trickier.
+
+

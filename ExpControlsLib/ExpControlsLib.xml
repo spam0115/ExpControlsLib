@@ -1882,6 +1882,21 @@
             including standard views and thumbnail modes. Changing the display mode updates the appearance of the list
             view accordingly.</remarks>
         </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.AddRange(System.Collections.Generic.IEnumerable{WindowsApiLib.Shell.CShellItem})">
+            <summary>
+            Currently, we're only using this to initialize the whole collection.  If we ever want to use this 
+            only add a batch of items to an existing collection, we'll need to add some logic to handle 
+            merging the new items with the existing ones in sorted order and etc.
+            </summary>
+            <param name="items"></param>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.ShiftCacheAfterInsertion(System.Int32)">
+            <summary>
+            Shifts cached ListViewItem objects after an item has been inserted into the list.
+            This allows us to reuse existing ListViewItem objects for items that have merely shifted index.
+            </summary>
+            <param name="index">The index where the item was inserted.</param>
+        </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.ShiftCacheAfterRemoval(System.Int32)">
             <summary>
             Shifts cached ListViewItem objects after an item has been removed from the list.

@@ -172,6 +172,12 @@ namespace ExpControlsLib
             _itemIndex.Clear();
         }
 
+        /// <summary>
+        /// Currently, we're only using this to initialize the whole collection.  If we ever want to use this 
+        /// only add a batch of items to an existing collection, we'll need to add some logic to handle 
+        /// merging the new items with the existing ones in sorted order and etc.
+        /// </summary>
+        /// <param name="items"></param>
         public void AddRange(IEnumerable<CShellItem> items)
         {
             Debug.WriteLine("VirtualListViewWrapper.AddRange #" + items.Count());
@@ -195,7 +201,7 @@ namespace ExpControlsLib
             }
         }
 
-        public void Add(CShellItem item)
+        public void AddToEnd(CShellItem item)
         {
             Debug.WriteLine("VirtualListViewWrapper.Add - " + item.Text);
             _lastTopIndex = -1;
@@ -213,6 +219,24 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Shifts cached ListViewItem objects after an item has been inserted into the list.
+        /// This allows us to reuse existing ListViewItem objects for items that have merely shifted index.
+        /// </summary>
+        /// <param name="index">The index where the item was inserted.</param>
+        private void ShiftCacheAfterInsertion(int index)
+        {
+            if (_itemCache.Count == 0) return;
+
+            // Shift all items from the insertion point onwards up by one index
+            var keysToShift = _itemCache.Keys.Where(k => k >= index).OrderByDescending(k => k).ToList();
+            foreach (var k in keysToShift)
+            {
+                _itemCache[k + 1] = _itemCache[k];
+                _itemCache.Remove(k);
+            }
+        }
+
         public void InsertSorted(CShellItem item)
         {
             Debug.WriteLine("VirtualListViewWrapper.InsertSorted - " + item.Text);
@@ -221,9 +245,34 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                _virtualItems.Insert(index, item);
-                UpdateVirtualListSize();
-                RecreateIndexMapping();
+                lock (_virtualItems)
+                {
+                    _virtualItems.Insert(index, item);
+                    UpdateVirtualListSize();
+
+                    // Efficiently update index mapping for the new item and shifted items
+                    for (int i = index; i < _virtualItems.Count; i++)
+                    {
+                        _pathToIndex[_virtualItems[i].FullPath] = i;
+                    }
+
+                    // Shift cache to reuse existing ListViewItem objects
+                    ShiftCacheAfterInsertion(index);
+                }
+
+                // Determine if we need to redraw visible items
+                int top = GetTopIndex();
+                int visibleCount = GetApproxVisibleCount();
+                int lastVisible = top + visibleCount;
+
+                // Only redraw if the insertion affects currently visible items or items that shift into view
+                int startRedraw = Math.Max(index, Math.Max(0, top));
+                int endRedraw = Math.Min(lastVisible, (int)_virtualItems.Count - 1);
+
+                if (startRedraw <= endRedraw)
+                {
+                    _listView.RedrawItems(startRedraw, endRedraw, false);
+                }
             }
             else
             {
@@ -263,19 +312,22 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                var item = _virtualItems[index];
-                _virtualItems.RemoveAt(index);
-                UpdateVirtualListSize();
-
-                // Efficiently update index mapping for shifted items
-                _pathToIndex.Remove(item.FullPath);
-                for (int i = index; i < _virtualItems.Count; i++)
+                lock (_virtualItems)
                 {
-                    _pathToIndex[_virtualItems[i].FullPath] = i;
-                }
+                    var item = _virtualItems[index];
+                    _virtualItems.RemoveAt(index);
+                    UpdateVirtualListSize();
 
-                // Shift cache to reuse existing ListViewItem objects
-                ShiftCacheAfterRemoval(index);
+                    // Efficiently update index mapping for shifted items
+                    _pathToIndex.Remove(item.FullPath);
+                    for (int i = index; i < _virtualItems.Count; i++)
+                    {
+                        _pathToIndex[_virtualItems[i].FullPath] = i;
+                    }
+
+                    // Shift cache to reuse existing ListViewItem objects
+                    ShiftCacheAfterRemoval(index);
+                }
 
                 // Reset viewport cache and determine if we need to redraw
                 _lastTopIndex = -1;
