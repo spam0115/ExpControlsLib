@@ -106,7 +106,7 @@ namespace WindowsApiLib.Shell
         [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static bool GetIStream(CShellItem item, IntPtr streamPtr, out IStream stream)
         {
-            if (item.Parent.Folder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStream, streamPtr) == S_OK)
+            if (item.Parent.IShlFolder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStream, streamPtr) == S_OK)
             {
                 stream = (IStream)Marshal.GetTypedObjectForIUnknown(streamPtr, typeof(IStream));
                 return true;
@@ -129,7 +129,7 @@ namespace WindowsApiLib.Shell
         [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-o
         public static bool GetIStorage(CShellItem item, IntPtr storagePtr, out IStorage storage)
         {
-            if (item.Parent.Folder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStorage, storagePtr) == S_OK)
+            if (item.Parent.IShlFolder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStorage, storagePtr) == S_OK)
             {
                 storage = (IStorage)Marshal.GetTypedObjectForIUnknown(storagePtr, typeof(IStorage));
                 return true;
@@ -167,15 +167,15 @@ namespace WindowsApiLib.Shell
             IShellFolder folder;
             if (ReferenceEquals(item, ShellController.DesktopCSI))
             {
-                folder = item.Folder;
+                folder = item.IShlFolder;
             }
             else
             {
-                folder = item.Parent.Folder;
+                folder = item.Parent.IShlFolder;
             }
             var relpidl = CPidl.ILFindLastID(item.PIDL);
             IntPtr rgfReserved = IntPtr.Zero; //unused
-            if (parent.Folder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { relpidl }, ShellAPI.IID_IDropTarget, rgfReserved, out dropTargetPtr) == 0)
+            if (parent.IShlFolder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { relpidl }, ShellAPI.IID_IDropTarget, rgfReserved, out dropTargetPtr) == 0)
             {
                 dropTarget = (IDropTarget)Marshal.GetTypedObjectForIUnknown(dropTargetPtr, typeof(IDropTarget));
                 return true;
@@ -222,7 +222,7 @@ namespace WindowsApiLib.Shell
 
             IntPtr dataObjectPtr = IntPtr.Zero;
             IntPtr rgfReserved = IntPtr.Zero; //unused
-            var uiObject = parent.Folder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Length, pidls, ShellAPI.IID_IDataObject, rgfReserved, out dataObjectPtr);
+            var uiObject = parent.IShlFolder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Length, pidls, ShellAPI.IID_IDataObject, rgfReserved, out dataObjectPtr);
             if (uiObject == S_OK)
             {
                 return dataObjectPtr;
@@ -346,7 +346,7 @@ namespace WindowsApiLib.Shell
             }
 
             IntPtr rgfReserved = IntPtr.Zero; //unused
-            var ret = parent.Folder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { CPidl.ILFindLastID(item.PIDL) }, ShellAPI.IID_IQueryInfo, rgfReserved, out iQueryInfoPtr); 
+            var ret = parent.IShlFolder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { CPidl.ILFindLastID(item.PIDL) }, ShellAPI.IID_IQueryInfo, rgfReserved, out iQueryInfoPtr); 
 
             if (ret == S_OK)
             {
@@ -691,7 +691,7 @@ namespace WindowsApiLib.Shell
         {
             IntPtr ptr = IntPtr.Zero;
             IShellFolder iShFolder = null;
-            int HR = parent.Folder.BindToObject(relPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref ptr);
+            int HR = parent.IShlFolder.BindToObject(relPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref ptr);
             if (HR >= S_OK && ptr != IntPtr.Zero)   // New code (12/12/09)
             {
                 // The ASUS fix is slightly modified from its' original as per a suggestion from Calum 4/8/2010
@@ -814,11 +814,11 @@ namespace WindowsApiLib.Shell
                 return null;
             if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
             {
-                return ShellController.DesktopCSI.Folder;
+                return ShellController.DesktopCSI.IShlFolder;
             }
             else if (b.Length == 0)   // Also indicates the desktop
             {
-                return ShellController.DesktopCSI.Folder;
+                return ShellController.DesktopCSI.IShlFolder;
             }
             else
             {

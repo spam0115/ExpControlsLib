@@ -42,7 +42,8 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-        /// Loads folder contents
+        /// Loads folder contents for the given CShellItem.  IE, it populated the directories and files
+        /// members.
         /// </summary>
         /// <remarks>
         /// the reason this function has a return value is because the CShellItem passed in may be a duplicate of

@@ -43,7 +43,7 @@ namespace WindowsApiLib.Shell
         /// <param name="ptr">An Absolute PIDL referencing the item to be Found.</param>
         /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
         /// <remarks> 5/31/2012 - most code in this function replaced by a call to FindCShItem(BaseItem as CShellItem, Abs as IntPtr)</remarks>
-        public CShellItem? FindCShItem(IntPtr ptr)
+        public CShellItem? FindItem(IntPtr ptr)
         {
             return FindCShItem(Root, ptr);
         }
@@ -59,34 +59,35 @@ namespace WindowsApiLib.Shell
         /// search. If the Item identified by the Absolute PIDL parameter is not ALREADY in the internal tree, then
         /// FindCShItem will return NOTHING.
         /// </summary>
-        /// <param name="Abs">An Absolute PIDL referencing the item to be Found.</param>
+        /// <param name="absPidl">An Absolute PIDL referencing the item to be Found.</param>
         /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
         /// <remarks> 5/31/2012 -Function added to replace algorithm used in FindCShItem(ptr as IntPtr) which now only calls this routine.</remarks>
-        public CShellItem? FindCShItem(CShellItem BaseItem, IntPtr Abs)
+        public CShellItem? FindCShItem(CShellItem BaseItem, IntPtr absPidl)
         {
             CShellItem? target = null;
 
-            if (CPidl.IsEqual(BaseItem.PIDL, Abs))
+            if (CPidl.ResolvesToSamePathOrName(BaseItem.PIDL, absPidl))
                 return BaseItem;
 
             if (BaseItem.DirectoryList is not null) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
             {
                 foreach (CShellItem DItem in BaseItem.DirectoryList)
                 {
-                    if (CPidl.IsEqual(DItem.PIDL, Abs))
+                    if (CPidl.ResolvesToSamePathOrName(DItem.PIDL, absPidl))
                         return DItem;
-                    if (CPidl.IsAncestorOf(DItem.PIDL, Abs, false)) //note that items are considered to be ancestors of themselves which is kinda weird
-                        return FindCShItem(DItem, Abs);
+                    if (CPidl.IsAncestorOf(DItem.PIDL, absPidl, false)) //note that items are considered to be ancestors of themselves which is kinda weird
+                        return FindCShItem(DItem, absPidl);
                 }
             }
 
-            if (BaseItem.FileList is not null && CPidl.IsAncestorOf(BaseItem.PIDL, Abs, true))
+            if (BaseItem.FileList is not null && CPidl.IsAncestorOf(BaseItem.PIDL, absPidl, true))
             {
-                var fullPath = CPidl.GetFileSystemPath(Abs);//doesn't work with dlna media servers
+                //var name = CPidl.GetFileSystemPath(Abs);//doesn't work with dlna media servers
+                //if (name is null) return null;
+                var name = CPidl.GetDisplayName(absPidl);//doesn't work with dlna media servers
+                if (name is null) return null;
 
-                if (fullPath is null) return null;
-
-                if (BaseItem.FilesDic.TryGetValue(fullPath, out CShellItem fileItem)) 
+                if (BaseItem.FilesDic.TryGetValue(name, out CShellItem fileItem)) 
                 {
                     return fileItem;
                 }
@@ -184,7 +185,7 @@ namespace WindowsApiLib.Shell
             var currentFolder = Root;
             if (currentFolder == null) throw new Exception("The root of the shell hierarchy was null.");
 
-            if (CPidl.IsEqual(currentFolder.PIDL, absPidl))  // we found the desired item
+            if (CPidl.AreEqual(currentFolder.IShlFolder, currentFolder.PIDL, absPidl))  // we found the desired item
             {
                 Parent = null;
                 return currentFolder;
@@ -197,7 +198,7 @@ namespace WindowsApiLib.Shell
                 {
                     if (IsAncestorOf(currentCSI.PIDL, absPidl))
                     {
-                        if (CPidl.IsEqual(currentCSI.PIDL, absPidl))  // we found the desired item
+                        if (CPidl.AreEqual(currentFolder.IShlFolder, currentCSI.PIDL, absPidl))  // we found the desired item
                         {
                             Parent = currentFolder;
                             return currentCSI;
@@ -221,10 +222,10 @@ namespace WindowsApiLib.Shell
                 return null;
             }
 
-            var displayName = CPidl.GetDisplayName(absPidl);
+            var name = CPidl.GetDisplayName(absPidl);
             
             // Check for files in the current folder
-            if (currentFolder.FilesDic.TryGetValue(displayName, out CShellItem fileItem))
+            if (currentFolder.FilesDic.TryGetValue(name, out CShellItem fileItem))
             {
                 Parent = currentFolder;
                 return fileItem;
@@ -273,22 +274,26 @@ namespace WindowsApiLib.Shell
         /// <returns></returns>
         public bool Remove(CShellItem item)
         {
-            CShellItem target = null;
+            CShellItem? target = null;
 
-            lock (this.Lock)
+            try
             {
-                try
+                lock (this.Lock)
                 {
-                    target = FindCShItem(item.PIDL);
-                    if (target == null) return false;
+                    target = FindItem(item.PIDL);
+                }
+                
+                if (target == null) return false;
 
+                lock (target)
+                {
                     if (target.IsFolder)
                     {
                         if (target.FilesInitialized)
                         {
                             foreach (var child in target.m_Files)
                             {
-                                child.m_Parent = null;
+                                child.m_Parent = null; //should we delete all children?
                             }
 
                             target.m_Files.Clear();
@@ -309,11 +314,11 @@ namespace WindowsApiLib.Shell
                     {
                         target.Parent.m_Files.Remove(target);
                     }
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine("Error in CShellItemHierarchyManager.RemoveItem: " + ex.ToString());
-                }
+                }               
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error in CShellItemHierarchyManager.RemoveItem: " + ex.ToString());
             }
 
             if (target != null)

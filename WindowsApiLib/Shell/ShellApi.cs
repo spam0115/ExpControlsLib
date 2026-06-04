@@ -727,9 +727,24 @@ namespace WindowsApiLib.Shell
         [DllImport("shell32", CharSet = CharSet.Unicode)]
         public static extern bool SHGetPathFromIDList(IntPtr pidl, StringBuilder Path);
 
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        public static extern bool SHGetPathFromIDListEx(
+            IntPtr pidl,
+            [Out] StringBuilder pszPath,
+            uint cchPath,
+            uint uOpts);
+
         [DllImport("shell32.dll", ExactSpelling = true)]
         public static extern int SHCreateItemFromIDList(IntPtr pidl, ref Guid riid, out IntPtr ppv);
 
+        public const uint SICHINT_CANONICAL = 0x10000000;
+        public const uint SICHINT_TEST_FILESYSPATH_IF_NOT_EQUAL = 0x20000000;
+        [DllImport("shell32.dll", PreserveSig = false)]
+        public static extern void SHCreateItemFromIDList(
+            IntPtr pidl,
+            ref Guid riid,
+            [MarshalAs(UnmanagedType.Interface)] out IShellItem ppv);
+        
         /// <summary>
         /// Creates an IShellItem from a file path
         /// </summary>

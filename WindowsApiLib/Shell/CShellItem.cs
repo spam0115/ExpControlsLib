@@ -80,7 +80,7 @@ namespace WindowsApiLib.Shell
         /// This is a bit funky, but is at least made predictible by the SyncLock.
         /// </summary>
         /// <remarks></remarks>
-        private static readonly object _itemTreeLock = new object();
+        private static readonly object _itemTreeLock = new object(); //todo: stop using this and use locks on the instances of m_directories and m_files instead
 
         #endregion
 
@@ -441,7 +441,7 @@ namespace WindowsApiLib.Shell
         /// Contains the IShellFolder Interface of the instance if it is a Folder.
         /// </summary>
         /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
-        public IShellFolder Folder
+        public IShellFolder IShlFolder
         {
             get
             {
@@ -1678,7 +1678,7 @@ namespace WindowsApiLib.Shell
         /// <remarks>A similar function exists in the ShellHelper class. GetDropTargetOf is more efficient.</remarks>
         public Shell.IDropTarget GetDropTargetOf(Control tn)
         {
-            if (Folder == null)
+            if (IShlFolder == null)
                 return null;
 
             // Standard way: GetUIObjectOf on the parent
@@ -1690,7 +1690,7 @@ namespace WindowsApiLib.Shell
             // Fallback: CreateViewObject (might be needed for some virtual folders or background drops)
             IntPtr pInterface = IntPtr.Zero;
             var tnH = tn.Handle;
-            if (Folder.CreateViewObject(tnH, ShellAPI.IID_IDropTarget, ref pInterface) == S_OK)
+            if (IShlFolder.CreateViewObject(tnH, ShellAPI.IID_IDropTarget, ref pInterface) == S_OK)
             {
                 return (Shell.IDropTarget)Marshal.GetTypedObjectForIUnknown(pInterface, typeof(Shell.IDropTarget));
             }
@@ -2008,7 +2008,7 @@ namespace WindowsApiLib.Shell
         internal CShellItemCollection GetContents(SHCONTF flags) //move: to shellcontroller
         {
             var items = new CShellItemCollection(this);
-            if (Folder is null)
+            if (IShlFolder is null)
                 return items; // when does this ever occur?
 
             Debug.WriteLine($"Getting contents for folder '{this.FullPath}'.");
@@ -2114,11 +2114,11 @@ namespace WindowsApiLib.Shell
                 return null;
             if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
             {
-                return ShellController.DesktopCSI.Folder;
+                return ShellController.DesktopCSI.IShlFolder;
             }
             else if (b.Length == 0)   // Also indicates the desktop
             {
-                return ShellController.DesktopCSI.Folder;
+                return ShellController.DesktopCSI.IShlFolder;
             }
             else
             {

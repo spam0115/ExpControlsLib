@@ -292,6 +292,10 @@ namespace ExpControlsLib
                 {
                     _TreeView.BeginUpdate();
                     ClearTree();
+
+                    var target = ShellController.Instance.LoadFolderContents(value);
+                    if (target != null) value = target;
+
                     CShellItem[] CSI = value.Directories;
                     Root = new TreeNode(value.DisplayName);
                     BuildTree(CSI);
@@ -484,7 +488,7 @@ namespace ExpControlsLib
             CShellItem newItem;
             try
             {
-                newItem = CShellItemFactory.CreateCShItem(newPath);
+                newItem = ShellController.Instance.HierachyManager.FindOrAdd(newPath);
                 if (newItem is null)
                     return ExpandANodeRet;
                 if (!newItem.IsFolder)
@@ -857,6 +861,10 @@ namespace ExpControlsLib
             ClearTree();
             CShellItem special;
             special = CShellItemFactory.CreateCShItem((CSIDL)newVal);
+
+            var target = ShellController.Instance.LoadFolderContents(special);
+            if (target != null) special = target;
+
             Root = new TreeNode(special.DisplayName)
             {
                 Tag = special,
@@ -953,6 +961,10 @@ namespace ExpControlsLib
             if (performAccurateCheck)
             {
                 // Force a one-level lookahead to ensure the arrow accurately reflects visible contents.
+                // Added hierarchy registration
+                var target = ShellController.Instance.LoadFolderContents(item);
+                if (target != null) item = target;
+
                 // item.Directories will perform/retrieve the enumeration.
                 foreach (CShellItem sub in item.Directories)
                 {
@@ -1287,7 +1299,7 @@ namespace ExpControlsLib
             }
 
             var newPidl = IntPtr.Zero;
-            if (item.Parent.Folder.SetNameOf((int)_TreeView.Handle, CPidl.ILFindLastID(item.PIDL), NewName, SHGDN.NORMAL, ref newPidl) == S_OK)
+            if (item.Parent.IShlFolder.SetNameOf((int)_TreeView.Handle, CPidl.ILFindLastID(item.PIDL), NewName, SHGDN.NORMAL, ref newPidl) == S_OK)
             {
             }
             // the following line is not needed since use of SetNameOf will cause a renamed WM_Notify msg 
@@ -1611,6 +1623,15 @@ namespace ExpControlsLib
         private void PopulateNode(TreeNode NodeToFill)          // 8/26/2012
         {
             CShellItem CSI = (CShellItem)NodeToFill.Tag;
+
+            // Added to ensure item is in hierarchy
+            var target = ShellController.Instance.LoadFolderContents(CSI);
+            if (target != null && !ReferenceEquals(CSI, target))
+            {
+                NodeToFill.Tag = target;
+                CSI = target;
+            }
+
             // 02/12/2014 - Setting of D changed at suggestion of Michael Ruby
             List<CShellItem> D;
             if (CSI.DirectoryList is null)
@@ -1766,11 +1787,11 @@ namespace ExpControlsLib
                 IShellFolder folder = null;
                 if (ReferenceEquals(CSI, ShellController.DesktopCSI))
                 {
-                    folder = CSI.Folder;
+                    folder = CSI.IShlFolder;
                 }
                 else
                 {
-                    folder = CSI.Parent.Folder;
+                    folder = CSI.Parent.IShlFolder;
                 }
 
                 var relPidl = CPidl.ILFindLastID(CSI.PIDL);

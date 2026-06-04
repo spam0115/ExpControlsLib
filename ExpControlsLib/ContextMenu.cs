@@ -64,11 +64,11 @@ namespace ExpControlsLib
 
             if (items[0] == ShellController.DesktopCSI)
             {
-                folder = items[0].Folder;
+                folder = items[0].IShlFolder;
             }
             else
             {
-                folder = items[0].Parent.Folder;
+                folder = items[0].Parent.IShlFolder;
             }
 
             for (int i = 0; i < items.Length; i++)

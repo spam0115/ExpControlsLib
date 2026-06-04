@@ -160,7 +160,7 @@ namespace WindowsApiLib.Shell
                                 IntPtr realRel;
                                 var splitPidl = CPidl.Split(shNotify.dwItem1);
 
-                                parentItem = HierachyManager.FindCShItem(splitPidl.ParentPidl);
+                                parentItem = HierachyManager.FindItem(splitPidl.ParentPidl);
                                 if (!(parentItem == null))
                                 {
                                     Debug.WriteLine("  [CREATE] Parent found: " + parentItem.ItemPath);
@@ -169,7 +169,7 @@ namespace WindowsApiLib.Shell
                                         if (!parentItem.FileList.Contains(shNotify.dwItem1))
                                         {
                                             Debug.WriteLine("  [CREATE] Parent files initialized and item NOT in list. Adding.");
-                                            if (SHGetRealIDL(parentItem.Folder, splitPidl.ChildPidl, out realRel) == S_OK)
+                                            if (SHGetRealIDL(parentItem.IShlFolder, splitPidl.ChildPidl, out realRel) == S_OK)
                                             {
                                                 var newItem = CShellItemFactory.CreateCShItem(realRel, parentItem);
                                                 if (newItem is not null)
@@ -207,14 +207,14 @@ namespace WindowsApiLib.Shell
 
                                 break;
                             }
-                        case SHCNE.DELETE:
+                        case SHCNE.DELETE: //keep in mind that windows can send the same delete message multiple times
                             Debug.WriteLine("  [DELETE] processing...");
                             var splitResult = CPidl.Split(shNotify.dwItem1);
                             parentPidl = splitResult.ParentPidl;
                             var relPidl = splitResult.ChildPidl;
                             Debug.WriteLine($"  {CPidl.ToString(shNotify.dwItem1)}");
                             Debug.WriteLine($"  {CPidl.ToString(parentPidl)}");
-                            parentItem = HierachyManager.FindCShItem(parentPidl);
+                            parentItem = HierachyManager.FindItem(parentPidl);
 
                             if (parentItem != null)
                             {
@@ -249,7 +249,7 @@ namespace WindowsApiLib.Shell
                             Debug.WriteLine("  [RENAMEITEM] processing...");
                             if (shNotify.dwItem2 != IntPtr.Zero)
                             {
-                                var item = HierachyManager.FindCShItem(shNotify.dwItem1);
+                                var item = HierachyManager.FindItem(shNotify.dwItem1);
                                 if (item is not null)
                                 {
                                     Debug.WriteLine("  [RENAMEITEM] Item found: " + item.ItemPath + ". New PIDL: " + shNotify.dwItem2.ToString("X"));
@@ -289,7 +289,7 @@ namespace WindowsApiLib.Shell
                                 }
                                 else
                                 {
-                                    var upCSI = HierachyManager.FindCShItem(shNotify.dwItem1);
+                                    var upCSI = HierachyManager.FindItem(shNotify.dwItem1);
                                     if (upCSI is not null)
                                     {
                                         Debug.WriteLine("  [UPDATEDIR] Found item: " + upCSI.ItemPath + ".  Updating dir.");
@@ -327,7 +327,7 @@ namespace WindowsApiLib.Shell
                                 }
                                 else
                                 {
-                                    var item = HierachyManager.FindCShItem(shNotify.dwItem1);
+                                    var item = HierachyManager.FindItem(shNotify.dwItem1);
                                     if (item is null)
                                     {
                                         Debug.WriteLine("  [UPDATEITEM] item was not found");
@@ -357,7 +357,7 @@ namespace WindowsApiLib.Shell
                                 //IntPtr parent, child = IntPtr.Zero;
                                 //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
                                 var splitPidls = CPidl.Split(shNotify.dwItem1);
-                                parentItem = HierachyManager.FindCShItem(splitPidls.ParentPidl);
+                                parentItem = HierachyManager.FindItem(splitPidls.ParentPidl);
                                 if (parentItem is not null)
                                 {
                                     Debug.WriteLine("  [MKDIR] Parent found: " + parentItem.ItemPath);
@@ -367,7 +367,7 @@ namespace WindowsApiLib.Shell
                                         {
                                             Debug.WriteLine("  [MKDIR] Parent folders initialized and NOT in list. Adding.");
                                             IntPtr realRel;
-                                            if (SHGetRealIDL(parentItem.Folder, splitPidls.ChildPidl, out realRel) == S_OK)
+                                            if (SHGetRealIDL(parentItem.IShlFolder, splitPidls.ChildPidl, out realRel) == S_OK)
                                             {
                                                 var newItem = CShellItemFactory.CreateCShItem(realRel, parentItem);
                                                 if (newItem is not null)
@@ -416,7 +416,7 @@ namespace WindowsApiLib.Shell
                             // If Not shNotify.dwItem2 <> IntPtr.Zero Then     '5/26/2012 - Old Code
                             if (shNotify.dwItem2 != IntPtr.Zero)          // 6/11/2012 - New Code
                             {
-                                var item = HierachyManager.FindCShItem(shNotify.dwItem1);
+                                var item = HierachyManager.FindItem(shNotify.dwItem1);
                                 if (item is not null)
                                 {
                                     Debug.WriteLine("  [RENAMEFOLDER] Found item: " + item.ItemPath + ". New PIDL: " + shNotify.dwItem2.ToString("X"));
@@ -440,7 +440,7 @@ namespace WindowsApiLib.Shell
                                 // Removed Directory
                                 var parent = CPidl.TrimLast(shNotify.dwItem1);
 
-                                parentItem = HierachyManager.FindCShItem(parent);
+                                parentItem = HierachyManager.FindItem(parent);
                                 if (parentItem is not null)
                                 {
                                     Debug.WriteLine("  [RMDIR] Parent found: " + parentItem.ItemPath);
@@ -479,7 +479,7 @@ namespace WindowsApiLib.Shell
                         case SHCNE.MEDIAINSERTED:
                         case SHCNE.MEDIAREMOVED:
                             Debug.WriteLine("  [MEDIA CHANGE] processing...");
-                            var mediaCSI = HierachyManager.FindCShItem(shNotify.dwItem1);
+                            var mediaCSI = HierachyManager.FindItem(shNotify.dwItem1);
                             if (mediaCSI is not null)
                             {
                                 Debug.WriteLine("  [MEDIA CHANGE] Found item: " + mediaCSI.ItemPath + ". Updating.");
@@ -493,7 +493,7 @@ namespace WindowsApiLib.Shell
                             break;
                         case SHCNE.UPDATEIMAGE:
                             Debug.WriteLine("  [UPDATEIMAGE] processing...");
-                            var imgCSI = HierachyManager.FindCShItem(shNotify.dwItem1);
+                            var imgCSI = HierachyManager.FindItem(shNotify.dwItem1);
                             if (imgCSI is not null)
                             {
                                 Debug.WriteLine("  [UPDATEIMAGE] Found item: " + imgCSI.ItemPath + ". Updating icon.");
@@ -599,7 +599,7 @@ namespace WindowsApiLib.Shell
             IntPtr pidlRel = IntPtr.Zero, newIShellFolderPtr = IntPtr.Zero;
             var splitPidl = CPidl.Split(changedPidl);
             var oldParentCsi = csi.Parent;    // Save in case "renamed" to a new directory
-            var allegedParentCsi = ShellController.Instance.HierachyManager.FindCShItem(splitPidl.ParentPidl);
+            var allegedParentCsi = ShellController.Instance.HierachyManager.FindItem(splitPidl.ParentPidl);
 
             try
             {
@@ -611,7 +611,7 @@ namespace WindowsApiLib.Shell
                     return false;
                     //todo: shouldn't we add the newParentCsi to the tree at this point?
                 }
-                else if (SHGetRealIDL(allegedParentCsi.Folder, splitPidl.ChildPidl, out pidlRel) == S_OK) // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
+                else if (SHGetRealIDL(allegedParentCsi.IShlFolder, splitPidl.ChildPidl, out pidlRel) == S_OK) // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
                 {
                     Marshal.FreeCoTaskMem(csi.m_Pidl);
                     csi.m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, pidlRel);  //Must do this!  newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID //don't do this: m_Pidl = changedPidl;
@@ -635,7 +635,7 @@ namespace WindowsApiLib.Shell
 
                         if (csi.IsFolder) //update children for folders
                         {
-                            if (allegedParentCsi.Folder.BindToObject(pidlRel, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref newIShellFolderPtr) != S_OK) //get new ishellfolder interface object
+                            if (allegedParentCsi.IShlFolder.BindToObject(pidlRel, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref newIShellFolderPtr) != S_OK) //get new ishellfolder interface object
                             {
                                 Marshal.Release(newIShellFolderPtr);
                                 return false;
@@ -1148,7 +1148,7 @@ namespace WindowsApiLib.Shell
             var parent1 = default(CShellItem);
             if (shNotify.dwItem1 != IntPtr.Zero)     // 5/26/2012
             {
-                csi1 = HierachyManager.FindCShItem(shNotify.dwItem1);
+                csi1 = HierachyManager.FindItem(shNotify.dwItem1);
                 if (csi1 is not null)
                 {
                     // If csi1.Path.IndexOf("ntuser.dat", StringComparison.InvariantCultureIgnoreCase) > -1 Then  '6/6/2012 - No longer needed
@@ -1178,7 +1178,7 @@ namespace WindowsApiLib.Shell
             }
             if (shNotify.dwItem2 != IntPtr.Zero)     // 5/26/2012
             {
-                csi2 = HierachyManager.FindCShItem(shNotify.dwItem2);    // 5/26/2012
+                csi2 = HierachyManager.FindItem(shNotify.dwItem2);    // 5/26/2012
                 if (csi2 is not null)
                 {
                     Debug.WriteLine(id + "dwItem2: " + " (" + shNotify.dwItem2.ToString() + ")" + csi2.ItemPath);

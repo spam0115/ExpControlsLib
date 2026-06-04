@@ -207,7 +207,7 @@ namespace WindowsApiLib.Shell
             {
                 var pchEaten = default(int);
                 int argpdwAttributes = default;
-                HR = DesktopCSI.Folder.ParseDisplayName(default, default, $"::{ShellNamespaceGuids.Documents.ToString()}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
+                HR = DesktopCSI.IShlFolder.ParseDisplayName(default, default, $"::{ShellNamespaceGuids.Documents.ToString()}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
             }
             else
             {
@@ -488,7 +488,7 @@ namespace WindowsApiLib.Shell
         {
             IntPtr ptr = IntPtr.Zero;
             IShellFolder rVal = null;
-            int HR = parent.Folder.BindToObject(relPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref ptr);
+            int HR = parent.IShlFolder.BindToObject(relPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref ptr);
             if (HR >= S_OK && ptr != IntPtr.Zero)   // New code (12/12/09)
             {
                 // The ASUS fix is slightly modified from its' original as per a suggestion from Calum 4/8/2010
@@ -544,7 +544,7 @@ namespace WindowsApiLib.Shell
 
             try
             {
-                HR = csi.Folder.EnumObjects(0, flags, ref IEnum);
+                HR = csi.IShlFolder.EnumObjects(0, flags, ref IEnum);
                 if (HR != S_OK)
                     return listPidls;
 
@@ -626,7 +626,7 @@ namespace WindowsApiLib.Shell
         public CShellItemCollection GetContents(CShellItem csi, SHCONTF flags)
         {
             var rVal = new CShellItemCollection(csi);
-            if (csi.Folder is null)
+            if (csi.IShlFolder is null)
                 return rVal;
             CShellItem itm;
 
@@ -689,7 +689,7 @@ namespace WindowsApiLib.Shell
             // Note: for GetAttributesOf, we must provide an array, in all cases with 1 element
             var aPidl = new IntPtr[1];
             aPidl[0] = ptr;
-            csi.Folder.GetAttributesOf(1, aPidl, ref attrFlag);
+            csi.IShlFolder.GetAttributesOf(1, aPidl, ref attrFlag);
             if (((attrFlag & SFGAO.FOLDER) != 0) && !((attrFlag & SFGAO.STREAM) != 0))
             {
                 IsFolderRelRet = true;

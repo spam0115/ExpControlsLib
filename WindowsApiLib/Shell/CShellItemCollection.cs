@@ -130,7 +130,7 @@ namespace WindowsApiLib.Shell
         {
             for (int i = 0; i < m_items.Count; i++)
             {
-                if (CPidl.IsBinaryEqual(m_items[i].PIDL, pidl))
+                if (CPidl.IsBinaryEqual(m_items[i].PIDL, pidl)) //binary comparisons are no good!
                 {
                     return i;
                 }
@@ -142,7 +142,7 @@ namespace WindowsApiLib.Shell
         {
             for (int i = 0; i < m_items.Count; i++)
             {
-                if (CPidl.IsBinaryEqual(m_items[i].LastPIDL, relPidl))
+                if (CPidl.IsBinaryEqual(m_items[i].LastPIDL, relPidl)) //binary comparisons are no good!
                 {
                     return i;
                 }

@@ -2020,8 +2020,8 @@ namespace ExpControlsLib
                         try
                         {
                             folder = _currentFolderCsi == ShellController.DesktopCSI
-                                ? _currentFolderCsi.Folder
-                                : _currentFolderCsi.Parent?.Folder;
+                                ? _currentFolderCsi.IShlFolder
+                                : _currentFolderCsi.Parent?.IShlFolder;
 
                             if (folder == null)
                             {
@@ -2054,7 +2054,7 @@ namespace ExpControlsLib
 
                         try
                         {
-                            folder = _currentFolderCsi.Folder;
+                            folder = _currentFolderCsi.IShlFolder;
                             if (folder == null)
                             {
                                 Debug.WriteLine("Failed to get folder interface for selected items");
@@ -2667,7 +2667,7 @@ namespace ExpControlsLib
                     }
 
                     IntPtr newPidl = IntPtr.Zero;
-                    if (item.Parent.Folder.SetNameOf(
+                    if (item.Parent.IShlFolder.SetNameOf(
                             _listView.Handle.ToInt32(),
                             CPidl.ILFindLastID(item.PIDL),
                             newName,
@@ -3184,8 +3184,8 @@ namespace ExpControlsLib
                         IntPtr iunk = IntPtr.Zero;
 
                         IShellFolder folder = _currentFolderCsi == ShellController.DesktopCSI
-                            ? _currentFolderCsi.Folder
-                            : _currentFolderCsi.Parent.Folder;
+                            ? _currentFolderCsi.IShlFolder
+                            : _currentFolderCsi.Parent.IShlFolder;
 
                         IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
 

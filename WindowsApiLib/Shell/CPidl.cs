@@ -25,14 +25,14 @@ namespace WindowsApiLib
         /// <summary>
         /// Given an IntPtr pointing to a valid PIDL, copy the bytes of that PIDL to a Byte()
         /// </summary>
-        /// <param name="Pidl">IntPtr pointing to a valid PIDL</param>
-        public CPidl(IntPtr Pidl)
+        /// <param name="pidl">IntPtr pointing to a valid PIDL</param>
+        public CPidl(IntPtr pidl)
         {
-            int cb = ItemIDListSize(Pidl);
+            int cb = ItemIDListSize(pidl);
             if (cb > 0)
             {
                 m_bytes = new byte[cb + 1 + 1];
-                Marshal.Copy(Pidl, m_bytes, 0, cb);
+                Marshal.Copy(pidl, m_bytes, 0, cb);
             }
             else
             {
@@ -41,7 +41,7 @@ namespace WindowsApiLib
                // ensure nulnul
             m_bytes[m_bytes.Length - 2] = 0;
             m_bytes[m_bytes.Length - 1] = 0;
-            m_ItemCount = SegmentCount(Pidl);
+            m_ItemCount = SegmentCount(pidl);
         }
 
         public CPidl(string path)
@@ -161,9 +161,9 @@ namespace WindowsApiLib
 
         /// <summary>returns True if the beginning of pidlA matches PidlB exactly for pidlB's entire length</summary>
         /// <returns>True if the beginning of pidlA matches PidlB exactly for pidlB's entire length</returns>
-        public static bool StartsWith(IntPtr pidlA, IntPtr pidlB)
+        public static bool StartsWith(IntPtr pidl1, IntPtr pidl2)
         {
-            return StartsWith(new CPidl(pidlA), new CPidl(pidlB));
+            return StartsWith(new CPidl(pidl1), new CPidl(pidl2));
         }
 
         /// <summary>returns True if the beginning of A matches B exactly for B's entire length</summary>
@@ -259,16 +259,16 @@ namespace WindowsApiLib
         /// <summary>
         /// AreBytesEqual performs a binary comparison of the contents of two ItemIDLists pointed to by two Pidls.
         /// </summary>
-        /// <param name="Pidl1">IntPtr pointing to an ItemIDList.</param>
+        /// <param name="pidl1">IntPtr pointing to an ItemIDList.</param>
         /// <param name="pidl2">IntPtr pointing to an ItemIDList.</param>
         /// <returns>True if all bytes are the same, False otherwise.</returns>
         /// <remarks>A substitute for ILIsEqual on pre-Win2K systems, and used by IsReallyEqual when binary
         /// comparison is needed on Win2K and above systems.</remarks>
-        public static bool AreBytesEqual(IntPtr Pidl1, IntPtr pidl2)
+        public static bool AreBytesEqual(IntPtr pidl1, IntPtr pidl2)
         {
             int cb1;
             int cb2;
-            cb1 = ItemIDListSize(Pidl1);
+            cb1 = ItemIDListSize(pidl1);
             cb2 = ItemIDListSize(pidl2);
             if (cb1 != cb2)
                 return false;
@@ -278,7 +278,7 @@ namespace WindowsApiLib
             var loopTo = lim32 - 1;
             for (i = 0; i <= loopTo; i++)
             {
-                if (Marshal.ReadInt32(Pidl1, i * 4) != Marshal.ReadInt32(pidl2, i * 4))
+                if (Marshal.ReadInt32(pidl1, i * 4) != Marshal.ReadInt32(pidl2, i * 4))
                 {
                     // Debug.WriteLine("Mismatch at Byte " & i * 4 & " (&H" & Hex(i * 4) & ")")
                     return false;
@@ -289,7 +289,7 @@ namespace WindowsApiLib
             var loopTo1 = limB - 1;
             for (i = 0; i <= loopTo1; i++)
             {
-                if (Marshal.ReadByte(Pidl1, offset + i) != Marshal.ReadByte(pidl2, offset + i))
+                if (Marshal.ReadByte(pidl1, offset + i) != Marshal.ReadByte(pidl2, offset + i))
                 {
                     // Debug.WriteLine("Mismatch at Byte " & i + offset & " (&H" & Hex(i + offset) & ")")
                     return false;
@@ -299,17 +299,17 @@ namespace WindowsApiLib
         }
 
         /// <summary>
-        /// IsEqual compares two ItemIDLists using SHCompareIDList.
+        /// IsEqual compares two relative single segment pidls using SHCompareIDList.
         /// </summary>
-        /// <param name="Pidl1">IntPtr pointing to an ItemIDList.</param>
-        /// <param name="Pidl2">IntPtr pointing to an ItemIDList.</param>
+        /// <param name="pidl1">IntPtr pointing to an ItemIDList.</param>
+        /// <param name="pidl2">IntPtr pointing to an ItemIDList.</param>
         /// <returns>True if ILIsEqual returns or would return True, False otherwise.</returns>
-        public static bool IsEqual(IntPtr Pidl1, IntPtr Pidl2)
+        public static bool IsEqual(IShellFolder parent, IntPtr pidl1, IntPtr pidl2)
         {
-            if (Pidl1 == Pidl2) return true;
+            if (pidl1 == pidl2) return true;
             try
             {
-                var result = CShellItemFactory.DeskTopDirectory.Folder.CompareIDs(SHCIDS_CANONICALONLY, Pidl1, Pidl2);
+                var result = parent.CompareIDs(SHCIDS_CANONICALONLY, pidl1, pidl2);
 
                 return (result & 0xFFFF) == 0; // Only the low 16 bits (HRESULT short) matter
             }
@@ -320,20 +320,181 @@ namespace WindowsApiLib
             }
         }
 
+        public static bool ResolvesToSamePathOrName(IntPtr pidl1, IntPtr pidl2)
+        {
+            if (pidl1 == IntPtr.Zero || pidl2 == IntPtr.Zero) return false;
+            if (ILIsEqual(pidl1, pidl2)) return true;
+
+            // 1) Filesystem path compare (preferred when available)
+            if (TryGetFileSystemPathFromPidl(pidl1, out var pathA) &&
+                TryGetFileSystemPathFromPidl(pidl2, out var pathB))
+            {
+                var normA = NormalizePath(pathA);
+                var normB = NormalizePath(pathB);
+
+                if (string.Equals(normA, normB, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            // 2) Shell canonical parsing name compare (works for non-filesystem too)
+            if (TryGetCanonicalParsingName(pidl1, out var nameA) &&
+                TryGetCanonicalParsingName(pidl2, out var nameB))
+            {
+                if (string.Equals(
+                        NormalizeShellName(nameA),
+                        NormalizeShellName(nameB),
+                        StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryGetFileSystemPathFromPidl(IntPtr pidl, out string path)
+        {
+            path = null!;
+            var sb = new StringBuilder(32768);
+
+            if (!SHGetPathFromIDListEx(pidl, sb, (uint)sb.Capacity, 0))
+                return false;
+
+            var p = sb.ToString();
+            if (string.IsNullOrWhiteSpace(p))
+                return false;
+
+            path = p;
+            return true;
+        }
+
+        private static bool TryGetCanonicalParsingName(IntPtr pidl, out string name)
+        {
+            name = null!;
+            IntPtr pName = IntPtr.Zero;
+            try
+            {
+                int hr = SHGetNameFromIDList(pidl, SIGDN.DESKTOPABSOLUTEPARSING, out pName);
+                if (hr != 0 || pName == IntPtr.Zero) return false;
+
+                name = Marshal.PtrToStringUni(pName)!;
+                return !string.IsNullOrWhiteSpace(name);
+            }
+            finally
+            {
+                if (pName != IntPtr.Zero) Marshal.FreeCoTaskMem(pName);
+            }
+        }
+
+        private static string NormalizePath(string path)
+        {
+            string p = path.Trim().Replace('/', '\\');
+
+            // strip extended prefixes for stable comparison
+            if (p.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
+                p = @"\\" + p.Substring(8);
+            else if (p.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase))
+                p = p.Substring(4);
+
+            try
+            {
+                p = Path.GetFullPath(p);
+            }
+            catch
+            {
+                // leave as-is if not a valid local path format
+            }
+
+            // trim trailing slash except for roots like C:\ or \\server\share\
+            p = TrimTrailingBackslashIfNotRoot(p);
+            return p;
+        }
+
+        private static string TrimTrailingBackslashIfNotRoot(string p)
+        {
+            if (string.IsNullOrEmpty(p)) return p;
+
+            // Drive root: C:\
+            if (p.Length == 3 && char.IsLetter(p[0]) && p[1] == ':' && p[2] == '\\')
+                return p;
+
+            // UNC root/share handling
+            // Keep \\server\share\ as-is
+            if (p.StartsWith(@"\\", StringComparison.Ordinal))
+            {
+                var parts = p.Split('\\', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2 && p.EndsWith("\\")) return p;
+            }
+
+            return p.TrimEnd('\\');
+        }
+        private static string NormalizeShellName(string s) => s.Trim();
+
+        // worthless and always gives false positives
+        //public static bool ArePidlsLogicallyEqual(IntPtr pidl1, IntPtr pidl2)
+        //{
+        //    if (pidl1 == pidl2) return true;
+        //    if (pidl1 == IntPtr.Zero || pidl2 == IntPtr.Zero) return false;
+
+        //    Guid siGuid = typeof(IShellItem).GUID;
+
+        //    SHCreateItemFromIDList(pidl1, ref siGuid, out IShellItem item1);
+        //    SHCreateItemFromIDList(pidl2, ref siGuid, out IShellItem item2);
+
+        //    string path1 = GetParsingName(pidl1); // What does this return?
+        //    string path2 = GetParsingName(pidl2); // What does this return?
+
+        //    int hr = item1.Compare(item2, SICHINT_CANONICAL | SICHINT_TEST_FILESYSPATH_IF_NOT_EQUAL, out int order);
+
+        //    Marshal.ReleaseComObject(item1);
+        //    Marshal.ReleaseComObject(item2);
+
+        //    // S_OK (0) = equal, S_FALSE (1) = not equal
+        //    return hr == 0;
+        //}
+
+        /// <summary>
+        /// Not currently used. Compares two PIDLs Relative to the instance Folder using the folder.CompareIDs API call.
+        /// </summary>
+        /// <param name="relPidl1">First Relative PIDL to compare.</param>
+        /// <param name="relPidl2">Second Relative PIDL to compare.</param>
+        /// <returns>True if Equal, False otherwise.</returns>
+        /// <remarks></remarks>
+        public static bool AreEqual(IShellFolder folder, IntPtr relPidl1, IntPtr relPidl2)
+        {
+            bool PidlsEqualRet = default;
+            if (folder is null)
+                return IsBinaryEqual(relPidl1, relPidl2);
+            PidlsEqualRet = false;            // assume not equal
+            uint lParam = (uint)SHCIDS.CANONICALONLY;
+            int H;
+            H = folder.CompareIDs(lParam, relPidl1, relPidl2);
+            if (H >= 0)
+            {
+                int Code = H & 0x7777;
+                if (Code == 0)
+                    return true;
+            }
+            else
+            {
+                return IsBinaryEqual(relPidl1, relPidl2);
+            }
+
+            return PidlsEqualRet;
+        }
+
         /// <summary>
         /// IsEqual compares two ItemIDLists. It uses the ILIsEqual function, which only compares portions 
         /// of each ItemID. On such systems, the other portions of the ItemID may differ in a few 
         /// bytes.
         /// </summary>
-        /// <param name="Pidl1">IntPtr pointing to an ItemIDList.</param>
-        /// <param name="Pidl2">IntPtr pointing to an ItemIDList.</param>
+        /// <param name="pidl1">IntPtr pointing to an ItemIDList.</param>
+        /// <param name="pidl2">IntPtr pointing to an ItemIDList.</param>
         /// <returns>True if ILIsEqual returns or would return True, False otherwise.</returns>
-        public static bool IsBinaryEqual(IntPtr Pidl1, IntPtr Pidl2)
+        public static bool IsBinaryEqual(IntPtr pidl1, IntPtr pidl2)
         {
-            if (Pidl1 == Pidl2) return true;
+            if (pidl1 == pidl2) return true;
             try
             {
-                return ILIsEqual(Pidl1, Pidl2); //todo: this only does binary comparison, not value comparison.  two pidls to the same item can have 2 different binary representations
+                return ILIsEqual(pidl1, pidl2); //todo: this only does binary comparison, not value comparison.  two pidls to the same item can have 2 different binary representations
             }
             catch(Exception ex)
             {
@@ -364,14 +525,14 @@ namespace WindowsApiLib
             }
             return true;         // all equal on fall thru
         }
-
+                
         /// <summary> Copy the contents of a byte() containing a PIDL to
-        /// CoTaskMemory, returning an IntPtr that points to that mem block
-        /// Assumes that this cPidl is properly terminated, as all New 
-        /// cPidls are.
-        /// </summary>
-        /// <returns>The newly created PIDL</returns>
-        /// <remarks> Caller must Free the returned IntPtr when done with the returned PIDL.</remarks>
+         /// CoTaskMemory, returning an IntPtr that points to that mem block
+         /// Assumes that this cPidl is properly terminated, as all New 
+         /// cPidls are.
+         /// </summary>
+         /// <returns>The newly created PIDL</returns>
+         /// <remarks> Caller must Free the returned IntPtr when done with the returned PIDL.</remarks>
         public IntPtr ToPIDL()
         {
             IntPtr ToPIDLRet = default;
@@ -619,14 +780,14 @@ namespace WindowsApiLib
 
 
         /// <summary>IsAncestorOf tests if Pidl1 is an ancestor of Pidl2.</summary>
-        /// <param name="Pidl1">Relative or Absolute PIDL of potential ancestor.</param>
-        /// <param name="Pidl2">Absolute PIDL of potential descendant.</param>
+        /// <param name="pidl1">Relative or Absolute PIDL of potential ancestor.</param>
+        /// <param name="pidl2">Absolute PIDL of potential descendant.</param>
         /// <param name="ImmediateOnly">If True, returns True only if Pidl1 is the Immediate Ancestor of Pidl2.</param>
         /// <returns>True if Pidl1 is an ancestor of Pidl2, False otherwise.</returns>
-        public static bool IsAncestorOf(IntPtr Pidl1, IntPtr Pidl2, bool ImmediateOnly = false)
+        public static bool IsAncestorOf(IntPtr pidl1, IntPtr pidl2, bool ImmediateOnly = false)
         {
-            if (Pidl1.Equals(IntPtr.Zero) || Pidl2.Equals(IntPtr.Zero)) return false;
-            return ILIsParent(Pidl1, Pidl2, ImmediateOnly);
+            if (pidl1.Equals(IntPtr.Zero) || pidl2.Equals(IntPtr.Zero)) return false;
+            return ILIsParent(pidl1, pidl2, ImmediateOnly);
         }
 
         /// <summary>IsAncestorOf tests if Item1 is an ancestor of Item2.</summary>
@@ -639,10 +800,32 @@ namespace WindowsApiLib
             return IsAncestorOf(Item1.PIDL, Item2.PIDL, ImmediateOnly);
         }
 
+        /// <summary>
+        /// Get's the display name for a pidl.
+        /// </summary>
+        /// <param name="absPidl"></param>
+        /// <returns></returns>
         public static string GetDisplayName(nint absPidl)
         {
             SHGetNameFromIDList(absPidl, SIGDN.PARENTRELATIVEEDITING, out string name);
             return name;
+        }
+
+        public static string GetParsingName(IntPtr pidl)
+        {
+            if (pidl == IntPtr.Zero)
+                return null;
+
+            try
+            {
+                SHGetNameFromIDList(pidl, SIGDN.DESKTOPABSOLUTEPARSING, out string name);
+                return name;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetParsingName failed: {ex.Message}");
+                return null;
+            }
         }
 
         /// <summary>
@@ -1152,36 +1335,6 @@ namespace WindowsApiLib
                     return false;
             }
             return true;
-        }
-
-        /// <summary>
-        /// Not currently used. Compares two PIDLs Relative to the instance Folder using the folder.CompareIDs API call.
-        /// </summary>
-        /// <param name="RelPidl1">First Relative PIDL to compare.</param>
-        /// <param name="RelPidl2">Second Relative PIDL to compare.</param>
-        /// <returns>True if Equal, False otherwise.</returns>
-        /// <remarks></remarks>
-        public bool AreEqual(IShellFolder folder, IntPtr RelPidl1, IntPtr RelPidl2)
-        {
-            bool PidlsEqualRet = default;
-            if (folder is null)
-                return IsBinaryEqual(RelPidl1, RelPidl2);
-            PidlsEqualRet = false;            // assume not equal
-            uint lParam = (uint)SHCIDS.CANONICALONLY;
-            int H;
-            H = folder.CompareIDs(lParam, RelPidl1, RelPidl2);
-            if (H >= 0)
-            {
-                int Code = H & 0x7777;
-                if (Code == 0)
-                    return true;
-            }
-            else
-            {
-                return IsBinaryEqual(RelPidl1, RelPidl2);
-            }
-
-            return PidlsEqualRet;
         }
 
         #endregion
