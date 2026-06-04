@@ -813,8 +813,8 @@ namespace ExpControlsLib
 
                 // For Created/Deleted/UpdateDir, sender is the Folder containing the item.
                 // For Updated/Renamed/IconChange, sender is the Item itself.
-                bool isTargetFolder = CPidl.IsBinaryEqual(senderCsi.PIDL, _currentFolderCsi.PIDL);
-                bool isTargetItem = senderCsi.Parent != null && CPidl.IsBinaryEqual(senderCsi.Parent.PIDL, _currentFolderCsi.PIDL);
+                bool isTargetFolder = CPidl.ResolvesToSamePathOrName(senderCsi.PIDL, _currentFolderCsi.PIDL);
+                bool isTargetItem = senderCsi.Parent != null && CPidl.ResolvesToSamePathOrName(senderCsi.Parent.PIDL, _currentFolderCsi.PIDL);
 
                 if (!isTargetFolder && !isTargetItem) return;
 
@@ -867,28 +867,22 @@ namespace ExpControlsLib
 
                                 if (e.Item.Parent.FullPath != _currentFolderCsi.FullPath) return;
 
+                                int index = -1;
                                 if (VirtualMode)
                                 {
-                                    var index = _listViewWrapper.FindInsertionPoint(csi);
-
-                                    if (index >= 0)
-                                    {
-                                        _listViewWrapper.RemoveAt(index);
-                                        _listViewWrapper.InsertSorted(csi);
-                                    }
+                                    index = _listViewWrapper.FindInsertionPoint(csi);
                                 }
                                 else
                                 {
-                                    // On Rename, we must find the item by its LVItem because the name has changed.
-                                    // However, we can use the lvi.Name which stores the OLD path used in our dictionary.
                                     var lvi = csi.LVItem;
-                                    if (lvi is null) throw new Exception("ListViewItem not found for renamed item"); // This should never happen because we only subscribe to updates for items in the current folder, but just in case...
+                                    if (lvi is null) throw new Exception("ListViewItem not found for renamed item"); 
+                                    index = lvi.Index;
+                                }
 
-                                    if (lvi.Index >= 0)
-                                    {
-                                        _listViewWrapper.RemoveAt(lvi.Index);
-                                        _listViewWrapper.InsertSorted(csi);
-                                    }
+                                if (index >= 0)
+                                {
+                                    _listViewWrapper.RemoveAt(index);
+                                    _listViewWrapper.InsertSorted(csi);
                                 }
                                 break;
                             }
@@ -1265,7 +1259,7 @@ namespace ExpControlsLib
                 if (_currentFolderCsi is null)
                     samePath = false;
                 else
-                    samePath = CPidl.IsBinaryEqual(_currentFolderCsi.PIDL, csi.PIDL);
+                    samePath = CPidl.ResolvesToSamePathOrName(_currentFolderCsi.PIDL, csi.PIDL);
 
                 if (_currentFolderCsi != null && samePath && reload == false) return;
 

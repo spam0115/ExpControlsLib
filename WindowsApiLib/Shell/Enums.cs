@@ -999,6 +999,7 @@ namespace WindowsApiLib.Shell
     /// <summary>
     /// Pidl basing options
     /// </summary>
+    [Flags]
     public enum SIGDN : uint
     {
         NORMALDISPLAY = 0x00000000,

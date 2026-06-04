@@ -43,15 +43,15 @@ namespace WindowsApiLib.Shell
         /// <param name="ptr">An Absolute PIDL referencing the item to be Found.</param>
         /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
         /// <remarks> 5/31/2012 - most code in this function replaced by a call to FindCShItem(BaseItem as CShellItem, Abs as IntPtr)</remarks>
-        public CShellItem? FindItem(IntPtr ptr)
+        public CShellItem? Find(IntPtr ptr)
         {
-            return FindCShItem(Root, ptr);
+            return Find(Root, ptr);
         }
 
-        public CShellItem? FindCShItem(string fullFileName)
+        public CShellItem? Find(string fullFileName)
         {
             IntPtr pidl = ShellAPI.ILCreateFromPathW(fullFileName);
-            return FindCShItem(Root, pidl);
+            return Find(Root, pidl);
         }
 
         /// <summary>
@@ -62,7 +62,7 @@ namespace WindowsApiLib.Shell
         /// <param name="absPidl">An Absolute PIDL referencing the item to be Found.</param>
         /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
         /// <remarks> 5/31/2012 -Function added to replace algorithm used in FindCShItem(ptr as IntPtr) which now only calls this routine.</remarks>
-        public CShellItem? FindCShItem(CShellItem BaseItem, IntPtr absPidl)
+        public CShellItem? Find(CShellItem BaseItem, IntPtr absPidl)
         {
             CShellItem? target = null;
 
@@ -76,7 +76,7 @@ namespace WindowsApiLib.Shell
                     if (CPidl.ResolvesToSamePathOrName(DItem.PIDL, absPidl))
                         return DItem;
                     if (CPidl.IsAncestorOf(DItem.PIDL, absPidl, false)) //note that items are considered to be ancestors of themselves which is kinda weird
-                        return FindCShItem(DItem, absPidl);
+                        return Find(DItem, absPidl);
                 }
             }
 
@@ -114,7 +114,7 @@ namespace WindowsApiLib.Shell
         /// referencing the item to be Found.</param>
         /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
         /// <remarks></remarks>
-        public CShellItem FindCShItem(byte[] b)
+        public CShellItem Find(byte[] b)
         {
             CShellItem FindCShItemRet = default;
             if (!CPidl.IsValid(b))
@@ -123,7 +123,7 @@ namespace WindowsApiLib.Shell
             if (thisPidl.Equals(IntPtr.Zero))
                 return null;
             Marshal.Copy(b, 0, thisPidl, b.Length);
-            FindCShItemRet = FindCShItem(Root, thisPidl);
+            FindCShItemRet = Find(Root, thisPidl);
             Marshal.FreeCoTaskMem(thisPidl);
             return FindCShItemRet;
         }
@@ -280,7 +280,7 @@ namespace WindowsApiLib.Shell
             {
                 lock (this.Lock)
                 {
-                    target = FindItem(item.PIDL);
+                    target = Find(item.PIDL);
                 }
                 
                 if (target == null) return false;

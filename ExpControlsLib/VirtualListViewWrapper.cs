@@ -239,7 +239,7 @@ namespace ExpControlsLib
 
         public void InsertSorted(CShellItem item)
         {
-            Debug.WriteLine("VirtualListViewWrapper.InsertSorted - " + item.Text);
+            Debug.WriteLine("VirtualListViewWrapper.InsertSorted - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             _lastTopIndex = -1;
             int index = FindInsertionPoint(item);
 
@@ -833,13 +833,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: GetTopIndex End");
+                Debug.WriteLine("ExpList: GetTopIndex End");
             }
         }
 
         private int FindTopLeftByVisibleEnumeration(int total)
         {
-            Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration Begin");
+            Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             try
             {
                 int bestIndex = -1;
@@ -869,19 +869,20 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration End");
+                Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             }
         }
 
         private int FindTopLeftByHitTestScan(int total)
         {
-            Debug.WriteLine("ExpList: FindTopLeftByHitTestScan Begin");
+            Debug.WriteLine("ExpList: FindTopLeftByHitTestScan Begin" );
             try
             {
                 var client = _listView.ClientRectangle;
                 if (client.Width <= 0 || client.Height <= 0) return -1;
 
-                int step = Math.Max(6, _listView.Font.Height / 2);
+                //int step = Math.Max(6, _listView.Font.Height / 2);
+                int step = Math.Max(6, GetSizeForDisplayMode() / 2);
 
                 int bestIndex = -1;
                 int bestTop = int.MaxValue;
@@ -927,7 +928,7 @@ namespace ExpControlsLib
 
         private int HitTestIndex(int x, int y)
         {
-            Debug.WriteLine("ExpList: HitTestIndex Begin");
+            //Debug.WriteLine("ExpList: HitTestIndex Begin");
             try
             {
                 LVHITTESTINFO ht = new LVHITTESTINFO
@@ -1047,6 +1048,29 @@ namespace ExpControlsLib
             {
                 //Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon End");
             }
+        }
+
+        /// <summary>
+        /// Gets the approximate pixel size for an item based on the current display mode.  
+        /// This is used to determine how aggressively to scan for visible items when calculating 
+        /// the top index.
+        /// </summary>
+        /// <returns></returns>
+        /// <remarks>todo: take into account display scale factor</remarks>   
+        /// <exception cref="Exception"></exception>
+        private int GetSizeForDisplayMode()
+        {
+            return DisplayMode switch
+            {
+                ListViewDisplayMode.Details => _listView.Font.Height,
+                ListViewDisplayMode.SmallIcon => 16,
+                ListViewDisplayMode.Tile => 32,
+                ListViewDisplayMode.Thumbnail => 48,
+                ListViewDisplayMode.LargeIcon => 96,
+                ListViewDisplayMode.LargeThumbnail => 96,
+                ListViewDisplayMode.ExtraLargeThumbnail => 256,
+                _ => throw new Exception("GetSizeForDisplayMode: Unsupported display mode")
+            };  
         }
 
         ///// <summary>

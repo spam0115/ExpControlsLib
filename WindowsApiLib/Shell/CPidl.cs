@@ -299,14 +299,62 @@ namespace WindowsApiLib
         }
 
         /// <summary>
+        /// IsEqual compares two ItemIDLists. It uses the ILIsEqual function, which only compares portions 
+        /// of each ItemID. On such systems, the other portions of the ItemID may differ in a few 
+        /// bytes.
+        /// </summary>
+        /// <param name="pidl1">IntPtr pointing to an ItemIDList.</param>
+        /// <param name="pidl2">IntPtr pointing to an ItemIDList.</param>
+        /// <returns>True if ILIsEqual returns or would return True, False otherwise.</returns>
+        public static bool IsBinaryEqual(IntPtr pidl1, IntPtr pidl2)
+        {
+            if (pidl1 == pidl2) return true;
+            try
+            {
+                return ILIsEqual(pidl1, pidl2); //todo: this only does binary comparison, not value comparison.  two pidls to the same item can have 2 different binary representations
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.ToString());
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Returns True if input cPidl's content exactly match the 
+        /// contents of this instance, False otherwise
+        /// </summary>
+        /// <param name="other">The CPidl to compare to this instance</param>
+        /// <returns>True if "other" is Equal to this instance, False otherwise</returns>
+        public bool IsBinaryEqual(CPidl other)
+        {
+            bool IsEqualRet = default;
+            IsEqualRet = false;     // assume not
+            if (other.Length != Length)
+                return IsEqualRet;
+            byte[] ob = other.PidlBytes;
+            int i;
+            var loopTo = Length - 1;
+            for (i = 0; i <= loopTo; i++)  // note: we look at nulnul also
+            {
+                if (ob[i] != m_bytes[i])
+                    return IsEqualRet;
+            }
+            return true;         // all equal on fall thru
+        }
+
+        /// <summary>
         /// IsEqual compares two relative single segment pidls using SHCompareIDList.
         /// </summary>
         /// <param name="pidl1">IntPtr pointing to an ItemIDList.</param>
         /// <param name="pidl2">IntPtr pointing to an ItemIDList.</param>
         /// <returns>True if ILIsEqual returns or would return True, False otherwise.</returns>
-        public static bool IsEqual(IShellFolder parent, IntPtr pidl1, IntPtr pidl2)
+        public static bool AreEqual(IShellFolder parent, IntPtr pidl1, IntPtr pidl2)
         {
             if (pidl1 == pidl2) return true;
+
+            if (parent is null) throw new ArgumentException("Null IShellFolder passed to AreEqual. This method requires a valid IShellFolder pointer for comparison.");
+
             try
             {
                 var result = parent.CompareIDs(SHCIDS_CANONICALONLY, pidl1, pidl2);
@@ -451,81 +499,6 @@ namespace WindowsApiLib
         //    return hr == 0;
         //}
 
-        /// <summary>
-        /// Not currently used. Compares two PIDLs Relative to the instance Folder using the folder.CompareIDs API call.
-        /// </summary>
-        /// <param name="relPidl1">First Relative PIDL to compare.</param>
-        /// <param name="relPidl2">Second Relative PIDL to compare.</param>
-        /// <returns>True if Equal, False otherwise.</returns>
-        /// <remarks></remarks>
-        public static bool AreEqual(IShellFolder folder, IntPtr relPidl1, IntPtr relPidl2)
-        {
-            bool PidlsEqualRet = default;
-            if (folder is null)
-                return IsBinaryEqual(relPidl1, relPidl2);
-            PidlsEqualRet = false;            // assume not equal
-            uint lParam = (uint)SHCIDS.CANONICALONLY;
-            int H;
-            H = folder.CompareIDs(lParam, relPidl1, relPidl2);
-            if (H >= 0)
-            {
-                int Code = H & 0x7777;
-                if (Code == 0)
-                    return true;
-            }
-            else
-            {
-                return IsBinaryEqual(relPidl1, relPidl2);
-            }
-
-            return PidlsEqualRet;
-        }
-
-        /// <summary>
-        /// IsEqual compares two ItemIDLists. It uses the ILIsEqual function, which only compares portions 
-        /// of each ItemID. On such systems, the other portions of the ItemID may differ in a few 
-        /// bytes.
-        /// </summary>
-        /// <param name="pidl1">IntPtr pointing to an ItemIDList.</param>
-        /// <param name="pidl2">IntPtr pointing to an ItemIDList.</param>
-        /// <returns>True if ILIsEqual returns or would return True, False otherwise.</returns>
-        public static bool IsBinaryEqual(IntPtr pidl1, IntPtr pidl2)
-        {
-            if (pidl1 == pidl2) return true;
-            try
-            {
-                return ILIsEqual(pidl1, pidl2); //todo: this only does binary comparison, not value comparison.  two pidls to the same item can have 2 different binary representations
-            }
-            catch(Exception ex)
-            {
-                Debug.WriteLine(ex.ToString());
-                throw;
-            }
-        }
-
-        /// <summary>
-        /// Returns True if input cPidl's content exactly match the 
-        /// contents of this instance, False otherwise
-        /// </summary>
-        /// <param name="other">The CPidl to compare to this instance</param>
-        /// <returns>True if "other" is Equal to this instance, False otherwise</returns>
-        public bool IsBinaryEqual(CPidl other)
-        {
-            bool IsEqualRet = default;
-            IsEqualRet = false;     // assume not
-            if (other.Length != Length)
-                return IsEqualRet;
-            byte[] ob = other.PidlBytes;
-            int i;
-            var loopTo = Length - 1;
-            for (i = 0; i <= loopTo; i++)  // note: we look at nulnul also
-            {
-                if (ob[i] != m_bytes[i])
-                    return IsEqualRet;
-            }
-            return true;         // all equal on fall thru
-        }
-                
         /// <summary> Copy the contents of a byte() containing a PIDL to
          /// CoTaskMemory, returning an IntPtr that points to that mem block
          /// Assumes that this cPidl is properly terminated, as all New 
@@ -803,22 +776,26 @@ namespace WindowsApiLib
         /// <summary>
         /// Get's the display name for a pidl.
         /// </summary>
-        /// <param name="absPidl"></param>
+        /// <param name="pidl"></param>
         /// <returns></returns>
-        public static string GetDisplayName(nint absPidl)
+        public static string? GetDisplayName(nint pidl)
         {
-            SHGetNameFromIDList(absPidl, SIGDN.PARENTRELATIVEEDITING, out string name);
-            return name;
+            return GetShellNameBase(pidl, (uint)SIGDN.PARENTRELATIVEEDITING);
         }
 
-        public static string GetParsingName(IntPtr pidl)
+        public static string? GetParsingName(IntPtr pidl)
+        {
+            return GetShellNameBase(pidl, (uint)SIGDN.DESKTOPABSOLUTEPARSING);
+        }
+
+        private static string? GetShellNameBase(IntPtr pidl, uint flags)
         {
             if (pidl == IntPtr.Zero)
                 return null;
 
             try
             {
-                SHGetNameFromIDList(pidl, SIGDN.DESKTOPABSOLUTEPARSING, out string name);
+                SHGetNameFromIDList(pidl, (SIGDN)flags, out string name);
                 return name;
             }
             catch (Exception ex)
