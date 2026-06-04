@@ -5,7 +5,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 using TreeLib;
@@ -158,6 +157,7 @@ namespace ExpControlsLib
         {
             Debug.WriteLine("VirtualListViewWrapper.Clear");
             _listView.SelectedIndices.Clear();
+            _lastTopIndex = -1;
             if (VirtualMode)
             {
                 _listView.VirtualListSize = 0;
@@ -175,6 +175,7 @@ namespace ExpControlsLib
         public void AddRange(IEnumerable<CShellItem> items)
         {
             Debug.WriteLine("VirtualListViewWrapper.AddRange #" + items.Count());
+            _lastTopIndex = -1;
             if (VirtualMode)
             {
                 _virtualItems.AddRange(items);
@@ -197,6 +198,7 @@ namespace ExpControlsLib
         public void Add(CShellItem item)
         {
             Debug.WriteLine("VirtualListViewWrapper.Add - " + item.Text);
+            _lastTopIndex = -1;
             if (VirtualMode)
             {
                 _virtualItems.Add(item);
@@ -214,6 +216,7 @@ namespace ExpControlsLib
         public void InsertSorted(CShellItem item)
         {
             Debug.WriteLine("VirtualListViewWrapper.InsertSorted - " + item.Text);
+            _lastTopIndex = -1;
             int index = FindInsertionPoint(item);
 
             if (VirtualMode)
@@ -231,17 +234,63 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Shifts cached ListViewItem objects after an item has been removed from the list.
+        /// This allows us to reuse existing ListViewItem objects for items that have merely shifted index.
+        /// </summary>
+        /// <param name="index">The index where the item was removed.</param>
+        private void ShiftCacheAfterRemoval(int index)
+        {
+            if (_itemCache.Count == 0) return;
+
+            // Remove the deleted item from cache
+            _itemCache.Remove(index);
+
+            // Shift all subsequent items down by one index
+            var keysToShift = _itemCache.Keys.Where(k => k > index).OrderBy(k => k).ToList();
+            foreach (var k in keysToShift)
+            {
+                _itemCache[k - 1] = _itemCache[k];
+                _itemCache.Remove(k);
+            }
+        }
+
         public void RemoveAt(int index)
         {
             if (index < 0 || index >= Count) return;
 
+            Debug.WriteLine("VirtualListViewWrapper.RemoveAt - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+
             if (VirtualMode)
             {
+                var item = _virtualItems[index];
                 _virtualItems.RemoveAt(index);
                 UpdateVirtualListSize();
-                RecreateIndexMapping();
-                _itemCache.Clear();
-                _listView.Invalidate();
+
+                // Efficiently update index mapping for shifted items
+                _pathToIndex.Remove(item.FullPath);
+                for (int i = index; i < _virtualItems.Count; i++)
+                {
+                    _pathToIndex[_virtualItems[i].FullPath] = i;
+                }
+
+                // Shift cache to reuse existing ListViewItem objects
+                ShiftCacheAfterRemoval(index);
+
+                // Reset viewport cache and determine if we need to redraw
+                _lastTopIndex = -1;
+                int top = GetTopIndex();
+                int visibleCount = GetApproxVisibleCount();
+                int lastVisible = top + visibleCount;
+
+                // Only redraw if the removal affects currently visible items or items that shift into view
+                int startRedraw = Math.Max(index, top);
+                int endRedraw = Math.Min(lastVisible, (int)_virtualItems.Count - 1);
+
+                if (startRedraw <= endRedraw)
+                {
+                    _listView.RedrawItems(startRedraw, endRedraw, false);
+                }
             }
             else
             {
@@ -304,7 +353,7 @@ namespace ExpControlsLib
         /// <returns>The matching <see cref="ListViewItem"/>, or null if not found.</returns>
         private ListViewItem? FindLVItem(CShellItem item)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: FindLVItem Begin");
+            Debug.WriteLine("ExpList: FindLVItem Begin");
             try
             {
                 if (_itemIndex.TryGetValue(item.FullPath, out var lvi))
@@ -313,7 +362,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: FindLVItem End");
+                Debug.WriteLine("ExpList: FindLVItem End");
             }
         }
 
@@ -351,6 +400,7 @@ namespace ExpControlsLib
         public void Sort(int column, SortOrder order)
         {
             if (_inSort) return;
+            _lastTopIndex = -1;
             _inSort = true;
             try
             {
@@ -433,7 +483,7 @@ namespace ExpControlsLib
         /// </summary>
         private void InvalidateVirtualItemImagesIndexes()
         {
-            //System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes Begin");
+            //Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes Begin");
             try
             {
                 if (!VirtualMode) return;
@@ -450,7 +500,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes End");
+                //Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes End");
             }
         }
 
@@ -681,18 +731,14 @@ namespace ExpControlsLib
         /// <returns>True if in a thumbnail view mode.</returns>
         public bool IsThumbnailViewMode() => DisplayMode == ListViewDisplayMode.Thumbnail || DisplayMode == ListViewDisplayMode.LargeThumbnail || DisplayMode == ListViewDisplayMode.ExtraLargeThumbnail;
 
-
         private const int LVM_GETNEXTITEM = LVM_FIRST + 12;
         private const int LVM_GETITEMRECT = LVM_FIRST + 14;
         private const int LVM_HITTEST = LVM_FIRST + 18;
         private const int LVM_GETITEMSPACING = LVM_FIRST + 51; // returns packed x/y in LPARAM
         private const int LVM_GETTOPINDEX = LVM_FIRST + 39;
-
         private const int LVNI_VISIBLE = 0x0008;
         private const int LVIR_BOUNDS = 0; // for LVM_GETITEMRECT
         private const int LVM_GETCOUNTPERPAGE = 0x1000 + 40;
-
-
 
         private int _lastTopIndex = -1;
 
@@ -704,7 +750,7 @@ namespace ExpControlsLib
         /// </summary>
         public int GetTopIndex()
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: GetTopIndex Begin");
+            Debug.WriteLine("ExpList: GetTopIndex Begin");
             try
             {
                 if (_listView == null || !_listView.IsHandleCreated) return -1;
@@ -735,14 +781,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: GetTopIndex End");
+                //Debug.WriteLine("ExpList: GetTopIndex End");
             }
         }
 
-
         private int FindTopLeftByVisibleEnumeration(int total)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration Begin");
+            Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration Begin");
             try
             {
                 int bestIndex = -1;
@@ -772,13 +817,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration End");
+                Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration End");
             }
         }
 
         private int FindTopLeftByHitTestScan(int total)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: FindTopLeftByHitTestScan Begin");
+            Debug.WriteLine("ExpList: FindTopLeftByHitTestScan Begin");
             try
             {
                 var client = _listView.ClientRectangle;
@@ -824,13 +869,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: FindTopLeftByHitTestScan End");
+                Debug.WriteLine("ExpList: FindTopLeftByHitTestScan End");
             }
         }
 
         private int HitTestIndex(int x, int y)
         {
-            //System.Diagnostics.Debug.WriteLine("ExpList: HitTestIndex Begin");
+            Debug.WriteLine("ExpList: HitTestIndex Begin");
             try
             {
                 LVHITTESTINFO ht = new LVHITTESTINFO
@@ -843,13 +888,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: HitTestIndex End");
+                //Debug.WriteLine("ExpList: HitTestIndex End");
             }
         }
 
         private int GetApproxVisibleCount()
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCount Begin");
+            Debug.WriteLine("ExpList: GetApproxVisibleCount Begin");
             try
             {
                 if (_listView == null || !_listView.IsHandleCreated)
@@ -861,7 +906,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCount End");
+                Debug.WriteLine("ExpList: GetApproxVisibleCount End");
             }
         }
 
@@ -915,7 +960,7 @@ namespace ExpControlsLib
 
         private int GetApproxVisibleCountLargeIcon()
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon Begin");
+            Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon Begin");
             try
             {
                 if (_listView == null || !_listView.IsHandleCreated || _listView.View != View.LargeIcon)
@@ -948,7 +993,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon End");
+                //Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon End");
             }
         }
 
@@ -962,7 +1007,7 @@ namespace ExpControlsLib
         ///// <param name="value">The <see cref="ListViewDisplayMode"/> to configure for.</param>
         //private void SetImageListForMode(ListViewDisplayMode value)
         //{
-        //    System.Diagnostics.Debug.WriteLine("ExpList: SetAndLoadImageList Begin");
+        //    Debug.WriteLine("ExpList: SetAndLoadImageList Begin");
         //    try
         //    {
         //        if (value <= ListViewDisplayMode.Tile) //built-in Windows 95 Shell view modes
@@ -981,7 +1026,7 @@ namespace ExpControlsLib
         //    }
         //    finally
         //    {
-        //        System.Diagnostics.Debug.WriteLine("ExpList: SetAndLoadImageList End");
+        //        Debug.WriteLine("ExpList: SetAndLoadImageList End");
         //    }
         //}
 
@@ -990,7 +1035,7 @@ namespace ExpControlsLib
         ///// </summary>
         //private int GetThumbnailSizeForMode(ListViewDisplayMode? mode = null)
         //{
-        //    //System.Diagnostics.Debug.WriteLine("ExpList: GetThumbnailSizeForMode Begin");
+        //    //Debug.WriteLine("ExpList: GetThumbnailSizeForMode Begin");
         //    try
         //    {
         //        mode ??= DisplayMode;
@@ -1004,7 +1049,7 @@ namespace ExpControlsLib
         //    }
         //    finally
         //    {
-        //        //System.Diagnostics.Debug.WriteLine("ExpList: GetThumbnailSizeForMode End");
+        //        //Debug.WriteLine("ExpList: GetThumbnailSizeForMode End");
         //    }
         //}
 

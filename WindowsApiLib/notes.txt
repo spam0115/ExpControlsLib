@@ -60,3 +60,7 @@ The CShellItem class is currently acting as a "God Object," combining identity, 
    * UI Integration: ShellItemUIExtensions (to hold LVItem/TNode)
 
 Items are double created.  First in Treeview and then in listview.
+
+
+todo: we need bulk delete updating instead of doing thigs 1 at a time which is too inefficient
+

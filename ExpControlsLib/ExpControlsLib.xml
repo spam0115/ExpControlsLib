@@ -764,87 +764,10 @@
             </summary>
             <param name="m">The Windows <see cref="T:System.Windows.Forms.Message"/> to process.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.DisplayFiles(System.String,WindowsApiLib.Shell.CShellItem,System.Boolean,System.Boolean)">
-            <summary>
-            Populates the list view with files and directories from the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
-            </summary>
-            <param name="pathName">The display path of the folder.</param>
-            <param name="csi">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> representing the folder to display.</param>
-            <param name="includeFolder">True to include subdirectories in the list.</param>
-            <param name="reload">True to force a reload even if the same item was previously selected.</param>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.EnterListViewEnumeration">
-            <summary>
-            Increments the enumeration depth counter. While depth > 0, DoItemUpdate will
-            defer shell item modifications to prevent reentrant mutation of _listView.Items.
-            Must be paired with <see cref="M:ExpControlsLib.ExpList.ExitListViewEnumeration"/>.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.ExitListViewEnumeration">
-            <summary>
-            Decrements the enumeration depth counter. When it reaches 0, any deferred
-            shell item updates are drained and applied.
-            Must be paired with <see cref="M:ExpControlsLib.ExpList.EnterListViewEnumeration"/>.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.DrainDeferredUpdates">
-            <summary>
-            Processes all deferred shell item updates that were queued while an enumeration was in progress.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.InvokeWhenListViewReady(System.Action)">
-            <summary>
-            Executes the action immediately if no enumeration is in progress, otherwise
-            defers it via BeginInvoke to run after the enumeration completes.
-            Use this for ListView modification operations outside of DoItemUpdate.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.RequestListViewRepopulate(System.Windows.Forms.ListViewItem[],System.Boolean)">
-            <summary>
-            This refreshes the ListView with new items.
-            This function marshals execution to the ui thread.  Also prevents double updating by gatekeeping 
-            execution via the _refreshing boolean.  Without these precautions, we got errors with array index 
-            out of bounds errors on the listview items that couldn't be resolved with only a lock. 
-            </summary>
-            <param name="newItems"></param>
-            <returns></returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.GetIndexFromFullPath(System.String)">
-            <summary>
-            Gets the zero-based index of the item identified by the specified full path.
-            </summary>
-            <remarks>Lookup is performed against an internal dictionary; -1 indicates no entry exists for
-            the provided path.  Probably only works for virtual mode.
-            </remarks>
-            <param name="fullPath">The full path identifying the item to look up.</param>
-            <returns>The zero-based index of the item if found; otherwise -1.</returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.MakeLVItem(WindowsApiLib.Shell.CShellItem)">
-            <summary>
-            Creates a <see cref="T:System.Windows.Forms.ListViewItem"/> for a given <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
-            Populates columns based on <see cref="E:ExpControlsLib.ExpList.ExpListGetColumnData"/> event or <see cref="P:System.Windows.Forms.ColumnHeader.Tag"/> mapping.
-            </summary>
-            <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to create the list view item for.</param>
-            <returns>A configured <see cref="T:System.Windows.Forms.ListViewItem"/>.</returns>
-        </member>
         <member name="P:ExpControlsLib.ExpList.SelectedItems">
             <summary>
             Exposes the SelectedItems collection of the internal ListView to allow external handlers to access the currently selected items.
             </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.FindLVItem(WindowsApiLib.Shell.CShellItem)">
-            <summary>
-            Finds the <see cref="T:System.Windows.Forms.ListViewItem"/> corresponding to a specific <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
-            </summary>
-            <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to search for.</param>
-            <returns>The matching <see cref="T:System.Windows.Forms.ListViewItem"/>, or null if not found.</returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.InsertLvi(System.Windows.Forms.ListViewItem,System.Windows.Forms.ListView)">
-            <summary>
-            Inserts a <see cref="T:System.Windows.Forms.ListViewItem"/> into the ListView, maintaining sort order.
-            </summary>
-            <param name="lvi">The <see cref="T:System.Windows.Forms.ListViewItem"/> to insert.</param>
-            <param name="lv">The <see cref="T:System.Windows.Forms.ListView"/> to insert into.</param>
         </member>
         <member name="M:ExpControlsLib.ExpList.UpdateInvoke(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
             <summary>
@@ -886,6 +809,123 @@
         <member name="M:ExpControlsLib.ExpList.RefreshItemByDisplayName(System.String)">
             <summary>
             Refresh by display name string.  This is very inefficient.  Avoid this function.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.DisplayFiles(System.String,WindowsApiLib.Shell.CShellItem,System.Boolean,System.Boolean)">
+            <summary>
+            Populates the list view with files and directories from the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
+            </summary>
+            <param name="pathName">The display path of the folder.</param>
+            <param name="csi">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> representing the folder to display.</param>
+            <param name="includeFolder">True to include subdirectories in the list.</param>
+            <param name="reload">True to force a reload even if the same item was previously selected.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.GetIndexFromFullPath(System.String)">
+            <summary>
+            Gets the zero-based index of the item identified by the specified full path.
+            </summary>
+            <remarks>Lookup is performed against an internal dictionary; -1 indicates no entry exists for
+            the provided path.  Probably only works for virtual mode.
+            </remarks>
+            <param name="fullPath">The full path identifying the item to look up.</param>
+            <returns>The zero-based index of the item if found; otherwise -1.</returns>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.FindItemByName(System.String)">
+            <summary>
+            Finds a ListViewItem by its display name (case-insensitive).
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.FindItemByID(System.IntPtr)">
+            <summary>
+            Finds a ListViewItem by its Shell ID (PIDL).
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.FindItemByPath(System.String)">
+            <summary>
+            Finds a ListViewItem by its full filesystem path.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.GetTopIndex">
+            <summary>
+            Returns a "top-like" index for any ListView mode.
+            - Details/List: effectively top row index
+            - LargeIcon/SmallIcon/Tile: top-left visible item index
+            Works in virtual and non-virtual mode.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.MakeLVItem(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Creates a <see cref="T:System.Windows.Forms.ListViewItem"/> for a given <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
+            Populates columns based on <see cref="E:ExpControlsLib.ExpList.ExpListGetColumnData"/> event or <see cref="P:System.Windows.Forms.ColumnHeader.Tag"/> mapping.
+            </summary>
+            <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to create the list view item for.</param>
+            <returns>A configured <see cref="T:System.Windows.Forms.ListViewItem"/>.</returns>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.EnterListViewEnumeration">
+            <summary>
+            Increments the enumeration depth counter. While depth > 0, DoItemUpdate will
+            defer shell item modifications to prevent reentrant mutation of _listView.Items.
+            Must be paired with <see cref="M:ExpControlsLib.ExpList.ExitListViewEnumeration"/>.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ExitListViewEnumeration">
+            <summary>
+            Decrements the enumeration depth counter. When it reaches 0, any deferred
+            shell item updates are drained and applied.
+            Must be paired with <see cref="M:ExpControlsLib.ExpList.EnterListViewEnumeration"/>.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.DrainDeferredUpdates">
+            <summary>
+            Processes all deferred shell item updates that were queued while an enumeration was in progress.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.InvokeWhenListViewReady(System.Action)">
+            <summary>
+            Executes the action immediately if no enumeration is in progress, otherwise
+            defers it via BeginInvoke to run after the enumeration completes.
+            Use this for ListView modification operations outside of DoItemUpdate.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.RequestListViewRepopulate(System.Windows.Forms.ListViewItem[],System.Boolean)">
+            <summary>
+            This refreshes the ListView with new items.
+            This function marshals execution to the ui thread.  Also prevents double updating by gatekeeping 
+            execution via the _refreshing boolean.  Without these precautions, we got errors with array index 
+            out of bounds errors on the listview items that couldn't be resolved with only a lock. 
+            </summary>
+            <param name="newItems"></param>
+            <returns></returns>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.LaunchFile(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Launches a file using the default system handler.
+            </summary>
+            <param name="csi">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to launch.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.WinMenu(System.String)">
+            <summary>
+            Invokes a standard shell action (cut, copy, paste, delete) on the selected items.
+            </summary>
+            <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.IsThumbnailViewMode">
+            <summary>
+            Determines if the current display mode is a thumbnail-based view.
+            </summary>
+            <returns>True if in a thumbnail view mode.</returns>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.IsWithin(System.Windows.Forms.Control,System.Windows.Forms.MouseEventArgs)">
+            <summary>
+            Determines if the mouse coordinates are within the client area of the specified control.
+            </summary>
+            <param name="ctl">The control to check.</param>
+            <param name="e">The <see cref="T:System.Windows.Forms.MouseEventArgs"/> containing the mouse position.</param>
+            <returns>True if the mouse is within the control's client area.</returns>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.SortLVItems">
+            <summary>
+            Sorts the items in the list view based on their tags (CShellItem).
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.GoBack">
@@ -934,19 +974,6 @@
             <summary>
             Handles the <see cref="E:System.Windows.Forms.ListView.AfterLabelEdit"/> event.
             Applies the new name to the shell item.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.IsWithin(System.Windows.Forms.Control,System.Windows.Forms.MouseEventArgs)">
-            <summary>
-            Determines if the mouse coordinates are within the client area of the specified control.
-            </summary>
-            <param name="ctl">The control to check.</param>
-            <param name="e">The <see cref="T:System.Windows.Forms.MouseEventArgs"/> containing the mouse position.</param>
-            <returns>True if the mouse is within the control's client area.</returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.SortLVItems">
-            <summary>
-            Sorts the items in the list view based on their tags (CShellItem).
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.ExpFileList_MouseLeave(System.Object,System.EventArgs)">
@@ -1004,47 +1031,6 @@
         <member name="M:ExpControlsLib.ExpList.ExpFileList_KeyUp(System.Object,System.Windows.Forms.KeyEventArgs)">
             <summary>
             Handles the KeyUp event for navigation keys.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.LaunchFile(WindowsApiLib.Shell.CShellItem)">
-            <summary>
-            Launches a file using the default system handler.
-            </summary>
-            <param name="csi">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to launch.</param>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.WinMenu(System.String)">
-            <summary>
-            Invokes a standard shell action (cut, copy, paste, delete) on the selected items.
-            </summary>
-            <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.IsThumbnailViewMode">
-            <summary>
-            Determines if the current display mode is a thumbnail-based view.
-            </summary>
-            <returns>True if in a thumbnail view mode.</returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.FindItemByName(System.String)">
-            <summary>
-            Finds a ListViewItem by its display name (case-insensitive).
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.FindItemByID(System.IntPtr)">
-            <summary>
-            Finds a ListViewItem by its Shell ID (PIDL).
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.FindItemByPath(System.String)">
-            <summary>
-            Finds a ListViewItem by its full filesystem path.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.GetTopIndex">
-            <summary>
-            Returns a "top-like" index for any ListView mode.
-            - Details/List: effectively top row index
-            - LargeIcon/SmallIcon/Tile: top-left visible item index
-            Works in virtual and non-virtual mode.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.SetImageListForMode(ExpControlsLib.ListViewDisplayMode)">
@@ -1153,6 +1139,14 @@
             TreeNode's Tag.</param>
             <remarks></remarks>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.WndProc(System.Windows.Forms.Message@)">
+            <summary>
+            Windows Message Handler for receiving Messages associated with a System Menu. 
+            This is what causes Cascading menus to Display
+            </summary>
+            <param name="m">A Windows Message</param>
+            <remarks>Only Handles Messages relating to Windows Context Menus</remarks>
+        </member>
         <member name="P:ExpControlsLib.ExpTree.AllowDrop">
             <summary>
             Turns this ExpTree Control's ability to accept Drops on or Off.<br />
@@ -1245,6 +1239,36 @@
             Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
             ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.GoBack">
+            <summary>
+            Navigates back to the previous folder in the history.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.GoForward">
+            <summary>
+            Navigates forward to the next folder in the history.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.GoUp">
+            <summary>
+            Navigates to the parent folder of the currently loaded folder.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.CanGoBack">
+            <summary>
+            Gets a value indicating whether there is a folder to navigate back to.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.CanGoForward">
+            <summary>
+            Gets a value indicating whether there is a folder to navigate forward to.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.CanGoUp">
+            <summary>
+            Gets a value indicating whether the current folder has a parent folder to navigate to.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.MakeNode(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Creates a TreeNode whose .Text is the DisplayName of the CShellItem.<br />
@@ -1288,47 +1312,6 @@
             <param name="item">The CShellItem to check.</param>
             <returns>True if it should have a dummy node, false otherwise.</returns>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.RefreshTree(WindowsApiLib.Shell.CShellItem)">
-            <summary>RefreshTree Method thanks to Calum McLellan</summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.PopulateNode(System.Windows.Forms.TreeNode)">
-            <summary>
-            Called to Populate the TreeNodes of a TreeNode that only contains a Dummy Node.
-            </summary>
-            <param name="NodeToFill">The unexpanded TreeNode to Fill</param>
-            <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
-            Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.GoBack">
-            <summary>
-            Navigates back to the previous folder in the history.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.GoForward">
-            <summary>
-            Navigates forward to the next folder in the history.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.GoUp">
-            <summary>
-            Navigates to the parent folder of the currently loaded folder.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpTree.CanGoBack">
-            <summary>
-            Gets a value indicating whether there is a folder to navigate back to.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpTree.CanGoForward">
-            <summary>
-            Gets a value indicating whether there is a folder to navigate forward to.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpTree.CanGoUp">
-            <summary>
-            Gets a value indicating whether the current folder has a parent folder to navigate to.
-            </summary>
-        </member>
         <member name="M:ExpControlsLib.ExpTree.Tv1_VisibleChanged(System.Object,System.EventArgs)">
             <summary>When a form containing this control is Hidden and then re-Shown,
             the association to the SystemImageList is lost.  Also lost is the
@@ -1344,6 +1327,14 @@
             theoretically possible for the code to request a collapse of this node
             If it occurs, cancel it</summary>
         </member>
+        <member name="P:ExpControlsLib.ExpTree.AllowFolderRename">
+            <summary>
+            Allow renaming of folders using LabelEdit
+            </summary>
+            <value></value>
+            <returns></returns>
+            <remarks></remarks>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.DragWrapper_ShDragEnter(System.IntPtr,System.Int32,System.Int32)">
             <summary>ShDragEnter does nothing. It is here for debug tracking</summary>
         </member>
@@ -1358,14 +1349,6 @@
             Node expansion based on expandNodeTimer added by me.
             </summary>
         </member>
-        <member name="P:ExpControlsLib.ExpTree.AllowFolderRename">
-            <summary>
-            Allow renaming of folders using LabelEdit
-            </summary>
-            <value></value>
-            <returns></returns>
-            <remarks></remarks>
-        </member>
         <member name="P:ExpControlsLib.ExpTree.UseWindowsContextMenu">
             <summary>
             Sets whether or not the control should use Windows System context menu for TreeNode items.
@@ -1378,13 +1361,24 @@
             Gets or sets whether to show a minimal context menu by filtering out most 3rd party extensions.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.WndProc(System.Windows.Forms.Message@)">
+        <member name="M:ExpControlsLib.ExpTree.RefreshTree(WindowsApiLib.Shell.CShellItem)">
+            <summary>RefreshTree Method thanks to Calum McLellan</summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.NodePath(System.Windows.Forms.TreeNode)">
             <summary>
-            Windows Message Handler for receiving Messages associated with a System Menu. 
-            This is what causes Cascading menus to Display
+            NodePath returns the Text version of the full path of a TreeNode.
             </summary>
-            <param name="m">A Windows Message</param>
-            <remarks>Only Handles Messages relating to Windows Context Menus</remarks>
+            <param name="node">The TreeNode to return the full path for.</param>
+            <returns>The full path to the input node within a tree</returns>
+            <remarks>Used only for some Debug.WriteLine statements.</remarks>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.PopulateNode(System.Windows.Forms.TreeNode)">
+            <summary>
+            Called to Populate the TreeNodes of a TreeNode that only contains a Dummy Node.
+            </summary>
+            <param name="NodeToFill">The unexpanded TreeNode to Fill</param>
+            <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
+            Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
         </member>
         <member name="M:ExpControlsLib.ExpTree.InsertNode(System.Windows.Forms.TreeNode,System.Windows.Forms.TreeNode)">
             <summary>
@@ -1401,14 +1395,6 @@
             </summary>
             <param name="N">The Node whose Nodes.Collection is to be sorted</param>
             <remarks></remarks>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.NodePath(System.Windows.Forms.TreeNode)">
-            <summary>
-            NodePath returns the Text version of the full path of a TreeNode.
-            </summary>
-            <param name="node">The TreeNode to return the full path for.</param>
-            <returns>The full path to the input node within a tree</returns>
-            <remarks>Used only for some Debug.WriteLine statements.</remarks>
         </member>
         <member name="F:ExpControlsLib.ExpTree.components">
             <summary> 
@@ -1483,7 +1469,7 @@
         </member>
         <member name="T:ExpControlsLib.LVColSorter">
             <summary>
-            LVColSorter is a Class to be used as a ListViewItemSorter. 
+            LVColSorter is ListView in non-virtual mode to sort items.  (not used in virtual mode) 
             LVColSorter may be used as the ListViewItemSorter for ListViews populated by any means, but works
             best when the .Tag properties of the ListViewItems and SubItems are set as described in Remarks.
             </summary>
@@ -1496,11 +1482,13 @@
             the .Tag property may be set to provide this class with the information needed for a proper Sort.</para>
             <para>Set the .Tags as follows:
             <list type="table">
-            <item><term>Each ListViewItem</term><description>The Class instance or DataRow from which the ListViewItem is built.
-                                                             The instance should support the IComparable Interface,
-                                                             if not, it is ignored for Sort purposes and may be omitted.</description></item>
-            <item><term>Each SubItem</term><description>If the .Text property will not Sort correctly, then the .Tag should be
-                                           set to the original Value (Date, Double, etc.)</description></item>
+            <item><term>Each ListViewItem</term>
+            <description>The Class instance or DataRow from which the ListViewItem is built.
+                The instance should support the IComparable Interface,
+                if not, it is ignored for Sort purposes and may be omitted.</description></item>
+            <item><term>Each SubItem</term>
+            <description>If the .Text property will not Sort correctly, then the .Tag should be
+                set to the original Value (Date, Double, etc.)</description></item>
             </list>See the documentation of the Compare Method of this Class for the actual Sort rules.</para>
             <para>Class Properties
             or DataRow Fields whose Value is a String will Sort based on that String. String
@@ -1518,6 +1506,15 @@
             <summary>
             Occurs when the sort column or order has changed.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.LVColSorter.#ctor(System.Windows.Forms.ListView)">
+            <summary>
+            Creates a new instance of LVColSorter based on a fully populated
+            ListView, with ColumnHeaders defined. Assigns its own Handler for ListView.ColumnClick Events.
+            </summary>
+            <param name="lv">A fully populated ListView, preferably set up by SetUpListView, which will
+            be using this instance as the ListViewItemSorter.</param>
+            <remarks></remarks>
         </member>
         <member name="M:ExpControlsLib.LVColSorter.Compare(System.Object,System.Object)">
             <summary>
@@ -1549,16 +1546,6 @@
                                Ascending or Decending. This sort order is determined by reversing the
                                sort order of the last click on this column.</description></item>
             </list></remarks>
-            
-        </member>
-        <member name="M:ExpControlsLib.LVColSorter.#ctor(System.Windows.Forms.ListView)">
-            <summary>
-            Creates a new instance of LVColSorter based on a fully populated
-            ListView, with ColumnHeaders defined. Assigns its own Handler for ListView.ColumnClick Events.
-            </summary>
-            <param name="lv">A fully populated ListView, preferably set up by SetUpListView, which will
-            be using this instance as the ListViewItemSorter.</param>
-            <remarks></remarks>
         </member>
         <member name="M:ExpControlsLib.LVColSorter.CompareUsingCompareTo(System.Object,System.Object)">
             <summary>
@@ -1716,14 +1703,14 @@
             must be detected and thumbnail results should be ignored.
             </remarks>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.ApplyThumbnailToUI(ExpControlsLib.ThumbnailReadyEventArgs,System.Drawing.Bitmap)">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.AddThumbnail(ExpControlsLib.ThumbnailReadyEventArgs,System.Drawing.Bitmap)">
             <summary>
-            Force thumbnail registration from the UI thread.  The active image list actually belongs to the 
-            ListView so we can't event read the count without causing an exception unless we are running from 
-            on the ui thread.
+            Adds a thumbnail to the internal ImageList and updates the item's ImageIndex.
+            This method must be called on the UI thread as it accesses the ImageList.
             </summary>
-            <param name="reqArgs"></param>
-            <param name="square"></param>
+            <param name="reqArgs">The thumbnail ready arguments.</param>
+            <param name="square">The square thumbnail bitmap.</param>
+            <returns>The index of the thumbnail in the ImageList, or -1 if it could not be added.</returns>
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.Clear">
             <summary>
@@ -1894,6 +1881,13 @@
             <remarks>Use this property to select among multiple visual representations for items,
             including standard views and thumbnail modes. Changing the display mode updates the appearance of the list
             view accordingly.</remarks>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.ShiftCacheAfterRemoval(System.Int32)">
+            <summary>
+            Shifts cached ListViewItem objects after an item has been removed from the list.
+            This allows us to reuse existing ListViewItem objects for items that have merely shifted index.
+            </summary>
+            <param name="index">The index where the item was removed.</param>
         </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.FindLVItem(WindowsApiLib.Shell.CShellItem)">
             <summary>
