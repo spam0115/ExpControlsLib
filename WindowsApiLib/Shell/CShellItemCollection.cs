@@ -101,7 +101,7 @@ namespace WindowsApiLib.Shell
         {
             foreach (CShellItem itm in m_items)
             {
-                if (CPidl.IsEqual(itm.PIDL, pidl))
+                if (CPidl.IsBinaryEqual(itm.PIDL, pidl))
                 {
                     return true;
                 }
@@ -130,7 +130,7 @@ namespace WindowsApiLib.Shell
         {
             for (int i = 0; i < m_items.Count; i++)
             {
-                if (CPidl.IsEqual(m_items[i].PIDL, pidl))
+                if (CPidl.IsBinaryEqual(m_items[i].PIDL, pidl))
                 {
                     return i;
                 }
@@ -142,7 +142,7 @@ namespace WindowsApiLib.Shell
         {
             for (int i = 0; i < m_items.Count; i++)
             {
-                if (CPidl.IsEqual(m_items[i].LastPIDL, relPidl))
+                if (CPidl.IsBinaryEqual(m_items[i].LastPIDL, relPidl))
                 {
                     return i;
                 }

@@ -1013,7 +1013,7 @@ namespace ExpControlsLib
                 {
                     if (e.Node.GetNodeCount(false) != System.IO.Directory.GetDirectories(CSI.FullPath).Length)
                     {
-                        ShellController.Instance.ShellUpdater.SelectiveFolderUpdate(CSI, false, true);
+                        ShellController.Instance.ShellUpdater.DoUpdateDir(CSI, false, true);
                     }
                 }
                 catch (Exception ex)

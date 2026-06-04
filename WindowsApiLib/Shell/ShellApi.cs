@@ -744,6 +744,13 @@ namespace WindowsApiLib.Shell
         [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         public static extern int SHGetNameFromIDList(IntPtr pidl, SIGDN sigdnName, out IntPtr ppszName);
 
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+        public static extern void SHGetNameFromIDList(
+            IntPtr pidl,
+            SIGDN sigdnName,
+            [MarshalAs(UnmanagedType.LPWStr)] out string ppszName
+        );
+
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SHGetPathFromIDListW(IntPtr pidl, [Out] char[] pszPath);
@@ -824,7 +831,6 @@ namespace WindowsApiLib.Shell
         [DllImport("shlwapi.dll", CharSet = CharSet.Auto)]
         public static extern int StrRetToBuf(IntPtr pstr, IntPtr pidl, StringBuilder pszBuf, [MarshalAs(UnmanagedType.U4)] int cchBuf);
 
-
         [Flags]
         public enum ASSOCF : uint
         {
@@ -867,6 +873,33 @@ namespace WindowsApiLib.Shell
             string pszExtra,
             StringBuilder pszOut,
             ref uint pcchOut);
+
+        /// <summary>
+        /// Compares two PIDL (Pointer to an Item ID List) values.
+        /// </summary>
+        /// <param name="lpsf">
+        /// A pointer to an IShellFolder interface. If NULL, the Desktop folder is used.
+        /// </param>
+        /// <param name="pidl1">The first PIDL to compare.</param>
+        /// <param name="pidl2">The second PIDL to compare.</param>
+        /// <param name="flags">
+        /// Comparison flags. Use SHCIDS_CANONICALONLY (0x10000000) for logical identity checks.
+        /// </param>
+        /// <returns>
+        /// Returns 0 if the PIDLs are equal.
+        /// Returns a negative value if pidl1 comes before pidl2.
+        /// Returns a positive value if pidl1 comes after pidl2.
+        /// </returns>
+        [DllImport("shlwapi.dll", EntryPoint = "#556", CharSet = CharSet.Unicode)]
+        public static extern int SHCompareIDList(
+            IntPtr lpsf,        // IShellFolder* — pass IntPtr.Zero to use the Desktop folder
+            IntPtr pidl1,       // PCIDLIST_ABSOLUTE
+            IntPtr pidl2,       // PCIDLIST_ABSOLUTE
+            uint flags          // SHCIDS_* flags
+        );
+        // Common flags for the 'flags' parameter
+        public const uint SHCIDS_CANONICALONLY = 0x10000000;
+        public const uint SHCIDS_ALLFIELDS = 0x80000000;
 
 
         #endregion

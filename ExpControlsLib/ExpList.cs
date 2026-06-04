@@ -524,14 +524,14 @@ namespace ExpControlsLib
         /// <param name="order">The sort order.</param>
         public void SetSort(int column, SortOrder order)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: SetSort Begin");
+            Debug.WriteLine("ExpList: SetSort Begin");
             try
             {
                 _listViewWrapper.Sort(column, order);
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: SetSort End");
+                Debug.WriteLine("ExpList: SetSort End");
             }
         }
 
@@ -547,7 +547,7 @@ namespace ExpControlsLib
         /// </summary>
         public ExpList()
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpList Begin");
+            Debug.WriteLine("ExpList: ExpList Begin");
             try
             {
                 InitializeComponent();
@@ -587,20 +587,20 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpList End");
+                Debug.WriteLine("ExpList: ExpList End");
             }
         }
 
         public void Initialize(ShellController shellController)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: Initialize Begin");
+            Debug.WriteLine("ExpList: Initialize Begin");
             try
             {
                 _shellController = shellController;
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: Initialize End");
+                Debug.WriteLine("ExpList: Initialize End");
             }
         }
 
@@ -610,7 +610,7 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpList_Load(object sender, EventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpList_Load Begin");
+            Debug.WriteLine("ExpList: ExpList_Load Begin");
             try
             {
                 // Setup Drag and Drop Wrappers
@@ -644,7 +644,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpList_Load End");
+                Debug.WriteLine("ExpList: ExpList_Load End");
             }
         }
 
@@ -653,14 +653,14 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpFileList_HandleCreated(object sender, EventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_HandleCreated Begin");
+            Debug.WriteLine("ExpList: ExpFileList_HandleCreated Begin");
             try
             {
                 _scrollHook = new ListViewScrollHook(this, OnScroll);
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_HandleCreated End");
+                Debug.WriteLine("ExpList: ExpFileList_HandleCreated End");
             }
         }
 
@@ -670,14 +670,14 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpList_VisibleChanged(object sender, EventArgs e) //occurs when the control become visible
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpList_VisibleChanged Begin");
+            Debug.WriteLine("ExpList: ExpList_VisibleChanged Begin");
             try
             {
 
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpList_VisibleChanged End");
+                Debug.WriteLine("ExpList: ExpList_VisibleChanged End");
             }
         }
 
@@ -687,7 +687,7 @@ namespace ExpControlsLib
         /// <param name="m">The Windows <see cref="Message"/> to process.</param>
         protected override void WndProc(ref Message m)
         {
-            //System.Diagnostics.Debug.WriteLine("ExpList: WndProc Begin");
+            //Debug.WriteLine("ExpList: WndProc Begin");
 
             try
             {
@@ -731,377 +731,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: WndProc End");
+                //Debug.WriteLine("ExpList: WndProc End");
             }
         }
 
 
         #endregion
 
-
-        #region ExplorerTree Event Handling -- AfterNodeSelect
-
-        /// <summary>
-        /// Populates the list view with files and directories from the specified <see cref="CShellItem"/>.
-        /// </summary>
-        /// <param name="pathName">The display path of the folder.</param>
-        /// <param name="csi">The <see cref="CShellItem"/> representing the folder to display.</param>
-        /// <param name="includeFolder">True to include subdirectories in the list.</param>
-        /// <param name="reload">True to force a reload even if the same item was previously selected.</param>
-        public void DisplayFiles(string pathName, CShellItem csi, bool includeFolder, bool reload = false)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: DisplayFiles Begin");
-            try
-            {
-                if (csi == null && !string.IsNullOrEmpty(pathName))
-                    csi = CShellItemFactory.CreateCShItem(pathName);
-
-                if (csi is null)
-                {
-                    _listView.BeginUpdate();
-                    _listViewWrapper.Clear();
-                    var oldCsi_null = _currentFolderCsi;
-                    _currentFolderCsi = null;
-                    _currentPath = pathName;
-                    ExpListCurrentFolderChanged?.Invoke(null, oldCsi_null);
-                    _listView.EndUpdate();
-                    return;
-                }
-
-                bool samePath;
-                if (_currentFolderCsi is null)
-                    samePath = false;
-                else
-                    samePath = CPidl.IsEqual(_currentFolderCsi.PIDL, csi.PIDL);
-
-                if (_currentFolderCsi != null && samePath && reload == false) return;
-
-                var oldCsi = _currentFolderCsi;
-                var hierarchyCsi = _shellController.LoadFolderContents(csi);
-                if (hierarchyCsi != null)
-                {
-                    _currentFolderCsi = hierarchyCsi;
-                }
-                else
-                {
-                    // If loading fails, clear the list instead of throwing
-                    _listView.BeginUpdate();
-                    _listViewWrapper.Clear();
-                    _currentFolderCsi = null;
-                    _currentPath = pathName;
-                    ExpListCurrentFolderChanged?.Invoke(null, oldCsi);
-                    _listView.EndUpdate();
-                    return;
-                }
-
-                // record history
-                if (!_isNavigatingHistory && _currentFolderCsi != null && !samePath)
-                {
-                    _backHistory.Push(_currentFolderCsi);
-                    _forwardHistory.Clear();
-                }
-
-                _selectedItem = null; //new folder loaded, no item selected yet
-                _currentPath = _currentFolderCsi.FullPath;
-
-                //display directories separately
-                var dirList = new List<CShellItem>();
-                var fileList = new List<CShellItem>();
-                if (includeFolder) dirList.AddRange(_currentFolderCsi.Directories);
-
-                if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(_currentFolderCsi.Files);
-
-                if ((dirList.Count + fileList.Count) == 0) //no items
-                {
-                    _listView.BeginUpdate();
-                    _listViewWrapper.Clear();
-                    _listView.EndUpdate();
-
-                    if (!samePath) ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
-
-                    return;
-                }
-                else
-                {
-                    int totalItems;
-
-                    Console.WriteLine("\tSorting...");
-                    fileList.Sort();
-                    totalItems = fileList.Count;
-                    if (includeFolder)
-                    {
-                        dirList.Sort();
-                        totalItems += dirList.Count;
-                    }
-                    Console.WriteLine("\tSorting done");
-
-                    var combinedList = new List<CShellItem>(totalItems);
-                    if (includeFolder) combinedList.AddRange(dirList);
-                    combinedList.AddRange(fileList);
-
-                    _listView.BeginUpdate();
-                    try
-                    {
-                        _listViewWrapper.Clear();
-                        _listViewWrapper.AddRange(combinedList);
-                        _listView.Tag = _currentFolderCsi;
-                    }
-                    finally
-                    {
-                        _listView.EndUpdate();
-                    }
-                }
-
-                OnScroll(); //this lazy loads the visible icons/thumbnails and is called here to ensure they are loaded on initial display
-
-                if (!samePath) ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: DisplayFiles End");
-            }
-        }
-
-
-        private bool _refreshing = false; //This variable is prevent reentrancy problems on the ui thread
-        private bool _refreshPending = false;
-        private bool _refetchImages = false;
-        private ListViewItem[]? _pendingItems = null;
-
-        /// <summary>
-        /// Increments the enumeration depth counter. While depth > 0, DoItemUpdate will
-        /// defer shell item modifications to prevent reentrant mutation of _listView.Items.
-        /// Must be paired with <see cref="ExitListViewEnumeration"/>.
-        /// </summary>
-        private void EnterListViewEnumeration()
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: EnterListViewEnumeration Begin");
-            try
-            {
-                _enumerationDepth++;
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: EnterListViewEnumeration End");
-            }
-        }
-
-        /// <summary>
-        /// Decrements the enumeration depth counter. When it reaches 0, any deferred
-        /// shell item updates are drained and applied.
-        /// Must be paired with <see cref="EnterListViewEnumeration"/>.
-        /// </summary>
-        private void ExitListViewEnumeration()
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExitListViewEnumeration Begin");
-            try
-            {
-                _enumerationDepth--;
-                if (_enumerationDepth <= 0)
-                {
-                    _enumerationDepth = 0;
-                    DrainDeferredUpdates();
-                }
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExitListViewEnumeration End");
-            }
-        }
-
-        /// <summary>
-        /// Processes all deferred shell item updates that were queued while an enumeration was in progress.
-        /// </summary>
-        private void DrainDeferredUpdates()
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: DrainDeferredUpdates Begin");
-            try
-            {
-                while (_deferredUpdates.Count > 0)
-                {
-                    var (sender, e) = _deferredUpdates.Dequeue();
-                    DoItemUpdate(sender, e);
-                }
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: DrainDeferredUpdates End");
-            }
-        }
-
-        /// <summary>
-        /// Executes the action immediately if no enumeration is in progress, otherwise
-        /// defers it via BeginInvoke to run after the enumeration completes.
-        /// Use this for ListView modification operations outside of DoItemUpdate.
-        /// </summary>
-        private void InvokeWhenListViewReady(Action action)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: InvokeWhenListViewReady Begin");
-            try
-            {
-                if (_enumerationDepth > 0)
-                {
-                    BeginInvoke(() => InvokeWhenListViewReady(action));
-                    return;
-                }
-                action();
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: InvokeWhenListViewReady End");
-            }
-        }
-
-        /// <summary>
-        /// This refreshes the ListView with new items.
-        /// This function marshals execution to the ui thread.  Also prevents double updating by gatekeeping 
-        /// execution via the _refreshing boolean.  Without these precautions, we got errors with array index 
-        /// out of bounds errors on the listview items that couldn't be resolved with only a lock. 
-        /// </summary>
-        /// <param name="newItems"></param>
-        /// <returns></returns>
-        private bool RequestListViewRepopulate(ListViewItem[] newItems, bool fetchImages)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: RequestListViewRefresh Begin");
-            try
-            {
-                if (_refreshing)
-                {
-                    _refreshPending = true;
-                    return false;
-                }
-
-                // Snapshot now (avoid deferred enumeration / later mutation)
-                _pendingItems = newItems;
-                _refetchImages = fetchImages;
-                _refreshing = true;
-
-                BeginInvoke(new MethodInvoker(RepopulateListViewCore)); // queue, don't run inline.  Can't take arguments because of MethodInvoker unfortunately
-
-                return true;
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: RequestListViewRefresh End");
-            }
-        }
-
-        private void RepopulateListViewCore()
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: RefreshListViewCore Begin");
-            try
-            {
-                // If an enumeration is in progress (reentrancy via message pumping),
-                // defer this refresh to after the enumeration completes.
-                if (_enumerationDepth > 0)
-                {
-                    BeginInvoke(new MethodInvoker(RepopulateListViewCore));
-                    return;
-                }
-
-                try
-                {
-                    // snapshot old position safely
-                    int topIndex = 0;
-                    if (_listView.Items.Count > 0)
-                    {
-                        topIndex = GetTopIndex();
-                    }
-
-                    var newItems = _pendingItems ?? Array.Empty<ListViewItem>();
-
-                    Console.WriteLine("Begin loading items into listview...");
-                    _listView.BeginUpdate();
-                    try
-                    {
-                        if (VirtualMode)
-                        {
-                            int count = newItems == null ? 0 : newItems.Length;
-
-                            _listView.VirtualListSize = count;
-                            _listView.Tag = _currentFolderCsi;
-                            _listView.Refresh();
-                        }
-                        else
-                        {
-                            _listView.Items.Clear();
-                            _listView.Items.AddRange(newItems);
-
-                            if (_listView.Items.Count > 0)
-                            {
-                                _listView.Tag = _currentFolderCsi; // For ClvDropWrapper
-
-                                topIndex = Math.Max(0, Math.Min(topIndex, _listView.Items.Count - 1));
-                                _listView.EnsureVisible(topIndex);
-
-                                if (_refetchImages) LoadImagesForItems();
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        _listView.EndUpdate();
-                    }
-                    Console.WriteLine("End loading items into listview");
-                }
-                finally
-                {
-                    _refreshing = false;
-                    _refreshPending = false;
-                }
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: RefreshListViewCore End");
-            }
-        }
-
-        #endregion
-
-
-        #region Public Methods
-
-        /// <summary>
-        /// Gets the zero-based index of the item identified by the specified full path.
-        /// </summary>
-        /// <remarks>Lookup is performed against an internal dictionary; -1 indicates no entry exists for
-        /// the provided path.  Probably only works for virtual mode.
-        /// </remarks>
-        /// <param name="fullPath">The full path identifying the item to look up.</param>
-        /// <returns>The zero-based index of the item if found; otherwise -1.</returns>
-        public int GetIndexFromFullPath(string fullPath)
-        {
-            return _listViewWrapper.GetIndexFromFullPath(fullPath);
-        }
-
-        #endregion
-
-        #region Private Methods
-        /// <summary>
-        /// Creates a <see cref="ListViewItem"/> for a given <see cref="CShellItem"/>.
-        /// Populates columns based on <see cref="ExpListGetColumnData"/> event or <see cref="ColumnHeader.Tag"/> mapping.
-        /// </summary>
-        /// <param name="item">The <see cref="CShellItem"/> to create the list view item for.</param>
-        /// <returns>A configured <see cref="ListViewItem"/>.</returns>
-        private ListViewItem MakeLVItem(CShellItem item)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: MakeLVItem Begin");
-            try
-            {
-                if (item == null) return new ListViewItem("Error: no CShellItem provided to MakeLVItem()");
-
-                ListViewItem lvi = new ListViewItem(item.DisplayName);
-
-                UpdateLviUsingCsi(lvi, item);
-
-                return lvi;
-            }
-            finally
-            {
-                //System.Diagnostics.Debug.WriteLine("ExpList: MakeLVItem End");
-            }
-        }
-        #endregion
 
         #region Dynamic Update Handler
 
@@ -1119,7 +755,7 @@ namespace ExpControlsLib
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
         private void UpdateInvoke(object sender, ShellItemUpdateEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: UpdateInvoke Begin");
+            Debug.WriteLine("ExpList: UpdateInvoke Begin");
             try
             {
                 if (sender is null || IsDisposed || !IsHandleCreated)
@@ -1147,7 +783,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: UpdateInvoke End");
+                //Debug.WriteLine("ExpList: UpdateInvoke End");
             }
         }
 
@@ -1159,7 +795,7 @@ namespace ExpControlsLib
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
         private void DoItemUpdate(object sender, ShellItemUpdateEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: DoItemUpdate Begin");
+            Debug.WriteLine("ExpList: DoItemUpdate Begin - " + e.UpdateType.ToString());
 
             try
             {
@@ -1177,8 +813,8 @@ namespace ExpControlsLib
 
                 // For Created/Deleted/UpdateDir, sender is the Folder containing the item.
                 // For Updated/Renamed/IconChange, sender is the Item itself.
-                bool isTargetFolder = CPidl.IsEqual(senderCsi.PIDL, _currentFolderCsi.PIDL);
-                bool isTargetItem = senderCsi.Parent != null && CPidl.IsEqual(senderCsi.Parent.PIDL, _currentFolderCsi.PIDL);
+                bool isTargetFolder = CPidl.IsBinaryEqual(senderCsi.PIDL, _currentFolderCsi.PIDL);
+                bool isTargetItem = senderCsi.Parent != null && CPidl.IsBinaryEqual(senderCsi.Parent.PIDL, _currentFolderCsi.PIDL);
 
                 if (!isTargetFolder && !isTargetItem) return;
 
@@ -1207,19 +843,19 @@ namespace ExpControlsLib
                                 int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
                                 if (index >= 0)
                                 {
-                                    bool wasSelected = _listViewWrapper.IsItemSelected(e.Item);
+                                    //bool wasSelected = _listViewWrapper.IsItemSelected(e.Item);
                                     _listViewWrapper.RemoveAt(index);
 
-                                    if (wasSelected && SelectedCount == 0 && Count > 0)
-                                    {
-                                        int nextIndex = Math.Min(index, Count - 1);
-                                        var nextLvi = _listViewWrapper.GetListViewItem(nextIndex);
-                                        if (nextLvi != null)
-                                        {
-                                            nextLvi.Selected = true;
-                                            nextLvi.Focused = true;
-                                        }
-                                    }
+                                    //if (wasSelected && SelectedCount == 0 && Count > 0)
+                                    //{
+                                    //    int nextIndex = Math.Min(index, Count - 1);
+                                    //    var nextLvi = _listViewWrapper.GetListViewItem(nextIndex);
+                                    //    if (nextLvi != null)
+                                    //    {
+                                    //        nextLvi.Selected = true;
+                                    //        nextLvi.Focused = true;
+                                    //    }
+                                    //}
                                 }
 
                                 break;
@@ -1230,7 +866,7 @@ namespace ExpControlsLib
                                 var csi = e.Item;
 
                                 if (e.Item.Parent.FullPath != _currentFolderCsi.FullPath) return;
-                                        
+
                                 if (VirtualMode)
                                 {
                                     var index = _listViewWrapper.FindInsertionPoint(csi);
@@ -1257,10 +893,6 @@ namespace ExpControlsLib
                                 break;
                             }
 
-                        case CShItemUpdateType.UpdateDir:
-                            DisplayFiles(_currentPath, _currentFolderCsi, true, reload: true);
-                            break;
-
                         case CShItemUpdateType.Updated:
                             {
                                 int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
@@ -1268,9 +900,14 @@ namespace ExpControlsLib
                                 {
                                     _listViewWrapper.RedrawItem(index);
                                 }
-                                
+
                                 break;
                             }
+
+                        case CShItemUpdateType.UpdateDir:
+                            Debug.WriteLine("\tUpdateDir");
+                            DisplayFiles(_currentPath, _currentFolderCsi, true, reload: true);
+                            break;
 
                         case CShItemUpdateType.IconChange:
                             {
@@ -1327,7 +964,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: DoItemUpdate End");
+                //Debug.WriteLine("ExpList: DoItemUpdate End");
             }
         }
 
@@ -1337,7 +974,7 @@ namespace ExpControlsLib
         /// </summary>
         public void UpdateLviUsingCsi(ListViewItem lvi, CShellItem csi)
         {
-            //System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi Begin");
+            //Debug.WriteLine("ExpList: UpdateLviUsingCsi Begin");
             try
             {
                 if (lvi == null || csi == null) return;
@@ -1350,7 +987,7 @@ namespace ExpControlsLib
 
                 PopulateColumnData(lvi, csi); //you need this even in non-details mode to facilitate sorting
 
-                if (IsThumbnailViewMode()) 
+                if (IsThumbnailViewMode())
                 {
                     //int index = _thumbnailManager.GetThumbnailIndex(csi, GetThumbnailSizeForMode()); //do not do this because sometimes windows will request all items from the listview for no reason
                     lvi.ImageIndex = -1;
@@ -1360,7 +997,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: UpdateLviUsingCsi End");
+                //Debug.WriteLine("ExpList: UpdateLviUsingCsi End");
             }
         }
 
@@ -1475,7 +1112,7 @@ namespace ExpControlsLib
                         }
                     }
                 }
-                
+
                 if (col.Index == 0)
                 {
                     text = item.DisplayName;
@@ -1497,7 +1134,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: GetColumnData End");
+                //Debug.WriteLine("ExpList: GetColumnData End");
             }
         }
 
@@ -1529,7 +1166,7 @@ namespace ExpControlsLib
         /// </summary>
         public ListViewItem? RefreshItemByDisplayName(string fileName)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: RefreshItemByDisplayName Begin");
+            Debug.WriteLine("ExpList: RefreshItemByDisplayName Begin");
             try
             {
                 for (int i = 0; i < _listViewWrapper.Count; i++)
@@ -1545,13 +1182,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: RefreshItemByDisplayName End");
+                //Debug.WriteLine("ExpList: RefreshItemByDisplayName End");
             }
         }
 
         public ListViewItem? RefreshItemByFullPath(string path)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: RefreshItemByFullPath Begin");
+            Debug.WriteLine("ExpList: RefreshItemByFullPath Begin");
             try
             {
                 int index = _listViewWrapper.GetIndexFromFullPath(path);
@@ -1566,13 +1203,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: RefreshItemByFullPath End");
+                //Debug.WriteLine("ExpList: RefreshItemByFullPath End");
             }
         }
 
         public ListViewItem? RefreshItem(CShellItem? item)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: RefreshItem Begin");
+            Debug.WriteLine("ExpList: RefreshItem Begin");
             try
             {
                 if (item is null) return null;
@@ -1589,1061 +1226,744 @@ namespace ExpControlsLib
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: RefreshItem End");
+                //Debug.WriteLine("ExpList: RefreshItem End");
             }
         }
 
         #endregion
 
-
-        #region Navigation
+        #region Public Methods
 
         /// <summary>
-        /// Navigates back to the previous folder in the history.
+        /// Populates the list view with files and directories from the specified <see cref="CShellItem"/>.
         /// </summary>
-        public void GoBack()
+        /// <param name="pathName">The display path of the folder.</param>
+        /// <param name="csi">The <see cref="CShellItem"/> representing the folder to display.</param>
+        /// <param name="includeFolder">True to include subdirectories in the list.</param>
+        /// <param name="reload">True to force a reload even if the same item was previously selected.</param>
+        public void DisplayFiles(string pathName, CShellItem csi, bool includeFolder, bool reload = false)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: GoBack Begin");
+            Debug.WriteLine("ExpList: DisplayFiles Begin");
             try
             {
-                if (_backHistory.Count > 0)
+                if (csi == null && !string.IsNullOrEmpty(pathName))
+                    csi = CShellItemFactory.CreateCShItem(pathName);
+
+                if (csi is null)
                 {
-                    _forwardHistory.Push(_currentFolderCsi);
-                    var prev = _backHistory.Pop();
-                    _isNavigatingHistory = true;
-                    try
-                    {
-                        DisplayFiles(prev.FullPath, prev, true);
-                    }
-                    finally
-                    {
-                        _isNavigatingHistory = false;
-                    }
+                    _listView.BeginUpdate();
+                    _listViewWrapper.Clear();
+                    var oldCsi_null = _currentFolderCsi;
+                    _currentFolderCsi = null;
+                    _currentPath = pathName;
+                    ExpListCurrentFolderChanged?.Invoke(null, oldCsi_null);
+                    _listView.EndUpdate();
+                    return;
                 }
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: GoBack End");
-            }
-        }
 
-        /// <summary>
-        /// Navigates forward to the next folder in the history.
-        /// </summary>
-        public void GoForward()
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: GoForward Begin");
-            try
-            {
-                if (_forwardHistory.Count > 0)
+                bool samePath;
+                if (_currentFolderCsi is null)
+                    samePath = false;
+                else
+                    samePath = CPidl.IsBinaryEqual(_currentFolderCsi.PIDL, csi.PIDL);
+
+                if (_currentFolderCsi != null && samePath && reload == false) return;
+
+                var oldCsi = _currentFolderCsi;
+                var hierarchyCsi = _shellController.LoadFolderContents(csi);
+                if (hierarchyCsi != null)
+                {
+                    _currentFolderCsi = hierarchyCsi;
+                }
+                else
+                {
+                    // If loading fails, clear the list instead of throwing
+                    _listView.BeginUpdate();
+                    _listViewWrapper.Clear();
+                    _currentFolderCsi = null;
+                    _currentPath = pathName;
+                    ExpListCurrentFolderChanged?.Invoke(null, oldCsi);
+                    _listView.EndUpdate();
+                    return;
+                }
+
+                // record history
+                if (!_isNavigatingHistory && _currentFolderCsi != null && !samePath)
                 {
                     _backHistory.Push(_currentFolderCsi);
-                    var next = _forwardHistory.Pop();
-                    _isNavigatingHistory = true;
+                    _forwardHistory.Clear();
+                }
+
+                _selectedItem = null; //new folder loaded, no item selected yet
+                _currentPath = _currentFolderCsi.FullPath;
+
+                //display directories separately
+                var dirList = new List<CShellItem>();
+                var fileList = new List<CShellItem>();
+                if (includeFolder) dirList.AddRange(_currentFolderCsi.Directories);
+
+                if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(_currentFolderCsi.Files);
+
+                if ((dirList.Count + fileList.Count) == 0) //no items
+                {
+                    _listView.BeginUpdate();
+                    _listViewWrapper.Clear();
+                    _listView.EndUpdate();
+
+                    if (!samePath) ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
+
+                    return;
+                }
+                else
+                {
+                    int totalItems;
+
+                    Console.WriteLine("\tSorting...");
+                    fileList.Sort();
+                    totalItems = fileList.Count;
+                    if (includeFolder)
+                    {
+                        dirList.Sort();
+                        totalItems += dirList.Count;
+                    }
+                    Console.WriteLine("\tSorting done");
+
+                    var combinedList = new List<CShellItem>(totalItems);
+                    if (includeFolder) combinedList.AddRange(dirList);
+                    combinedList.AddRange(fileList);
+
+                    _listView.BeginUpdate();
                     try
                     {
-                        DisplayFiles(next.FullPath, next, true);
+                        _listViewWrapper.Clear();
+                        _listViewWrapper.AddRange(combinedList);
+                        _listView.Tag = _currentFolderCsi;
                     }
                     finally
                     {
-                        _isNavigatingHistory = false;
+                        _listView.EndUpdate();
                     }
                 }
+
+                OnScroll(); //this lazy loads the visible icons/thumbnails and is called here to ensure they are loaded on initial display
+
+                if (!samePath) ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: GoForward End");
+                Debug.WriteLine("ExpList: DisplayFiles End");
             }
         }
 
+
         /// <summary>
-        /// Navigates to the parent folder of the currently loaded folder.
+        /// Gets the zero-based index of the item identified by the specified full path.
         /// </summary>
-        public void GoUp()
+        /// <remarks>Lookup is performed against an internal dictionary; -1 indicates no entry exists for
+        /// the provided path.  Probably only works for virtual mode.
+        /// </remarks>
+        /// <param name="fullPath">The full path identifying the item to look up.</param>
+        /// <returns>The zero-based index of the item if found; otherwise -1.</returns>
+        public int GetIndexFromFullPath(string fullPath)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: GoUp Begin");
+            return _listViewWrapper.GetIndexFromFullPath(fullPath);
+        }
+
+        /// <summary>
+        /// Finds a ListViewItem by its display name (case-insensitive).
+        /// </summary>
+        public ListViewItem FindItemByName(string name)
+        {
+            Debug.WriteLine("ExpList: FindItemByName Begin");
             try
             {
-                if (_currentFolderCsi?.Parent != null)
+                for (int i = 0; i < _listViewWrapper.Count; i++)
                 {
-                    var parent = _currentFolderCsi.Parent;
-                    DisplayFiles(parent.FullPath, parent, true);
+                    var item = _listViewWrapper.GetItem(i);
+                    if (item != null && string.Equals(item.DisplayName, name, StringComparison.OrdinalIgnoreCase))
+                        return _listViewWrapper.GetListViewItem(i);
                 }
+                return null;
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: GoUp End");
+                //Debug.WriteLine("ExpList: FindItemByName End");
             }
         }
 
         /// <summary>
-        /// Gets a value indicating whether there is a folder to navigate back to.
+        /// Finds a ListViewItem by its Shell ID (PIDL).
         /// </summary>
-        public bool CanGoBack => _backHistory.Count > 0;
+        public ListViewItem FindItemByID(IntPtr pidl)
+        {
+            Debug.WriteLine("ExpList: FindItemByID Begin");
+            try
+            {
+                for (int i = 0; i < _listViewWrapper.Count; i++)
+                {
+                    var item = _listViewWrapper.GetItem(i);
+                    if (item != null && CPidl.IsBinaryEqual(item.PIDL, pidl))
+                        return _listViewWrapper.GetListViewItem(i);
+                }
+                return null;
+            }
+            finally
+            {
+                //Debug.WriteLine("ExpList: FindItemByID End");
+            }
+        }
 
         /// <summary>
-        /// Gets a value indicating whether there is a folder to navigate forward to.
+        /// Finds a ListViewItem by its full filesystem path.
         /// </summary>
-        public bool CanGoForward => _forwardHistory.Count > 0;
+        public ListViewItem FindItemByPath(string path)
+        {
+            Debug.WriteLine("ExpList: FindItemByPath Begin");
+            try
+            {
+                int index = _listViewWrapper.GetIndexFromFullPath(path);
+                if (index >= 0)
+                    return _listViewWrapper.GetListViewItem(index);
+                return null;
+            }
+            finally
+            {
+                //Debug.WriteLine("ExpList: FindItemByPath End");
+            }
+        }
+
 
         /// <summary>
-        /// Gets a value indicating whether the current folder has a parent folder to navigate to.
+        /// Returns a "top-like" index for any ListView mode.
+        /// - Details/List: effectively top row index
+        /// - LargeIcon/SmallIcon/Tile: top-left visible item index
+        /// Works in virtual and non-virtual mode.
         /// </summary>
-        public bool CanGoUp => _currentFolderCsi?.Parent != null;
+        public int GetTopIndex()
+        {
+            Debug.WriteLine("ExpList: GetTopIndex Begin");
+            try
+            {
+                if (_listView == null || !_listView.IsHandleCreated) return -1;
+
+                int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+                if (total <= 0) return -1;
+
+                if (_lastTopIndex > -1) return _lastTopIndex; // cache for repeated calls.  The OS will sometimes make tons of redundant calls
+
+                int top = 0;
+                if (!_listView.VirtualMode && _listView.TopItem != null)
+                {
+                    _lastTopIndex = _listView.TopItem.Index;
+                    return _listView.TopItem.Index;
+                }
+
+                // 2) Try visible enumeration (works in many non-virtual cases)
+                int byVisibleEnum = FindTopLeftByVisibleEnumeration(total);
+                if (byVisibleEnum >= 0) return byVisibleEnum;
+
+                // 3) Virtual-safe fallback: scan viewport by hit-test
+                int byHitTestScan = FindTopLeftByHitTestScan(total);
+                if (byHitTestScan >= 0) return byHitTestScan;
+
+                // 4) Last fallback
+                _lastTopIndex = (top >= 0 && top < total) ? top : -1;
+                return _lastTopIndex;
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: GetTopIndex End");
+            }
+        }
+
 
         #endregion
 
-        //private bool IsItemSelected(CShellItem item)
+
+        #region Private Methods
+        /// <summary>
+        /// Creates a <see cref="ListViewItem"/> for a given <see cref="CShellItem"/>.
+        /// Populates columns based on <see cref="ExpListGetColumnData"/> event or <see cref="ColumnHeader.Tag"/> mapping.
+        /// </summary>
+        /// <param name="item">The <see cref="CShellItem"/> to create the list view item for.</param>
+        /// <returns>A configured <see cref="ListViewItem"/>.</returns>
+        private ListViewItem MakeLVItem(CShellItem item)
+        {
+            try
+            {
+                if (item == null) return new ListViewItem("Error: no CShellItem provided to MakeLVItem()");
+
+                Debug.WriteLine("ExpList: MakeLVItem Begin - " + item.DisplayName);
+
+                ListViewItem lvi = new ListViewItem(item.DisplayName);
+
+                UpdateLviUsingCsi(lvi, item);
+
+                return lvi;
+            }
+            finally
+            {
+                //Debug.WriteLine("ExpList: MakeLVItem End");
+            }
+        }
+
+
+        private const int LVM_GETNEXTITEM = LVM_FIRST + 12;
+        private const int LVM_GETITEMRECT = LVM_FIRST + 14;
+        private const int LVM_HITTEST = LVM_FIRST + 18;
+        private const int LVM_GETITEMSPACING = LVM_FIRST + 51; // returns packed x/y in LPARAM
+        private const int LVM_GETTOPINDEX = LVM_FIRST + 39;
+
+        private const int LVNI_VISIBLE = 0x0008;
+        private const int LVIR_BOUNDS = 0; // for LVM_GETITEMRECT
+        private const int LVM_GETCOUNTPERPAGE = 0x1000 + 40;
+
+
+        private int _lastTopIndex = -1;
+
+
+
+        private int FindTopLeftByVisibleEnumeration(int total)
+        {
+            Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration Begin");
+            try
+            {
+                int bestIndex = -1;
+                int bestTop = int.MaxValue;
+                int bestLeft = int.MaxValue;
+
+                int i = -1;
+                while (true)
+                {
+                    i = (int)SendMessage(_listView.Handle, LVM_GETNEXTITEM, (IntPtr)i, (IntPtr)LVNI_VISIBLE);
+                    if (i < 0) break;
+                    if (i >= total) continue;
+
+                    RECT rc = new RECT { left = LVIR_BOUNDS };
+                    if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)i, ref rc) == IntPtr.Zero)
+                        continue;
+
+                    if (rc.top < bestTop || (rc.top == bestTop && rc.left < bestLeft))
+                    {
+                        bestTop = rc.top;
+                        bestLeft = rc.left;
+                        bestIndex = i;
+                    }
+                }
+
+                return bestIndex;
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration End");
+            }
+        }
+
+        private int FindTopLeftByHitTestScan(int total)
+        {
+            Debug.WriteLine("ExpList: FindTopLeftByHitTestScan Begin");
+            try
+            {
+                var client = _listView.ClientRectangle;
+                if (client.Width <= 0 || client.Height <= 0) return -1;
+
+                int step = Math.Max(6, _listView.Font.Height / 2);
+
+                int bestIndex = -1;
+                int bestTop = int.MaxValue;
+                int bestLeft = int.MaxValue;
+
+                for (int y = 0; y < client.Height; y += step)
+                {
+                    for (int x = 0; x < client.Width; x += step)
+                    {
+                        int idx = HitTestIndex(x, y);
+                        if (idx < 0 || idx >= total) continue;
+
+                        RECT rc = new RECT { left = LVIR_BOUNDS };
+                        if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)idx, ref rc) != IntPtr.Zero)
+                        {
+                            if (rc.top < bestTop || (rc.top == bestTop && rc.left < bestLeft))
+                            {
+                                bestTop = rc.top;
+                                bestLeft = rc.left;
+                                bestIndex = idx;
+                            }
+                        }
+                        else
+                        {
+                            // fallback ordering if rect unavailable
+                            if (y < bestTop || (y == bestTop && x < bestLeft))
+                            {
+                                bestTop = y;
+                                bestLeft = x;
+                                bestIndex = idx;
+                            }
+                        }
+                    }
+                }
+
+                return bestIndex;
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: FindTopLeftByHitTestScan End");
+            }
+        }
+
+        private int HitTestIndex(int x, int y)
+        {
+            //Debug.WriteLine("ExpList: HitTestIndex Begin");
+            try
+            {
+                LVHITTESTINFO ht = new LVHITTESTINFO
+                {
+                    pt = new POINT { x = x, y = y }
+                };
+
+                int result = (int)SendMessage(_listView.Handle, LVM_HITTEST, IntPtr.Zero, ref ht);
+                return result; // -1 if none
+            }
+            finally
+            {
+                //Debug.WriteLine("ExpList: HitTestIndex End");
+            }
+        }
+
+        private int GetApproxVisibleCount()
+        {
+            Debug.WriteLine("ExpList: GetApproxVisibleCount Begin");
+            try
+            {
+                if (_listView == null || !_listView.IsHandleCreated)
+                    return 0;
+
+                return _listView.View == View.LargeIcon
+                    ? GetApproxVisibleCountLargeIcon()
+                    : GetAnyVisibleCount();
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: GetApproxVisibleCount End");
+            }
+        }
+
+        private int GetAnyVisibleCount()
+        {
+            if (_listView == null || !_listView.IsHandleCreated || _listView.View == View.LargeIcon)
+                return 0;
+
+            int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+            if (total <= 0) return 0;
+
+            switch (_listView.View)
+            {
+                case View.Details:
+                case View.List:
+                    // LVM_GETCOUNTPERPAGE is geometry-based and works in virtual mode
+                    int perPage = (int)SendMessage(_listView.Handle, LVM_GETCOUNTPERPAGE, IntPtr.Zero, IntPtr.Zero);
+                    return Math.Min(total, Math.Max(0, perPage));
+
+                case View.SmallIcon:
+                case View.Tile:
+                    // LVM_GETCOUNTPERPAGE returns total item count for these views, so use spacing math instead
+                    return EstimateVisibleBySpacing(_listView, total, largeIcon: false);
+
+                default:
+                    return 0;
+            }
+        }
+
+        private static int EstimateVisibleBySpacing(ListView lv, int total, bool largeIcon)
+        {
+            int packed = (int)SendMessage(lv.Handle, LVM_GETITEMSPACING,
+                largeIcon ? IntPtr.Zero : (IntPtr)1, IntPtr.Zero);
+
+            int cellW = packed & 0xFFFF;
+            int cellH = (packed >> 16) & 0xFFFF;
+
+            if (cellW <= 0 || cellH <= 0)
+            {
+                var img = (largeIcon ? lv.LargeImageList?.ImageSize : lv.SmallImageList?.ImageSize)
+                          ?? new System.Drawing.Size(16, 16);
+                cellW = Math.Max(1, img.Width + 16);
+                cellH = Math.Max(1, img.Height + lv.Font.Height + 8);
+            }
+
+            int cols = Math.Max(1, (int)Math.Ceiling(lv.ClientSize.Width / (double)cellW));
+            int rows = Math.Max(1, (int)Math.Ceiling(lv.ClientSize.Height / (double)cellH));
+
+            return Math.Min(total, cols * rows);
+        }
+
+        //private int GetAnyVisibleCount()
         //{
-        //    if (item == null) return false;
-        //    if (VirtualMode)
+        //    Debug.WriteLine("ExpList: GetAnyVisibleCount Begin");
+        //    try
         //    {
-        //        if (_pathToIndex.TryGetValue(item.FullPath, out int index))
-        //            return _listView.SelectedIndices.Contains(index);
-        //        return false;
+        //        if (_listView == null || !_listView.IsHandleCreated || _listView.View == View.LargeIcon)
+        //            return 0;
+
+        //        int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+        //        if (total <= 0) return 0;
+
+        //        Rectangle client = _listView.ClientRectangle;
+        //        int count = 0;
+        //        int i = -1;
+
+        //        while (true)
+        //        {
+        //            i = (int)SendMessage(_listView.Handle, LVM_GETNEXTITEM, (IntPtr)i, (IntPtr)LVNI_VISIBLE); //always returns -1 in listview virtual mode
+        //            if (i < 0) break;
+        //            if (i >= total) continue;
+
+        //            RECT rc = new RECT { left = LVIR_BOUNDS };
+        //            if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)i, ref rc) == IntPtr.Zero)
+        //                continue;
+
+        //            Rectangle itemRect = Rectangle.FromLTRB(rc.left, rc.top, rc.right, rc.bottom);
+        //            if (itemRect.IntersectsWith(client))
+        //                count++;
+        //        }
+
+        //        return count;
         //    }
-        //    else
+        //    finally
         //    {
-        //        var lvi = FindLVItem(item);
-        //        return lvi?.Selected ?? false;
+        //        Debug.WriteLine("ExpList: GetAnyVisibleCount End");
         //    }
         //}
 
-        private void ExpFileList_Click(object sender, EventArgs e)
+        private int GetApproxVisibleCountLargeIcon()
         {
-            Debug.WriteLine("ExpList: ExpFileList_Click Begin");
+            Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon Begin");
             try
             {
-                ListView listView = (ListView)sender;
+                if (_listView == null || !_listView.IsHandleCreated || _listView.View != View.LargeIcon)
+                    return 0;
 
-                if (listView.SelectedIndices.Count == 0) return;
+                int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+                if (total <= 0) return 0;
 
-                CShellItem? csi = null;
-                if (listView.FocusedItem != null) //could be selected OR deselected
-                { 
-                    csi = GetItem(listView.FocusedItem.Index);
-                    if (csi == null) return;
+                // FALSE => large icon spacing
+                int packed = (int)SendMessage(_listView.Handle, LVM_GETITEMSPACING, IntPtr.Zero, IntPtr.Zero);
+                int cellW = packed & 0xFFFF;
+                int cellH = (packed >> 16) & 0xFFFF;
 
-                    if (listView.FocusedItem.Selected)
-                        _selectedItem = csi; // ← keep in sync
-
-                    if (csi.ImageIndex == -1)
-                    {
-                        _thumbnailManager.RequestThumbnail(csi, GetThumbnailSizeForMode(), listView.FocusedItem.Index);
-                    }
-
-                    ExpListItemClick?.Invoke(listView.FocusedItem, csi);
-                }
-                else
+                // Fallback if spacing couldn't be read
+                if (cellW <= 0 || cellH <= 0)
                 {
-                    ExpListItemClick?.Invoke(null, null);
+                    var img = _listView.LargeImageList?.ImageSize ?? new System.Drawing.Size(32, 32);
+                    cellW = Math.Max(1, img.Width + 32);                   // rough label/padding allowance
+                    cellH = Math.Max(1, img.Height + _listView.Font.Height * 2 + 16);
                 }
+
+                int vw = Math.Max(1, _listView.ClientSize.Width);
+                int vh = Math.Max(1, _listView.ClientSize.Height);
+
+                int cols = Math.Max(1, (int)Math.Ceiling(vw / (double)cellW));
+                int rows = Math.Max(1, (int)Math.Ceiling(vh / (double)cellH));
+
+                int approx = cols * rows;
+                return Math.Min(total, approx);
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpFileList_Click End");
+                Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon End");
+            }
+        }
+
+
+        private bool _refreshing = false; //This variable is prevent reentrancy problems on the ui thread
+        private bool _refreshPending = false;
+        private bool _refetchImages = false;
+        private ListViewItem[]? _pendingItems = null;
+
+        /// <summary>
+        /// Increments the enumeration depth counter. While depth > 0, DoItemUpdate will
+        /// defer shell item modifications to prevent reentrant mutation of _listView.Items.
+        /// Must be paired with <see cref="ExitListViewEnumeration"/>.
+        /// </summary>
+        private void EnterListViewEnumeration()
+        {
+            Debug.WriteLine("ExpList: EnterListViewEnumeration Begin");
+            try
+            {
+                _enumerationDepth++;
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: EnterListViewEnumeration End");
             }
         }
 
         /// <summary>
-        /// Handles double-click events on list view items. 
-        /// Folders are navigated into, while files are launched.
+        /// Decrements the enumeration depth counter. When it reaches 0, any deferred
+        /// shell item updates are drained and applied.
+        /// Must be paired with <see cref="EnterListViewEnumeration"/>.
         /// </summary>
-        private void ExpFileList_DoubleClick(object sender, EventArgs e)
+        private void ExitListViewEnumeration()
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_DoubleClick Begin");
+            Debug.WriteLine("ExpList: ExitListViewEnumeration Begin");
             try
             {
-                if (_listView.SelectedIndices.Count <= 0) return;
-
-                CShellItem? csi = null;
-                if (_listView.FocusedItem != null && _listView.FocusedItem.Selected)
-                    csi = GetItem(_listView.FocusedItem.Index);
-                else
-                    csi = GetItem(_listView.SelectedIndices[0]);
-
-                if (csi == null) return;
-
-                if (csi.IsFolder)
+                _enumerationDepth--;
+                if (_enumerationDepth <= 0)
                 {
-                    if (csi.FullPath.StartsWith(":"))
-                        ExpListItemDoubleClick?.Invoke(csi.DisplayName, csi);
-                    else
-                        ExpListItemDoubleClick?.Invoke(csi.FullPath, csi);
-                }
-                else
-                {
-                    try
-                    {
-                        LaunchFile(csi);
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show(ex.Message, "Error in starting application", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
+                    _enumerationDepth = 0;
+                    DrainDeferredUpdates();
                 }
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_DoubleClick End");
-            }
-        }
-
-        private void ExpFileList_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_SelectedIndexChanged Begin");
-            
-            if (_isShuttingDown) return;
-
-            try
-            {
-                if (_listView.SelectedIndices.Count > 0)
-                {
-                    // If current _selectedItem is still selected, keep it.
-                    // This handles the case where multiple items are selected and we don't want to 
-                    // jump back to the first one in the list.
-                    if (_selectedItem != null && _listViewWrapper.IsItemSelected(_selectedItem))
-                    {
-                        // keep _selectedItem as is
-                    }
-                    else if (_listView.FocusedItem != null && _listView.FocusedItem.Selected)
-                    {
-                        _selectedItem = GetItem(_listView.FocusedItem.Index);
-                    }
-                    else
-                    {
-                        _selectedItem = GetItem(_listView.SelectedIndices[0]);
-                    }
-                }
-                else
-                {
-                    _selectedItem = null;
-                }
-
-                if (VirtualMode)
-                {
-                    // In virtual mode, we pass null to because there are no items in _listView.SelectedItems
-                    // Consumers should use SelectedCShellItems property instead.
-                    SelectedIndexChanged?.Invoke(null);
-                }
-                else
-                {
-                    SelectedIndexChanged?.Invoke(_listView.SelectedItems);
-                }
-            }
-            catch (InvalidOperationException ex)
-            {
-                Debug.WriteLine("ExpList: InvalidOperationException in ExpFileList_SelectedIndexChanged: " + ex.ToString());
-            }
-            catch (NullReferenceException ex) 
-            { 
-                Debug.WriteLine("ExpList: NullReferenceException in ExpFileList_SelectedIndexChanged: " + ex.ToString());
-            }
-            finally
-            {
-                //Debug.WriteLine("ExpList: ExpFileList_SelectedIndexChanged End");
-            }
-        }
-
-        private void ExpFileList_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
-        {
-            Debug.WriteLine("ExpList: ExpFileList_ItemSelectionChanged Begin");
-            try
-            {
-                if (e.IsSelected)
-                {
-                    _selectedItem = GetItem(e.ItemIndex);
-                }
-                ItemSelectionChanged?.Invoke(e);
-            }
-            finally
-            {
-                //Debug.WriteLine("ExpList: ExpFileList_ItemSelectionChanged End");
-            }
-        }
-
-
-        /// <summary>
-        /// Handles the <see cref="Control.Leave"/> event of the <see cref="_listView"/> ListView.
-        /// Clears the current selection.
-        /// </summary>
-        /// what the hell good is this?  It makes it impossible to use any selections to do anything.
-        //private void ExpFileList_Leave(object sender, EventArgs e)
-        //{
-        //    ExpFileList.SelectedItems.Clear();
-        //}
-
-        #region LabelEdit Handlers (Item Rename)
-
-        /// <summary>
-        /// Handles the <see cref="ListView.BeforeLabelEdit"/> event.
-        /// Determines if an item can be renamed and sets up the edit control.
-        /// </summary>
-        private void ExpFileList_BeforeLabelEdit(object sender, LabelEditEventArgs e)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_BeforeLabelEdit Begin");
-            try
-            {
-                IntPtr editWnd = SendMessage(_listView.Handle, LVM_GETEDITCONTROL, 0, IntPtr.Zero);
-                var csi = GetItem(e.Item);
-                if (csi == null) { e.CancelEdit = true; return; }
-
-                int textLen = Path.GetFileNameWithoutExtension(csi.DisplayName).Length;
-                SendMessage(editWnd, EM_SETSEL, IntPtr.Zero, (IntPtr)textLen);
-
-                if ((!csi.IsFileSystem) || csi.IsDisk ||
-                    csi.FullPath == CShellItemFactory.CreateCShItem(CSIDL.MYDOCUMENTS).FullPath ||
-                    !csi.CanRename)
-                {
-                    System.Media.SystemSounds.Beep.Play();
-                    e.CancelEdit = true;
-                }
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_BeforeLabelEdit End");
+                Debug.WriteLine("ExpList: ExitListViewEnumeration End");
             }
         }
 
         /// <summary>
-        /// Handles the <see cref="ListView.AfterLabelEdit"/> event.
-        /// Applies the new name to the shell item.
+        /// Processes all deferred shell item updates that were queued while an enumeration was in progress.
         /// </summary>
-        private void ExpFileList_AfterLabelEdit(object sender, LabelEditEventArgs e)
+        private void DrainDeferredUpdates()
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_AfterLabelEdit Begin");
+            Debug.WriteLine("ExpList: DrainDeferredUpdates Begin");
             try
             {
-                var item = GetItem(e.Item);
-                if (item == null || e.Label == null || e.Label == string.Empty) return;
-
-                try
+                while (_deferredUpdates.Count > 0)
                 {
-                    string newName = e.Label.Trim();
-
-                    if (newName.Length < 1 || newName.IndexOfAny(Path.GetInvalidPathChars()) != -1)
-                    {
-                        e.CancelEdit = true;
-                        System.Media.SystemSounds.Beep.Play();
-                        return;
-                    }
-
-                    string path = item.FullPath;
-                    int index = path.LastIndexOf('\\');
-                    if (index == -1)
-                    {
-                        e.CancelEdit = true;
-                        System.Media.SystemSounds.Beep.Play();
-                        return;
-                    }
-
-                    IntPtr newPidl = IntPtr.Zero;
-                    if (item.Parent.Folder.SetNameOf(
-                            _listView.Handle.ToInt32(),
-                            CPidl.ILFindLastID(item.PIDL),
-                            newName,
-                            SHGDN.NORMAL,
-                            newPidl) != S_OK)
-                    {
-                        System.Media.SystemSounds.Beep.Play();
-                        e.CancelEdit = true;
-                    }
-                }
-                catch
-                {
-                    e.CancelEdit = true;
-                    System.Media.SystemSounds.Beep.Play();
+                    var (sender, e) = _deferredUpdates.Dequeue();
+                    DoItemUpdate(sender, e);
                 }
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_AfterLabelEdit End");
+                Debug.WriteLine("ExpList: DrainDeferredUpdates End");
             }
         }
 
-        #endregion
-
-        #region Context Menu Handlers
-
-        private readonly ExpControlsLib.ContextMenu m_WindowsContextMenu = new ExpControlsLib.ContextMenu();
-        private bool m_OutOfRange;
-
         /// <summary>
-        /// Determines if the mouse coordinates are within the client area of the specified control.
+        /// Executes the action immediately if no enumeration is in progress, otherwise
+        /// defers it via BeginInvoke to run after the enumeration completes.
+        /// Use this for ListView modification operations outside of DoItemUpdate.
         /// </summary>
-        /// <param name="ctl">The control to check.</param>
-        /// <param name="e">The <see cref="MouseEventArgs"/> containing the mouse position.</param>
-        /// <returns>True if the mouse is within the control's client area.</returns>
-        private bool IsWithin(Control ctl, MouseEventArgs e)
+        private void InvokeWhenListViewReady(Action action)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: IsWithin Begin");
+            Debug.WriteLine("ExpList: InvokeWhenListViewReady Begin");
             try
             {
-                if (e.X < 0 || e.Y < 0) return false;
-                Rectangle cr = ctl.ClientRectangle;
-                if (e.X > cr.Width || e.Y > cr.Height) return false;
+                if (_enumerationDepth > 0)
+                {
+                    BeginInvoke(() => InvokeWhenListViewReady(action));
+                    return;
+                }
+                action();
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: InvokeWhenListViewReady End");
+            }
+        }
+
+        /// <summary>
+        /// This refreshes the ListView with new items.
+        /// This function marshals execution to the ui thread.  Also prevents double updating by gatekeeping 
+        /// execution via the _refreshing boolean.  Without these precautions, we got errors with array index 
+        /// out of bounds errors on the listview items that couldn't be resolved with only a lock. 
+        /// </summary>
+        /// <param name="newItems"></param>
+        /// <returns></returns>
+        private bool RequestListViewRepopulate(ListViewItem[] newItems, bool fetchImages)
+        {
+            Debug.WriteLine("ExpList: RequestListViewRefresh Begin");
+            try
+            {
+                if (_refreshing)
+                {
+                    _refreshPending = true;
+                    return false;
+                }
+
+                // Snapshot now (avoid deferred enumeration / later mutation)
+                _pendingItems = newItems;
+                _refetchImages = fetchImages;
+                _refreshing = true;
+
+                BeginInvoke(new MethodInvoker(RepopulateListViewCore)); // queue, don't run inline.  Can't take arguments because of MethodInvoker unfortunately
+
                 return true;
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: IsWithin End");
+                Debug.WriteLine("ExpList: RequestListViewRefresh End");
             }
         }
 
-        /// <summary>
-        /// Sorts the items in the list view based on their tags (CShellItem).
-        /// </summary>
-        private void SortLVItems()
+        private void RepopulateListViewCore()
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: SortLVItems Begin");
+            Debug.WriteLine("ExpList: RefreshListViewCore Begin");
             try
             {
-                if (VirtualMode)
+                // If an enumeration is in progress (reentrancy via message pumping),
+                // defer this refresh to after the enumeration completes.
+                if (_enumerationDepth > 0)
                 {
-                    if (_listView.ListViewItemSorter is LVColSorter sorter)
-                    {
-                        _listViewWrapper.Sort(sorter.SortColumn, sorter.OrderOfSort);
-                    }
+                    BeginInvoke(new MethodInvoker(RepopulateListViewCore));
                     return;
                 }
 
-                if (_listView.Items.Count < 2) return;
-
-                EnterListViewEnumeration();
                 try
                 {
+                    // snapshot old position safely
+                    int topIndex = 0;
+                    if (_listView.Items.Count > 0)
+                    {
+                        topIndex = GetTopIndex();
+                    }
+
+                    var newItems = _pendingItems ?? Array.Empty<ListViewItem>();
+
+                    Console.WriteLine("Begin loading items into listview...");
                     _listView.BeginUpdate();
-                    var tmp = new ListViewItem[_listView.Items.Count];
-                    _listView.Items.CopyTo(tmp, 0);
-                    Array.Sort(tmp, new TagComparer());
-                    _listView.Items.Clear();
-                    _listView.Items.AddRange(tmp);
-                    _listView.EndUpdate();
+                    try
+                    {
+                        if (VirtualMode)
+                        {
+                            int count = newItems == null ? 0 : newItems.Length;
+
+                            _listView.VirtualListSize = count;
+                            _listView.Tag = _currentFolderCsi;
+                            _listView.Refresh();
+                        }
+                        else
+                        {
+                            _listView.Items.Clear();
+                            _listView.Items.AddRange(newItems);
+
+                            if (_listView.Items.Count > 0)
+                            {
+                                _listView.Tag = _currentFolderCsi; // For ClvDropWrapper
+
+                                topIndex = Math.Max(0, Math.Min(topIndex, _listView.Items.Count - 1));
+                                _listView.EnsureVisible(topIndex);
+
+                                if (_refetchImages) LoadImagesForItems();
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        _listView.EndUpdate();
+                    }
+                    Console.WriteLine("End loading items into listview");
                 }
                 finally
                 {
-                    ExitListViewEnumeration();
+                    _refreshing = false;
+                    _refreshPending = false;
                 }
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: SortLVItems End");
-            }
-        }
-
-        /// <summary>
-        /// Handles the MouseLeave event to track when the mouse is outside the list view.
-        /// </summary>
-        private void ExpFileList_MouseLeave(object sender, EventArgs e)
-        {
-            //System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseLeave Begin");
-            try
-            {
-                m_OutOfRange = true;
-                OnMouseLeave(e);
-            }
-            finally
-            {
-                //System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseLeave End");
-            }
-        }
-
-        private void ExpFileList_MouseEnter(object sender, EventArgs e)
-        {
-            //System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseEnter Begin");
-            try
-            {
-                OnMouseEnter(e);
-            }
-            finally
-            {
-                //System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseEnter End");
-            }
-        }
-
-        /// <summary>
-        /// Handles the MouseDown event to reset the out-of-range flag for right-clicks.
-        /// </summary>
-        private void ExpFileList_MouseDown(object sender, MouseEventArgs e)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseDown Begin");
-            try
-            {
-                if (e.Button == MouseButtons.Right) m_OutOfRange = false;
-                OnMouseDown(e);
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseDown End");
-            }
-        }
-
-        /// <summary>
-        /// Handles the MouseUp event to trigger context menus or middle-click actions.
-        /// </summary>
-        private void ExpFileList_MouseUp(object sender, MouseEventArgs e)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseUp Begin");
-            try
-            {
-                if (e.Button == MouseButtons.Right)
-                {
-                    if (!IsWithin(_listView, e)) return;
-                    if (m_OutOfRange) return;
-
-                    Point pt = new Point(e.X, e.Y);
-                    ListViewItem tn = _listView.GetItemAt(e.X, e.Y);
-
-                    if (tn != null && _listView.SelectedIndices.Count > 0)
-                    {
-                        var itms = SelectedCShellItems.ToArray();
-
-                        CMInvokeCommandInfoEx cmi;
-                        bool allowRename = itms.Length <= 1; //Don't allow rename of more than 1 item
-
-                        if (m_WindowsContextMenu.ShowMenu(Handle, itms, MousePosition, allowRename, out cmi, MinimalContextMenu))
-                        {
-                            byte[] cmdBytes = new byte[256];
-                            m_WindowsContextMenu.winMenu.GetCommandString(cmi.lpVerb.ToInt32(), (int)GCS.VERBA, 0, cmdBytes, 256);
-                            string cmdName = SzToString(cmdBytes).ToLowerInvariant();
-
-                            if (cmdName.Equals("rename"))
-                            {
-                                _listView.LabelEdit = true;
-                                tn.BeginEdit();
-                            }
-                            else
-                            {
-                                string strPath = itms[0].Parent == ShellController.DesktopCSI
-                                    ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-                                    : itms[0].Parent.FullPath;
-
-                                m_WindowsContextMenu.InvokeCommand(m_WindowsContextMenu.winMenu, (UInt32)cmi.lpVerb.ToInt32(), strPath, pt);
-                            }
-
-                            Marshal.ReleaseComObject(m_WindowsContextMenu.winMenu);
-                        }
-                    }
-                    else
-                    {
-                        ShowAndHandleContextMenu(MousePosition);
-                    }
-                }
-
-                ExpListItemGetSelItems?.Invoke(_listView.SelectedItems);
-
-                if (e.Button == MouseButtons.Middle && _listView.SelectedIndices.Count > 0)
-                {
-                    CShellItem? csi = null;
-                    if (_listView.FocusedItem != null && _listView.FocusedItem.Selected)
-                        csi = GetItem(_listView.FocusedItem.Index);
-                    else
-                        csi = GetItem(_listView.SelectedIndices[0]);
-
-                    if (csi != null) ExpListItemMouseMBUp?.Invoke(csi.FullPath, csi);
-                }
-                OnMouseUp(e);
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseUp End");
-            }
-        }
-
-        private void ExpFileList_MouseMove(object sender, MouseEventArgs e)
-        {
-            //System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseMove Begin");
-            try
-            {
-                OnMouseMove(e);
-            }
-            finally
-            {
-                //System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_MouseMove End");
-            }
-        }
-
-
-        /// <summary>
-        /// Creates a native Windows context menu for the current folder.
-        /// </summary>
-        /// <param name="comContextMenu">Output parameter for the main context menu handle.</param>
-        /// <param name="viewSubMenu">Output parameter for the View submenu handle.</param>
-        private void CreateContextMenu(out IntPtr comContextMenu, out IntPtr viewSubMenu, out IntPtr sortSubMenu)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: CreateContextMenu Begin");
-            try
-            {
-                comContextMenu = CreatePopupMenu();
-                viewSubMenu = CreatePopupMenu();
-                sortSubMenu = CreatePopupMenu();
-
-                // Create and insert the "View" submenu item into the main context menu.
-                var itemInfo = new MENUITEMINFO("View")
-                {
-                    fMask = (int)(MIIM.SUBMENU | MIIM.STRING),
-                    hSubMenu = viewSubMenu
-                };
-                InsertMenuItem(comContextMenu, 0, true, ref itemInfo);
-
-                // Create and insert the "Sort by" submenu item into the main context menu.
-                var sortInfo = new MENUITEMINFO("Sort by")
-                {
-                    fMask = (int)(MIIM.SUBMENU | MIIM.STRING),
-                    hSubMenu = sortSubMenu
-                };
-                InsertMenuItem(comContextMenu, 1, true, ref sortInfo);
-
-                // Add view mode options to the View submenu with radio button indicators.
-                uint checkedFlag;
-                uint checkedValue = (uint)(MFT.RADIOCHECK | MFT.CHECKED);
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.Details) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.DETAILS, "Details");
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.Thumbnail) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (uint)CMD.THUMBNAILS, "Thumbnails");
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.LargeThumbnail) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (uint)CMD.LARGE_THUMBNAILS, "Large Thumbnails");
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.ExtraLargeThumbnail) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.EXTRA_LARGE_THUMBNAILS, "Extra Large Thumbnails");
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.LargeIcon) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.LARGEICON, "Large Icons");
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.List) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.LIST, "List");
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.Tile) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.TILES, "Tiles");
-
-                // Add sorting options to the Sort by submenu.
-                if (_listView.ListViewItemSorter is LVColSorter sorter)
-                {
-                    int currentSortCol = sorter.SortColumn;
-                    for (int i = 0; i < _listView.Columns.Count; i++)
-                    {
-                        uint sortChecked = (i == currentSortCol) ? checkedValue : (uint)MFT.BYCOMMAND;
-                        AppendMenu(sortSubMenu, sortChecked, (uint)((int)CMD.SORT_BY_BASE + i), _listView.Columns[i].Text);
-                    }
-                }
-
-                // Add separator and standard folder operations to the main context menu.
-                AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
-                AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, (uint)CMD.REFRESH, "Refresh (F5)");
-                AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, (uint)CMD.SELECT_ALL, "Select All (Ctrl+A)");
-                AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
-
-                // Determine if Paste operations are allowed by checking clipboard contents.
-                // CanDropClipboard() returns the DragDropEffects supported by the target folder.
-                var enabled = (uint)MFT.GRAYED;
-                DragDropEffects effects = DragDropEffects.None;
-
-                if (_currentFolderCsi == null)
-                {
-                    enabled = (uint)MFT.BYCOMMAND;
-                }
-                else
-                {
-                    effects = CanDropClipboard(_currentFolderCsi);
-                    if ((effects & DragDropEffects.Copy) == DragDropEffects.Copy ||
-                        (effects & DragDropEffects.Move) == DragDropEffects.Move)
-                    {
-                        enabled = (uint)MFT.BYCOMMAND;
-                    }
-                }
-
-                // Add Paste menu item, enabled only if clipboard contents are compatible.
-                AppendMenu(comContextMenu, enabled, (int)CMD.PASTE, "Paste (Ctrl+V)");
-
-                // Add additional paste and context operations if a folder is selected.
-                if (_currentFolderCsi != null)
-                {
-                    enabled = (uint)MFT.GRAYED;
-                    if ((effects & DragDropEffects.Link) == DragDropEffects.Link)
-                        enabled = (int)MFT.BYCOMMAND;
-
-                    AppendMenu(comContextMenu, enabled, (uint)CMD.PASTELINK, "Paste Link");
-                    AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
-
-                    // Add New menu for writable folders (excluding special shell folders like ::).
-                    // The "New" submenu is managed by m_WindowsContextMenu.SetUpNewMenu(),
-                    // which adds file creation options for the selected folder.
-                    if (_currentFolderCsi.IsFolder &&
-                        ((!_currentFolderCsi.FullPath.StartsWith("::")) || _currentFolderCsi == ShellController.DesktopCSI))
-                    {
-                        int xIndex = GetMenuItemCount(comContextMenu.ToInt32());
-                        m_WindowsContextMenu.SetUpNewMenu(_currentFolderCsi, comContextMenu, xIndex);
-                        AppendMenu(comContextMenu, (int)MFT.SEPARATOR, 0, string.Empty);
-                    }
-
-                    AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, (uint)CMD.PROPERTIES, "Properties");
-                }
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: CreateContextMenu End");
-            }
-        }
-
-        /// <summary>
-        /// Displays a context menu for the ListView when no items are selected.
-        /// This menu includes view options (Tiles, Large Icons, List, Details), 
-        /// refresh, select all, paste operations, and new item creation.
-        /// </summary>
-        /// <param name="pt">The point (in screen coordinates) where the menu should be displayed.</param>
-        /// <remarks>
-        /// This function handles the creation and management of Windows popup menus.
-        /// It directly manages native menu handles via Win32 API calls and must properly
-        /// release all COM objects and menu handles to avoid memory leaks and access violations.
-        /// 
-        /// Key operations:
-        /// 1. Creates two popup menus: a main context menu and a View submenu
-        /// 2. Populates menus with commands and their checked states
-        /// 3. Determines menu item availability based on clipboard contents
-        /// 4. Invokes the selected command on shell objects (IShellFolder, IContextMenu)
-        /// 5. Releases all COM interfaces and menu handles in the CLEANUP section
-        /// 
-        /// Memory safety note: Menu handles (comContextMenu, viewSubMenu) must be released
-        /// via Marshal.Release() after TrackPopupMenuEx returns. COM objects (IContextMenu, 
-        /// IShellFolder) must be released by ReleaseComObject() to prevent heap corruption.
-        /// Mixing release mechanisms or skipping releases can cause access violations.
-        /// </remarks>
-        private void ShowAndHandleContextMenu(Point pt)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: objects Begin");
-            try
-            {
-                int HR;
-                int MIN = 1;
-                var cmi = new CMInvokeCommandInfoEx();
-
-                // Create three native Windows popup menu handles.
-                IntPtr comContextMenu;
-                IntPtr viewSubMenu;
-                IntPtr sortSubMenu;
-
-                CreateContextMenu(out comContextMenu, out viewSubMenu, out sortSubMenu);
-
-                // Display the context menu and capture the user's selection.
-                int cmdID = TrackPopupMenuEx(comContextMenu, (int)TPM.RETURNCMD, pt.X, pt.Y, Handle, IntPtr.Zero);
-
-                // Process the user's menu selection.
-                if (cmdID >= MIN)
-                {
-                    // Handle sorting commands.
-                    if (cmdID >= (int)CMD.SORT_BY_BASE)
-                    {
-                        int colIndex = cmdID - (int)CMD.SORT_BY_BASE;
-                        if (_listView.ListViewItemSorter is LVColSorter sorter)
-                        {
-                            sorter.SortColumn = colIndex;
-                        }
-                        goto CLEANUP;
-                    }
-
-                    // Initialize the CMInvokeCommandInfoEx structure used for shell command invocation.
-                    cmi = new CMInvokeCommandInfoEx
-                    {
-                        cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                        nShow = (int)SW.SHOWNORMAL,
-                        fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
-                        ptInvoke = new Point(pt.X, pt.Y)
-                    };
-
-                    // Handle view mode changes and built-in operations.
-                    var cmdEnum = (CMD)cmdID;
-                    switch (cmdEnum)
-                    {
-                        case CMD.TILES:
-                            DisplayMode = ListViewDisplayMode.Tile;
-                            goto CLEANUP;
-                        case CMD.LIST:
-                            DisplayMode = ListViewDisplayMode.List;
-                            goto CLEANUP;
-                        case CMD.DETAILS:
-                            DisplayMode = ListViewDisplayMode.Details;
-                            goto CLEANUP;
-                        case CMD.LARGEICON:
-                            this.DisplayMode = ListViewDisplayMode.LargeIcon;
-                            goto CLEANUP;
-                        case CMD.THUMBNAILS:
-                            this.DisplayMode = ListViewDisplayMode.Thumbnail;
-                            goto CLEANUP;
-                        case CMD.LARGE_THUMBNAILS:
-                            this.DisplayMode = ListViewDisplayMode.LargeThumbnail;
-                            goto CLEANUP;
-                        case CMD.EXTRA_LARGE_THUMBNAILS:
-                            this.DisplayMode = ListViewDisplayMode.ExtraLargeThumbnail;
-                            goto CLEANUP;
-                        case CMD.REFRESH:
-                            // Refresh the folder contents and re-sort the ListView items.
-                            _shellController.ShellUpdater.SelectiveFolderUpdate(_currentFolderCsi);
-                            SortLVItems();
-                            goto CLEANUP;
-                        case CMD.SELECT_ALL:
-                            // Select all items in the ListView.
-                            if (VirtualMode)
-                            {
-                                _listView.BeginUpdate();
-                                try
-                                {
-                                    for (int i = 0; i < _listView.VirtualListSize; i++)
-                                        _listView.SelectedIndices.Add(i);
-                                }
-                                finally
-                                {
-                                    _listView.EndUpdate();
-                                }
-                            }
-                            else
-                            {
-                                EnterListViewEnumeration();
-                                try
-                                {
-                                    foreach (ListViewItem item in _listView.Items)
-                                    {
-                                        if (item is null) continue;
-                                        item.Selected = true;
-                                    }
-                                }
-                                finally
-                                {
-                                    ExitListViewEnumeration();
-                                }
-                            }
-                            goto CLEANUP;
-                        case CMD.PASTE:
-                            if (_currentFolderCsi != null)
-                            {
-                                cmi.lpVerb = Marshal.StringToHGlobalAnsi("paste");
-                                cmi.lpVerbW = Marshal.StringToHGlobalUni("paste");
-                            }
-                            else
-                            {
-                                goto CLEANUP;
-                            }
-                            break;
-                        case CMD.PASTELINK:
-                            cmi.lpVerb = Marshal.StringToHGlobalAnsi("pastelink");
-                            cmi.lpVerbW = Marshal.StringToHGlobalUni("pastelink");
-                            break;
-                        case CMD.PROPERTIES:
-                            cmi.lpVerb = Marshal.StringToHGlobalAnsi("properties");
-                            cmi.lpVerbW = Marshal.StringToHGlobalUni("properties");
-                            break;
-                        default:
-                            // Handle commands from the "New" submenu.
-                            cmdID -= 1;
-                            cmi.lpVerb = (IntPtr)cmdID;
-                            cmi.lpVerbW = (IntPtr)cmdID;
-                            m_CreateNew = true;
-                            HR = m_WindowsContextMenu.newMenu.InvokeCommand(cmi);
-#if DEBUG
-                            if (HR != S_OK)
-                                Marshal.ThrowExceptionForHR(HR);
-#endif
-                            goto CLEANUP;
-                    }
-
-                    if (_currentFolderCsi != null)
-                    {
-                        int prgf = 0;
-                        IntPtr iunk = IntPtr.Zero;
-
-                        IShellFolder folder = _currentFolderCsi == ShellController.DesktopCSI
-                            ? _currentFolderCsi.Folder
-                            : _currentFolderCsi.Parent.Folder;
-
-                        IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
-
-                        HR = folder.GetUIObjectOf(IntPtr.Zero, 1, new[] { relPidl }, IID_IContextMenu, prgf, out iunk);
-#if DEBUG
-                        if (HR != S_OK)
-                            Marshal.ThrowExceptionForHR(HR);
-#endif
-                        m_WindowsContextMenu.winMenu = (IContextMenu)Marshal.GetObjectForIUnknown(iunk);
-
-                        HR = m_WindowsContextMenu.winMenu.InvokeCommand(cmi);
-
-                        m_WindowsContextMenu.ReleaseMenu();
-#if DEBUG
-                        if (HR != S_OK)
-                            Marshal.ThrowExceptionForHR(HR);
-#endif
-                    }
-                }
-
-            CLEANUP:
-                m_WindowsContextMenu.ReleaseNewMenu();
-
-                if (comContextMenu != IntPtr.Zero)
-                {
-                    DestroyMenu(comContextMenu);
-                    comContextMenu = IntPtr.Zero;
-                }
-
-                // Note: viewSubMenu and sortSubMenu are destroyed when comContextMenu is destroyed.
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: objects End");
-            }
-        }
-        #endregion
-
-        #region Keyboard Events
-
-
-        /// <summary>
-        /// Handles KeyDown events for shortcuts (Ctrl+A, Ctrl+C/V/X, Delete, F2, F5, Enter).
-        /// </summary>
-        private void ExpFileList_KeyDown(object sender, KeyEventArgs e)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_KeyDown Begin");
-            try
-            {
-                if (e.Control && e.KeyCode == Keys.A)
-                {
-                    if (VirtualMode)
-                    {
-                        _listView.BeginUpdate();
-                        try
-                        {
-                            for (int i = 0; i < _listView.VirtualListSize; i++)
-                                _listView.SelectedIndices.Add(i);
-                        }
-                        finally
-                        {
-                            _listView.EndUpdate();
-                        }
-                    }
-                    else
-                    {
-                        EnterListViewEnumeration();
-                        try
-                        {
-                            foreach (ListViewItem item in _listView.Items)
-                            {
-                                if (item is null) continue;
-                                item.Selected = true;
-                            }
-                        }
-                        finally
-                        {
-                            ExitListViewEnumeration();
-                        }
-                    }
-                    ExpListItemGetSelItems?.Invoke(_listView.SelectedItems);
-                }
-
-                if (e.Control)
-                {
-                    switch (e.KeyCode)
-                    {
-                        case Keys.X: WinMenu("cut"); break;
-                        case Keys.C: WinMenu("copy"); break;
-                        case Keys.V: WinMenu("paste"); break;
-                        case Keys.Z: MessageBox.Show("Don't support UNDO now!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information); break;
-                    }
-                }
-
-                if (e.KeyCode == Keys.F2 && _listView.SelectedIndices.Count > 0)
-                {
-                    if (VirtualMode)
-                    {
-                        // In virtual mode, we must ensure the item is cached or retrieved
-                        _listView.FocusedItem?.BeginEdit();
-                    }
-                    else
-                    {
-                        _listView.SelectedItems[0].BeginEdit();
-                    }
-                }
-
-                if (e.KeyCode == Keys.F5)
-                {
-                    _shellController.ShellUpdater.SelectiveFolderUpdate(_currentFolderCsi);
-                    SortLVItems();
-                }
-
-                if (e.KeyCode == Keys.Enter && _listView.SelectedIndices.Count > 0)
-                {
-                    var csi = GetItem(_listView.SelectedIndices[0]);
-                    if (csi == null) return;
-
-                    string name = csi.DisplayName;
-
-                    if (csi.IsFolder)
-                    {
-                        if (csi.FullPath.StartsWith(":"))
-                            ExpListItemDoubleClick?.Invoke(csi.DisplayName, csi);
-                        else
-                            ExpListItemDoubleClick?.Invoke(csi.FullPath, csi);
-                    }
-                    else
-                    {
-                        string path = csi.FullPath;
-                        try
-                        {
-                            if (name == Path.GetFileName(path))
-                                LaunchFile(csi);
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show(ex.Message, "Error in starting application", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        }
-                    }
-                }
-
-                OnKeyDown(e);
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_KeyDown End");
-            }
-        }
-
-
-        /// <summary>
-        /// Handles the KeyUp event for navigation keys.
-        /// </summary>
-        private void ExpFileList_KeyUp(object sender, KeyEventArgs e)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_KeyUp Begin");
-            try
-            {
-                if ((e.KeyCode == Keys.Up || e.KeyCode == Keys.Down || e.KeyCode == Keys.Left || e.KeyCode == Keys.Right)
-                    && _listView.SelectedIndices.Count > 0)
-                {
-                    var csi = GetItem(_listView.SelectedIndices[0]);
-                    if (csi != null) ExpListItemArrowKeyUp?.Invoke(csi.FullPath, csi);
-                }
-                else if (e.KeyCode == Keys.Delete)
-                {
-                    WinMenu("delete");
-                }
-
-                OnKeyUp(e);
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_KeyUp End");
-            }
-        }
-
-        private void ExpFileList_KeyPress(object sender, KeyPressEventArgs e)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_KeyPress Begin");
-            try
-            {
-                OnKeyPress(e);
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: ExpFileList_KeyPress End");
+                Debug.WriteLine("ExpList: RefreshListViewCore End");
             }
         }
 
@@ -2653,7 +1973,7 @@ namespace ExpControlsLib
         /// <param name="csi">The <see cref="CShellItem"/> to launch.</param>
         private void LaunchFile(CShellItem csi)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: LaunchFile Begin");
+            Debug.WriteLine("ExpList: LaunchFile Begin");
             try
             {
                 var psi = new ProcessStartInfo
@@ -2665,7 +1985,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: LaunchFile End");
+                Debug.WriteLine("ExpList: LaunchFile End");
             }
         }
 
@@ -2675,7 +1995,7 @@ namespace ExpControlsLib
         /// <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
         private void WinMenu(string cmd)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: WinMenu Begin");
+            Debug.WriteLine("ExpList: WinMenu Begin");
             try
             {
                 // Validate preconditions
@@ -2751,7 +2071,7 @@ namespace ExpControlsLib
                             {
                                 selectedItems = _listView?.SelectedItems?.Cast<ListViewItem>()?.Select(item => item.Tag as CShellItem)?.ToArray() ?? new CShellItem[0];
                             }
-                            
+
                             pidls = new List<IntPtr>(selectedItems.Length);
 
                             for (int i = 0; i < selectedItems.Length; i++)
@@ -2877,7 +2197,7 @@ namespace ExpControlsLib
                             foreach (var item in selectedItems)
                             {
                                 _shellController.HierachyManager.Remove(item);
-                                
+
                                 this.RemoveAt(_listViewWrapper.GetIndex(item));
                             }
                             if (selectedItems.Length > this.GetApproxVisibleCount())
@@ -2931,7 +2251,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: WinMenu End");
+                Debug.WriteLine("ExpList: WinMenu End");
             }
         }
 
@@ -2941,382 +2261,434 @@ namespace ExpControlsLib
         /// <returns>True if in a thumbnail view mode.</returns>
         private bool IsThumbnailViewMode() => DisplayMode == ListViewDisplayMode.Thumbnail || DisplayMode == ListViewDisplayMode.LargeThumbnail || DisplayMode == ListViewDisplayMode.ExtraLargeThumbnail;
 
-        #endregion
-
-        #region Public Functions 
-
-
         /// <summary>
-        /// Finds a ListViewItem by its display name (case-insensitive).
+        /// Determines if the mouse coordinates are within the client area of the specified control.
         /// </summary>
-        public ListViewItem FindItemByName(string name)
+        /// <param name="ctl">The control to check.</param>
+        /// <param name="e">The <see cref="MouseEventArgs"/> containing the mouse position.</param>
+        /// <returns>True if the mouse is within the control's client area.</returns>
+        private bool IsWithin(Control ctl, MouseEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: FindItemByName Begin");
+            Debug.WriteLine("ExpList: IsWithin Begin");
             try
             {
-                for (int i = 0; i < _listViewWrapper.Count; i++)
-                {
-                    var item = _listViewWrapper.GetItem(i);
-                    if (item != null && string.Equals(item.DisplayName, name, StringComparison.OrdinalIgnoreCase))
-                        return _listViewWrapper.GetListViewItem(i);
-                }
-                return null;
+                if (e.X < 0 || e.Y < 0) return false;
+                Rectangle cr = ctl.ClientRectangle;
+                if (e.X > cr.Width || e.Y > cr.Height) return false;
+                return true;
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: FindItemByName End");
+                Debug.WriteLine("ExpList: IsWithin End");
             }
         }
 
         /// <summary>
-        /// Finds a ListViewItem by its Shell ID (PIDL).
+        /// Sorts the items in the list view based on their tags (CShellItem).
         /// </summary>
-        public ListViewItem FindItemByID(IntPtr pidl)
+        private void SortLVItems()
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: FindItemByID Begin");
+            Debug.WriteLine("ExpList: SortLVItems Begin");
             try
             {
-                for (int i = 0; i < _listViewWrapper.Count; i++)
+                if (VirtualMode)
                 {
-                    var item = _listViewWrapper.GetItem(i);
-                    if (item != null && CPidl.IsEqual(item.PIDL, pidl))
-                        return _listViewWrapper.GetListViewItem(i);
-                }
-                return null;
-            }
-            finally
-            {
-                //System.Diagnostics.Debug.WriteLine("ExpList: FindItemByID End");
-            }
-        }
-
-        /// <summary>
-        /// Finds a ListViewItem by its full filesystem path.
-        /// </summary>
-        public ListViewItem FindItemByPath(string path)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: FindItemByPath Begin");
-            try
-            {
-                int index = _listViewWrapper.GetIndexFromFullPath(path);
-                if (index >= 0)
-                    return _listViewWrapper.GetListViewItem(index);
-                return null;
-            }
-            finally
-            {
-                //System.Diagnostics.Debug.WriteLine("ExpList: FindItemByPath End");
-            }
-        }
-
-        private const int LVM_GETNEXTITEM = LVM_FIRST + 12;
-        private const int LVM_GETITEMRECT = LVM_FIRST + 14;
-        private const int LVM_HITTEST = LVM_FIRST + 18;
-        private const int LVM_GETITEMSPACING = LVM_FIRST + 51; // returns packed x/y in LPARAM
-        private const int LVM_GETTOPINDEX = LVM_FIRST + 39;
-
-        private const int LVNI_VISIBLE = 0x0008;
-        private const int LVIR_BOUNDS = 0; // for LVM_GETITEMRECT
-        private const int LVM_GETCOUNTPERPAGE = 0x1000 + 40;
-
-
-
-        private int _lastTopIndex = -1;
-
-        /// <summary>
-        /// Returns a "top-like" index for any ListView mode.
-        /// - Details/List: effectively top row index
-        /// - LargeIcon/SmallIcon/Tile: top-left visible item index
-        /// Works in virtual and non-virtual mode.
-        /// </summary>
-        public int GetTopIndex()
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: GetTopIndex Begin");
-            try
-            {
-                if (_listView == null || !_listView.IsHandleCreated) return -1;
-
-                int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
-                if (total <= 0) return -1;
-
-                if (_lastTopIndex > -1) return _lastTopIndex; // cache for repeated calls.  The OS will sometimes make tons of redundant calls
-
-                int top = 0;
-                if (!_listView.VirtualMode && _listView.TopItem != null)
-                {
-                    _lastTopIndex = _listView.TopItem.Index;
-                    return _listView.TopItem.Index;
-                }
-
-                // 2) Try visible enumeration (works in many non-virtual cases)
-                int byVisibleEnum = FindTopLeftByVisibleEnumeration(total);
-                if (byVisibleEnum >= 0) return byVisibleEnum;
-
-                // 3) Virtual-safe fallback: scan viewport by hit-test
-                int byHitTestScan = FindTopLeftByHitTestScan(total);
-                if (byHitTestScan >= 0) return byHitTestScan;
-
-                // 4) Last fallback
-                _lastTopIndex = (top >= 0 && top < total) ? top : -1;
-                return _lastTopIndex;
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: GetTopIndex End");
-            }
-        }
-
-        private int FindTopLeftByVisibleEnumeration(int total)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration Begin");
-            try
-            {
-                int bestIndex = -1;
-                int bestTop = int.MaxValue;
-                int bestLeft = int.MaxValue;
-
-                int i = -1;
-                while (true)
-                {
-                    i = (int)SendMessage(_listView.Handle, LVM_GETNEXTITEM, (IntPtr)i, (IntPtr)LVNI_VISIBLE);
-                    if (i < 0) break;
-                    if (i >= total) continue;
-
-                    RECT rc = new RECT { left = LVIR_BOUNDS };
-                    if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)i, ref rc) == IntPtr.Zero)
-                        continue;
-
-                    if (rc.top < bestTop || (rc.top == bestTop && rc.left < bestLeft))
+                    if (_listView.ListViewItemSorter is LVColSorter sorter)
                     {
-                        bestTop = rc.top;
-                        bestLeft = rc.left;
-                        bestIndex = i;
+                        _listViewWrapper.Sort(sorter.SortColumn, sorter.OrderOfSort);
                     }
+                    return;
                 }
 
-                return bestIndex;
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration End");
-            }
-        }
+                if (_listView.Items.Count < 2) return;
 
-        private int FindTopLeftByHitTestScan(int total)
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: FindTopLeftByHitTestScan Begin");
-            try
-            {
-                var client = _listView.ClientRectangle;
-                if (client.Width <= 0 || client.Height <= 0) return -1;
-
-                int step = Math.Max(6, _listView.Font.Height / 2);
-
-                int bestIndex = -1;
-                int bestTop = int.MaxValue;
-                int bestLeft = int.MaxValue;
-
-                for (int y = 0; y < client.Height; y += step)
+                EnterListViewEnumeration();
+                try
                 {
-                    for (int x = 0; x < client.Width; x += step)
-                    {
-                        int idx = HitTestIndex(x, y);
-                        if (idx < 0 || idx >= total) continue;
-
-                        RECT rc = new RECT { left = LVIR_BOUNDS };
-                        if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)idx, ref rc) != IntPtr.Zero)
-                        {
-                            if (rc.top < bestTop || (rc.top == bestTop && rc.left < bestLeft))
-                            {
-                                bestTop = rc.top;
-                                bestLeft = rc.left;
-                                bestIndex = idx;
-                            }
-                        }
-                        else
-                        {
-                            // fallback ordering if rect unavailable
-                            if (y < bestTop || (y == bestTop && x < bestLeft))
-                            {
-                                bestTop = y;
-                                bestLeft = x;
-                                bestIndex = idx;
-                            }
-                        }
-                    }
+                    _listView.BeginUpdate();
+                    var tmp = new ListViewItem[_listView.Items.Count];
+                    _listView.Items.CopyTo(tmp, 0);
+                    Array.Sort(tmp, new TagComparer());
+                    _listView.Items.Clear();
+                    _listView.Items.AddRange(tmp);
+                    _listView.EndUpdate();
                 }
-
-                return bestIndex;
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: FindTopLeftByHitTestScan End");
-            }
-        }
-
-        private int HitTestIndex(int x, int y)
-        {
-            //System.Diagnostics.Debug.WriteLine("ExpList: HitTestIndex Begin");
-            try
-            {
-                LVHITTESTINFO ht = new LVHITTESTINFO
+                finally
                 {
-                    pt = new POINT { x = x, y = y }
-                };
-
-                int result = (int)SendMessage(_listView.Handle, LVM_HITTEST, IntPtr.Zero, ref ht);
-                return result; // -1 if none
+                    ExitListViewEnumeration();
+                }
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: HitTestIndex End");
+                Debug.WriteLine("ExpList: SortLVItems End");
             }
         }
-
-        private int GetApproxVisibleCount()
-        {
-            System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCount Begin");
-            try
-            {
-                if (_listView == null || !_listView.IsHandleCreated)
-                    return 0;
-
-                return _listView.View == View.LargeIcon
-                    ? GetApproxVisibleCountLargeIcon()
-                    : GetAnyVisibleCount();
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCount End");
-            }
-        }
-
-        private int GetAnyVisibleCount()
-        {
-            if (_listView == null || !_listView.IsHandleCreated || _listView.View == View.LargeIcon)
-                return 0;
-
-            int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
-            if (total <= 0) return 0;
-
-            switch (_listView.View)
-            {
-                case View.Details:
-                case View.List:
-                    // LVM_GETCOUNTPERPAGE is geometry-based and works in virtual mode
-                    int perPage = (int)SendMessage(_listView.Handle, LVM_GETCOUNTPERPAGE, IntPtr.Zero, IntPtr.Zero);
-                    return Math.Min(total, Math.Max(0, perPage));
-
-                case View.SmallIcon:
-                case View.Tile:
-                    // LVM_GETCOUNTPERPAGE returns total item count for these views, so use spacing math instead
-                    return EstimateVisibleBySpacing(_listView, total, largeIcon: false);
-
-                default:
-                    return 0;
-            }
-        }
-
-        private static int EstimateVisibleBySpacing(ListView lv, int total, bool largeIcon)
-        {
-            int packed = (int)SendMessage(lv.Handle, LVM_GETITEMSPACING,
-                largeIcon ? IntPtr.Zero : (IntPtr)1, IntPtr.Zero);
-
-            int cellW = packed & 0xFFFF;
-            int cellH = (packed >> 16) & 0xFFFF;
-
-            if (cellW <= 0 || cellH <= 0)
-            {
-                var img = (largeIcon ? lv.LargeImageList?.ImageSize : lv.SmallImageList?.ImageSize)
-                          ?? new System.Drawing.Size(16, 16);
-                cellW = Math.Max(1, img.Width + 16);
-                cellH = Math.Max(1, img.Height + lv.Font.Height + 8);
-            }
-
-            int cols = Math.Max(1, (int)Math.Ceiling(lv.ClientSize.Width / (double)cellW));
-            int rows = Math.Max(1, (int)Math.Ceiling(lv.ClientSize.Height / (double)cellH));
-
-            return Math.Min(total, cols * rows);
-        }
-
-        //private int GetAnyVisibleCount()
+        //private bool IsItemSelected(CShellItem item)
         //{
-        //    System.Diagnostics.Debug.WriteLine("ExpList: GetAnyVisibleCount Begin");
-        //    try
+        //    if (item == null) return false;
+        //    if (VirtualMode)
         //    {
-        //        if (_listView == null || !_listView.IsHandleCreated || _listView.View == View.LargeIcon)
-        //            return 0;
-
-        //        int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
-        //        if (total <= 0) return 0;
-
-        //        Rectangle client = _listView.ClientRectangle;
-        //        int count = 0;
-        //        int i = -1;
-
-        //        while (true)
-        //        {
-        //            i = (int)SendMessage(_listView.Handle, LVM_GETNEXTITEM, (IntPtr)i, (IntPtr)LVNI_VISIBLE); //always returns -1 in listview virtual mode
-        //            if (i < 0) break;
-        //            if (i >= total) continue;
-
-        //            RECT rc = new RECT { left = LVIR_BOUNDS };
-        //            if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)i, ref rc) == IntPtr.Zero)
-        //                continue;
-
-        //            Rectangle itemRect = Rectangle.FromLTRB(rc.left, rc.top, rc.right, rc.bottom);
-        //            if (itemRect.IntersectsWith(client))
-        //                count++;
-        //        }
-
-        //        return count;
+        //        if (_pathToIndex.TryGetValue(item.FullPath, out int index))
+        //            return _listView.SelectedIndices.Contains(index);
+        //        return false;
         //    }
-        //    finally
+        //    else
         //    {
-        //        System.Diagnostics.Debug.WriteLine("ExpList: GetAnyVisibleCount End");
+        //        var lvi = FindLVItem(item);
+        //        return lvi?.Selected ?? false;
         //    }
         //}
 
-        private int GetApproxVisibleCountLargeIcon()
+
+        #endregion
+
+        #region Navigation
+
+        /// <summary>
+        /// Navigates back to the previous folder in the history.
+        /// </summary>
+        public void GoBack()
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon Begin");
+            Debug.WriteLine("ExpList: GoBack Begin");
             try
             {
-                if (_listView == null || !_listView.IsHandleCreated || _listView.View != View.LargeIcon)
-                    return 0;
-
-                int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
-                if (total <= 0) return 0;
-
-                // FALSE => large icon spacing
-                int packed = (int)SendMessage(_listView.Handle, LVM_GETITEMSPACING, IntPtr.Zero, IntPtr.Zero);
-                int cellW = packed & 0xFFFF;
-                int cellH = (packed >> 16) & 0xFFFF;
-
-                // Fallback if spacing couldn't be read
-                if (cellW <= 0 || cellH <= 0)
+                if (_backHistory.Count > 0)
                 {
-                    var img = _listView.LargeImageList?.ImageSize ?? new System.Drawing.Size(32, 32);
-                    cellW = Math.Max(1, img.Width + 32);                   // rough label/padding allowance
-                    cellH = Math.Max(1, img.Height + _listView.Font.Height * 2 + 16);
+                    _forwardHistory.Push(_currentFolderCsi);
+                    var prev = _backHistory.Pop();
+                    _isNavigatingHistory = true;
+                    try
+                    {
+                        DisplayFiles(prev.FullPath, prev, true);
+                    }
+                    finally
+                    {
+                        _isNavigatingHistory = false;
+                    }
                 }
-
-                int vw = Math.Max(1, _listView.ClientSize.Width);
-                int vh = Math.Max(1, _listView.ClientSize.Height);
-
-                int cols = Math.Max(1, (int)Math.Ceiling(vw / (double)cellW));
-                int rows = Math.Max(1, (int)Math.Ceiling(vh / (double)cellH));
-
-                int approx = cols * rows;
-                return Math.Min(total, approx);
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon End");
+                Debug.WriteLine("ExpList: GoBack End");
             }
         }
 
+        /// <summary>
+        /// Navigates forward to the next folder in the history.
+        /// </summary>
+        public void GoForward()
+        {
+            Debug.WriteLine("ExpList: GoForward Begin");
+            try
+            {
+                if (_forwardHistory.Count > 0)
+                {
+                    _backHistory.Push(_currentFolderCsi);
+                    var next = _forwardHistory.Pop();
+                    _isNavigatingHistory = true;
+                    try
+                    {
+                        DisplayFiles(next.FullPath, next, true);
+                    }
+                    finally
+                    {
+                        _isNavigatingHistory = false;
+                    }
+                }
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: GoForward End");
+            }
+        }
+
+        /// <summary>
+        /// Navigates to the parent folder of the currently loaded folder.
+        /// </summary>
+        public void GoUp()
+        {
+            Debug.WriteLine("ExpList: GoUp Begin");
+            try
+            {
+                if (_currentFolderCsi?.Parent != null)
+                {
+                    var parent = _currentFolderCsi.Parent;
+                    DisplayFiles(parent.FullPath, parent, true);
+                }
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: GoUp End");
+            }
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether there is a folder to navigate back to.
+        /// </summary>
+        public bool CanGoBack => _backHistory.Count > 0;
+
+        /// <summary>
+        /// Gets a value indicating whether there is a folder to navigate forward to.
+        /// </summary>
+        public bool CanGoForward => _forwardHistory.Count > 0;
+
+        /// <summary>
+        /// Gets a value indicating whether the current folder has a parent folder to navigate to.
+        /// </summary>
+        public bool CanGoUp => _currentFolderCsi?.Parent != null;
+
         #endregion
+
+
+        #region Event Handlers
+        private void ExpFileList_Click(object sender, EventArgs e)
+        {
+            Debug.WriteLine("ExpList: ExpFileList_Click Begin");
+            try
+            {
+                ListView listView = (ListView)sender;
+
+                if (listView.SelectedIndices.Count == 0) return;
+
+                CShellItem? csi = null;
+                if (listView.FocusedItem != null) //could be selected OR deselected
+                { 
+                    csi = GetItem(listView.FocusedItem.Index);
+                    if (csi == null) return;
+
+                    if (listView.FocusedItem.Selected)
+                        _selectedItem = csi; // ← keep in sync
+
+                    if (csi.ImageIndex == -1)
+                    {
+                        _thumbnailManager.RequestThumbnail(csi, GetThumbnailSizeForMode(), listView.FocusedItem.Index);
+                    }
+
+                    ExpListItemClick?.Invoke(listView.FocusedItem, csi);
+                }
+                else
+                {
+                    ExpListItemClick?.Invoke(null, null);
+                }
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: ExpFileList_Click End");
+            }
+        }
+
+        /// <summary>
+        /// Handles double-click events on list view items. 
+        /// Folders are navigated into, while files are launched.
+        /// </summary>
+        private void ExpFileList_DoubleClick(object sender, EventArgs e)
+        {
+            Debug.WriteLine("ExpList: ExpFileList_DoubleClick Begin");
+            try
+            {
+                if (_listView.SelectedIndices.Count <= 0) return;
+
+                CShellItem? csi = null;
+                if (_listView.FocusedItem != null && _listView.FocusedItem.Selected)
+                    csi = GetItem(_listView.FocusedItem.Index);
+                else
+                    csi = GetItem(_listView.SelectedIndices[0]);
+
+                if (csi == null) return;
+
+                if (csi.IsFolder)
+                {
+                    if (csi.FullPath.StartsWith(":"))
+                        ExpListItemDoubleClick?.Invoke(csi.DisplayName, csi);
+                    else
+                        ExpListItemDoubleClick?.Invoke(csi.FullPath, csi);
+                }
+                else
+                {
+                    try
+                    {
+                        LaunchFile(csi);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(ex.Message, "Error in starting application", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: ExpFileList_DoubleClick End");
+            }
+        }
+
+        private void ExpFileList_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            Debug.WriteLine("ExpList: ExpFileList_SelectedIndexChanged Begin");
+            
+            if (_isShuttingDown) return;
+
+            try
+            {
+                if (_listView.SelectedIndices.Count > 0)
+                {
+                    // If current _selectedItem is still selected, keep it.
+                    // This handles the case where multiple items are selected and we don't want to 
+                    // jump back to the first one in the list.
+                    if (_selectedItem != null && _listViewWrapper.IsItemSelected(_selectedItem))
+                    {
+                        // keep _selectedItem as is
+                    }
+                    else if (_listView.FocusedItem != null && _listView.FocusedItem.Selected)
+                    {
+                        _selectedItem = GetItem(_listView.FocusedItem.Index);
+                    }
+                    else
+                    {
+                        _selectedItem = GetItem(_listView.SelectedIndices[0]);
+                    }
+                }
+                else
+                {
+                    _selectedItem = null;
+                }
+
+                if (VirtualMode)
+                {
+                    // In virtual mode, we pass null to because there are no items in _listView.SelectedItems
+                    // Consumers should use SelectedCShellItems property instead.
+                    SelectedIndexChanged?.Invoke(null);
+                }
+                else
+                {
+                    SelectedIndexChanged?.Invoke(_listView.SelectedItems);
+                }
+            }
+            catch (InvalidOperationException ex)
+            {
+                Debug.WriteLine("ExpList: InvalidOperationException in ExpFileList_SelectedIndexChanged: " + ex.ToString());
+            }
+            catch (NullReferenceException ex) 
+            { 
+                Debug.WriteLine("ExpList: NullReferenceException in ExpFileList_SelectedIndexChanged: " + ex.ToString());
+            }
+            finally
+            {
+                //Debug.WriteLine("ExpList: ExpFileList_SelectedIndexChanged End");
+            }
+        }
+
+        private void ExpFileList_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
+        {
+            Debug.WriteLine("ExpList: ExpFileList_ItemSelectionChanged Begin");
+            try
+            {
+                if (e.IsSelected)
+                {
+                    _selectedItem = GetItem(e.ItemIndex);
+                }
+                ItemSelectionChanged?.Invoke(e);
+            }
+            finally
+            {
+                //Debug.WriteLine("ExpList: ExpFileList_ItemSelectionChanged End");
+            }
+        }
+
+        /// <summary>
+        /// Handles the <see cref="Control.Leave"/> event of the <see cref="_listView"/> ListView.
+        /// Clears the current selection.
+        /// </summary>
+        /// what the hell good is this?  It makes it impossible to use any selections to do anything.
+        //private void ExpFileList_Leave(object sender, EventArgs e)
+        //{
+        //    ExpFileList.SelectedItems.Clear();
+        //}
+
+        /// <summary>
+        /// Handles the <see cref="ListView.BeforeLabelEdit"/> event.
+        /// Determines if an item can be renamed and sets up the edit control.
+        /// </summary>
+        private void ExpFileList_BeforeLabelEdit(object sender, LabelEditEventArgs e)
+        {
+            Debug.WriteLine("ExpList: ExpFileList_BeforeLabelEdit Begin");
+            try
+            {
+                IntPtr editWnd = SendMessage(_listView.Handle, LVM_GETEDITCONTROL, 0, IntPtr.Zero);
+                var csi = GetItem(e.Item);
+                if (csi == null) { e.CancelEdit = true; return; }
+
+                int textLen = Path.GetFileNameWithoutExtension(csi.DisplayName).Length;
+                SendMessage(editWnd, EM_SETSEL, IntPtr.Zero, (IntPtr)textLen);
+
+                if ((!csi.IsFileSystem) || csi.IsDisk ||
+                    csi.FullPath == CShellItemFactory.CreateCShItem(CSIDL.MYDOCUMENTS).FullPath ||
+                    !csi.CanRename)
+                {
+                    System.Media.SystemSounds.Beep.Play();
+                    e.CancelEdit = true;
+                }
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: ExpFileList_BeforeLabelEdit End");
+            }
+        }
+
+        /// <summary>
+        /// Handles the <see cref="ListView.AfterLabelEdit"/> event.
+        /// Applies the new name to the shell item.
+        /// </summary>
+        private void ExpFileList_AfterLabelEdit(object sender, LabelEditEventArgs e)
+        {
+            Debug.WriteLine("ExpList: ExpFileList_AfterLabelEdit Begin");
+            try
+            {
+                var item = GetItem(e.Item);
+                if (item == null || e.Label == null || e.Label == string.Empty) return;
+
+                try
+                {
+                    string newName = e.Label.Trim();
+
+                    if (newName.Length < 1 || newName.IndexOfAny(Path.GetInvalidPathChars()) != -1)
+                    {
+                        e.CancelEdit = true;
+                        System.Media.SystemSounds.Beep.Play();
+                        return;
+                    }
+
+                    string path = item.FullPath;
+                    int index = path.LastIndexOf('\\');
+                    if (index == -1)
+                    {
+                        e.CancelEdit = true;
+                        System.Media.SystemSounds.Beep.Play();
+                        return;
+                    }
+
+                    IntPtr newPidl = IntPtr.Zero;
+                    if (item.Parent.Folder.SetNameOf(
+                            _listView.Handle.ToInt32(),
+                            CPidl.ILFindLastID(item.PIDL),
+                            newName,
+                            SHGDN.NORMAL,
+                            newPidl) != S_OK)
+                    {
+                        System.Media.SystemSounds.Beep.Play();
+                        e.CancelEdit = true;
+                    }
+                }
+                catch
+                {
+                    e.CancelEdit = true;
+                    System.Media.SystemSounds.Beep.Play();
+                }
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: ExpFileList_AfterLabelEdit End");
+            }
+        }
 
         private void ThumbnailManager_ThumbnailReady(object sender, ThumbnailReadyEventArgs e)
         {
@@ -3385,6 +2757,628 @@ namespace ExpControlsLib
 
         }
 
+        #region Context Menu Handlers
+
+        private readonly ExpControlsLib.ContextMenu m_WindowsContextMenu = new ExpControlsLib.ContextMenu();
+        private bool m_OutOfRange;
+
+        /// <summary>
+        /// Handles the MouseLeave event to track when the mouse is outside the list view.
+        /// </summary>
+        private void ExpFileList_MouseLeave(object sender, EventArgs e)
+        {
+            //Debug.WriteLine("ExpList: ExpFileList_MouseLeave Begin");
+            try
+            {
+                m_OutOfRange = true;
+                OnMouseLeave(e);
+            }
+            finally
+            {
+                //Debug.WriteLine("ExpList: ExpFileList_MouseLeave End");
+            }
+        }
+
+        private void ExpFileList_MouseEnter(object sender, EventArgs e)
+        {
+            //Debug.WriteLine("ExpList: ExpFileList_MouseEnter Begin");
+            try
+            {
+                OnMouseEnter(e);
+            }
+            finally
+            {
+                //Debug.WriteLine("ExpList: ExpFileList_MouseEnter End");
+            }
+        }
+
+        /// <summary>
+        /// Handles the MouseDown event to reset the out-of-range flag for right-clicks.
+        /// </summary>
+        private void ExpFileList_MouseDown(object sender, MouseEventArgs e)
+        {
+            Debug.WriteLine("ExpList: ExpFileList_MouseDown Begin");
+            try
+            {
+                if (e.Button == MouseButtons.Right) m_OutOfRange = false;
+                OnMouseDown(e);
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: ExpFileList_MouseDown End");
+            }
+        }
+
+        /// <summary>
+        /// Handles the MouseUp event to trigger context menus or middle-click actions.
+        /// </summary>
+        private void ExpFileList_MouseUp(object sender, MouseEventArgs e)
+        {
+            Debug.WriteLine("ExpList: ExpFileList_MouseUp Begin");
+            try
+            {
+                if (e.Button == MouseButtons.Right)
+                {
+                    if (!IsWithin(_listView, e)) return;
+                    if (m_OutOfRange) return;
+
+                    Point pt = new Point(e.X, e.Y);
+                    ListViewItem tn = _listView.GetItemAt(e.X, e.Y);
+
+                    if (tn != null && _listView.SelectedIndices.Count > 0)
+                    {
+                        var itms = SelectedCShellItems.ToArray();
+
+                        CMInvokeCommandInfoEx cmi;
+                        bool allowRename = itms.Length <= 1; //Don't allow rename of more than 1 item
+
+                        if (m_WindowsContextMenu.ShowMenu(Handle, itms, MousePosition, allowRename, out cmi, MinimalContextMenu))
+                        {
+                            byte[] cmdBytes = new byte[256];
+                            m_WindowsContextMenu.winMenu.GetCommandString(cmi.lpVerb.ToInt32(), (int)GCS.VERBA, 0, cmdBytes, 256);
+                            string cmdName = SzToString(cmdBytes).ToLowerInvariant();
+
+                            if (cmdName.Equals("rename"))
+                            {
+                                _listView.LabelEdit = true;
+                                tn.BeginEdit();
+                            }
+                            else
+                            {
+                                string strPath = itms[0].Parent == ShellController.DesktopCSI
+                                    ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+                                    : itms[0].Parent.FullPath;
+
+                                m_WindowsContextMenu.InvokeCommand(m_WindowsContextMenu.winMenu, (UInt32)cmi.lpVerb.ToInt32(), strPath, pt);
+                            }
+
+                            Marshal.ReleaseComObject(m_WindowsContextMenu.winMenu);
+                        }
+                    }
+                    else
+                    {
+                        ShowAndHandleContextMenu(MousePosition);
+                    }
+                }
+
+                ExpListItemGetSelItems?.Invoke(_listView.SelectedItems);
+
+                if (e.Button == MouseButtons.Middle && _listView.SelectedIndices.Count > 0)
+                {
+                    CShellItem? csi = null;
+                    if (_listView.FocusedItem != null && _listView.FocusedItem.Selected)
+                        csi = GetItem(_listView.FocusedItem.Index);
+                    else
+                        csi = GetItem(_listView.SelectedIndices[0]);
+
+                    if (csi != null) ExpListItemMouseMBUp?.Invoke(csi.FullPath, csi);
+                }
+                OnMouseUp(e);
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: ExpFileList_MouseUp End");
+            }
+        }
+
+        private void ExpFileList_MouseMove(object sender, MouseEventArgs e)
+        {
+            //Debug.WriteLine("ExpList: ExpFileList_MouseMove Begin");
+            try
+            {
+                OnMouseMove(e);
+            }
+            finally
+            {
+                //Debug.WriteLine("ExpList: ExpFileList_MouseMove End");
+            }
+        }
+
+        /// <summary>
+        /// Creates a native Windows context menu for the current folder.
+        /// </summary>
+        /// <param name="comContextMenu">Output parameter for the main context menu handle.</param>
+        /// <param name="viewSubMenu">Output parameter for the View submenu handle.</param>
+        private void CreateContextMenu(out IntPtr comContextMenu, out IntPtr viewSubMenu, out IntPtr sortSubMenu)
+        {
+            Debug.WriteLine("ExpList: CreateContextMenu Begin");
+            try
+            {
+                comContextMenu = CreatePopupMenu();
+                viewSubMenu = CreatePopupMenu();
+                sortSubMenu = CreatePopupMenu();
+
+                // Create and insert the "View" submenu item into the main context menu.
+                var itemInfo = new MENUITEMINFO("View")
+                {
+                    fMask = (int)(MIIM.SUBMENU | MIIM.STRING),
+                    hSubMenu = viewSubMenu
+                };
+                InsertMenuItem(comContextMenu, 0, true, ref itemInfo);
+
+                // Create and insert the "Sort by" submenu item into the main context menu.
+                var sortInfo = new MENUITEMINFO("Sort by")
+                {
+                    fMask = (int)(MIIM.SUBMENU | MIIM.STRING),
+                    hSubMenu = sortSubMenu
+                };
+                InsertMenuItem(comContextMenu, 1, true, ref sortInfo);
+
+                // Add view mode options to the View submenu with radio button indicators.
+                uint checkedFlag;
+                uint checkedValue = (uint)(MFT.RADIOCHECK | MFT.CHECKED);
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.Details) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.DETAILS, "Details");
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.Thumbnail) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (uint)CMD.THUMBNAILS, "Thumbnails");
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.LargeThumbnail) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (uint)CMD.LARGE_THUMBNAILS, "Large Thumbnails");
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.ExtraLargeThumbnail) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.EXTRA_LARGE_THUMBNAILS, "Extra Large Thumbnails");
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.LargeIcon) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.LARGEICON, "Large Icons");
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.List) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.LIST, "List");
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.Tile) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.TILES, "Tiles");
+
+                // Add sorting options to the Sort by submenu.
+                if (_listView.ListViewItemSorter is LVColSorter sorter)
+                {
+                    int currentSortCol = sorter.SortColumn;
+                    for (int i = 0; i < _listView.Columns.Count; i++)
+                    {
+                        uint sortChecked = (i == currentSortCol) ? checkedValue : (uint)MFT.BYCOMMAND;
+                        AppendMenu(sortSubMenu, sortChecked, (uint)((int)CMD.SORT_BY_BASE + i), _listView.Columns[i].Text);
+                    }
+                }
+
+                // Add separator and standard folder operations to the main context menu.
+                AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
+                AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, (uint)CMD.REFRESH, "Refresh (F5)");
+                AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, (uint)CMD.SELECT_ALL, "Select All (Ctrl+A)");
+                AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
+
+                // Determine if Paste operations are allowed by checking clipboard contents.
+                // CanDropClipboard() returns the DragDropEffects supported by the target folder.
+                var enabled = (uint)MFT.GRAYED;
+                DragDropEffects effects = DragDropEffects.None;
+
+                if (_currentFolderCsi == null)
+                {
+                    enabled = (uint)MFT.BYCOMMAND;
+                }
+                else
+                {
+                    effects = CanDropClipboard(_currentFolderCsi);
+                    if ((effects & DragDropEffects.Copy) == DragDropEffects.Copy ||
+                        (effects & DragDropEffects.Move) == DragDropEffects.Move)
+                    {
+                        enabled = (uint)MFT.BYCOMMAND;
+                    }
+                }
+
+                // Add Paste menu item, enabled only if clipboard contents are compatible.
+                AppendMenu(comContextMenu, enabled, (int)CMD.PASTE, "Paste (Ctrl+V)");
+
+                // Add additional paste and context operations if a folder is selected.
+                if (_currentFolderCsi != null)
+                {
+                    enabled = (uint)MFT.GRAYED;
+                    if ((effects & DragDropEffects.Link) == DragDropEffects.Link)
+                        enabled = (int)MFT.BYCOMMAND;
+
+                    AppendMenu(comContextMenu, enabled, (uint)CMD.PASTELINK, "Paste Link");
+                    AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
+
+                    // Add New menu for writable folders (excluding special shell folders like ::).
+                    // The "New" submenu is managed by m_WindowsContextMenu.SetUpNewMenu(),
+                    // which adds file creation options for the selected folder.
+                    if (_currentFolderCsi.IsFolder &&
+                        ((!_currentFolderCsi.FullPath.StartsWith("::")) || _currentFolderCsi == ShellController.DesktopCSI))
+                    {
+                        int xIndex = GetMenuItemCount(comContextMenu.ToInt32());
+                        m_WindowsContextMenu.SetUpNewMenu(_currentFolderCsi, comContextMenu, xIndex);
+                        AppendMenu(comContextMenu, (int)MFT.SEPARATOR, 0, string.Empty);
+                    }
+
+                    AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, (uint)CMD.PROPERTIES, "Properties");
+                }
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: CreateContextMenu End");
+            }
+        }
+
+        /// <summary>
+        /// Displays a context menu for the ListView when no items are selected.
+        /// This menu includes view options (Tiles, Large Icons, List, Details), 
+        /// refresh, select all, paste operations, and new item creation.
+        /// </summary>
+        /// <param name="pt">The point (in screen coordinates) where the menu should be displayed.</param>
+        /// <remarks>
+        /// This function handles the creation and management of Windows popup menus.
+        /// It directly manages native menu handles via Win32 API calls and must properly
+        /// release all COM objects and menu handles to avoid memory leaks and access violations.
+        /// 
+        /// Key operations:
+        /// 1. Creates two popup menus: a main context menu and a View submenu
+        /// 2. Populates menus with commands and their checked states
+        /// 3. Determines menu item availability based on clipboard contents
+        /// 4. Invokes the selected command on shell objects (IShellFolder, IContextMenu)
+        /// 5. Releases all COM interfaces and menu handles in the CLEANUP section
+        /// 
+        /// Memory safety note: Menu handles (comContextMenu, viewSubMenu) must be released
+        /// via Marshal.Release() after TrackPopupMenuEx returns. COM objects (IContextMenu, 
+        /// IShellFolder) must be released by ReleaseComObject() to prevent heap corruption.
+        /// Mixing release mechanisms or skipping releases can cause access violations.
+        /// </remarks>
+        private void ShowAndHandleContextMenu(Point pt)
+        {
+            Debug.WriteLine("ExpList: ShowAndHandleContextMenu Begin");
+            try
+            {
+                int HR;
+                int MIN = 1;
+                var cmi = new CMInvokeCommandInfoEx();
+
+                // Create three native Windows popup menu handles.
+                IntPtr comContextMenu;
+                IntPtr viewSubMenu;
+                IntPtr sortSubMenu;
+
+                CreateContextMenu(out comContextMenu, out viewSubMenu, out sortSubMenu);
+
+                // Display the context menu and capture the user's selection.
+                int cmdID = TrackPopupMenuEx(comContextMenu, (int)TPM.RETURNCMD, pt.X, pt.Y, Handle, IntPtr.Zero);
+
+                // Process the user's menu selection.
+                if (cmdID >= MIN)
+                {
+                    // Handle sorting commands.
+                    if (cmdID >= (int)CMD.SORT_BY_BASE)
+                    {
+                        int colIndex = cmdID - (int)CMD.SORT_BY_BASE;
+                        if (_listView.ListViewItemSorter is LVColSorter sorter)
+                        {
+                            sorter.SortColumn = colIndex;
+                        }
+                        goto CLEANUP;
+                    }
+
+                    // Initialize the CMInvokeCommandInfoEx structure used for shell command invocation.
+                    cmi = new CMInvokeCommandInfoEx
+                    {
+                        cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                        nShow = (int)SW.SHOWNORMAL,
+                        fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
+                        ptInvoke = new Point(pt.X, pt.Y)
+                    };
+
+                    // Handle view mode changes and built-in operations.
+                    var cmdEnum = (CMD)cmdID;
+                    switch (cmdEnum)
+                    {
+                        case CMD.TILES:
+                            DisplayMode = ListViewDisplayMode.Tile;
+                            goto CLEANUP;
+                        case CMD.LIST:
+                            DisplayMode = ListViewDisplayMode.List;
+                            goto CLEANUP;
+                        case CMD.DETAILS:
+                            DisplayMode = ListViewDisplayMode.Details;
+                            goto CLEANUP;
+                        case CMD.LARGEICON:
+                            this.DisplayMode = ListViewDisplayMode.LargeIcon;
+                            goto CLEANUP;
+                        case CMD.THUMBNAILS:
+                            this.DisplayMode = ListViewDisplayMode.Thumbnail;
+                            goto CLEANUP;
+                        case CMD.LARGE_THUMBNAILS:
+                            this.DisplayMode = ListViewDisplayMode.LargeThumbnail;
+                            goto CLEANUP;
+                        case CMD.EXTRA_LARGE_THUMBNAILS:
+                            this.DisplayMode = ListViewDisplayMode.ExtraLargeThumbnail;
+                            goto CLEANUP;
+                        case CMD.REFRESH:
+                            // Refresh the folder contents and re-sort the ListView items.
+                            _shellController.ShellUpdater.DoUpdateDir(_currentFolderCsi);
+                            SortLVItems();
+                            goto CLEANUP;
+                        case CMD.SELECT_ALL:
+                            // Select all items in the ListView.
+                            if (VirtualMode)
+                            {
+                                _listView.BeginUpdate();
+                                try
+                                {
+                                    for (int i = 0; i < _listView.VirtualListSize; i++)
+                                        _listView.SelectedIndices.Add(i);
+                                }
+                                finally
+                                {
+                                    _listView.EndUpdate();
+                                }
+                            }
+                            else
+                            {
+                                EnterListViewEnumeration();
+                                try
+                                {
+                                    foreach (ListViewItem item in _listView.Items)
+                                    {
+                                        if (item is null) continue;
+                                        item.Selected = true;
+                                    }
+                                }
+                                finally
+                                {
+                                    ExitListViewEnumeration();
+                                }
+                            }
+                            goto CLEANUP;
+                        case CMD.PASTE:
+                            if (_currentFolderCsi != null)
+                            {
+                                cmi.lpVerb = Marshal.StringToHGlobalAnsi("paste");
+                                cmi.lpVerbW = Marshal.StringToHGlobalUni("paste");
+                            }
+                            else
+                            {
+                                goto CLEANUP;
+                            }
+                            break;
+                        case CMD.PASTELINK:
+                            cmi.lpVerb = Marshal.StringToHGlobalAnsi("pastelink");
+                            cmi.lpVerbW = Marshal.StringToHGlobalUni("pastelink");
+                            break;
+                        case CMD.PROPERTIES:
+                            cmi.lpVerb = Marshal.StringToHGlobalAnsi("properties");
+                            cmi.lpVerbW = Marshal.StringToHGlobalUni("properties");
+                            break;
+                        default:
+                            // Handle commands from the "New" submenu.
+                            cmdID -= 1;
+                            cmi.lpVerb = (IntPtr)cmdID;
+                            cmi.lpVerbW = (IntPtr)cmdID;
+                            m_CreateNew = true;
+                            HR = m_WindowsContextMenu.newMenu.InvokeCommand(cmi);
+#if DEBUG
+                            if (HR != S_OK)
+                                Marshal.ThrowExceptionForHR(HR);
+#endif
+                            goto CLEANUP;
+                    }
+
+                    if (_currentFolderCsi != null)
+                    {
+                        int prgf = 0;
+                        IntPtr iunk = IntPtr.Zero;
+
+                        IShellFolder folder = _currentFolderCsi == ShellController.DesktopCSI
+                            ? _currentFolderCsi.Folder
+                            : _currentFolderCsi.Parent.Folder;
+
+                        IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
+
+                        HR = folder.GetUIObjectOf(IntPtr.Zero, 1, new[] { relPidl }, IID_IContextMenu, prgf, out iunk);
+#if DEBUG
+                        if (HR != S_OK)
+                            Marshal.ThrowExceptionForHR(HR);
+#endif
+                        m_WindowsContextMenu.winMenu = (IContextMenu)Marshal.GetObjectForIUnknown(iunk);
+
+                        HR = m_WindowsContextMenu.winMenu.InvokeCommand(cmi);
+
+                        m_WindowsContextMenu.ReleaseMenu();
+#if DEBUG
+                        if (HR != S_OK)
+                            Marshal.ThrowExceptionForHR(HR);
+#endif
+                    }
+                }
+
+            CLEANUP:
+                m_WindowsContextMenu.ReleaseNewMenu();
+
+                if (comContextMenu != IntPtr.Zero)
+                {
+                    DestroyMenu(comContextMenu);
+                    comContextMenu = IntPtr.Zero;
+                }
+
+                // Note: viewSubMenu and sortSubMenu are destroyed when comContextMenu is destroyed.
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: objects End");
+            }
+        }
+        #endregion
+
+
+        /// <summary>
+        /// Handles KeyDown events for shortcuts (Ctrl+A, Ctrl+C/V/X, Delete, F2, F5, Enter).
+        /// </summary>
+        private void ExpFileList_KeyDown(object sender, KeyEventArgs e)
+        {
+            Debug.WriteLine("ExpList: ExpFileList_KeyDown Begin");
+            try
+            {
+                if (e.Control && e.KeyCode == Keys.A)
+                {
+                    if (VirtualMode)
+                    {
+                        _listView.BeginUpdate();
+                        try
+                        {
+                            for (int i = 0; i < _listView.VirtualListSize; i++)
+                                _listView.SelectedIndices.Add(i);
+                        }
+                        finally
+                        {
+                            _listView.EndUpdate();
+                        }
+                    }
+                    else
+                    {
+                        EnterListViewEnumeration();
+                        try
+                        {
+                            foreach (ListViewItem item in _listView.Items)
+                            {
+                                if (item is null) continue;
+                                item.Selected = true;
+                            }
+                        }
+                        finally
+                        {
+                            ExitListViewEnumeration();
+                        }
+                    }
+                    ExpListItemGetSelItems?.Invoke(_listView.SelectedItems);
+                }
+
+                if (e.Control)
+                {
+                    switch (e.KeyCode)
+                    {
+                        case Keys.X: WinMenu("cut"); break;
+                        case Keys.C: WinMenu("copy"); break;
+                        case Keys.V: WinMenu("paste"); break;
+                        case Keys.Z: MessageBox.Show("Don't support UNDO now!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information); break;
+                    }
+                }
+
+                if (e.KeyCode == Keys.F2 && _listView.SelectedIndices.Count > 0)
+                {
+                    if (VirtualMode)
+                    {
+                        // In virtual mode, we must ensure the item is cached or retrieved
+                        _listView.FocusedItem?.BeginEdit();
+                    }
+                    else
+                    {
+                        _listView.SelectedItems[0].BeginEdit();
+                    }
+                }
+
+                if (e.KeyCode == Keys.F5)
+                {
+                    _shellController.ShellUpdater.DoUpdateDir(_currentFolderCsi);
+                    SortLVItems();
+                }
+
+                if (e.KeyCode == Keys.Enter && _listView.SelectedIndices.Count > 0)
+                {
+                    var csi = GetItem(_listView.SelectedIndices[0]);
+                    if (csi == null) return;
+
+                    string name = csi.DisplayName;
+
+                    if (csi.IsFolder)
+                    {
+                        if (csi.FullPath.StartsWith(":"))
+                            ExpListItemDoubleClick?.Invoke(csi.DisplayName, csi);
+                        else
+                            ExpListItemDoubleClick?.Invoke(csi.FullPath, csi);
+                    }
+                    else
+                    {
+                        string path = csi.FullPath;
+                        try
+                        {
+                            if (name == Path.GetFileName(path))
+                                LaunchFile(csi);
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show(ex.Message, "Error in starting application", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                    }
+                }
+
+                OnKeyDown(e);
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: ExpFileList_KeyDown End");
+            }
+        }
+
+
+        /// <summary>
+        /// Handles the KeyUp event for navigation keys.
+        /// </summary>
+        private void ExpFileList_KeyUp(object sender, KeyEventArgs e)
+        {
+            Debug.WriteLine("ExpList: ExpFileList_KeyUp Begin");
+            try
+            {
+                if ((e.KeyCode == Keys.Up || e.KeyCode == Keys.Down || e.KeyCode == Keys.Left || e.KeyCode == Keys.Right)
+                    && _listView.SelectedIndices.Count > 0)
+                {
+                    var csi = GetItem(_listView.SelectedIndices[0]);
+                    if (csi != null) ExpListItemArrowKeyUp?.Invoke(csi.FullPath, csi);
+                }
+                else if (e.KeyCode == Keys.Delete)
+                {
+                    WinMenu("delete");
+                }
+
+                OnKeyUp(e);
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: ExpFileList_KeyUp End");
+            }
+        }
+
+        private void ExpFileList_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            Debug.WriteLine("ExpList: ExpFileList_KeyPress Begin");
+            try
+            {
+                OnKeyPress(e);
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: ExpFileList_KeyPress End");
+            }
+        }
+
+
+
+        #endregion Event Handlers
+
         #region Lazy Thumbnail Loading Support
 
         /// <summary>
@@ -3397,7 +3391,7 @@ namespace ExpControlsLib
         /// <param name="value">The <see cref="ListViewDisplayMode"/> to configure for.</param>
         private void SetImageListForMode(ListViewDisplayMode value)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: SetAndLoadImageList Begin");
+            Debug.WriteLine("ExpList: SetAndLoadImageList Begin");
             try
             {
                 if (value <= ListViewDisplayMode.Tile) //built-in Windows 95 Shell view modes
@@ -3424,13 +3418,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: SetAndLoadImageList End");
+                Debug.WriteLine("ExpList: SetAndLoadImageList End");
             }
         }
 
         private void LoadImagesForItems(ListViewDisplayMode? mode = null)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: LoadImagesForItems Begin");
+            Debug.WriteLine("ExpList: LoadImagesForItems Begin");
             try
             {
                 mode = mode == null ? DisplayMode : mode;
@@ -3446,7 +3440,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: LoadImagesForItems End");
+                //Debug.WriteLine("ExpList: LoadImagesForItems End");
             }
         }
 
@@ -3457,7 +3451,7 @@ namespace ExpControlsLib
         /// <param name="onlyVisible">true if you only want icons near the visible items.</param>
         private void LoadIconsForItems(bool onlyVisible = false)
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: LoadIconsForItems Begin");
+            Debug.WriteLine("ExpList: LoadIconsForItems Begin");
             try
             {
                 if (!_listView.IsHandleCreated) return;
@@ -3529,7 +3523,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                System.Diagnostics.Debug.WriteLine("ExpList: LoadIconsForItems End");
+                Debug.WriteLine("ExpList: LoadIconsForItems End");
             }
         }
 
@@ -3539,7 +3533,7 @@ namespace ExpControlsLib
         /// </summary>
         private int GetThumbnailSizeForMode(ListViewDisplayMode? mode = null)
         {
-            //System.Diagnostics.Debug.WriteLine("ExpList: GetThumbnailSizeForMode Begin");
+            //Debug.WriteLine("ExpList: GetThumbnailSizeForMode Begin");
             try
             {
                 mode ??= DisplayMode;
@@ -3553,7 +3547,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: GetThumbnailSizeForMode End");
+                //Debug.WriteLine("ExpList: GetThumbnailSizeForMode End");
             }
         }
 
@@ -3570,8 +3564,6 @@ namespace ExpControlsLib
             try
             {
                 if (!_listView.IsHandleCreated) return;
-
-                Debug.WriteLine("Starting to request thumbnails...");
 
                 EnterListViewEnumeration();
                 try
@@ -3655,7 +3647,7 @@ namespace ExpControlsLib
 
             public ListViewScrollHook(ExpList expList, Action onScroll)
             {
-                System.Diagnostics.Debug.WriteLine("ExpList.ListViewScrollHook: ListViewScrollHook Begin");
+                Debug.WriteLine("ExpList.ListViewScrollHook: ListViewScrollHook Begin");
                 try
                 {
                     _onScroll = onScroll;
@@ -3665,13 +3657,13 @@ namespace ExpControlsLib
                 }
                 finally
                 {
-                    System.Diagnostics.Debug.WriteLine("ExpList.ListViewScrollHook: ListViewScrollHook End");
+                    Debug.WriteLine("ExpList.ListViewScrollHook: ListViewScrollHook End");
                 }
             }
 
             protected override void WndProc(ref Message m)
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList.WndProc Begin");
+                //Debug.WriteLine("ExpList.WndProc Begin");
                 try
                 {
                     try
@@ -3710,14 +3702,14 @@ namespace ExpControlsLib
                 }
                 finally
                 {
-                    //System.Diagnostics.Debug.WriteLine("ExpList.WndProc End");
+                    //Debug.WriteLine("ExpList.WndProc End");
                 }
             }
 
             private int _scrollQueued;
             private void QueueOnScroll()
             {
-                System.Diagnostics.Debug.WriteLine("ExpList.ListViewScrollHook: QueueOnScroll Begin");
+                Debug.WriteLine("ExpList.ListViewScrollHook: QueueOnScroll Begin");
                 try
                 {
                     if (_listView.IsDisposed || !_listView.IsHandleCreated) return;
@@ -3731,14 +3723,14 @@ namespace ExpControlsLib
                 }
                 finally
                 {
-                    System.Diagnostics.Debug.WriteLine("ExpList.ListViewScrollHook: QueueOnScroll End");
+                    Debug.WriteLine("ExpList.ListViewScrollHook: QueueOnScroll End");
                 }
             }
         }
 
         private void OnScroll()
         {
-            System.Diagnostics.Debug.WriteLine("ExpList: OnListViewScroll Begin");
+            Debug.WriteLine("ExpList: OnListViewScroll Begin");
             if (_isShuttingDown) return;
             try
             {
@@ -3748,7 +3740,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //System.Diagnostics.Debug.WriteLine("ExpList: OnListViewScroll End");
+                //Debug.WriteLine("ExpList: OnListViewScroll End");
             }
         }
 

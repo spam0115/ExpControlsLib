@@ -299,16 +299,36 @@ namespace WindowsApiLib
         }
 
         /// <summary>
-        /// IsEqual compares two ItemIDLists. On Win2K and above systems, it uses the ILIsEqual API, which only
-        /// compares portions of each ItemID. On such systems, the other portions of the ItemID may differ in a 
-        /// few bytes -- typically this is desired behavior, but not in UPDATEDIR cases which do a Byte 
-        /// comparison in addition to IsEqual.
+        /// IsEqual compares two ItemIDLists using SHCompareIDList.
         /// </summary>
         /// <param name="Pidl1">IntPtr pointing to an ItemIDList.</param>
         /// <param name="Pidl2">IntPtr pointing to an ItemIDList.</param>
         /// <returns>True if ILIsEqual returns or would return True, False otherwise.</returns>
-        /// <remarks></remarks>
         public static bool IsEqual(IntPtr Pidl1, IntPtr Pidl2)
+        {
+            if (Pidl1 == Pidl2) return true;
+            try
+            {
+                var result = CShellItemFactory.DeskTopDirectory.Folder.CompareIDs(SHCIDS_CANONICALONLY, Pidl1, Pidl2);
+
+                return (result & 0xFFFF) == 0; // Only the low 16 bits (HRESULT short) matter
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.ToString());
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// IsEqual compares two ItemIDLists. It uses the ILIsEqual function, which only compares portions 
+        /// of each ItemID. On such systems, the other portions of the ItemID may differ in a few 
+        /// bytes.
+        /// </summary>
+        /// <param name="Pidl1">IntPtr pointing to an ItemIDList.</param>
+        /// <param name="Pidl2">IntPtr pointing to an ItemIDList.</param>
+        /// <returns>True if ILIsEqual returns or would return True, False otherwise.</returns>
+        public static bool IsBinaryEqual(IntPtr Pidl1, IntPtr Pidl2)
         {
             if (Pidl1 == Pidl2) return true;
             try
@@ -328,7 +348,7 @@ namespace WindowsApiLib
         /// </summary>
         /// <param name="other">The CPidl to compare to this instance</param>
         /// <returns>True if "other" is Equal to this instance, False otherwise</returns>
-        public bool IsEqual(CPidl other)
+        public bool IsBinaryEqual(CPidl other)
         {
             bool IsEqualRet = default;
             IsEqualRet = false;     // assume not
@@ -619,6 +639,11 @@ namespace WindowsApiLib
             return IsAncestorOf(Item1.PIDL, Item2.PIDL, ImmediateOnly);
         }
 
+        public static string GetDisplayName(nint absPidl)
+        {
+            SHGetNameFromIDList(absPidl, SIGDN.PARENTRELATIVEEDITING, out string name);
+            return name;
+        }
 
         /// <summary>
         /// Returns the filesystem path for a PIDL, or null if it isn't a filesystem item.
@@ -1140,7 +1165,7 @@ namespace WindowsApiLib
         {
             bool PidlsEqualRet = default;
             if (folder is null)
-                return IsEqual(RelPidl1, RelPidl2);
+                return IsBinaryEqual(RelPidl1, RelPidl2);
             PidlsEqualRet = false;            // assume not equal
             uint lParam = (uint)SHCIDS.CANONICALONLY;
             int H;
@@ -1153,7 +1178,7 @@ namespace WindowsApiLib
             }
             else
             {
-                return IsEqual(RelPidl1, RelPidl2);
+                return IsBinaryEqual(RelPidl1, RelPidl2);
             }
 
             return PidlsEqualRet;
@@ -1258,6 +1283,7 @@ namespace WindowsApiLib
         {
             return new ICPidlEnumerator(m_bytes);
         }
+
         #endregion
 
         #region        CPIDL enumerator Class

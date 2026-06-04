@@ -34,7 +34,7 @@ namespace WindowsApiLib.Shell
         public delegate void CShItemUpdateEventHandler(object sender, ShellItemUpdateEventArgs e);
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public bool DoUpdates { get; set; }
+        public bool AllowUpdates { get; set; }
 
         /// <summary>
         /// 
@@ -45,7 +45,7 @@ namespace WindowsApiLib.Shell
         {
             HierachyManager = hierachyManager;
             _eventFlags = SHCNE_flags;
-            DoUpdates = false;
+            AllowUpdates = false;
 
             _backgroundThread = new Thread(RunBackgroundMessageLoop)
             {
@@ -88,31 +88,31 @@ namespace WindowsApiLib.Shell
             Application.Run();
         }
 
-        protected override void WndProc(ref Message m)
+        protected override void WndProc(ref Message msg)
         {
-            if (m.Msg == WindowsMessages.WM_DESTROY_THREAD_WINDOW)
+            if (msg.Msg == WindowsMessages.WM_DESTROY_THREAD_WINDOW)
             {
                 DestroyHandle();
                 Application.ExitThread();
                 return;
             }
 
-            if (!DoUpdates) { 
-                base.WndProc(ref m); //the handle in the constructor can't be created unless this is called before exiting this wndproc
+            if (!AllowUpdates) { 
+                base.WndProc(ref msg); //the handle in the constructor can't be created unless this is called before exiting this wndproc
                 return;
             }
 
-            if (m.Msg != (long)WM.USER + 200L)
+            if (msg.Msg != (long)WM.USER + 200L)
             {
-                base.WndProc(ref m);
+                base.WndProc(ref msg);
                 return;
             }
             IntPtr ppidl = IntPtr.Zero;
             var msgID = default(SHCNE);
             SHNOTIFYSTRUCT shNotify = default;
-            var hLock = SHChangeNotification_Lock(m.WParam, (uint)m.LParam, ref ppidl, ref msgID); //note: we are using the legacy notification struct, not the newer SHCNRF_NewDelivery mode.  While this block of memory is locked, you cannot free it's members.
+            var hLock = SHChangeNotification_Lock(msg.WParam, (uint)msg.LParam, ref ppidl, ref msgID); //note: we are using the legacy notification struct, not the newer SHCNRF_NewDelivery mode.  While this block of memory is locked, you cannot free it's members.
             if (hLock == IntPtr.Zero) return;
-             
+
             try
             {
                 if (!IsItemNotificationEvent(msgID)) return;
@@ -148,12 +148,12 @@ namespace WindowsApiLib.Shell
 
                 lock (HierachyManager.Lock)
                 {
-                    CShellItem parentItem = null;
+                    CShellItem? parentItem = null;
                     IntPtr parentPidl = IntPtr.Zero;
 
                     switch (msgID)
                     {
-                        // Item Changes
+                        // Item Changesq
                         case SHCNE.CREATE:
                             {
                                 Debug.WriteLine("  [CREATE] processing...");
@@ -209,13 +209,16 @@ namespace WindowsApiLib.Shell
                             }
                         case SHCNE.DELETE:
                             Debug.WriteLine("  [DELETE] processing...");
-                            parentPidl = CPidl.TrimLast(shNotify.dwItem1);
+                            var splitResult = CPidl.Split(shNotify.dwItem1);
+                            parentPidl = splitResult.ParentPidl;
+                            var relPidl = splitResult.ChildPidl;
+                            Debug.WriteLine($"  {CPidl.ToString(shNotify.dwItem1)}");
+                            Debug.WriteLine($"  {CPidl.ToString(parentPidl)}");
                             parentItem = HierachyManager.FindCShItem(parentPidl);
 
                             if (parentItem != null)
                             {
                                 Debug.WriteLine("  [DELETE] Parent found: " + parentItem.ItemPath);
-                                var relPidl = CPidl.ILFindLastID(shNotify.dwItem1);
                                 CShellItem childItem = null;
 
                                 // Try to find the child item in either files or directories
@@ -228,7 +231,7 @@ namespace WindowsApiLib.Shell
                                 if (childItem != null)
                                 {
                                     Debug.WriteLine("  [DELETE] Child item found: " + childItem.ItemPath + ". Updating as deleted.");
-                                    Update(childItem, IntPtr.Zero, CShItemUpdateType.Deleted);
+                                    DoUpdate(childItem, IntPtr.Zero, CShItemUpdateType.Deleted);
                                 }
                                 else
                                 {
@@ -244,13 +247,13 @@ namespace WindowsApiLib.Shell
                             break;
                         case SHCNE.RENAMEITEM:
                             Debug.WriteLine("  [RENAMEITEM] processing...");
-                            if (shNotify.dwItem2 != IntPtr.Zero)     // 5/26/2012
+                            if (shNotify.dwItem2 != IntPtr.Zero)
                             {
                                 var item = HierachyManager.FindCShItem(shNotify.dwItem1);
                                 if (item is not null)
                                 {
                                     Debug.WriteLine("  [RENAMEITEM] Item found: " + item.ItemPath + ". New PIDL: " + shNotify.dwItem2.ToString("X"));
-                                    Update(item, shNotify.dwItem2, CShItemUpdateType.Renamed);
+                                    DoUpdate(item, shNotify.dwItem2, CShItemUpdateType.Renamed);
                                 }
                                 else
                                 {
@@ -265,6 +268,8 @@ namespace WindowsApiLib.Shell
                         case SHCNE.UPDATEDIR:
                             {
                                 Debug.WriteLine("  [UPDATEDIR] processing...");
+
+                                return;
                                 if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0)
                                 {
                                     Debug.WriteLine("  [UPDATEDIR] message with no location specified.");
@@ -272,10 +277,10 @@ namespace WindowsApiLib.Shell
                                 }
                                 else if (CPidl.SegmentCount(shNotify.dwItem1) == 1)
                                 {
-                                    if (HierachyManager?.CurrentFolder != null && CPidl.IsEqual(HierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
+                                    if (HierachyManager?.CurrentFolder != null && CPidl.IsBinaryEqual(HierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
                                     {
                                         Debug.WriteLine("  [UPDATEDIR] Updating CurrentFolder: " + HierachyManager.CurrentFolder.ItemPath);
-                                        Update(HierachyManager.CurrentFolder, default, CShItemUpdateType.UpdateDir);
+                                        DoUpdate(HierachyManager.CurrentFolder, default, CShItemUpdateType.UpdateDir);
                                     }
                                     else
                                     {
@@ -288,7 +293,7 @@ namespace WindowsApiLib.Shell
                                     if (upCSI is not null)
                                     {
                                         Debug.WriteLine("  [UPDATEDIR] Found item: " + upCSI.ItemPath + ".  Updating dir.");
-                                        Update(upCSI, default, CShItemUpdateType.UpdateDir);
+                                        DoUpdate(upCSI, default, CShItemUpdateType.UpdateDir);
                                     }
                                     else
                                     {
@@ -308,7 +313,7 @@ namespace WindowsApiLib.Shell
                                 }
                                 else if (CPidl.SegmentCount(shNotify.dwItem1) == 1)
                                 {
-                                    if (HierachyManager?.CurrentFolder != null && CPidl.IsEqual(HierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
+                                    if (HierachyManager?.CurrentFolder != null && CPidl.IsBinaryEqual(HierachyManager.CurrentFolder.LastPIDL, shNotify.dwItem1))
                                     {
                                         if (shNotify.dwItem2 != IntPtr.Zero) Debug.WriteLine("[UPDATEITEM] : dwItem2=" + CPidl.ToString(shNotify.dwItem2));
 
@@ -332,11 +337,11 @@ namespace WindowsApiLib.Shell
                                     Debug.WriteLine("  [UPDATEITEM] Found/Added item: " + item.ItemPath + (item.IsFolder ? " (Folder)" : " (File)"));
                                     if (item.IsFolder)
                                     {
-                                        Update(item, default, CShItemUpdateType.UpdateDir);
+                                        DoUpdate(item, default, CShItemUpdateType.UpdateDir);
                                     }
                                     else
                                     {
-                                        Update(item, IntPtr.Zero, CShItemUpdateType.Updated);
+                                        DoUpdate(item, IntPtr.Zero, CShItemUpdateType.Updated);
                                     }
                                 }
                                 //if (shNotify.dwItem1 != IntPtr.Zero) Marshal.FreeCoTaskMem(shNotify.dwItem1); //Do NOT do this.  Crashes the app after startup.  The memory is still locked.
@@ -393,7 +398,7 @@ namespace WindowsApiLib.Shell
                                         if (!IsVistaOrAbove())  // 6/27/2012 - XP will not send an UPDATEITEM for Parent in this case, so we have to
                                         {
                                             Debug.WriteLine("  [MKDIR] XP path: Updating parent.");
-                                            Update(parentItem, IntPtr.Zero, CShItemUpdateType.Updated);
+                                            DoUpdate(parentItem, IntPtr.Zero, CShItemUpdateType.Updated);
                                         }
                                     }
                                 }
@@ -415,7 +420,7 @@ namespace WindowsApiLib.Shell
                                 if (item is not null)
                                 {
                                     Debug.WriteLine("  [RENAMEFOLDER] Found item: " + item.ItemPath + ". New PIDL: " + shNotify.dwItem2.ToString("X"));
-                                    Update(item, shNotify.dwItem2, CShItemUpdateType.Renamed);
+                                    DoUpdate(item, shNotify.dwItem2, CShItemUpdateType.Renamed);
                                 }
                                 else
                                 {
@@ -460,7 +465,7 @@ namespace WindowsApiLib.Shell
                                         if (!IsVistaOrAbove())  // 6/27/2012 - XP will not send an UPDATEITEM for Parent in this case, so we have to
                                         {
                                             Debug.WriteLine("  [RMDIR] XP path: Updating parent.");
-                                            Update(parentItem, IntPtr.Zero, CShItemUpdateType.Updated);
+                                            DoUpdate(parentItem, IntPtr.Zero, CShItemUpdateType.Updated);
                                         }
                                     }
                                 }
@@ -478,7 +483,7 @@ namespace WindowsApiLib.Shell
                             if (mediaCSI is not null)
                             {
                                 Debug.WriteLine("  [MEDIA CHANGE] Found item: " + mediaCSI.ItemPath + ". Updating.");
-                                Update(mediaCSI, default, CShItemUpdateType.MediaChange);
+                                DoUpdate(mediaCSI, default, CShItemUpdateType.MediaChange);
                             }
                             else
                             {
@@ -492,7 +497,7 @@ namespace WindowsApiLib.Shell
                             if (imgCSI is not null)
                             {
                                 Debug.WriteLine("  [UPDATEIMAGE] Found item: " + imgCSI.ItemPath + ". Updating icon.");
-                                Update(imgCSI, default, CShItemUpdateType.IconChange);
+                                DoUpdate(imgCSI, default, CShItemUpdateType.IconChange);
                             }
                             else
                             {
@@ -515,7 +520,7 @@ namespace WindowsApiLib.Shell
                 }
             }
 
-            base.WndProc(ref m);
+            base.WndProc(ref msg);
         }
 
         //todo:move this into ShellController and CShellHierarchyManager
@@ -530,7 +535,7 @@ namespace WindowsApiLib.Shell
         ///     rename, move, etc.</param>
         /// <param name="changeType">The type of change.</param>
         /// <remarks>Serves as a bridge between CShItemUpdater and the CShellItem that should handle a change.</remarks>
-        internal void Update(CShellItem csi, IntPtr changedPidl, CShItemUpdateType changeType)
+        internal void DoUpdate(CShellItem csi, IntPtr changedPidl, CShItemUpdateType changeType)
         {
             Debug.WriteLine("Entered CShellItemUpdater.Update: " + changeType.ToString());
             switch (changeType)
@@ -673,11 +678,40 @@ namespace WindowsApiLib.Shell
 
         }
 
-        private void DoUpdateDir(CShellItem CSI)
+        private bool _isUpdatingDir = false; //this is to prevent multiple simultaneous updates on the same folder which can cause problems.  We will ignore any update requests that come in while an update is already in progress.  This can happen when there are multiple changes to a folder in a short period of time, which causes multiple WM_UPDATEDIR messages to be fired before the first one has finished processing.
+        /// <summary>
+        /// The DoUpdateDir function is called when a WM_UPDATEDIR message is received, indicating 
+        /// that the contents of a folder have changed. It compares the current content of the folder 
+        /// with the internal cache (m_Directories and m_Files) and raises appropriate events for any 
+        /// changes detected. The function takes parameters to specify whether to update files, folders, 
+        /// or both. It returns the count of changes made. If an update is already in progress for the 
+        /// same folder (possible because of multiple windows messages causing re-entrancey), it will 
+        /// ignore subsequent update requests to prevent conflicts.
+        /// </summary>
+        /// <param name="csi"></param>
+        /// <param name="updateFiles"></param>
+        /// <param name="updateFolders"></param>
+        /// <returns></returns>
+        public int DoUpdateDir(CShellItem csi, bool updateFiles = true, bool updateFolders = true)
         {
-            if (ReferenceEquals(CSI, CShellItemFactory.RecycleBin)) return;
+            if (_isUpdatingDir)
+            {
+                Debug.WriteLine("DoUpdateDir called but an update is already in progress for this folder. Ignoring.");
+                return 0;
+            }
+            try
+            {
+                _isUpdatingDir = true;
+                if (ReferenceEquals(csi, CShellItemFactory.RecycleBin)) return 0;
 
-            SelectiveFolderUpdate(CSI, true, true);
+                var count = SelectiveFolderUpdate(csi, true, true);
+                Debug.WriteLine("DoUpdateDir end - " + csi.Text + " - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+                return count;
+            }
+            finally
+            {
+                _isUpdatingDir = false;
+            }
         }
 
         /// <summary>
@@ -690,8 +724,8 @@ namespace WindowsApiLib.Shell
         /// messages are fired followed by WM_UPDATEDIR to indicate that there are more changes. 
         /// Certain other types of file operations (eg Save) use only WM_UPDATEDIR rather than WM_CREATE.
         /// </summary>
-        /// <param name="UpdateFiles">True to examine Files of this folder for changes.</param>
-        /// <param name="UpdateFolders">True to examine sub-directories of this folder for changes.</param>
+        /// <param name="updateFiles">True to examine Files of this folder for changes.</param>
+        /// <param name="updateFolders">True to examine sub-directories of this folder for changes.</param>
         /// <returns>True if changes have been made, False otherwise</returns>
         /// <remarks>If m_Directories or m_Files is Nothing, then no attempt is made to compare with current 
         /// contents.  That is, if m_files is Nothing then it is not updated, m_Directories is treated the same.
@@ -701,15 +735,17 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Refreshes the information for this item from the shell and raises an Update event.
         /// </summary>
-        public int SelectiveFolderUpdate(CShellItem? csi, bool UpdateFiles = true, bool UpdateFolders = true)
+        private int SelectiveFolderUpdate(CShellItem? csi, bool updateFiles = true, bool updateFolders = true)
         {
             if (csi is null) return 0;
             if (!csi.m_IsFolder) return 0;
 
+            Debug.WriteLine("SelectiveFolderUpdate begin - " + csi.Text + " - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+
             var attrFlag = SHCONTF.INCLUDEHIDDEN;
-            if (csi.m_Files is not null && UpdateFiles)
+            if (csi.m_Files is not null && updateFiles)
                 attrFlag = attrFlag | SHCONTF.NONFOLDERS;
-            if (csi.m_Directories is not null && UpdateFolders)
+            if (csi.m_Directories is not null && updateFolders)
                 attrFlag = attrFlag | SHCONTF.FOLDERS;
             if (attrFlag == SHCONTF.INCLUDEHIDDEN)
                 return 0; // nothing loaded in the given csi yet.  we ignore csi's that haven't been loaded yet (usually loaded in the UI) because they are folders the user hasn't browsed to yet
@@ -725,7 +761,7 @@ namespace WindowsApiLib.Shell
                 if (!lockTaken)
                     return 0;
 
-                operations = CrossCheckOldAndNewFolderContents(csi, UpdateFiles, UpdateFolders, newPidls);
+                operations = CrossCheckOldAndNewFolderContents(csi, updateFiles, updateFolders, newPidls);
             }
             finally
             {
@@ -741,8 +777,8 @@ namespace WindowsApiLib.Shell
             {
                 var folder = csi.IsFolder ? csi : csi.Parent;
 
-                if (operations.Count < 400)
-                {
+                //if (operations.Count < 400)
+                //{
                     foreach (var (item, type) in operations)
                     {
                         switch (type)
@@ -764,11 +800,11 @@ namespace WindowsApiLib.Shell
                                 break;
                         }
                     }
-                }
-                else
-                {
-                    RaiseUpdateEvent(csi, new ShellItemUpdateEventArgs(null, CShItemUpdateType.UpdateDir));
-                }
+                //}
+                //else
+                //{
+                //    RaiseUpdateEvent(csi, new ShellItemUpdateEventArgs(null, CShItemUpdateType.UpdateDir));
+                //}
             }
 
             return operations.Count;
@@ -776,6 +812,7 @@ namespace WindowsApiLib.Shell
 
         private List<(CShellItem, CShItemUpdateType)> CrossCheckOldAndNewFolderContents(CShellItem csi, bool UpdateFiles, bool UpdateFolders, List<nint> newPidls)
         {
+            Debug.WriteLine("CrossCheckOldAndNewFolderContents begin");
             var operations = new List<(CShellItem Item, CShItemUpdateType Type)>();
 
             lock (HierachyManager.Lock)
@@ -819,8 +856,8 @@ namespace WindowsApiLib.Shell
                         }
 
 #if DEBUG
-                        Debug.WriteLine("oldCsiDic size: " + oldCsiDic.Count());
-                        Debug.WriteLine("newPidls size: " + newPidls.Count());
+                        Debug.WriteLine("\toldCsiDic size: " + oldCsiDic.Count());
+                        Debug.WriteLine("\tnewPidls size: " + newPidls.Count());
 #endif
 
                         Dictionary<string, FileInfo> fileInfos = null;
@@ -832,6 +869,7 @@ namespace WindowsApiLib.Shell
                             fileInfos = directoryInfo.GetFiles().ToDictionary(file => file.Name, file => file);
                         }
 
+                        Debug.WriteLine("\tfetch fileinfo done - " + DateTime.Now.ToString("HH:mm:ss.fff"));
                         for (int i = 0; i < newPidls.Count; i++)
                         {
                             IntPtr newPidl = newPidls[i];
@@ -847,7 +885,7 @@ namespace WindowsApiLib.Shell
                                     continue;
                                 }
                                 
-                                if (CPidl.IsEqual(oldCsi.LastPIDL, newPidl)) //additional check
+                                if (CPidl.IsBinaryEqual(oldCsi.LastPIDL, newPidl)) //additional check
                                 {   // found the same item
                                     if (!ReferenceEquals(csi, CShellItemFactory.RecycleBin))
                                     {
@@ -894,6 +932,7 @@ namespace WindowsApiLib.Shell
                             }
                         }
 
+                        Debug.WriteLine("\tadditions done - " + DateTime.Now.ToString("HH:mm:ss.fff"));
                         //any items remaining in the dictionary have no match with the current state of the folder.  Remove.
                         if (oldCsiDic.Count > 0)
                         {
@@ -901,8 +940,9 @@ namespace WindowsApiLib.Shell
                             {
                                 RemoveItem(csi, item);
                                 operations.Add((item, CShItemUpdateType.Deleted));
-                                Debug.WriteLine("removed item from hierarchy '" + item.DisplayName + "'");
+                                Debug.WriteLine("\tremoved item from hierarchy '" + item.DisplayName + "'");
                             }
+                            Debug.WriteLine("\tremovals done - " + DateTime.Now.ToString("HH:mm:ss.fff"));
                         }
                     }
                 }
@@ -989,7 +1029,7 @@ namespace WindowsApiLib.Shell
             if (changed)
             {
                 RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
-                RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(parent, CShItemUpdateType.Updated));
+                //RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(parent, CShItemUpdateType.Updated));
             }
 
             return changed;

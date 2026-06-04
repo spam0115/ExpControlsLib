@@ -156,6 +156,7 @@ namespace ExpControlsLib
 
         public void Clear()
         {
+            Debug.WriteLine("VirtualListViewWrapper.Clear");
             _listView.SelectedIndices.Clear();
             if (VirtualMode)
             {
@@ -173,6 +174,7 @@ namespace ExpControlsLib
 
         public void AddRange(IEnumerable<CShellItem> items)
         {
+            Debug.WriteLine("VirtualListViewWrapper.AddRange #" + items.Count());
             if (VirtualMode)
             {
                 _virtualItems.AddRange(items);
@@ -194,6 +196,7 @@ namespace ExpControlsLib
 
         public void Add(CShellItem item)
         {
+            Debug.WriteLine("VirtualListViewWrapper.Add - " + item.Text);
             if (VirtualMode)
             {
                 _virtualItems.Add(item);
@@ -210,6 +213,7 @@ namespace ExpControlsLib
 
         public void InsertSorted(CShellItem item)
         {
+            Debug.WriteLine("VirtualListViewWrapper.InsertSorted - " + item.Text);
             int index = FindInsertionPoint(item);
 
             if (VirtualMode)
@@ -475,6 +479,7 @@ namespace ExpControlsLib
 
             if (item.NeedsRefresh) //item has been updated in the background and needs to be recreated as a new ListViewItem to reflect changes
             {
+                Debug.WriteLine("VirtualListViewWrapper.GetLviFromVirtual needs refresh - " + item.Text);
                 var lvi = CreateLviFromCsi(item);
                 _itemCache[index] = lvi;
                 return lvi;
@@ -498,6 +503,7 @@ namespace ExpControlsLib
                 }
                 else
                 {
+                    Debug.WriteLine("VirtualListViewWrapper.GetLviFromVirtual failed to get item #" + index.ToString() + " from cache - " + item.Text);
                     lvi = CreateLviFromCsi(item);
                     _itemCache[index] = lvi;
                     return lvi;

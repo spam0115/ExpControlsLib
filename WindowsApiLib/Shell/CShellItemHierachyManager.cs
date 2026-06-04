@@ -43,12 +43,12 @@ namespace WindowsApiLib.Shell
         /// <param name="ptr">An Absolute PIDL referencing the item to be Found.</param>
         /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
         /// <remarks> 5/31/2012 - most code in this function replaced by a call to FindCShItem(BaseItem as CShellItem, Abs as IntPtr)</remarks>
-        public CShellItem FindCShItem(IntPtr ptr)
+        public CShellItem? FindCShItem(IntPtr ptr)
         {
             return FindCShItem(Root, ptr);
         }
 
-        public CShellItem FindCShItem(string fullFileName)
+        public CShellItem? FindCShItem(string fullFileName)
         {
             IntPtr pidl = ShellAPI.ILCreateFromPathW(fullFileName);
             return FindCShItem(Root, pidl);
@@ -62,9 +62,9 @@ namespace WindowsApiLib.Shell
         /// <param name="Abs">An Absolute PIDL referencing the item to be Found.</param>
         /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
         /// <remarks> 5/31/2012 -Function added to replace algorithm used in FindCShItem(ptr as IntPtr) which now only calls this routine.</remarks>
-        public CShellItem FindCShItem(CShellItem BaseItem, IntPtr Abs)
+        public CShellItem? FindCShItem(CShellItem BaseItem, IntPtr Abs)
         {
-            CShellItem FindCShItemRet = default;
+            CShellItem? target = null;
 
             if (CPidl.IsEqual(BaseItem.PIDL, Abs))
                 return BaseItem;
@@ -75,7 +75,7 @@ namespace WindowsApiLib.Shell
                 {
                     if (CPidl.IsEqual(DItem.PIDL, Abs))
                         return DItem;
-                    if (CPidl.IsAncestorOf(DItem.PIDL, Abs, false))
+                    if (CPidl.IsAncestorOf(DItem.PIDL, Abs, false)) //note that items are considered to be ancestors of themselves which is kinda weird
                         return FindCShItem(DItem, Abs);
                 }
             }
@@ -214,16 +214,17 @@ namespace WindowsApiLib.Shell
             NEXTWHILE:;
             }
 
-            //Test for invalid paths
+            //Test for invalid paths and mismatched path lengths
             if (CPidl.SegmentCount(currentFolder.PIDL) + 1 != CPidl.SegmentCount(absPidl)) //the root folder plus 1 final pidl should be the same length as the given pidl if the given pidl is real
             {
                 Debug.WriteLine("Invalid pidl provided to FindInShellHierarchy(): '" + CPidl.ToString(absPidl) + "'");
                 return null;
             }
 
-            var fullPath = CPidl.GetFileSystemPath(absPidl);
+            var displayName = CPidl.GetDisplayName(absPidl);
+            
             // Check for files in the current folder
-            if (currentFolder.FilesDic.TryGetValue(fullPath, out CShellItem fileItem))
+            if (currentFolder.FilesDic.TryGetValue(displayName, out CShellItem fileItem))
             {
                 Parent = currentFolder;
                 return fileItem;
