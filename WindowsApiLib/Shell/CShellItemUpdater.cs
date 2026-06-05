@@ -153,7 +153,7 @@ namespace WindowsApiLib.Shell
 
                     switch (msgID)
                     {
-                        // Item Changesq
+                        // Item Changes
                         case SHCNE.CREATE:
                             {
                                 Debug.WriteLine("  [CREATE] processing...");

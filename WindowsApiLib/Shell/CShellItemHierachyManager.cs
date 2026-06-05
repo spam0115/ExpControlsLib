@@ -139,7 +139,7 @@ namespace WindowsApiLib.Shell
             IntPtr pidl = ShellAPI.ILCreateFromPathW(path);
             if (pidl == IntPtr.Zero)
             {
-                Debug.WriteLine("Invalid path provided to FindInShellHierarchy(): '" + path + "'");
+                Debug.WriteLine("Invalid path provided to FindOrAdd(): '" + path + "'");
                 return null;
             }
             try
@@ -185,12 +185,13 @@ namespace WindowsApiLib.Shell
             var currentFolder = Root;
             if (currentFolder == null) throw new Exception("The root of the shell hierarchy was null.");
 
-            if (CPidl.AreEqual(currentFolder.IShlFolder, currentFolder.PIDL, absPidl))  // we found the desired item
+            if (CPidl.ResolvesToSamePathOrName(currentFolder.PIDL, absPidl))  // we found the desired item
             {
                 Parent = null;
                 return currentFolder;
             }
 
+            var splitPidl = CPidl.Split(absPidl);
             bool foundFinalExtantParentDirectory = false;
             while (!foundFinalExtantParentDirectory)
             { //todo: I don't like how reading of folder contents is hidden inside the Directories and Files properties rather than being explicit
@@ -198,7 +199,7 @@ namespace WindowsApiLib.Shell
                 {
                     if (IsAncestorOf(currentCSI.PIDL, absPidl))
                     {
-                        if (CPidl.AreEqual(currentFolder.IShlFolder, currentCSI.PIDL, absPidl))  // we found the desired item
+                        if (CPidl.ResolvesToSamePathOrName(currentCSI.PIDL, absPidl))  // we found the desired item
                         {
                             Parent = currentFolder;
                             return currentCSI;
@@ -218,7 +219,7 @@ namespace WindowsApiLib.Shell
             //Test for invalid paths and mismatched path lengths
             if (CPidl.SegmentCount(currentFolder.PIDL) + 1 != CPidl.SegmentCount(absPidl)) //the root folder plus 1 final pidl should be the same length as the given pidl if the given pidl is real
             {
-                Debug.WriteLine("Invalid pidl provided to FindInShellHierarchy(): '" + CPidl.ToString(absPidl) + "'");
+                Debug.WriteLine("Invalid pidl provided to FindOrAdd(): '" + CPidl.ToString(absPidl) + "'");
                 return null;
             }
 

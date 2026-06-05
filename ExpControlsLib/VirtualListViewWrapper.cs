@@ -492,7 +492,7 @@ namespace ExpControlsLib
         {
             if (VirtualMode)
             {
-                _itemCache.Remove(index);
+                _itemCache.Remove(index); //it is assumed that there must be new data to require a redraw
                 _listView.RedrawItems(index, index, false);
             }
             else
@@ -875,7 +875,7 @@ namespace ExpControlsLib
 
         private int FindTopLeftByHitTestScan(int total)
         {
-            Debug.WriteLine("ExpList: FindTopLeftByHitTestScan Begin" );
+            Debug.WriteLine("ExpList: FindTopLeftByHitTestScan Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             try
             {
                 var client = _listView.ClientRectangle;
@@ -922,7 +922,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: FindTopLeftByHitTestScan End");
+                Debug.WriteLine("ExpList: FindTopLeftByHitTestScan End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             }
         }
 
