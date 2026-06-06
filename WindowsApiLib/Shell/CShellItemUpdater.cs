@@ -88,6 +88,8 @@ namespace WindowsApiLib.Shell
             Application.Run();
         }
 
+        private LruDictionary<IntPtr, bool> _activeDeletes = new (1000);
+
         protected override void WndProc(ref Message msg)
         {
             if (msg.Msg == WindowsMessages.WM_DESTROY_THREAD_WINDOW)
@@ -209,41 +211,64 @@ namespace WindowsApiLib.Shell
                             }
                         case SHCNE.DELETE: //keep in mind that windows can send the same delete message multiple times
                             Debug.WriteLine("  [DELETE] processing...");
-                            var splitResult = CPidl.Split(shNotify.dwItem1);
-                            parentPidl = splitResult.ParentPidl;
-                            var relPidl = splitResult.ChildPidl;
-                            Debug.WriteLine($"  {CPidl.ToString(shNotify.dwItem1)}");
-                            Debug.WriteLine($"  {CPidl.ToString(parentPidl)}");
-                            parentItem = HierachyManager.Find(parentPidl);
 
-                            if (parentItem != null)
+                            if (shNotify.dwItem1 == IntPtr.Zero)
                             {
-                                Debug.WriteLine("  [DELETE] Parent found: " + parentItem.ItemPath);
-                                CShellItem childItem = null;
+                                Debug.WriteLine("  [DELETE] message with no location specified. Skipping.");
+                                return;
+                            }
 
-                                // Try to find the child item in either files or directories
-                                if (parentItem.FileList != null)
-                                    childItem = parentItem.FileList[relPidl];
+                            if (_activeDeletes.ContainsKey(shNotify.dwItem1))
+                            {
+                                Debug.WriteLine("  [DELETE] Already processing delete for this item. Skipping to avoid duplicate work.");
+                                return;
+                            }
 
-                                if (childItem == null && parentItem.DirectoryList != null)
-                                    childItem = parentItem.DirectoryList[relPidl];
+                            try
+                            {
+                                _activeDeletes.Add(shNotify.dwItem1, true);
 
-                                if (childItem != null)
+                                var splitResult = CPidl.Split(shNotify.dwItem1);
+                                parentPidl = splitResult.ParentPidl;
+                                var relPidl = splitResult.ChildPidl;
+                                Debug.WriteLine($"  {CPidl.ToString(shNotify.dwItem1)}");
+                                Debug.WriteLine($"  {CPidl.ToString(parentPidl)}");
+                                parentItem = HierachyManager.Find(parentPidl);
+
+                                if (parentItem != null)
                                 {
-                                    Debug.WriteLine("  [DELETE] Child item found: " + childItem.ItemPath + ". Updating as deleted.");
-                                    DoUpdate(childItem, IntPtr.Zero, CShItemUpdateType.Deleted);
+                                    Debug.WriteLine("  [DELETE] Parent found: " + parentItem.ItemPath);
+                                    CShellItem childItem = null;
+
+                                    // Try to find the child item in either files or directories
+                                    if (parentItem.FileList != null)
+                                        childItem = parentItem.FileList[relPidl];
+
+                                    if (childItem == null && parentItem.DirectoryList != null)
+                                        childItem = parentItem.DirectoryList[relPidl];
+
+                                    if (childItem != null)
+                                    {
+                                        Debug.WriteLine("  [DELETE] Child item found: " + childItem.ItemPath + ". Updating as deleted.");
+                                        DoUpdate(childItem, IntPtr.Zero, CShItemUpdateType.Deleted);
+                                    }
+                                    else
+                                    {
+                                        Debug.WriteLine("  [DELETE] Child item NOT found in parent's lists.");
+                                    }
                                 }
                                 else
                                 {
-                                    Debug.WriteLine("  [DELETE] Child item NOT found in parent's lists.");
+                                    Debug.WriteLine("  [DELETE] Parent NOT found.");
                                 }
+
+                                Marshal.FreeCoTaskMem(parentPidl);
                             }
-                            else
+                            finally
                             {
-                                Debug.WriteLine("  [DELETE] Parent NOT found.");
+                                _activeDeletes.Remove(shNotify.dwItem1);
                             }
 
-                            Marshal.FreeCoTaskMem(parentPidl);
                             break;
                         case SHCNE.RENAMEITEM:
                             Debug.WriteLine("  [RENAMEITEM] processing...");
@@ -1000,11 +1025,11 @@ namespace WindowsApiLib.Shell
             bool changed = false;
             if (parent == null || item == null) return false;
 
-            lock (HierachyManager.Lock)
+            try
             {
-                try
+                if (parent.IsFolder)
                 {
-                    if (parent.IsFolder)
+                    lock (HierachyManager.Lock)
                     {
                         if (parent.FoldersInitialized && parent.m_Directories.Contains(item))
                         {
@@ -1020,10 +1045,10 @@ namespace WindowsApiLib.Shell
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine("Error in CShellItem.RemoveItem -- " + ex.ToString());
-                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error in CShellItem.RemoveItem -- " + ex.ToString());
             }
 
             if (changed)

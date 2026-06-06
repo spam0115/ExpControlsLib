@@ -79,7 +79,7 @@ namespace ExpControlsLib
         private ThumbnailImageListManager _thumbnailManager; // Manager for thumbnail display modes
         private VirtualListViewWrapper _listViewWrapper;
 
-        
+
         // Avoid Globalization problem-- an empty timevalue
         private static readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
 
@@ -93,13 +93,13 @@ namespace ExpControlsLib
         private CDragWrapper DW;         // Wrapper for Drag ops originating in ExpFileList
         private ClvDropWrapper DropWrap; // Wrapper for Drop ops targeting ExpFileList
         private bool m_CreateNew = false; // Flag for NewMenu processing of "New" item
-        
+
         // Reentrancy guard: prevents DoItemUpdate from modifying _listView.Items
         // while an enumeration is in progress (Invoke() pumps messages and can trigger
         // reentrant shell notifications on the same UI thread).
         private int _enumerationDepth = 0;
         private readonly Queue<(object sender, ShellItemUpdateEventArgs e)> _deferredUpdates = new();
-        
+
         internal static bool _isShuttingDown = false;
 
         #endregion
@@ -281,7 +281,7 @@ namespace ExpControlsLib
                 _listViewWrapper.DisplayMode = value;
 
                 SetImageListForMode(value);
-                if (_listViewWrapper.VirtualMode) LoadImagesForItems();
+                if (_listViewWrapper.VirtualMode) LoadImagesForVisibleItems();
 
                 DisplayModeChanged?.Invoke(value);
             }
@@ -366,19 +366,15 @@ namespace ExpControlsLib
         [Browsable(false)]
         public int SortColumn
         {
-            get => (_listView.ListViewItemSorter as LVColSorter)?.SortColumn ?? 0;
-            set
-            {
-                if (_listView.ListViewItemSorter is LVColSorter sorter)
-                    sorter.SortColumn = value;
-            }
+            get => _listViewWrapper.SortColumn;
+            set => _listViewWrapper.SortColumn = value;
         }
 
         /// <summary>
         /// Gets the current sort order.
         /// </summary>
         [Browsable(false)]
-        public SortOrder SortOrder => (_listView.ListViewItemSorter as LVColSorter)?.OrderOfSort ?? SortOrder.None;
+        public SortOrder SortOrder => _listViewWrapper.SortOrder;
 
         /// <summary>
         /// Gets or sets a value indicating whether the list view is in virtual mode.
@@ -429,7 +425,7 @@ namespace ExpControlsLib
                 else
                 {
                     if (value == _currentPath && _currentFolderCsi != null) return;
-                     
+
                     var oldCsi = _currentFolderCsi;
 
                     var newCsi = _shellController.HierachyManager.FindOrAdd(value);
@@ -522,7 +518,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="column">The column index.</param>
         /// <param name="order">The sort order.</param>
-        public void SetSort(int column, SortOrder order)
+        public void Sort(int column, SortOrder order)
         {
             Debug.WriteLine("ExpList: SetSort Begin");
             try
@@ -558,10 +554,10 @@ namespace ExpControlsLib
                 _scrollDebounceTimer.Tick += (s, e) =>
                 {
                     _scrollDebounceTimer.Stop();
-                    LoadImagesForItems();
+                    _thumbnailManager.CancelPendingRequests();
+                    LoadImagesForVisibleItems();
                 };
 
-                Load += ExpList_Load;
                 VisibleChanged += ExpList_VisibleChanged;
 
                 _listView.HandleCreated += ExpFileList_HandleCreated;
@@ -621,18 +617,17 @@ namespace ExpControlsLib
                 _thumbnailManager = new ThumbnailImageListManager(this);
                 _thumbnailManager.ThumbnailReady += ThumbnailManager_ThumbnailReady;
 
-                //create sorter
-                var sorter = new LVColSorter(_listView);
-                sorter.SortOrderChanged += (s, e) =>
+                //set up sorter
+                _listViewWrapper.Initialize();
+                _listViewWrapper.Sorter.SortOrderChanged += (s, e) =>
                 {
                     if (VirtualMode)
                     {
-                        _listViewWrapper.Sort(sorter.SortColumn, sorter.OrderOfSort);
+                        _listViewWrapper.Sort(_listViewWrapper.Sorter.SortColumn, _listViewWrapper.Sorter.OrderOfSort);
                     }
-                    SortOrderChanged?.Invoke(this, EventArgs.Empty);
+                    SortOrderChanged?.Invoke(this, EventArgs.Empty); //what does this do?
                     OnScroll();
                 };
-                _listView.ListViewItemSorter = sorter;
 
                 // Setup Change Notification
                 CShellItemUpdater.UpdateEvent += UpdateInvoke;
@@ -741,6 +736,603 @@ namespace ExpControlsLib
 
         #region Dynamic Update Handler
 
+
+        /// <summary>
+        /// Invokes a standard shell action (cut, copy, paste, delete) on the selected items.
+        /// </summary>
+        /// <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
+        private void WinMenu(string cmd)
+        {
+            Debug.WriteLine("ExpList: WinMenu Begin");
+            try
+            {
+                // Validate preconditions
+                if (_currentFolderCsi == null || !_currentFolderCsi.IsFolder)
+                {
+                    return;
+                }
+
+                IntPtr rgfReserved = IntPtr.Zero;
+                IntPtr iUnknownOut = IntPtr.Zero;
+                IShellFolder? folder = null;
+                IntPtr lpVerbAnsi = IntPtr.Zero;
+                IntPtr lpVerbUni = IntPtr.Zero;
+                List<IntPtr>? pidls = null;
+                CShellItem[] selectedItems = Array.Empty<CShellItem>();
+
+                try
+                {
+                    if (cmd == "paste")
+                    {
+                        // Get the target folder for paste operation
+                        try
+                        {
+                            folder = _currentFolderCsi == ShellController.DesktopCSI
+                                ? _currentFolderCsi.IShlFolder
+                                : _currentFolderCsi.Parent?.IShlFolder;
+
+                            if (folder == null)
+                            {
+                                Debug.WriteLine("Failed to get folder interface for paste operation");
+                                MessageBox.Show("Cannot paste: folder interface is unavailable.", "Paste Error",
+                                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                return;
+                            }
+
+                            IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
+                            if (relPidl == IntPtr.Zero)
+                            {
+                                Debug.WriteLine("Failed to get relative PIDL for current folder");
+                                return;
+                            }
+
+                            pidls = new List<IntPtr> { relPidl };
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Error preparing paste operation: {ex.Message}");
+                            MessageBox.Show($"Error preparing paste: {ex.Message}", "Paste Error",
+                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                    }
+                    else // Handle cut, copy, delete operations
+                    {
+                        if (SelectedCount <= 0) return;
+
+                        try
+                        {
+                            folder = _currentFolderCsi.IShlFolder;
+                            if (folder == null)
+                            {
+                                Debug.WriteLine("Failed to get folder interface for selected items");
+                                MessageBox.Show("Cannot perform operation: folder interface is unavailable.", "Error",
+                                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                return;
+                            }
+
+                            if (VirtualMode)
+                            {
+                                selectedItems = SelectedCShellItems.ToArray(); //materialize selection to array for consistent processing
+                            }
+                            else
+                            {
+                                selectedItems = _listView?.SelectedItems?.Cast<ListViewItem>()?.Select(item => item.Tag as CShellItem)?.ToArray() ?? new CShellItem[0];
+                            }
+
+                            pidls = new List<IntPtr>(selectedItems.Length);
+
+                            for (int i = 0; i < selectedItems.Length; i++)
+                            {
+                                var sel = selectedItems[i];
+                                if (sel == null)
+                                {
+                                    Debug.WriteLine($"Selected item {i} is null");
+                                    continue;
+                                }
+
+                                // For delete operations, validate that item can be deleted
+                                if (cmd == "delete" && !sel.CanDelete)
+                                {
+                                    MessageBox.Show($"Cannot delete: {sel.DisplayName}", "Cannot Delete",
+                                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                    continue;
+                                }
+
+                                IntPtr pidl = CPidl.ILFindLastID(sel.PIDL);
+                                if (pidl == IntPtr.Zero)
+                                {
+                                    Debug.WriteLine($"Failed to get PIDL for item: {sel.DisplayName}");
+                                    MessageBox.Show($"Failed to get ID for item: {sel.DisplayName}", "Error",
+                                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                    continue;
+                                }
+
+                                pidls.Add(pidl);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Error preparing {cmd} operation: {ex.Message}");
+                            MessageBox.Show($"Error preparing operation: {ex.Message}", "Error",
+                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+#if DEBUG
+                        var path = CPidl.ToString(pidls[0]);
+#endif
+                    }
+
+#if DEBUG
+                    var path2 = CPidl.ToString(pidls[0]);
+#endif
+                    // Get IContextMenu interface from the shell folder
+                    if (pidls == null || pidls.Count == 0)
+                    {
+                        Debug.WriteLine("No items to process");
+                        return;
+                    }
+
+                    try
+                    {
+                        int HR = folder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Count, pidls.ToArray(),
+                            IID_IContextMenu, rgfReserved, out iUnknownOut);
+
+                        if (HR != S_OK || iUnknownOut == IntPtr.Zero)
+                        {
+                            Debug.WriteLine($"GetUIObjectOf failed: HRESULT=0x{HR:X8}");
+                            MessageBox.Show("Failed to get context menu interface from shell.", "Error",
+                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Exception in GetUIObjectOf: {ex.Message}");
+                        MessageBox.Show($"Error accessing shell interface: {ex.Message}", "Error",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    // Marshal the COM interface
+                    try
+                    {
+                        m_WindowsContextMenu.winMenu = (IContextMenu)Marshal.GetObjectForIUnknown(iUnknownOut);
+                        if (m_WindowsContextMenu.winMenu == null)
+                        {
+                            Debug.WriteLine("Failed to marshal IContextMenu interface");
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Failed to marshal IContextMenu: {ex.Message}");
+                        return;
+                    }
+
+                    // Prepare command structure with allocated strings
+                    try
+                    {
+                        lpVerbAnsi = Marshal.StringToHGlobalAnsi(cmd);
+                        lpVerbUni = Marshal.StringToHGlobalUni(cmd);
+
+                        var cmi = new CMInvokeCommandInfoEx
+                        {
+                            cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                            nShow = (int)SW.SHOWNORMAL,
+                            fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
+                            ptInvoke = new Point(0, 0),
+                            lpVerb = lpVerbAnsi,
+                            lpVerbW = lpVerbUni
+                        };
+
+                        int topItemIndex = -1;
+                        bool hasItems = VirtualMode ? _listView.VirtualListSize > 0 : _listView.Items.Count > 0;
+                        if (cmd == "delete" && hasItems)
+                        { //prevent null references from invalid selections that are about to be deleted
+                            topItemIndex = _listViewWrapper.GetTopIndex();
+                            _listView.SelectedIndices.Clear();
+                            if (!VirtualMode)
+                            {
+                                _listView.SelectedItems.Clear();
+                            }
+                        }
+                        // Execute the shell command
+                        int invokeHR = m_WindowsContextMenu.winMenu.InvokeCommand(cmi); //the important part
+
+                        if (cmd == "delete" && hasItems)
+                        {
+                            foreach (var item in selectedItems)
+                            {
+                                _shellController.HierachyManager.Remove(item);
+
+                                this.RemoveAt(_listViewWrapper.GetIndex(item));
+                            }
+                            if (selectedItems.Length > this._listViewWrapper.GetApproxVisibleCount())
+                                OnScroll();
+                        }
+
+                        if (topItemIndex >= 0)
+                        {
+                            _listView.BeginInvoke(new Action(() =>
+                            {
+                                int count = VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+                                if (topItemIndex < count)
+                                {
+                                    if (VirtualMode)
+                                        _listView.EnsureVisible(topItemIndex);
+                                    else
+                                        _listView.Items[topItemIndex].EnsureVisible();
+                                }
+                            }));
+                        }
+
+                        if (invokeHR != S_OK)
+                        {
+                            Debug.WriteLine($"InvokeCommand failed: HRESULT=0x{invokeHR:X8}, cmd='{cmd}'");
+                            // Don't show error to user for most cases - shell handles UI
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Error invoking command '{cmd}': {ex.Message}");
+                        MessageBox.Show($"Error executing command: {ex.Message}", "Error",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                    finally
+                    {
+                        m_WindowsContextMenu.ReleaseMenu();
+
+                        // Clean up allocated strings
+                        if (lpVerbAnsi != IntPtr.Zero)
+                            Marshal.FreeHGlobal(lpVerbAnsi);
+                        if (lpVerbUni != IntPtr.Zero)
+                            Marshal.FreeHGlobal(lpVerbUni);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Unexpected error in WinMenu: {ex.Message}");
+                    MessageBox.Show($"Unexpected error: {ex.Message}", "Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: WinMenu End");
+            }
+        }
+
+
+        /// <summary>
+        /// Creates a native Windows context menu for the current folder.
+        /// </summary>
+        /// <param name="comContextMenu">Output parameter for the main context menu handle.</param>
+        /// <param name="viewSubMenu">Output parameter for the View submenu handle.</param>
+        private void CreateContextMenu(out IntPtr comContextMenu, out IntPtr viewSubMenu, out IntPtr sortSubMenu)
+        {
+            Debug.WriteLine("ExpList: CreateContextMenu Begin");
+            try
+            {
+                comContextMenu = CreatePopupMenu();
+                viewSubMenu = CreatePopupMenu();
+                sortSubMenu = CreatePopupMenu();
+
+                // Create and insert the "View" submenu item into the main context menu.
+                var itemInfo = new MENUITEMINFO("View")
+                {
+                    fMask = (int)(MIIM.SUBMENU | MIIM.STRING),
+                    hSubMenu = viewSubMenu
+                };
+                InsertMenuItem(comContextMenu, 0, true, ref itemInfo);
+
+                // Create and insert the "Sort by" submenu item into the main context menu.
+                var sortInfo = new MENUITEMINFO("Sort by")
+                {
+                    fMask = (int)(MIIM.SUBMENU | MIIM.STRING),
+                    hSubMenu = sortSubMenu
+                };
+                InsertMenuItem(comContextMenu, 1, true, ref sortInfo);
+
+                // Add view mode options to the View submenu with radio button indicators.
+                uint checkedFlag;
+                uint checkedValue = (uint)(MFT.RADIOCHECK | MFT.CHECKED);
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.Details) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.DETAILS, "Details");
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.Thumbnail) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (uint)CMD.THUMBNAILS, "Thumbnails");
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.LargeThumbnail) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (uint)CMD.LARGE_THUMBNAILS, "Large Thumbnails");
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.ExtraLargeThumbnail) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.EXTRA_LARGE_THUMBNAILS, "Extra Large Thumbnails");
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.LargeIcon) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.LARGEICON, "Large Icons");
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.List) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.LIST, "List");
+
+                checkedFlag = (DisplayMode == ListViewDisplayMode.Tile) ? checkedValue : (uint)MFT.BYCOMMAND;
+                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.TILES, "Tiles");
+
+                // Add sorting options to the Sort by submenu.
+                if (_listView.ListViewItemSorter is LVColSorter sorter)
+                {
+                    int currentSortCol = sorter.SortColumn;
+                    for (int i = 0; i < _listView.Columns.Count; i++)
+                    {
+                        uint sortChecked = (i == currentSortCol) ? checkedValue : (uint)MFT.BYCOMMAND;
+                        AppendMenu(sortSubMenu, sortChecked, (uint)((int)CMD.SORT_BY_BASE + i), _listView.Columns[i].Text);
+                    }
+                }
+
+                // Add separator and standard folder operations to the main context menu.
+                AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
+                AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, (uint)CMD.REFRESH, "Refresh (F5)");
+                AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, (uint)CMD.SELECT_ALL, "Select All (Ctrl+A)");
+                AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
+
+                // Determine if Paste operations are allowed by checking clipboard contents.
+                // CanDropClipboard() returns the DragDropEffects supported by the target folder.
+                var enabled = (uint)MFT.GRAYED;
+                DragDropEffects effects = DragDropEffects.None;
+
+                if (_currentFolderCsi == null)
+                {
+                    enabled = (uint)MFT.BYCOMMAND;
+                }
+                else
+                {
+                    effects = CanDropClipboard(_currentFolderCsi);
+                    if ((effects & DragDropEffects.Copy) == DragDropEffects.Copy ||
+                        (effects & DragDropEffects.Move) == DragDropEffects.Move)
+                    {
+                        enabled = (uint)MFT.BYCOMMAND;
+                    }
+                }
+
+                // Add Paste menu item, enabled only if clipboard contents are compatible.
+                AppendMenu(comContextMenu, enabled, (int)CMD.PASTE, "Paste (Ctrl+V)");
+
+                // Add additional paste and context operations if a folder is selected.
+                if (_currentFolderCsi != null)
+                {
+                    enabled = (uint)MFT.GRAYED;
+                    if ((effects & DragDropEffects.Link) == DragDropEffects.Link)
+                        enabled = (int)MFT.BYCOMMAND;
+
+                    AppendMenu(comContextMenu, enabled, (uint)CMD.PASTELINK, "Paste Link");
+                    AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
+
+                    // Add New menu for writable folders (excluding special shell folders like ::).
+                    // The "New" submenu is managed by m_WindowsContextMenu.SetUpNewMenu(),
+                    // which adds file creation options for the selected folder.
+                    if (_currentFolderCsi.IsFolder &&
+                        ((!_currentFolderCsi.FullPath.StartsWith("::")) || _currentFolderCsi == ShellController.DesktopCSI))
+                    {
+                        int xIndex = GetMenuItemCount(comContextMenu.ToInt32());
+                        m_WindowsContextMenu.SetUpNewMenu(_currentFolderCsi, comContextMenu, xIndex);
+                        AppendMenu(comContextMenu, (int)MFT.SEPARATOR, 0, string.Empty);
+                    }
+
+                    AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, (uint)CMD.PROPERTIES, "Properties");
+                }
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: CreateContextMenu End");
+            }
+        }
+
+        /// <summary>
+        /// Displays a context menu for the ListView when no items are selected.
+        /// This menu includes view options (Tiles, Large Icons, List, Details), 
+        /// refresh, select all, paste operations, and new item creation.
+        /// </summary>
+        /// <param name="pt">The point (in screen coordinates) where the menu should be displayed.</param>
+        /// <remarks>
+        /// This function handles the creation and management of Windows popup menus.
+        /// It directly manages native menu handles via Win32 API calls and must properly
+        /// release all COM objects and menu handles to avoid memory leaks and access violations.
+        /// 
+        /// Key operations:
+        /// 1. Creates two popup menus: a main context menu and a View submenu
+        /// 2. Populates menus with commands and their checked states
+        /// 3. Determines menu item availability based on clipboard contents
+        /// 4. Invokes the selected command on shell objects (IShellFolder, IContextMenu)
+        /// 5. Releases all COM interfaces and menu handles in the CLEANUP section
+        /// 
+        /// Memory safety note: Menu handles (comContextMenu, viewSubMenu) must be released
+        /// via Marshal.Release() after TrackPopupMenuEx returns. COM objects (IContextMenu, 
+        /// IShellFolder) must be released by ReleaseComObject() to prevent heap corruption.
+        /// Mixing release mechanisms or skipping releases can cause access violations.
+        /// </remarks>
+        private void ShowAndHandleContextMenu(Point pt)
+        {
+            Debug.WriteLine("ExpList: ShowAndHandleContextMenu Begin");
+            try
+            {
+                int HR;
+                int MIN = 1;
+                var cmi = new CMInvokeCommandInfoEx();
+
+                // Create three native Windows popup menu handles.
+                IntPtr comContextMenu;
+                IntPtr viewSubMenu;
+                IntPtr sortSubMenu;
+
+                CreateContextMenu(out comContextMenu, out viewSubMenu, out sortSubMenu);
+
+                // Display the context menu and capture the user's selection.
+                int cmdID = TrackPopupMenuEx(comContextMenu, (int)TPM.RETURNCMD, pt.X, pt.Y, Handle, IntPtr.Zero);
+
+                // Process the user's menu selection.
+                if (cmdID >= MIN)
+                {
+                    // Handle sorting commands.
+                    if (cmdID >= (int)CMD.SORT_BY_BASE)
+                    {
+                        int colIndex = cmdID - (int)CMD.SORT_BY_BASE;
+                        if (_listView.ListViewItemSorter is LVColSorter sorter)
+                        {
+                            sorter.SortColumn = colIndex;
+                        }
+                        goto CLEANUP;
+                    }
+
+                    // Initialize the CMInvokeCommandInfoEx structure used for shell command invocation.
+                    cmi = new CMInvokeCommandInfoEx
+                    {
+                        cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                        nShow = (int)SW.SHOWNORMAL,
+                        fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
+                        ptInvoke = new Point(pt.X, pt.Y)
+                    };
+
+                    // Handle view mode changes and built-in operations.
+                    var cmdEnum = (CMD)cmdID;
+                    switch (cmdEnum)
+                    {
+                        case CMD.TILES:
+                            DisplayMode = ListViewDisplayMode.Tile;
+                            goto CLEANUP;
+                        case CMD.LIST:
+                            DisplayMode = ListViewDisplayMode.List;
+                            goto CLEANUP;
+                        case CMD.DETAILS:
+                            DisplayMode = ListViewDisplayMode.Details;
+                            goto CLEANUP;
+                        case CMD.LARGEICON:
+                            this.DisplayMode = ListViewDisplayMode.LargeIcon;
+                            goto CLEANUP;
+                        case CMD.THUMBNAILS:
+                            this.DisplayMode = ListViewDisplayMode.Thumbnail;
+                            goto CLEANUP;
+                        case CMD.LARGE_THUMBNAILS:
+                            this.DisplayMode = ListViewDisplayMode.LargeThumbnail;
+                            goto CLEANUP;
+                        case CMD.EXTRA_LARGE_THUMBNAILS:
+                            this.DisplayMode = ListViewDisplayMode.ExtraLargeThumbnail;
+                            goto CLEANUP;
+                        case CMD.REFRESH:
+                            // Refresh the folder contents and re-sort the ListView items.
+                            _shellController.ShellUpdater.DoUpdateDir(_currentFolderCsi);
+                            _listViewWrapper.Sort();
+                            goto CLEANUP;
+                        case CMD.SELECT_ALL:
+                            // Select all items in the ListView.
+                            if (VirtualMode)
+                            {
+                                _listView.BeginUpdate();
+                                try
+                                {
+                                    for (int i = 0; i < _listView.VirtualListSize; i++)
+                                        _listView.SelectedIndices.Add(i);
+                                }
+                                finally
+                                {
+                                    _listView.EndUpdate();
+                                }
+                            }
+                            else
+                            {
+                                EnterListViewEnumeration();
+                                try
+                                {
+                                    foreach (ListViewItem item in _listView.Items)
+                                    {
+                                        if (item is null) continue;
+                                        item.Selected = true;
+                                    }
+                                }
+                                finally
+                                {
+                                    ExitListViewEnumeration();
+                                }
+                            }
+                            goto CLEANUP;
+                        case CMD.PASTE:
+                            if (_currentFolderCsi != null)
+                            {
+                                cmi.lpVerb = Marshal.StringToHGlobalAnsi("paste");
+                                cmi.lpVerbW = Marshal.StringToHGlobalUni("paste");
+                            }
+                            else
+                            {
+                                goto CLEANUP;
+                            }
+                            break;
+                        case CMD.PASTELINK:
+                            cmi.lpVerb = Marshal.StringToHGlobalAnsi("pastelink");
+                            cmi.lpVerbW = Marshal.StringToHGlobalUni("pastelink");
+                            break;
+                        case CMD.PROPERTIES:
+                            cmi.lpVerb = Marshal.StringToHGlobalAnsi("properties");
+                            cmi.lpVerbW = Marshal.StringToHGlobalUni("properties");
+                            break;
+                        default:
+                            // Handle commands from the "New" submenu.
+                            cmdID -= 1;
+                            cmi.lpVerb = (IntPtr)cmdID;
+                            cmi.lpVerbW = (IntPtr)cmdID;
+                            m_CreateNew = true;
+                            HR = m_WindowsContextMenu.newMenu.InvokeCommand(cmi);
+#if DEBUG
+                            if (HR != S_OK)
+                                Marshal.ThrowExceptionForHR(HR);
+#endif
+                            goto CLEANUP;
+                    }
+
+                    if (_currentFolderCsi != null)
+                    {
+                        int prgf = 0;
+                        IntPtr iunk = IntPtr.Zero;
+
+                        IShellFolder folder = _currentFolderCsi == ShellController.DesktopCSI
+                            ? _currentFolderCsi.IShlFolder
+                            : _currentFolderCsi.Parent.IShlFolder;
+
+                        IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
+
+                        HR = folder.GetUIObjectOf(IntPtr.Zero, 1, new[] { relPidl }, IID_IContextMenu, prgf, out iunk);
+#if DEBUG
+                        if (HR != S_OK)
+                            Marshal.ThrowExceptionForHR(HR);
+#endif
+                        m_WindowsContextMenu.winMenu = (IContextMenu)Marshal.GetObjectForIUnknown(iunk);
+
+                        HR = m_WindowsContextMenu.winMenu.InvokeCommand(cmi);
+
+                        m_WindowsContextMenu.ReleaseMenu();
+#if DEBUG
+                        if (HR != S_OK)
+                            Marshal.ThrowExceptionForHR(HR);
+#endif
+                    }
+                }
+
+            CLEANUP:
+                m_WindowsContextMenu.ReleaseNewMenu();
+
+                if (comContextMenu != IntPtr.Zero)
+                {
+                    DestroyMenu(comContextMenu);
+                    comContextMenu = IntPtr.Zero;
+                }
+
+                // Note: viewSubMenu and sortSubMenu are destroyed when comContextMenu is destroyed.
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: objects End");
+            }
+        }
+
         private delegate void InvokeUpdate(object sender, ShellItemUpdateEventArgs e);
 
         /// <summary>
@@ -787,6 +1379,7 @@ namespace ExpControlsLib
             }
         }
 
+        private LruDictionary<String, bool> _activeDeletes = new(1000);
         /// <summary>
         /// Performs the actual update of list view items in response to shell changes.
         /// Handles creation, deletion, renaming, and other updates of files and folders.
@@ -833,13 +1426,21 @@ namespace ExpControlsLib
                             }
 
                         case CShItemUpdateType.Deleted:
+                            if (e.Item is null)
                             {
-                                if (e.Item is null)
-                                {
-                                    Debug.WriteLine("ExpList received DELETED event but no item was specified.");
-                                    return;
-                                }
+                                Debug.WriteLine("ExpList received DELETED event but no item was specified.");
+                                return;
+                            }
 
+                            if (_activeDeletes.ContainsKey(e.Item.FullPath))
+                            {
+                                Debug.WriteLine("  [DELETE] Already processing delete for this item. Skipping to avoid duplicate work.");
+                                return;
+                            }
+
+                            try
+                            {
+                                _activeDeletes.Add(e.Item.FullPath, true);
                                 int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
                                 if (index >= 0)
                                 {
@@ -857,9 +1458,12 @@ namespace ExpControlsLib
                                     //    }
                                     //}
                                 }
-
-                                break;
                             }
+                            finally
+                            {
+                                _activeDeletes.Remove(e.Item.FullPath);
+                            }
+                            break;
 
                         case CShItemUpdateType.Renamed: // This event can be raised in various rename scenarios - file rename, folder rename, drag-drop move with rename, etc.  The structure of the event (which properties are populated) can vary based on the scenario, so the handling needs to be robust to these variations.
                             {
@@ -875,7 +1479,7 @@ namespace ExpControlsLib
                                 else
                                 {
                                     var lvi = csi.LVItem;
-                                    if (lvi is null) throw new Exception("ListViewItem not found for renamed item"); 
+                                    if (lvi is null) throw new Exception("ListViewItem not found for renamed item");
                                     index = lvi.Index;
                                 }
 
@@ -1308,21 +1912,8 @@ namespace ExpControlsLib
         /// </summary>
         public ListViewItem FindItemByName(string name)
         {
-            Debug.WriteLine("ExpList: FindItemByName Begin");
-            try
-            {
-                for (int i = 0; i < _listViewWrapper.Count; i++)
-                {
-                    var item = _listViewWrapper.GetItem(i);
-                    if (item != null && string.Equals(item.DisplayName, name, StringComparison.OrdinalIgnoreCase))
-                        return _listViewWrapper.GetListViewItem(i);
-                }
-                return null;
-            }
-            finally
-            {
-                //Debug.WriteLine("ExpList: FindItemByName End");
-            }
+            var fullPath = _currentPath + name;
+            return FindItemByPath(fullPath);
         }
 
         /// <summary>
@@ -1849,272 +2440,6 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Invokes a standard shell action (cut, copy, paste, delete) on the selected items.
-        /// </summary>
-        /// <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
-        private void WinMenu(string cmd)
-        {
-            Debug.WriteLine("ExpList: WinMenu Begin");
-            try
-            {
-                // Validate preconditions
-                if (_currentFolderCsi == null || !_currentFolderCsi.IsFolder)
-                {
-                    return;
-                }
-
-                IntPtr rgfReserved = IntPtr.Zero;
-                IntPtr iUnknownOut = IntPtr.Zero;
-                IShellFolder? folder = null;
-                IntPtr lpVerbAnsi = IntPtr.Zero;
-                IntPtr lpVerbUni = IntPtr.Zero;
-                List<IntPtr>? pidls = null;
-                CShellItem[] selectedItems = Array.Empty<CShellItem>();
-
-                try
-                {
-                    if (cmd == "paste")
-                    {
-                        // Get the target folder for paste operation
-                        try
-                        {
-                            folder = _currentFolderCsi == ShellController.DesktopCSI
-                                ? _currentFolderCsi.IShlFolder
-                                : _currentFolderCsi.Parent?.IShlFolder;
-
-                            if (folder == null)
-                            {
-                                Debug.WriteLine("Failed to get folder interface for paste operation");
-                                MessageBox.Show("Cannot paste: folder interface is unavailable.", "Paste Error",
-                                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                return;
-                            }
-
-                            IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
-                            if (relPidl == IntPtr.Zero)
-                            {
-                                Debug.WriteLine("Failed to get relative PIDL for current folder");
-                                return;
-                            }
-
-                            pidls = new List<IntPtr> { relPidl };
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.WriteLine($"Error preparing paste operation: {ex.Message}");
-                            MessageBox.Show($"Error preparing paste: {ex.Message}", "Paste Error",
-                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            return;
-                        }
-                    }
-                    else // Handle cut, copy, delete operations
-                    {
-                        if (SelectedCount <= 0) return;
-
-                        try
-                        {
-                            folder = _currentFolderCsi.IShlFolder;
-                            if (folder == null)
-                            {
-                                Debug.WriteLine("Failed to get folder interface for selected items");
-                                MessageBox.Show("Cannot perform operation: folder interface is unavailable.", "Error",
-                                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                return;
-                            }
-
-                            if (VirtualMode)
-                            {
-                                selectedItems = SelectedCShellItems.ToArray(); //materialize selection to array for consistent processing
-                            }
-                            else
-                            {
-                                selectedItems = _listView?.SelectedItems?.Cast<ListViewItem>()?.Select(item => item.Tag as CShellItem)?.ToArray() ?? new CShellItem[0];
-                            }
-
-                            pidls = new List<IntPtr>(selectedItems.Length);
-
-                            for (int i = 0; i < selectedItems.Length; i++)
-                            {
-                                var sel = selectedItems[i];
-                                if (sel == null)
-                                {
-                                    Debug.WriteLine($"Selected item {i} is null");
-                                    continue;
-                                }
-
-                                // For delete operations, validate that item can be deleted
-                                if (cmd == "delete" && !sel.CanDelete)
-                                {
-                                    MessageBox.Show($"Cannot delete: {sel.DisplayName}", "Cannot Delete",
-                                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                    continue;
-                                }
-
-                                IntPtr pidl = CPidl.ILFindLastID(sel.PIDL);
-                                if (pidl == IntPtr.Zero)
-                                {
-                                    Debug.WriteLine($"Failed to get PIDL for item: {sel.DisplayName}");
-                                    MessageBox.Show($"Failed to get ID for item: {sel.DisplayName}", "Error",
-                                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                    continue;
-                                }
-
-                                pidls.Add(pidl);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.WriteLine($"Error preparing {cmd} operation: {ex.Message}");
-                            MessageBox.Show($"Error preparing operation: {ex.Message}", "Error",
-                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            return;
-                        }
-#if DEBUG
-                        var path = CPidl.ToString(pidls[0]);
-#endif
-                    }
-
-#if DEBUG
-                    var path2 = CPidl.ToString(pidls[0]);
-#endif
-                    // Get IContextMenu interface from the shell folder
-                    if (pidls == null || pidls.Count == 0)
-                    {
-                        Debug.WriteLine("No items to process");
-                        return;
-                    }
-
-                    try
-                    {
-                        int HR = folder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Count, pidls.ToArray(),
-                            IID_IContextMenu, rgfReserved, out iUnknownOut);
-
-                        if (HR != S_OK || iUnknownOut == IntPtr.Zero)
-                        {
-                            Debug.WriteLine($"GetUIObjectOf failed: HRESULT=0x{HR:X8}");
-                            MessageBox.Show("Failed to get context menu interface from shell.", "Error",
-                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            return;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Exception in GetUIObjectOf: {ex.Message}");
-                        MessageBox.Show($"Error accessing shell interface: {ex.Message}", "Error",
-                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        return;
-                    }
-
-                    // Marshal the COM interface
-                    try
-                    {
-                        m_WindowsContextMenu.winMenu = (IContextMenu)Marshal.GetObjectForIUnknown(iUnknownOut);
-                        if (m_WindowsContextMenu.winMenu == null)
-                        {
-                            Debug.WriteLine("Failed to marshal IContextMenu interface");
-                            return;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Failed to marshal IContextMenu: {ex.Message}");
-                        return;
-                    }
-
-                    // Prepare command structure with allocated strings
-                    try
-                    {
-                        lpVerbAnsi = Marshal.StringToHGlobalAnsi(cmd);
-                        lpVerbUni = Marshal.StringToHGlobalUni(cmd);
-
-                        var cmi = new CMInvokeCommandInfoEx
-                        {
-                            cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                            nShow = (int)SW.SHOWNORMAL,
-                            fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
-                            ptInvoke = new Point(0, 0),
-                            lpVerb = lpVerbAnsi,
-                            lpVerbW = lpVerbUni
-                        };
-
-                        int topItemIndex = -1;
-                        bool hasItems = VirtualMode ? _listView.VirtualListSize > 0 : _listView.Items.Count > 0;
-                        if (cmd == "delete" && hasItems)
-                        { //prevent null references from invalid selections that are about to be deleted
-                            topItemIndex = _listViewWrapper.GetTopIndex();
-                            _listView.SelectedIndices.Clear();
-                            if (!VirtualMode)
-                            {
-                                _listView.SelectedItems.Clear();
-                            }
-                        }
-                        // Execute the shell command
-                        int invokeHR = m_WindowsContextMenu.winMenu.InvokeCommand(cmi); //the important part
-
-                        if (cmd == "delete" && hasItems)
-                        {
-                            foreach (var item in selectedItems)
-                            {
-                                _shellController.HierachyManager.Remove(item);
-
-                                this.RemoveAt(_listViewWrapper.GetIndex(item));
-                            }
-                            if (selectedItems.Length > this._listViewWrapper.GetApproxVisibleCount())
-                                OnScroll();
-                        }
-
-                        if (topItemIndex >= 0)
-                        {
-                            _listView.BeginInvoke(new Action(() =>
-                            {
-                                int count = VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
-                                if (topItemIndex < count)
-                                {
-                                    if (VirtualMode)
-                                        _listView.EnsureVisible(topItemIndex);
-                                    else
-                                        _listView.Items[topItemIndex].EnsureVisible();
-                                }
-                            }));
-                        }
-
-                        if (invokeHR != S_OK)
-                        {
-                            Debug.WriteLine($"InvokeCommand failed: HRESULT=0x{invokeHR:X8}, cmd='{cmd}'");
-                            // Don't show error to user for most cases - shell handles UI
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Error invoking command '{cmd}': {ex.Message}");
-                        MessageBox.Show($"Error executing command: {ex.Message}", "Error",
-                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    }
-                    finally
-                    {
-                        m_WindowsContextMenu.ReleaseMenu();
-
-                        // Clean up allocated strings
-                        if (lpVerbAnsi != IntPtr.Zero)
-                            Marshal.FreeHGlobal(lpVerbAnsi);
-                        if (lpVerbUni != IntPtr.Zero)
-                            Marshal.FreeHGlobal(lpVerbUni);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Unexpected error in WinMenu: {ex.Message}");
-                    MessageBox.Show($"Unexpected error: {ex.Message}", "Error",
-                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
-            }
-            finally
-            {
-                Debug.WriteLine("ExpList: WinMenu End");
-            }
-        }
-
-        /// <summary>
         /// Determines if the current display mode is a thumbnail-based view.
         /// </summary>
         /// <returns>True if in a thumbnail view mode.</returns>
@@ -2142,48 +2467,46 @@ namespace ExpControlsLib
             }
         }
 
-        ///// <summary>
-        ///// Sorts the items in the list view based on their tags (CShellItem).
-        ///// </summary>
-        private void SortLVItems()
-        {
-            Debug.WriteLine("ExpList: SortLVItems Begin");
-            try
-            {
-                if (VirtualMode)
-                {
-                    if (_listView.ListViewItemSorter is LVColSorter sorter)
-                    {
-                        _listViewWrapper.Sort(sorter.SortColumn, sorter.OrderOfSort);
-                    }
-                    return;
-                }
+        /////// <summary>
+        /////// Sorts the items in the list view based on their tags (CShellItem).
+        /////// </summary>
+        //private void SortLVItems()
+        //{
+        //    Debug.WriteLine("ExpList: SortLVItems Begin");
+        //    try
+        //    {
+        //        if (VirtualMode)
+        //        {
+        //            if (_listView.ListViewItemSorter is LVColSorter sorter)
+        //            {
+        //                _listViewWrapper.Sort(sorter.SortColumn, sorter.OrderOfSort);
+        //            }
+        //            return;
+        //        }
 
-                if (_listView.Items.Count < 2) return;
+        //        if (_listView.Items.Count < 2) return;
 
-                EnterListViewEnumeration();
-                try
-                {
-                    _listView.BeginUpdate();
-                    var tmp = new ListViewItem[_listView.Items.Count];
-                    _listView.Items.CopyTo(tmp, 0);
-                    Array.Sort(tmp, new TagComparer());
-                    _listView.Items.Clear();
-                    _listView.Items.AddRange(tmp);
-                    _listView.EndUpdate();
-                }
-                finally
-                {
-                    ExitListViewEnumeration();
-                }
-            }
-            finally
-            {
-                Debug.WriteLine("ExpList: SortLVItems End");
-            }
-        }
-
-
+        //        EnterListViewEnumeration();
+        //        try
+        //        {
+        //            _listView.BeginUpdate();
+        //            var tmp = new ListViewItem[_listView.Items.Count];
+        //            _listView.Items.CopyTo(tmp, 0);
+        //            Array.Sort(tmp, new TagComparer());
+        //            _listView.Items.Clear();
+        //            _listView.Items.AddRange(tmp);
+        //            _listView.EndUpdate();
+        //        }
+        //        finally
+        //        {
+        //            ExitListViewEnumeration();
+        //        }
+        //    }
+        //    finally
+        //    {
+        //        Debug.WriteLine("ExpList: SortLVItems End");
+        //    }
+        //}
 
         #endregion
 
@@ -2296,7 +2619,7 @@ namespace ExpControlsLib
 
                 CShellItem? csi = null;
                 if (listView.FocusedItem != null) //could be selected OR deselected
-                { 
+                {
                     csi = GetItem(listView.FocusedItem.Index);
                     if (csi == null) return;
 
@@ -2368,7 +2691,7 @@ namespace ExpControlsLib
         private void ExpFileList_SelectedIndexChanged(object sender, EventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_SelectedIndexChanged Begin");
-            
+
             if (_isShuttingDown) return;
 
             try
@@ -2411,8 +2734,8 @@ namespace ExpControlsLib
             {
                 Debug.WriteLine("ExpList: InvalidOperationException in ExpFileList_SelectedIndexChanged: " + ex.ToString());
             }
-            catch (NullReferenceException ex) 
-            { 
+            catch (NullReferenceException ex)
+            {
                 Debug.WriteLine("ExpList: NullReferenceException in ExpFileList_SelectedIndexChanged: " + ex.ToString());
             }
             finally
@@ -2738,334 +3061,6 @@ namespace ExpControlsLib
             }
         }
 
-        /// <summary>
-        /// Creates a native Windows context menu for the current folder.
-        /// </summary>
-        /// <param name="comContextMenu">Output parameter for the main context menu handle.</param>
-        /// <param name="viewSubMenu">Output parameter for the View submenu handle.</param>
-        private void CreateContextMenu(out IntPtr comContextMenu, out IntPtr viewSubMenu, out IntPtr sortSubMenu)
-        {
-            Debug.WriteLine("ExpList: CreateContextMenu Begin");
-            try
-            {
-                comContextMenu = CreatePopupMenu();
-                viewSubMenu = CreatePopupMenu();
-                sortSubMenu = CreatePopupMenu();
-
-                // Create and insert the "View" submenu item into the main context menu.
-                var itemInfo = new MENUITEMINFO("View")
-                {
-                    fMask = (int)(MIIM.SUBMENU | MIIM.STRING),
-                    hSubMenu = viewSubMenu
-                };
-                InsertMenuItem(comContextMenu, 0, true, ref itemInfo);
-
-                // Create and insert the "Sort by" submenu item into the main context menu.
-                var sortInfo = new MENUITEMINFO("Sort by")
-                {
-                    fMask = (int)(MIIM.SUBMENU | MIIM.STRING),
-                    hSubMenu = sortSubMenu
-                };
-                InsertMenuItem(comContextMenu, 1, true, ref sortInfo);
-
-                // Add view mode options to the View submenu with radio button indicators.
-                uint checkedFlag;
-                uint checkedValue = (uint)(MFT.RADIOCHECK | MFT.CHECKED);
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.Details) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.DETAILS, "Details");
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.Thumbnail) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (uint)CMD.THUMBNAILS, "Thumbnails");
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.LargeThumbnail) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (uint)CMD.LARGE_THUMBNAILS, "Large Thumbnails");
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.ExtraLargeThumbnail) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.EXTRA_LARGE_THUMBNAILS, "Extra Large Thumbnails");
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.LargeIcon) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.LARGEICON, "Large Icons");
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.List) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.LIST, "List");
-
-                checkedFlag = (DisplayMode == ListViewDisplayMode.Tile) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.TILES, "Tiles");
-
-                // Add sorting options to the Sort by submenu.
-                if (_listView.ListViewItemSorter is LVColSorter sorter)
-                {
-                    int currentSortCol = sorter.SortColumn;
-                    for (int i = 0; i < _listView.Columns.Count; i++)
-                    {
-                        uint sortChecked = (i == currentSortCol) ? checkedValue : (uint)MFT.BYCOMMAND;
-                        AppendMenu(sortSubMenu, sortChecked, (uint)((int)CMD.SORT_BY_BASE + i), _listView.Columns[i].Text);
-                    }
-                }
-
-                // Add separator and standard folder operations to the main context menu.
-                AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
-                AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, (uint)CMD.REFRESH, "Refresh (F5)");
-                AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, (uint)CMD.SELECT_ALL, "Select All (Ctrl+A)");
-                AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
-
-                // Determine if Paste operations are allowed by checking clipboard contents.
-                // CanDropClipboard() returns the DragDropEffects supported by the target folder.
-                var enabled = (uint)MFT.GRAYED;
-                DragDropEffects effects = DragDropEffects.None;
-
-                if (_currentFolderCsi == null)
-                {
-                    enabled = (uint)MFT.BYCOMMAND;
-                }
-                else
-                {
-                    effects = CanDropClipboard(_currentFolderCsi);
-                    if ((effects & DragDropEffects.Copy) == DragDropEffects.Copy ||
-                        (effects & DragDropEffects.Move) == DragDropEffects.Move)
-                    {
-                        enabled = (uint)MFT.BYCOMMAND;
-                    }
-                }
-
-                // Add Paste menu item, enabled only if clipboard contents are compatible.
-                AppendMenu(comContextMenu, enabled, (int)CMD.PASTE, "Paste (Ctrl+V)");
-
-                // Add additional paste and context operations if a folder is selected.
-                if (_currentFolderCsi != null)
-                {
-                    enabled = (uint)MFT.GRAYED;
-                    if ((effects & DragDropEffects.Link) == DragDropEffects.Link)
-                        enabled = (int)MFT.BYCOMMAND;
-
-                    AppendMenu(comContextMenu, enabled, (uint)CMD.PASTELINK, "Paste Link");
-                    AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
-
-                    // Add New menu for writable folders (excluding special shell folders like ::).
-                    // The "New" submenu is managed by m_WindowsContextMenu.SetUpNewMenu(),
-                    // which adds file creation options for the selected folder.
-                    if (_currentFolderCsi.IsFolder &&
-                        ((!_currentFolderCsi.FullPath.StartsWith("::")) || _currentFolderCsi == ShellController.DesktopCSI))
-                    {
-                        int xIndex = GetMenuItemCount(comContextMenu.ToInt32());
-                        m_WindowsContextMenu.SetUpNewMenu(_currentFolderCsi, comContextMenu, xIndex);
-                        AppendMenu(comContextMenu, (int)MFT.SEPARATOR, 0, string.Empty);
-                    }
-
-                    AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, (uint)CMD.PROPERTIES, "Properties");
-                }
-            }
-            finally
-            {
-                Debug.WriteLine("ExpList: CreateContextMenu End");
-            }
-        }
-
-        /// <summary>
-        /// Displays a context menu for the ListView when no items are selected.
-        /// This menu includes view options (Tiles, Large Icons, List, Details), 
-        /// refresh, select all, paste operations, and new item creation.
-        /// </summary>
-        /// <param name="pt">The point (in screen coordinates) where the menu should be displayed.</param>
-        /// <remarks>
-        /// This function handles the creation and management of Windows popup menus.
-        /// It directly manages native menu handles via Win32 API calls and must properly
-        /// release all COM objects and menu handles to avoid memory leaks and access violations.
-        /// 
-        /// Key operations:
-        /// 1. Creates two popup menus: a main context menu and a View submenu
-        /// 2. Populates menus with commands and their checked states
-        /// 3. Determines menu item availability based on clipboard contents
-        /// 4. Invokes the selected command on shell objects (IShellFolder, IContextMenu)
-        /// 5. Releases all COM interfaces and menu handles in the CLEANUP section
-        /// 
-        /// Memory safety note: Menu handles (comContextMenu, viewSubMenu) must be released
-        /// via Marshal.Release() after TrackPopupMenuEx returns. COM objects (IContextMenu, 
-        /// IShellFolder) must be released by ReleaseComObject() to prevent heap corruption.
-        /// Mixing release mechanisms or skipping releases can cause access violations.
-        /// </remarks>
-        private void ShowAndHandleContextMenu(Point pt)
-        {
-            Debug.WriteLine("ExpList: ShowAndHandleContextMenu Begin");
-            try
-            {
-                int HR;
-                int MIN = 1;
-                var cmi = new CMInvokeCommandInfoEx();
-
-                // Create three native Windows popup menu handles.
-                IntPtr comContextMenu;
-                IntPtr viewSubMenu;
-                IntPtr sortSubMenu;
-
-                CreateContextMenu(out comContextMenu, out viewSubMenu, out sortSubMenu);
-
-                // Display the context menu and capture the user's selection.
-                int cmdID = TrackPopupMenuEx(comContextMenu, (int)TPM.RETURNCMD, pt.X, pt.Y, Handle, IntPtr.Zero);
-
-                // Process the user's menu selection.
-                if (cmdID >= MIN)
-                {
-                    // Handle sorting commands.
-                    if (cmdID >= (int)CMD.SORT_BY_BASE)
-                    {
-                        int colIndex = cmdID - (int)CMD.SORT_BY_BASE;
-                        if (_listView.ListViewItemSorter is LVColSorter sorter)
-                        {
-                            sorter.SortColumn = colIndex;
-                        }
-                        goto CLEANUP;
-                    }
-
-                    // Initialize the CMInvokeCommandInfoEx structure used for shell command invocation.
-                    cmi = new CMInvokeCommandInfoEx
-                    {
-                        cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                        nShow = (int)SW.SHOWNORMAL,
-                        fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
-                        ptInvoke = new Point(pt.X, pt.Y)
-                    };
-
-                    // Handle view mode changes and built-in operations.
-                    var cmdEnum = (CMD)cmdID;
-                    switch (cmdEnum)
-                    {
-                        case CMD.TILES:
-                            DisplayMode = ListViewDisplayMode.Tile;
-                            goto CLEANUP;
-                        case CMD.LIST:
-                            DisplayMode = ListViewDisplayMode.List;
-                            goto CLEANUP;
-                        case CMD.DETAILS:
-                            DisplayMode = ListViewDisplayMode.Details;
-                            goto CLEANUP;
-                        case CMD.LARGEICON:
-                            this.DisplayMode = ListViewDisplayMode.LargeIcon;
-                            goto CLEANUP;
-                        case CMD.THUMBNAILS:
-                            this.DisplayMode = ListViewDisplayMode.Thumbnail;
-                            goto CLEANUP;
-                        case CMD.LARGE_THUMBNAILS:
-                            this.DisplayMode = ListViewDisplayMode.LargeThumbnail;
-                            goto CLEANUP;
-                        case CMD.EXTRA_LARGE_THUMBNAILS:
-                            this.DisplayMode = ListViewDisplayMode.ExtraLargeThumbnail;
-                            goto CLEANUP;
-                        case CMD.REFRESH:
-                            // Refresh the folder contents and re-sort the ListView items.
-                            _shellController.ShellUpdater.DoUpdateDir(_currentFolderCsi);
-                            SortLVItems();
-                            goto CLEANUP;
-                        case CMD.SELECT_ALL:
-                            // Select all items in the ListView.
-                            if (VirtualMode)
-                            {
-                                _listView.BeginUpdate();
-                                try
-                                {
-                                    for (int i = 0; i < _listView.VirtualListSize; i++)
-                                        _listView.SelectedIndices.Add(i);
-                                }
-                                finally
-                                {
-                                    _listView.EndUpdate();
-                                }
-                            }
-                            else
-                            {
-                                EnterListViewEnumeration();
-                                try
-                                {
-                                    foreach (ListViewItem item in _listView.Items)
-                                    {
-                                        if (item is null) continue;
-                                        item.Selected = true;
-                                    }
-                                }
-                                finally
-                                {
-                                    ExitListViewEnumeration();
-                                }
-                            }
-                            goto CLEANUP;
-                        case CMD.PASTE:
-                            if (_currentFolderCsi != null)
-                            {
-                                cmi.lpVerb = Marshal.StringToHGlobalAnsi("paste");
-                                cmi.lpVerbW = Marshal.StringToHGlobalUni("paste");
-                            }
-                            else
-                            {
-                                goto CLEANUP;
-                            }
-                            break;
-                        case CMD.PASTELINK:
-                            cmi.lpVerb = Marshal.StringToHGlobalAnsi("pastelink");
-                            cmi.lpVerbW = Marshal.StringToHGlobalUni("pastelink");
-                            break;
-                        case CMD.PROPERTIES:
-                            cmi.lpVerb = Marshal.StringToHGlobalAnsi("properties");
-                            cmi.lpVerbW = Marshal.StringToHGlobalUni("properties");
-                            break;
-                        default:
-                            // Handle commands from the "New" submenu.
-                            cmdID -= 1;
-                            cmi.lpVerb = (IntPtr)cmdID;
-                            cmi.lpVerbW = (IntPtr)cmdID;
-                            m_CreateNew = true;
-                            HR = m_WindowsContextMenu.newMenu.InvokeCommand(cmi);
-#if DEBUG
-                            if (HR != S_OK)
-                                Marshal.ThrowExceptionForHR(HR);
-#endif
-                            goto CLEANUP;
-                    }
-
-                    if (_currentFolderCsi != null)
-                    {
-                        int prgf = 0;
-                        IntPtr iunk = IntPtr.Zero;
-
-                        IShellFolder folder = _currentFolderCsi == ShellController.DesktopCSI
-                            ? _currentFolderCsi.IShlFolder
-                            : _currentFolderCsi.Parent.IShlFolder;
-
-                        IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
-
-                        HR = folder.GetUIObjectOf(IntPtr.Zero, 1, new[] { relPidl }, IID_IContextMenu, prgf, out iunk);
-#if DEBUG
-                        if (HR != S_OK)
-                            Marshal.ThrowExceptionForHR(HR);
-#endif
-                        m_WindowsContextMenu.winMenu = (IContextMenu)Marshal.GetObjectForIUnknown(iunk);
-
-                        HR = m_WindowsContextMenu.winMenu.InvokeCommand(cmi);
-
-                        m_WindowsContextMenu.ReleaseMenu();
-#if DEBUG
-                        if (HR != S_OK)
-                            Marshal.ThrowExceptionForHR(HR);
-#endif
-                    }
-                }
-
-            CLEANUP:
-                m_WindowsContextMenu.ReleaseNewMenu();
-
-                if (comContextMenu != IntPtr.Zero)
-                {
-                    DestroyMenu(comContextMenu);
-                    comContextMenu = IntPtr.Zero;
-                }
-
-                // Note: viewSubMenu and sortSubMenu are destroyed when comContextMenu is destroyed.
-            }
-            finally
-            {
-                Debug.WriteLine("ExpList: objects End");
-            }
-        }
         #endregion
 
 
@@ -3138,7 +3133,7 @@ namespace ExpControlsLib
                 if (e.KeyCode == Keys.F5)
                 {
                     _shellController.ShellUpdater.DoUpdateDir(_currentFolderCsi);
-                    SortLVItems();
+                    _listViewWrapper.Sort();
                 }
 
                 if (e.KeyCode == Keys.Enter && _listView.SelectedIndices.Count > 0)
@@ -3265,7 +3260,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void LoadImagesForItems(ListViewDisplayMode? mode = null)
+        private void LoadImagesForVisibleItems(ListViewDisplayMode? mode = null)
         {
             Debug.WriteLine("ExpList: LoadImagesForItems Begin");
             try
@@ -3370,7 +3365,6 @@ namespace ExpControlsLib
             }
         }
 
-
         /// <summary>
         /// Gets the pixel size for a given thumbnail display mode
         /// </summary>
@@ -3413,7 +3407,7 @@ namespace ExpControlsLib
                 {
                     if (VirtualMode)
                     {
-                        int startIndex = 0;
+                        int startIndex = 0, backFill = 0;
                         int endIndex = _listViewWrapper.Count - 1;
 
                         if (onlyVisible)
@@ -3421,14 +3415,29 @@ namespace ExpControlsLib
                             int topIndex = _listViewWrapper.GetTopIndex();
                             int countPerPage = _listViewWrapper.GetApproxVisibleCount();
                             // Use a reasonable buffer (1 page above/below) for smoother scrolling
-                            startIndex = Math.Max(0, topIndex - countPerPage);
+                            startIndex = Math.Max(0, topIndex);
                             endIndex = Math.Min(_listViewWrapper.Count - 1, topIndex + countPerPage * 2);
+                            backFill = startIndex - countPerPage/2; // if user scrolls up, we want to have thumbnails ready for the previous page
                         }
 
                         for (int i = startIndex; i <= endIndex; i++)
                         {
                             var csi = _listViewWrapper.GetItem(i);
-                            if (csi.ImageIndex != -1) { 
+                            if (csi.ImageIndex != -1)
+                            {
+                                // Skip if already in image list (GetThumbnailIndex will return != -1)
+                                if (_thumbnailManager.GetThumbnailIndex(csi, thumbnailSize) != -1) continue;
+                            }
+
+                            _thumbnailManager.RequestThumbnail(csi, thumbnailSize, i);
+                            Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
+                        }
+
+                        for (int i = backFill; i < startIndex; i++)
+                        {
+                            var csi = _listViewWrapper.GetItem(i);
+                            if (csi.ImageIndex != -1)
+                            {
                                 // Skip if already in image list (GetThumbnailIndex will return != -1)
                                 if (_thumbnailManager.GetThumbnailIndex(csi, thumbnailSize) != -1) continue;
                             }
@@ -3515,14 +3524,14 @@ namespace ExpControlsLib
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine(ex.ToString()); 
+                        Debug.WriteLine(ex.ToString());
                         _listView.SelectedIndices.Clear();
                     }
 
                     if (m.Msg == WindowsMessages.WM_QUERYENDSESSION || m.Msg == WindowsMessages.WM_ENDSESSION || m.Msg == WindowsMessages.WM_CLOSE) // || m.Msg == WindowsMessages.WM_NCDESTORY WM_NCDESTORY get's called during startup
                         ExpList._isShuttingDown = true;
 
-                    if (ExpList._isShuttingDown) return; 
+                    if (ExpList._isShuttingDown) return;
 
                     switch (m.Msg)
                     {
@@ -3588,6 +3597,7 @@ namespace ExpControlsLib
         }
 
         #endregion
+
 
 
 

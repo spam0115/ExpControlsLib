@@ -70,6 +70,7 @@ namespace ExpControlsLib
             Margin = new Padding(4, 3, 4, 3);
             Name = "ExpList";
             Size = new Size(817, 346);
+            Load += ExpList_Load;
             ResumeLayout(false);
         }
 

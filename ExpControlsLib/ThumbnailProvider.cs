@@ -144,7 +144,7 @@ namespace ExpControlsLib
             }
 
 #if DEBUG
-            Console.WriteLine("\tAttempting to add to thumbnail request queue: " + (csi?.DisplayName ?? filePath));
+            Console.WriteLine("\tAdding to thumbnail request queue: " + (csi?.DisplayName ?? filePath));
 #endif
 
             var task = _requestQueueRunner.EnqueueWork(_cancellationToken => { 
@@ -174,8 +174,11 @@ namespace ExpControlsLib
         /// 
         /// </summary>
         /// <remarks>After cancellation, already-running tasks may still finish and create bitmaps which may not have gdi resources released correctly.</remarks>
-        public void CancelAllPendingOperations() { 
+        public void CancelPendingRequests() { 
             _cancellationTokenSource.Cancel();
+
+            _cancellationTokenSource = new CancellationTokenSource();
+            _cancellationToken = _cancellationTokenSource.Token;
 
             lock (_activeTasks)
             {

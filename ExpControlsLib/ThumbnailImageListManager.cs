@@ -193,7 +193,13 @@ namespace ExpControlsLib
                 RequestThumbnail(csi, thumbnailSize, itemIndex);
             }
         }
-        
+
+        internal void CancelPendingRequests()
+        {
+            _thumbnailProvider.CancelPendingRequests();
+        }
+
+
         /// <summary>
         /// Handles thumbnail ready events and updates the ListView.
         /// Image manipulation is done on the background thread, while UI updates are marshalled to the UI thread.
@@ -353,6 +359,7 @@ namespace ExpControlsLib
             Clear();
             _thumbnailProvider?.Dispose();
         }
+
 
     }
 }

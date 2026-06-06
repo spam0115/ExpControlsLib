@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Diagnostics.Eventing.Reader;
 using System.Drawing;
 using System.Linq;
 using System.Runtime.Versioning;
@@ -34,8 +35,32 @@ namespace ExpControlsLib
         private int _prevSortColumn = -1;
         private bool _inSort = false;
 
-        public int SortColumn => _sortColumn;
-        public SortOrder SortOrder => _sortOrder;
+        public LVColSorter Sorter { get; private set; }
+        public int SortColumn
+        {
+            get => _sortColumn;
+            set
+            {
+                _prevSortColumn = _sortColumn;
+                _sortColumn = value;
+                if (!VirtualMode && Sorter != null)
+                    Sorter.SortColumn = value;
+            }
+        }
+
+        public SortOrder SortOrder
+        {
+            get => _sortOrder;
+            set
+            {
+                _prevSortOrder = _sortOrder;
+                _sortOrder = value;
+                if (!VirtualMode && _ListView != null)
+                    _ListView.Sorting = value;
+            }
+        }
+
+        public SortOrder Sorting => SortOrder;
 
         /// <summary>
         /// Callback to create a new ListViewItem for a given CShellItem.
@@ -53,6 +78,17 @@ namespace ExpControlsLib
             _ListView = listView ?? throw new ArgumentNullException(nameof(listView));
 
             _ListView.RetrieveVirtualItem += OnRetrieveVirtualItem;
+        }
+
+        /// <summary>
+        /// Stuff that can't be don't in the constructor because of unavailable dependencies.  
+        /// This should be called in Control.Load().
+        /// </summary>
+        public void Initialize()
+        {
+            //create sorter.  this can't be done earlier because listview columns aren't available during the constructor
+            Sorter = new LVColSorter(_ListView);
+            _ListView.ListViewItemSorter = Sorter;
         }
 
         [Browsable(true), Category("Behavior"), DefaultValue(false)]
@@ -99,23 +135,6 @@ namespace ExpControlsLib
             }
         }
 
-        public SortOrder Sorting
-        {
-            get
-            {
-                if (VirtualMode)
-                    return _sortOrder;
-                else
-                    return _ListView.Sorting;
-            }
-            set
-            {
-                if (VirtualMode)
-                    _sortOrder = value;
-                else
-                    _ListView.Sorting = value;
-            }
-        }
 
         /// <summary>
         /// Gets or sets the display mode used to present items in the list view.
@@ -449,11 +468,17 @@ namespace ExpControlsLib
             return -1;
         }
 
+        public void Sort()
+        {
+            Sort(_sortColumn, _sortOrder);
+        }
+
         public void Sort(int column, SortOrder order)
         {
+            Debug.WriteLine("VirtualListViewWrapper: Sort begin");
             if (_inSort) return;
-            LastTopIndex = -1;
             _inSort = true;
+            LastTopIndex = -1;
             try
             {
                 if (column != _sortColumn && _sortOrder != SortOrder.None)
@@ -485,6 +510,7 @@ namespace ExpControlsLib
             finally
             {
                 _inSort = false;
+                Debug.WriteLine("VirtualListViewWrapper: Sort end");
             }
         }
 
