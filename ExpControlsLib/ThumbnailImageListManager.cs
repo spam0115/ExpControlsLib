@@ -28,7 +28,7 @@ namespace ExpControlsLib
         
         private readonly HashedLinkedList<string> _lruKeys = new();
         private readonly System.Collections.Generic.Dictionary<string, ThumbnailSlot> _slotByKey = new();
-        private const int MaxThumbnails = 3000;
+        private const int MaxThumbnails = 5000;
 
         private readonly System.Collections.Generic.HashSet<ImageList> _corruptImageLists = new System.Collections.Generic.HashSet<ImageList>();
 
@@ -55,6 +55,13 @@ namespace ExpControlsLib
             _thumbnailProvider.ThumbnailReady += OnThumbnailReady;
         }
 
+        /// <summary>
+        /// Gets the thumbnail index for a given CShellItem and requested size. 
+        /// If the thumbnail is not yet available, it initiates a request and returns -1.
+        /// </summary>
+        /// <param name="csi"></param>
+        /// <param name="requestedSize"></param>
+        /// <returns></returns>
         public int GetThumbnailIndex(CShellItem csi, int requestedSize)
         {
             if (_slotByKey.TryGetValue($"{csi.FullPath}|{requestedSize}", out var slot))

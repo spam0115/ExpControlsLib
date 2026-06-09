@@ -1857,7 +1857,7 @@ namespace ExpControlsLib
                 {
                     int totalItems;
 
-                    Console.WriteLine("\tSorting...");
+                    Debug.WriteLine("\tSorting..." + DateTime.Now.ToString("HH:mm:ss.fff"));
                     fileList.Sort();
                     totalItems = fileList.Count;
                     if (includeFolder)
@@ -1865,7 +1865,7 @@ namespace ExpControlsLib
                         dirList.Sort();
                         totalItems += dirList.Count;
                     }
-                    Console.WriteLine("\tSorting done");
+                    Debug.WriteLine("\tSorting done" + DateTime.Now.ToString("HH:mm:ss.fff"));
 
                     var combinedList = new List<CShellItem>(totalItems);
                     if (includeFolder) combinedList.AddRange(dirList);
@@ -2913,6 +2913,7 @@ namespace ExpControlsLib
 
                 if (VirtualMode)
                 {
+                    Debug.WriteLine("Redrawing: " + e.Item.DisplayName);
                     _listView.RedrawItems(index, index, false);
                 }
                 else
@@ -3436,14 +3437,22 @@ namespace ExpControlsLib
                         for (int i = backFill; i < startIndex; i++)
                         {
                             var csi = _listViewWrapper.GetItem(i);
-                            if (csi.ImageIndex != -1)
+                            if (csi is null)
+                            {
+                                Debug.WriteLine($"LoadThumbnailsForItems: GetItem returned null for index {i}");
+                                continue;
+                            }
+
+                            if (csi.ImageIndex == -1)
+                            {
+                                _thumbnailManager.RequestThumbnail(csi, thumbnailSize, i);
+                                Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
+                            }
+                            else
                             {
                                 // Skip if already in image list (GetThumbnailIndex will return != -1)
                                 if (_thumbnailManager.GetThumbnailIndex(csi, thumbnailSize) != -1) continue;
                             }
-
-                            _thumbnailManager.RequestThumbnail(csi, thumbnailSize, i);
-                            Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
                         }
                     }
                     else

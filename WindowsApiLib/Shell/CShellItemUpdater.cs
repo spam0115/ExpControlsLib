@@ -331,7 +331,7 @@ namespace WindowsApiLib.Shell
 
                         case SHCNE.UPDATEITEM: //this is supposed to be items but that include directories sometimes
                             {
-                                Debug.WriteLine("  [UPDATEITEM] processing...");
+                                Debug.WriteLine("  [UPDATEITEM] processing... " + DateTime.Now.ToString("HH:mm:ss.fff"));
                                 if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0)
                                 {
                                     Debug.WriteLine("  [UPDATEITEM] Empty pidl received from UPDATEITEM event");
@@ -355,7 +355,7 @@ namespace WindowsApiLib.Shell
                                     var item = HierachyManager.Find(shNotify.dwItem1);
                                     if (item is null)
                                     {
-                                        Debug.WriteLine("  [UPDATEITEM] item was not found");
+                                        Debug.WriteLine("  [UPDATEITEM] item was not found " + DateTime.Now.ToString("HH:mm:ss.fff"));
                                         return;
                                     }
 
@@ -377,7 +377,7 @@ namespace WindowsApiLib.Shell
                         case SHCNE.MKDIR:
                         case SHCNE.DRIVEADD:
                             {
-                                Debug.WriteLine("  [MKDIR/DRIVEADD] processing...");
+                                Debug.WriteLine("  [MKDIR/DRIVEADD] processing... " + DateTime.Now.ToString("HH:mm:ss.fff"));
                                 // Make Directory
                                 //IntPtr parent, child = IntPtr.Zero;
                                 //parent = CPidl.SplitPidl(shNotify.dwItem1, ref child);
@@ -429,7 +429,7 @@ namespace WindowsApiLib.Shell
                                 }
                                 else
                                 {
-                                    Debug.WriteLine("  ***MKDIR - Parent Not Found");
+                                    Debug.WriteLine("  [MKDIR] Parent Not Found " + DateTime.Now.ToString("HH:mm:ss.fff"));
                                 }     // 6/30/2012
                                 Marshal.FreeCoTaskMem(splitPidls.ParentPidl);
                                 Marshal.FreeCoTaskMem(splitPidls.ChildPidl);

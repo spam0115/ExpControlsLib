@@ -372,7 +372,7 @@ namespace ExpControlsLib
             }
         }
 
-        public CShellItem GetItem(int index)
+        public CShellItem? GetItem(int index)
         {
             if (VirtualMode)
             {
@@ -384,6 +384,8 @@ namespace ExpControlsLib
                 if (index >= 0 && index < _ListView.Items.Count)
                     return _ListView.Items[index].Tag as CShellItem;
             }
+
+            Debug.WriteLine("VirtualListViewWrapper.GetItem failed to get item at index " + index);
             return null;
         }
 

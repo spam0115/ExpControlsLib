@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
@@ -35,9 +36,7 @@ namespace ExpControlsLib
 
             string prefix = string.IsNullOrWhiteSpace(threadNamePrefix) ? "STA Runner" : threadNamePrefix;
 
-#if DEBUG
-            Console.WriteLine("Starting StaThreadRunner...");
-#endif
+            Debug.WriteLine("Starting StaThreadRunner...");
 
             for (int i = 0; i < staThreadCount; i++)
             {
@@ -51,9 +50,7 @@ namespace ExpControlsLib
                 thread.SetApartmentState(ApartmentState.STA);
                 _threads[i] = thread;
                 thread.Start();
-#if DEBUG
-                Console.WriteLine("\tthread started.");
-#endif
+                Debug.WriteLine("\tthread started." + DateTime.Now.ToString("HH:mm:ss.fff"));
             }
 
             _ready.Wait();

@@ -29,6 +29,11 @@ namespace ExpControlsLib
         // A bool to indicate whether this class has been disposed
         private bool disposed = false;
 
+        // Deferral fields
+        private object? m_PendingItem;
+        private MouseButtons m_PendingButton;
+        private const int SecondaryThreshold = 20; // Radius in pixels for less sensitivity before initiating drag
+
         /// <summary>
         /// Event Raised when a Drag is started from the associated Control
         /// </summary>
@@ -80,29 +85,82 @@ namespace ExpControlsLib
                 m_DragStartPoint.X - SystemInformation.DragSize.Width,
                 m_DragStartPoint.Y - SystemInformation.DragSize.Height,
                 SystemInformation.DragSize.Width * 2,
-                SystemInformation.DragSize.Height * 2); //can't increase it past this much or else a drag won't start at all. This is because the system drag event is triggered while the cursor is still within the threshold and get's cancelled and then never fired again.
+                SystemInformation.DragSize.Height * 2);
 
             if (dragRect.Contains(currentPoint))
             {
                 return;
             }
 
+            // Secondary check: If we haven't reached our own larger threshold yet, defer the drag
+            if (Math.Abs(currentPoint.X - m_DragStartPoint.X) < SecondaryThreshold &&
+                Math.Abs(currentPoint.Y - m_DragStartPoint.Y) < SecondaryThreshold)
+            {
+                if (m_PendingItem == null)
+                {
+                    m_PendingItem = e.Item;
+                    m_PendingButton = e.Button;
+                    m_Client.MouseMove += OnMouseMoveDeferred;
+                    m_Client.MouseUp += OnMouseUpDeferred;
+                }
+                return;
+            }
+
+            StartDragInternal(sender, e.Item, e.Button);
+        }
+
+        private void OnMouseMoveDeferred(object? sender, MouseEventArgs e)
+        {
+            if (m_PendingItem == null) return;
+
+            // Check if we've finally crossed the secondary threshold
+            if (Math.Abs(e.X - m_DragStartPoint.X) >= SecondaryThreshold ||
+                Math.Abs(e.Y - m_DragStartPoint.Y) >= SecondaryThreshold)
+            {
+                object? item = m_PendingItem;
+                MouseButtons button = m_PendingButton;
+                CleanupDeferred();
+
+                // Use BeginInvoke to ensure the current MouseMove event completes 
+                // before starting the modal DoDragDrop loop.
+                m_Client.BeginInvoke(new Action(() =>
+                {
+                    StartDragInternal(m_Client, item, button);
+                }));
+            }
+        }
+
+        private void OnMouseUpDeferred(object? sender, MouseEventArgs e)
+        {
+            CleanupDeferred();
+        }
+
+        private void CleanupDeferred()
+        {
+            if (m_PendingItem != null)
+            {
+                m_PendingItem = null;
+                m_Client.MouseMove -= OnMouseMoveDeferred;
+                m_Client.MouseUp -= OnMouseUpDeferred;
+            }
+        }
+
+        private void StartDragInternal(object sender, object? itemToDrag, MouseButtons button)
+        {
             ReleaseCom();
+            startButton = button;
 
-            startButton = e.Button;
             CShellItem item;
-
             if (isTreeView) // Can only drag 1 Item
             {
-                item = (e.Item as TreeNode)?.Tag as CShellItem;
+                item = (itemToDrag as TreeNode)?.Tag as CShellItem;
                 if (item == null)
-                    throw new ArgumentException("CDragWrapper -- Invalid item to drag -- No CShellItem in Tag");
+                    return;
 
                 dataObjectPtr = ShellHelper.GetIDataObject(new[] { item });
             }
             else // ListView may have more than one item to drag
             {
-                // All items to drag MUST be in the same Folder!
                 var ctl = (ListView)m_Client;
                 if (ctl.SelectedIndices.Count == 0) return;
 
@@ -209,6 +267,7 @@ namespace ExpControlsLib
         {
             if (!disposed)
             {
+                CleanupDeferred();
                 if (m_Client != null)
                 {
                     m_Client.MouseDown -= OnMouseDown;
