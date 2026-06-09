@@ -162,6 +162,16 @@ namespace WindowsApiLib.Shell
                 m_items.Remove(value);
         }
 
+        internal void RemoveRange(IEnumerable<CShellItem> items)
+        {
+            if (items == null) return;
+            var toRemove = new HashSet<CShellItem>(items);
+            lock (m_syncRoot)
+            {
+                m_items.RemoveAll(i => toRemove.Contains(i));
+            }
+        }
+
         internal void Remove(string name)
         {
             lock (m_syncRoot)

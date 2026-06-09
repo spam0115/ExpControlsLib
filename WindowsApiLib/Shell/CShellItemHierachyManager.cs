@@ -278,59 +278,99 @@ namespace WindowsApiLib.Shell
         /// <returns></returns>
         public bool Remove(CShellItem item)
         {
-            CShellItem? target = null;
+            return RemoveRange(new[] { item }, true);
+        }
+
+        public bool RemoveRange(IEnumerable<CShellItem> items, bool raiseEvents = true)
+        {
+            if (items == null) return false;
+
+            var removedAny = false;
+            var groupedByParent = new Dictionary<CShellItem, List<CShellItem>>();
 
             try
             {
                 lock (this.Lock)
                 {
-                    target = Find(item.PIDL);
+                    foreach (var item in items)
+                    {
+                        var target = Find(item.PIDL);
+                        if (target != null && target.Parent != null)
+                        {
+                            if (!groupedByParent.TryGetValue(target.Parent, out var list))
+                            {
+                                list = new List<CShellItem>();
+                                groupedByParent[target.Parent] = list;
+                            }
+                            list.Add(target);
+                        }
+                    }
                 }
-                
-                if (target == null) return false;
 
-                lock (target)
+                foreach (var kvp in groupedByParent)
                 {
-                    if (target.IsFolder)
+                    var parent = kvp.Key;
+                    var targets = kvp.Value;
+
+                    lock (parent)
                     {
-                        if (target.FilesInitialized)
+                        var filesToRemove = new List<CShellItem>();
+                        var dirsToRemove = new List<CShellItem>();
+
+                        foreach (var target in targets)
                         {
-                            foreach (var child in target.m_Files)
+                            if (target.IsFolder)
                             {
-                                child.m_Parent = null; //should we delete all children?
+                                lock (target)
+                                {
+                                    if (target.FilesInitialized)
+                                    {
+                                        foreach (var child in target.m_Files)
+                                            child.m_Parent = null;
+                                        target.m_Files.Clear();
+                                    }
+                                    if (target.FoldersInitialized)
+                                    {
+                                        foreach (var child in target.m_Directories)
+                                            child.m_Parent = null;
+                                        target.m_Directories.Clear();
+                                    }
+                                }
+                                dirsToRemove.Add(target);
                             }
-
-                            target.m_Files.Clear();
+                            else
+                            {
+                                filesToRemove.Add(target);
+                            }
                         }
-                        if (target.FoldersInitialized)
+
+                        if (filesToRemove.Count > 0)
                         {
-                            foreach (var child in target.m_Files)
-                            {
-                                child.m_Parent = null;
-                            }
-
-                            target.m_Directories.Clear(); //should we recursively unlink items?
+                            parent.m_Files.RemoveRange(filesToRemove);
                         }
-
-                        target.Parent.m_Directories.Remove(target);
+                        if (dirsToRemove.Count > 0)
+                        {
+                            parent.m_Directories.RemoveRange(dirsToRemove);
+                        }
+                        
+                        removedAny = true;
                     }
-                    else
+
+                    if (raiseEvents)
                     {
-                        target.Parent.m_Files.Remove(target);
+                        foreach (var target in targets)
+                        {
+                            CShellItemUpdater.RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(target, CShItemUpdateType.Deleted));
+                        }
                     }
-                }               
+                }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("Error in CShellItemHierarchyManager.RemoveItem: " + ex.ToString());
+                Debug.WriteLine("Error in CShellItemHierarchyManager.RemoveRange: " + ex.ToString());
             }
 
-            if (target != null)
-            {
-                CShellItemUpdater.RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(target, CShItemUpdateType.Deleted));
-            }
-
-            return true;
+            return removedAny;
         }
     }
 

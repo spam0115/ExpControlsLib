@@ -942,14 +942,31 @@ namespace ExpControlsLib
 
                         if (cmd == "delete" && hasItems)
                         {
-                            foreach (var item in selectedItems)
+                            _listView.BeginUpdate();
+                            try
                             {
-                                _shellController.HierachyManager.Remove(item);
+                                // Batch remove from hierarchy (suppress individual events)
+                                _shellController.HierachyManager.RemoveRange(selectedItems, raiseEvents: false);
 
-                                this.RemoveAt(_listViewWrapper.GetIndex(item));
+                                // Batch remove from list view wrapper
+                                _listViewWrapper.RemoveItems(selectedItems);
+
+                                if (selectedItems.Length > this._listViewWrapper.GetApproxVisibleCount())
+                                    OnScroll();
+
+                                // Fire single update event for the folder
+                                if (_currentFolderCsi != null)
+                                {
+                                    string path = _currentFolderCsi.FullPath.StartsWith(":")
+                                        ? _currentFolderCsi.DisplayName
+                                        : _currentFolderCsi.FullPath;
+                                    ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
+                                }
                             }
-                            if (selectedItems.Length > this._listViewWrapper.GetApproxVisibleCount())
-                                OnScroll();
+                            finally
+                            {
+                                _listView.EndUpdate();
+                            }
                         }
 
                         if (topItemIndex >= 0)

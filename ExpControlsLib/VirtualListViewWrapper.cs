@@ -372,6 +372,70 @@ namespace ExpControlsLib
             }
         }
 
+        public void RemoveItems(IEnumerable<CShellItem> items)
+        {
+            if (items == null) return;
+            var toRemove = new HashSet<CShellItem>(items);
+            if (toRemove.Count == 0) return;
+
+            if (VirtualMode)
+            {
+                lock (_virtualItems)
+                {
+                    // Rebuild virtual items list in one pass
+                    var remaining = new List<CShellItem>(_virtualItems.Count);
+                    foreach (var item in _virtualItems)
+                    {
+                        if (!toRemove.Contains(item))
+                        {
+                            remaining.Add(item);
+                        }
+                        else
+                        {
+                            _pathToIndex.Remove(item.FullPath);
+                        }
+                    }
+
+                    _virtualItems.Clear();
+                    _virtualItems.AddRange(remaining);
+                    UpdateVirtualListSize();
+
+                    // Rebuild path index
+                    _pathToIndex.Clear();
+                    for (int i = 0; i < _virtualItems.Count; i++)
+                    {
+                        _pathToIndex[_virtualItems[i].FullPath] = i;
+                    }
+
+                    // For large batches, it's safer and often faster to just clear the cache
+                    _itemCache.Clear();
+                }
+
+                LastTopIndex = -1;
+                _ListView.Invalidate();
+            }
+            else
+            {
+                _ListView.BeginUpdate();
+                try
+                {
+                    // Remove backwards to minimize shifting
+                    for (int i = _ListView.Items.Count - 1; i >= 0; i--)
+                    {
+                        if (_ListView.Items[i].Tag is CShellItem csi && toRemove.Contains(csi))
+                        {
+                            _itemIndex.Remove(csi.FullPath);
+                            _ListView.Items.RemoveAt(i);
+                        }
+                    }
+                }
+                finally
+                {
+                    _ListView.EndUpdate();
+                }
+            }
+        }
+
         public CShellItem? GetItem(int index)
         {
             if (VirtualMode)
