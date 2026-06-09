@@ -728,7 +728,7 @@
             Removes the item at the specified index.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.SetSort(System.Int32,System.Windows.Forms.SortOrder)">
+        <member name="M:ExpControlsLib.ExpList.Sort(System.Int32,System.Windows.Forms.SortOrder)">
             <summary>
             Sets the sort column and order.
             </summary>
@@ -764,6 +764,44 @@
             </summary>
             <param name="m">The Windows <see cref="T:System.Windows.Forms.Message"/> to process.</param>
         </member>
+        <member name="M:ExpControlsLib.ExpList.WinMenu(System.String)">
+            <summary>
+            Invokes a standard shell action (cut, copy, paste, delete) on the selected items.
+            </summary>
+            <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.CreateContextMenu(System.IntPtr@,System.IntPtr@,System.IntPtr@)">
+            <summary>
+            Creates a native Windows context menu for the current folder.
+            </summary>
+            <param name="comContextMenu">Output parameter for the main context menu handle.</param>
+            <param name="viewSubMenu">Output parameter for the View submenu handle.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ShowAndHandleContextMenu(System.Drawing.Point)">
+            <summary>
+            Displays a context menu for the ListView when no items are selected.
+            This menu includes view options (Tiles, Large Icons, List, Details), 
+            refresh, select all, paste operations, and new item creation.
+            </summary>
+            <param name="pt">The point (in screen coordinates) where the menu should be displayed.</param>
+            <remarks>
+            This function handles the creation and management of Windows popup menus.
+            It directly manages native menu handles via Win32 API calls and must properly
+            release all COM objects and menu handles to avoid memory leaks and access violations.
+            
+            Key operations:
+            1. Creates two popup menus: a main context menu and a View submenu
+            2. Populates menus with commands and their checked states
+            3. Determines menu item availability based on clipboard contents
+            4. Invokes the selected command on shell objects (IShellFolder, IContextMenu)
+            5. Releases all COM interfaces and menu handles in the CLEANUP section
+            
+            Memory safety note: Menu handles (comContextMenu, viewSubMenu) must be released
+            via Marshal.Release() after TrackPopupMenuEx returns. COM objects (IContextMenu, 
+            IShellFolder) must be released by ReleaseComObject() to prevent heap corruption.
+            Mixing release mechanisms or skipping releases can cause access violations.
+            </remarks>
+        </member>
         <member name="P:ExpControlsLib.ExpList.SelectedItems">
             <summary>
             Exposes the SelectedItems collection of the internal ListView to allow external handlers to access the currently selected items.
@@ -784,7 +822,7 @@
             <param name="sender">The source of the event.</param>
             <param name="e">The <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the event data.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.UpdateLviUsingCsi(System.Windows.Forms.ListViewItem,WindowsApiLib.Shell.CShellItem)">
+        <member name="M:ExpControlsLib.ExpList.UpdateListviewItemCallback(System.Windows.Forms.ListViewItem,WindowsApiLib.Shell.CShellItem)">
             <summary>
             Refreshes the display of a single item whose underlying filesystem data has changed.
             </summary>
@@ -805,11 +843,6 @@
             in one shot, which is more efficient than firing GetColumnData for each individual column.
             </summary>
             <param name="item"></param>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.RefreshItemByDisplayName(System.String)">
-            <summary>
-            Refresh by display name string.  This is very inefficient.  Avoid this function.
-            </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.DisplayFiles(System.String,WindowsApiLib.Shell.CShellItem,System.Boolean,System.Boolean)">
             <summary>
@@ -845,15 +878,7 @@
             Finds a ListViewItem by its full filesystem path.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.GetTopIndex">
-            <summary>
-            Returns a "top-like" index for any ListView mode.
-            - Details/List: effectively top row index
-            - LargeIcon/SmallIcon/Tile: top-left visible item index
-            Works in virtual and non-virtual mode.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.MakeLVItem(WindowsApiLib.Shell.CShellItem)">
+        <member name="M:ExpControlsLib.ExpList.CreateListviewItemCallback(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Creates a <see cref="T:System.Windows.Forms.ListViewItem"/> for a given <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
             Populates columns based on <see cref="E:ExpControlsLib.ExpList.ExpListGetColumnData"/> event or <see cref="P:System.Windows.Forms.ColumnHeader.Tag"/> mapping.
@@ -887,27 +912,11 @@
             Use this for ListView modification operations outside of DoItemUpdate.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.RequestListViewRepopulate(System.Windows.Forms.ListViewItem[],System.Boolean)">
-            <summary>
-            This refreshes the ListView with new items.
-            This function marshals execution to the ui thread.  Also prevents double updating by gatekeeping 
-            execution via the _refreshing boolean.  Without these precautions, we got errors with array index 
-            out of bounds errors on the listview items that couldn't be resolved with only a lock. 
-            </summary>
-            <param name="newItems"></param>
-            <returns></returns>
-        </member>
         <member name="M:ExpControlsLib.ExpList.LaunchFile(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Launches a file using the default system handler.
             </summary>
             <param name="csi">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to launch.</param>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.WinMenu(System.String)">
-            <summary>
-            Invokes a standard shell action (cut, copy, paste, delete) on the selected items.
-            </summary>
-            <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
         </member>
         <member name="M:ExpControlsLib.ExpList.IsThumbnailViewMode">
             <summary>
@@ -922,11 +931,6 @@
             <param name="ctl">The control to check.</param>
             <param name="e">The <see cref="T:System.Windows.Forms.MouseEventArgs"/> containing the mouse position.</param>
             <returns>True if the mouse is within the control's client area.</returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.SortLVItems">
-            <summary>
-            Sorts the items in the list view based on their tags (CShellItem).
-            </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.GoBack">
             <summary>
@@ -990,38 +994,6 @@
             <summary>
             Handles the MouseUp event to trigger context menus or middle-click actions.
             </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.CreateContextMenu(System.IntPtr@,System.IntPtr@,System.IntPtr@)">
-            <summary>
-            Creates a native Windows context menu for the current folder.
-            </summary>
-            <param name="comContextMenu">Output parameter for the main context menu handle.</param>
-            <param name="viewSubMenu">Output parameter for the View submenu handle.</param>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.ShowAndHandleContextMenu(System.Drawing.Point)">
-            <summary>
-            Displays a context menu for the ListView when no items are selected.
-            This menu includes view options (Tiles, Large Icons, List, Details), 
-            refresh, select all, paste operations, and new item creation.
-            </summary>
-            <param name="pt">The point (in screen coordinates) where the menu should be displayed.</param>
-            <remarks>
-            This function handles the creation and management of Windows popup menus.
-            It directly manages native menu handles via Win32 API calls and must properly
-            release all COM objects and menu handles to avoid memory leaks and access violations.
-            
-            Key operations:
-            1. Creates two popup menus: a main context menu and a View submenu
-            2. Populates menus with commands and their checked states
-            3. Determines menu item availability based on clipboard contents
-            4. Invokes the selected command on shell objects (IShellFolder, IContextMenu)
-            5. Releases all COM interfaces and menu handles in the CLEANUP section
-            
-            Memory safety note: Menu handles (comContextMenu, viewSubMenu) must be released
-            via Marshal.Release() after TrackPopupMenuEx returns. COM objects (IContextMenu, 
-            IShellFolder) must be released by ReleaseComObject() to prevent heap corruption.
-            Mixing release mechanisms or skipping releases can cause access violations.
-            </remarks>
         </member>
         <member name="M:ExpControlsLib.ExpList.ExpFileList_KeyDown(System.Object,System.Windows.Forms.KeyEventArgs)">
             <summary>
@@ -1676,6 +1648,15 @@
             Creates and maintains separate ImageLists for different thumbnail sizes.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.GetThumbnailIndex(WindowsApiLib.Shell.CShellItem,System.Int32)">
+            <summary>
+            Gets the thumbnail index for a given CShellItem and requested size. 
+            If the thumbnail is not yet available, it initiates a request and returns -1.
+            </summary>
+            <param name="csi"></param>
+            <param name="requestedSize"></param>
+            <returns></returns>
+        </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.GetImageList(System.Int32)">
             <summary>
             Gets or creates an ImageList for the specified thumbnail size
@@ -1775,7 +1756,7 @@
             <param name="size">Desired thumbnail size in pixels (e.g., 96, 256).</param>
             <param name="reqArgs">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailProvider.CancelAllPendingOperations">
+        <member name="M:ExpControlsLib.ThumbnailProvider.CancelPendingRequests">
             <summary>
             
             </summary>
@@ -1862,14 +1843,20 @@
             Virtual and Regular modes. Provides a unified interface for data manipulation.
             </summary>
         </member>
-        <member name="P:ExpControlsLib.VirtualListViewWrapper.CreateItemCallback">
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.CreateListviewItemCallback">
             <summary>
             Callback to create a new ListViewItem for a given CShellItem.
             </summary>
         </member>
-        <member name="P:ExpControlsLib.VirtualListViewWrapper.UpdateItemCallback">
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.UpdateListviewItemCallback">
             <summary>
             Callback to update an existing ListViewItem with data from a CShellItem.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.Initialize">
+            <summary>
+            Stuff that can't be don't in the constructor because of unavailable dependencies.  
+            This should be called in Control.Load().
             </summary>
         </member>
         <member name="P:ExpControlsLib.VirtualListViewWrapper.DisplayMode">
@@ -1949,6 +1936,16 @@
             - LargeIcon/SmallIcon/Tile: top-left visible item index
             Works in virtual and non-virtual mode.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.GetSizeForDisplayMode">
+            <summary>
+            Gets the approximate pixel size for an item based on the current display mode.  
+            This is used to determine how aggressively to scan for visible items when calculating 
+            the top index.
+            </summary>
+            <returns></returns>
+            <remarks>todo: take into account display scale factor</remarks>   
+            <exception cref="T:System.Exception"></exception>
         </member>
     </members>
 </doc>
