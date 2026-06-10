@@ -35,8 +35,7 @@ namespace ExpControlsLib
         /// In-memory cache of previously generated thumbnails keyed by
         /// "path|size". Stores raw pixel data to avoid GDI handle exhaustion.
         /// </summary>
-        private readonly ConcurrentDictionary<string, byte[]> _thumbnailCache =
-            new ConcurrentDictionary<string, byte[]>();
+        private readonly ConcurrentDictionary<string, byte[]> _thumbnailCache = new ();
 
         /// <summary>
         /// queue for holding pending thumbnail requests that will be processed by the background worker.

@@ -128,7 +128,7 @@ namespace WindowsApiLib
                 }
             }
             m_Initialized = true;
-            // Call here; SHGetIconOverlayIndex requies that the System ImageList is initialized...
+            // Call here; SHGetIconOverlayIndex requires that the System ImageList is initialized...
             GetOverlayIndices();
         }
         #endregion

@@ -20,6 +20,7 @@ namespace WindowsApiLib
 
             return Regex.IsMatch(input, regex, RegexOptions.CultureInvariant);
         }
+
         public static long GetDiskSize(string drivePath)
         {
             try
