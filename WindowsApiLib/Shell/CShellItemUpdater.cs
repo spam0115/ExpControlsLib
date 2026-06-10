@@ -359,7 +359,7 @@ namespace WindowsApiLib.Shell
                                         return;
                                     }
 
-                                    Debug.WriteLine("  [UPDATEITEM] Found/Added item: " + item.ItemPath + (item.IsFolder ? " (Folder)" : " (File)"));
+                                    Debug.WriteLine("  [UPDATEITEM] Found item: " + item.ItemPath + (item.IsFolder ? " (Folder)" : " (File)"));
                                     if (item.IsFolder)
                                     {
                                         DoUpdate(item, default, CShItemUpdateType.UpdateDir);

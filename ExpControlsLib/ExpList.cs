@@ -709,26 +709,26 @@ namespace ExpControlsLib
                 int hr;
                 if (m.Msg == (int)WM.INITMENUPOPUP || m.Msg == (int)WM.MEASUREITEM || m.Msg == (int)WM.DRAWITEM)
                 {
-                    if (m_WindowsContextMenu.winMenu2 != null)
+                    if (m_WindowsContextMenu.cntxMenuExtended != null)
                     {
-                        hr = m_WindowsContextMenu.winMenu2.HandleMenuMsg(m.Msg, m.WParam, m.LParam);
+                        hr = m_WindowsContextMenu.cntxMenuExtended.HandleMenuMsg(m.Msg, m.WParam, m.LParam);
                         if (hr == 0) return;
                     }
                     else if ((m.Msg == (int)WM.INITMENUPOPUP && m.WParam == m_WindowsContextMenu.newMenuPtr)
                              || m.Msg == (int)WM.MEASUREITEM || m.Msg == (int)WM.DRAWITEM)
                     {
-                        if (m_WindowsContextMenu.newMenu2 != null)
+                        if (m_WindowsContextMenu.newMenuExtended != null)
                         {
-                            hr = m_WindowsContextMenu.newMenu2.HandleMenuMsg(m.Msg, m.WParam, m.LParam);
+                            hr = m_WindowsContextMenu.newMenuExtended.HandleMenuMsg(m.Msg, m.WParam, m.LParam);
                             if (hr == 0) return;
                         }
                     }
                 }
                 else if (m.Msg == (int)WM.MENUCHAR)
                 {
-                    if (m_WindowsContextMenu.winMenu3 != null)
+                    if (m_WindowsContextMenu.cntxMenuCascading != null)
                     {
-                        hr = m_WindowsContextMenu.winMenu3.HandleMenuMsg2(m.Msg, m.WParam, m.LParam, IntPtr.Zero);
+                        hr = m_WindowsContextMenu.cntxMenuCascading.HandleMenuMsg2(m.Msg, m.WParam, m.LParam, IntPtr.Zero);
                         if (hr == 0) return;
                     }
                 }
@@ -908,8 +908,8 @@ namespace ExpControlsLib
                     // Marshal the COM interface
                     try
                     {
-                        m_WindowsContextMenu.winMenu = (IContextMenu)Marshal.GetObjectForIUnknown(iUnknownOut);
-                        if (m_WindowsContextMenu.winMenu == null)
+                        m_WindowsContextMenu.cntxMenuBase = (IContextMenu)Marshal.GetObjectForIUnknown(iUnknownOut);
+                        if (m_WindowsContextMenu.cntxMenuBase == null)
                         {
                             Debug.WriteLine("Failed to marshal IContextMenu interface");
                             return;
@@ -949,7 +949,7 @@ namespace ExpControlsLib
                             }
                         }
                         // Execute the shell command
-                        int invokeHR = m_WindowsContextMenu.winMenu.InvokeCommand(cmi); //the important part
+                        int invokeHR = m_WindowsContextMenu.cntxMenuBase.InvokeCommand(cmi); //the important part
 
                         if (cmd == "delete" && hasItems)
                         {
@@ -1308,7 +1308,7 @@ namespace ExpControlsLib
                             cmi.lpVerb = (IntPtr)cmdID;
                             cmi.lpVerbW = (IntPtr)cmdID;
                             m_CreateNew = true;
-                            HR = m_WindowsContextMenu.newMenu.InvokeCommand(cmi);
+                            HR = m_WindowsContextMenu.newMenuBase.InvokeCommand(cmi);
 #if DEBUG
                             if (HR != S_OK)
                                 Marshal.ThrowExceptionForHR(HR);
@@ -1332,9 +1332,9 @@ namespace ExpControlsLib
                         if (HR != S_OK)
                             Marshal.ThrowExceptionForHR(HR);
 #endif
-                        m_WindowsContextMenu.winMenu = (IContextMenu)Marshal.GetObjectForIUnknown(iunk);
+                        m_WindowsContextMenu.cntxMenuBase = (IContextMenu)Marshal.GetObjectForIUnknown(iunk);
 
-                        HR = m_WindowsContextMenu.winMenu.InvokeCommand(cmi);
+                        HR = m_WindowsContextMenu.cntxMenuBase.InvokeCommand(cmi);
 
                         m_WindowsContextMenu.ReleaseMenu();
 #if DEBUG
@@ -3038,7 +3038,7 @@ namespace ExpControlsLib
                             else
                             {
                                 byte[] cmdBytes = new byte[256];
-                                m_WindowsContextMenu.winMenu.GetCommandString(verbId, (int)GCS.VERBA, 0, cmdBytes, 256);
+                                m_WindowsContextMenu.cntxMenuBase.GetCommandString(verbId, (int)GCS.VERBA, 0, cmdBytes, 256);
                                 string cmdName = SzToString(cmdBytes).ToLowerInvariant();
 
                                 if (cmdName.Equals("rename"))
@@ -3052,11 +3052,11 @@ namespace ExpControlsLib
                                         ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
                                         : itms[0].Parent.FullPath;
 
-                                    m_WindowsContextMenu.InvokeCommand(m_WindowsContextMenu.winMenu, (UInt32)verbId, strPath, pt);
+                                    m_WindowsContextMenu.InvokeCommand(m_WindowsContextMenu.cntxMenuBase, (UInt32)verbId, strPath, pt);
                                 }
                             }
 
-                            Marshal.ReleaseComObject(m_WindowsContextMenu.winMenu);
+                            Marshal.ReleaseComObject(m_WindowsContextMenu.cntxMenuBase);
                         }
                     }
                     else

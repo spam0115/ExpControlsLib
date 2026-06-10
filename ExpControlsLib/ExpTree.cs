@@ -149,9 +149,9 @@ namespace ExpControlsLib
             int hr;
             if (m.Msg == (long)WM.INITMENUPOPUP | m.Msg == (long)WM.MEASUREITEM | m.Msg == (long)WM.DRAWITEM)
             {
-                if (m_windowsContextMenu.winMenu2 is not null)
+                if (m_windowsContextMenu.cntxMenuExtended is not null)
                 {
-                    hr = m_windowsContextMenu.winMenu2.HandleMenuMsg(m.Msg, m.WParam, m.LParam);
+                    hr = m_windowsContextMenu.cntxMenuExtended.HandleMenuMsg(m.Msg, m.WParam, m.LParam);
                     if (hr == 0)
                     {
                         return;
@@ -160,9 +160,9 @@ namespace ExpControlsLib
             }
             else if (m.Msg == (long)WM.MENUCHAR)
             {
-                if (m_windowsContextMenu.winMenu3 is not null)
+                if (m_windowsContextMenu.cntxMenuCascading is not null)
                 {
-                    hr = m_windowsContextMenu.winMenu3.HandleMenuMsg2(m.Msg, m.WParam, m.LParam, IntPtr.Zero);
+                    hr = m_windowsContextMenu.cntxMenuCascading.HandleMenuMsg2(m.Msg, m.WParam, m.LParam, IntPtr.Zero);
                     if (hr == 0)
                     {
                         return;
@@ -1063,7 +1063,7 @@ namespace ExpControlsLib
                     {
                         // Check for rename
                         var cmdBytes = new byte[257];
-                        m_windowsContextMenu.winMenu.GetCommandString(cmi.lpVerb.ToInt32(), (int)GCS.VERBA, 0, cmdBytes, 256);
+                        m_windowsContextMenu.cntxMenuBase.GetCommandString(cmi.lpVerb.ToInt32(), (int)GCS.VERBA, 0, cmdBytes, 256);
 
                         string cmdName = SzToString(cmdBytes).ToLower();
                         if (cmdName.Equals("rename"))
@@ -1082,7 +1082,7 @@ namespace ExpControlsLib
                             {
                                 strPath = itms[0].Parent.FullPath;
                             }
-                            m_windowsContextMenu.InvokeCommand(m_windowsContextMenu.winMenu, (uint)cmi.lpVerb, strPath, pt);
+                            m_windowsContextMenu.InvokeCommand(m_windowsContextMenu.cntxMenuBase, (uint)cmi.lpVerb, strPath, pt);
                         }
                         // Marshal.ReleaseComObject(m_windowsContextMenu.winMenu)
                         m_windowsContextMenu.ReleaseMenu();
@@ -1803,7 +1803,7 @@ namespace ExpControlsLib
                     Marshal.ThrowExceptionForHR(HR);
                 }
                 #endif
-                m_windowsContextMenu.winMenu = (IContextMenu)Marshal.GetObjectForIUnknown(iunk);
+                m_windowsContextMenu.cntxMenuBase = (IContextMenu)Marshal.GetObjectForIUnknown(iunk);
                 var cmi = new CMInvokeCommandInfoEx();
                 cmi.cbSize = Marshal.SizeOf(cmi);
                 cmi.nShow = (int)SW.SHOWNORMAL;
@@ -1812,7 +1812,7 @@ namespace ExpControlsLib
                 cmi.lpVerb = Marshal.StringToHGlobalAnsi(cmd);
                 cmi.lpVerbW = Marshal.StringToHGlobalUni(cmd);
 
-                HR = m_windowsContextMenu.winMenu.InvokeCommand(ref cmi);
+                HR = m_windowsContextMenu.cntxMenuBase.InvokeCommand(ref cmi);
                 m_windowsContextMenu.ReleaseMenu();
                 #if DEBUG 
                 if (!(HR == S_OK))

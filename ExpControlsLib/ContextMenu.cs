@@ -25,12 +25,19 @@ namespace ExpControlsLib
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool DestroyMenu(IntPtr hMenu);
 
-        public IContextMenu winMenu = null;
-        public IContextMenu2 winMenu2 = null;
-        public IContextMenu3 winMenu3 = null;
-        public IContextMenu newMenu = null;
-        public IContextMenu2 newMenu2 = null;
-        public IContextMenu3 newMenu3 = null;
+        /// <summary>Base interface for basic context menu commands (Open, Copy, etc.).</summary>
+        public IContextMenu cntxMenuBase = null;
+        /// <summary>Extends IContextMenu to support owner-drawn items and submenus (HandleMenuMsg).</summary>
+        public IContextMenu2 cntxMenuExtended = null;
+        /// <summary>Extends IContextMenu2 to support advanced cascading menus with result return (HandleMenuMsg2).</summary>
+        public IContextMenu3 cntxMenuCascading = null;
+
+        /// <summary>Base interface for the 'New' submenu creation.</summary>
+        public IContextMenu newMenuBase = null;
+        /// <summary>Extends newMenu to support owner-drawn items and submenus in the 'New' menu.</summary>
+        public IContextMenu2 newMenuExtended = null;
+        /// <summary>Extends newMenu2 to support advanced cascading features in the 'New' menu.</summary>
+        public IContextMenu3 newMenuCascading = null;
         public IntPtr newMenuPtr = IntPtr.Zero;
 
         private readonly int min = 1;
@@ -89,7 +96,7 @@ namespace ExpControlsLib
                 goto FAIL;
             }
 
-            winMenu = (IContextMenu)Marshal.GetObjectForIUnknown(pIcontext);
+            cntxMenuBase = (IContextMenu)Marshal.GetObjectForIUnknown(pIcontext);
 
             IntPtr p = IntPtr.Zero;
 
@@ -97,13 +104,13 @@ namespace ExpControlsLib
             Marshal.QueryInterface(pIcontext, IID_IContextMenu2, out p);
             if (p != IntPtr.Zero)
             {
-                winMenu2 = (IContextMenu2)Marshal.GetObjectForIUnknown(p);
+                cntxMenuExtended = (IContextMenu2)Marshal.GetObjectForIUnknown(p);
             }
 
             Marshal.QueryInterface(pIcontext, IID_IContextMenu3, out p);
             if (p != IntPtr.Zero)
             {
-                winMenu3 = (IContextMenu3)Marshal.GetObjectForIUnknown(p);
+                cntxMenuCascading = (IContextMenu3)Marshal.GetObjectForIUnknown(p);
             }
 
             if (pIcontext != IntPtr.Zero)
@@ -121,7 +128,7 @@ namespace ExpControlsLib
             if (minimal) flags |= (int)CMF.NOVERBS; //.VERBSONLY;
             if ((Control.ModifierKeys & Keys.Shift) == Keys.Shift) flags |= (int)CMF.EXTENDEDVERBS;
 
-            int idCount = winMenu.QueryContextMenu(comContextMenu, startIndex, min, max, flags);
+            int idCount = cntxMenuBase.QueryContextMenu(comContextMenu, startIndex, min, max, flags);
 
             // Append separator and custom "Move" menu item
             AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
@@ -142,16 +149,16 @@ namespace ExpControlsLib
                     ptInvoke = new Point(pt.X, pt.Y)
                 };
 
-                if (winMenu2 != null)
+                if (cntxMenuExtended != null)
                 {
-                    Marshal.ReleaseComObject(winMenu2);
-                    winMenu2 = null;
+                    Marshal.ReleaseComObject(cntxMenuExtended);
+                    cntxMenuExtended = null;
                 }
 
-                if (winMenu3 != null)
+                if (cntxMenuCascading != null)
                 {
-                    Marshal.ReleaseComObject(winMenu3);
-                    winMenu3 = null;
+                    Marshal.ReleaseComObject(cntxMenuCascading);
+                    cntxMenuCascading = null;
                 }
 
                 if (comContextMenu != IntPtr.Zero)
@@ -175,16 +182,16 @@ namespace ExpControlsLib
                     ptInvoke = new Point(pt.X, pt.Y)
                 };
 
-                if (winMenu2 != null)
+                if (cntxMenuExtended != null)
                 {
-                    Marshal.ReleaseComObject(winMenu2);
-                    winMenu2 = null;
+                    Marshal.ReleaseComObject(cntxMenuExtended);
+                    cntxMenuExtended = null;
                 }
 
-                if (winMenu3 != null)
+                if (cntxMenuCascading != null)
                 {
-                    Marshal.ReleaseComObject(winMenu3);
-                    winMenu3 = null;
+                    Marshal.ReleaseComObject(cntxMenuCascading);
+                    cntxMenuCascading = null;
                 }
 
                 if (comContextMenu != IntPtr.Zero)
@@ -197,22 +204,22 @@ namespace ExpControlsLib
             }
 
         FAIL:
-            if (winMenu != null)
+            if (cntxMenuBase != null)
             {
-                Marshal.ReleaseComObject(winMenu);
-                winMenu = null;
+                Marshal.ReleaseComObject(cntxMenuBase);
+                cntxMenuBase = null;
             }
 
-            if (winMenu2 != null)
+            if (cntxMenuExtended != null)
             {
-                Marshal.ReleaseComObject(winMenu2);
-                winMenu2 = null;
+                Marshal.ReleaseComObject(cntxMenuExtended);
+                cntxMenuExtended = null;
             }
 
-            if (winMenu3 != null)
+            if (cntxMenuCascading != null)
             {
-                Marshal.ReleaseComObject(winMenu3);
-                winMenu3 = null;
+                Marshal.ReleaseComObject(cntxMenuCascading);
+                cntxMenuCascading = null;
             }
 
             if (comContextMenu != IntPtr.Zero)
@@ -226,10 +233,10 @@ namespace ExpControlsLib
 
         public void ReleaseMenu()
         {
-            if (winMenu != null)
+            if (cntxMenuBase != null)
             {
-                Marshal.ReleaseComObject(winMenu);
-                winMenu = null;
+                Marshal.ReleaseComObject(cntxMenuBase);
+                cntxMenuBase = null;
             }
         }
 
@@ -284,19 +291,19 @@ namespace ExpControlsLib
 
             if (HR == S_OK)
             {
-                newMenu = (IContextMenu)Marshal.GetObjectForIUnknown(newMenuPtr);
+                newMenuBase = (IContextMenu)Marshal.GetObjectForIUnknown(newMenuPtr);
 
                 IntPtr p = IntPtr.Zero;
                 Marshal.QueryInterface(newMenuPtr, IID_IContextMenu2, out p);
                 if (p != IntPtr.Zero)
                 {
-                    newMenu2 = (IContextMenu2)Marshal.GetObjectForIUnknown(p);
+                    newMenuExtended = (IContextMenu2)Marshal.GetObjectForIUnknown(p);
                 }
 
                 Marshal.QueryInterface(newMenuPtr, IID_IContextMenu3, out p);
                 if (p != IntPtr.Zero)
                 {
-                    newMenu3 = (IContextMenu3)Marshal.GetObjectForIUnknown(p);
+                    newMenuCascading = (IContextMenu3)Marshal.GetObjectForIUnknown(p);
                 }
 
                 if (p != IntPtr.Zero)
@@ -332,7 +339,7 @@ namespace ExpControlsLib
                 return false;
             }
 
-            idCount = newMenu.QueryContextMenu(contextMenu, index, min, max, (int)CMF.NORMAL);
+            idCount = newMenuBase.QueryContextMenu(contextMenu, index, min, max, (int)CMF.NORMAL);
             newMenuPtr = GetSubMenu(contextMenu, index);
             //Marshal.Release(newMenuPtr);
 
@@ -341,22 +348,22 @@ namespace ExpControlsLib
 
         public void ReleaseNewMenu()
         {
-            if (newMenu != null)
+            if (newMenuBase != null)
             {
-                Marshal.ReleaseComObject(newMenu);
-                newMenu = null;
+                Marshal.ReleaseComObject(newMenuBase);
+                newMenuBase = null;
             }
 
-            if (newMenu2 != null)
+            if (newMenuExtended != null)
             {
-                Marshal.ReleaseComObject(newMenu2);
-                newMenu2 = null;
+                Marshal.ReleaseComObject(newMenuExtended);
+                newMenuExtended = null;
             }
 
-            if (newMenu3 != null)
+            if (newMenuCascading != null)
             {
-                Marshal.ReleaseComObject(newMenu3);
-                newMenu3 = null;
+                Marshal.ReleaseComObject(newMenuCascading);
+                newMenuCascading = null;
             }
 
             // CRITICAL: Do NOT release newMenuPtr after GetSubMenu() has been called!
