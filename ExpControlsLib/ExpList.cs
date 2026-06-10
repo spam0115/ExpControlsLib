@@ -195,6 +195,17 @@ namespace ExpControlsLib
         public event ExpListItemsChangedEventHandler ExpListItemsChanged;
 
         /// <summary>
+        /// Delegate for the <see cref="ExpListMove"/> event.
+        /// </summary>
+        public delegate void ExpListMoveEventHandler(object sender, ExpListMoveEventArgs e);
+        /// <summary>
+        /// Occurs when Move is selected from the context menu.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires when Move is selected from the context menu")]
+        public event ExpListMoveEventHandler ExpListMove;
+
+        /// <summary>
         /// Delegate for the <see cref="ExpListSelectedIndexChangedEventHandler"/> event.
         /// </summary>
         /// <param name="items">The collection of selected list view items.</param>
@@ -3019,22 +3030,30 @@ namespace ExpControlsLib
 
                         if (m_WindowsContextMenu.ShowMenu(Handle, itms, MousePosition, allowRename, out cmi, MinimalContextMenu))
                         {
-                            byte[] cmdBytes = new byte[256];
-                            m_WindowsContextMenu.winMenu.GetCommandString(cmi.lpVerb.ToInt32(), (int)GCS.VERBA, 0, cmdBytes, 256);
-                            string cmdName = SzToString(cmdBytes).ToLowerInvariant();
-
-                            if (cmdName.Equals("rename"))
+                            int verbId = cmi.lpVerb.ToInt32();
+                            if (verbId == 99999)
                             {
-                                _listView.LabelEdit = true;
-                                tn.BeginEdit();
+                                ExpListMove?.Invoke(this, new ExpListMoveEventArgs(itms));
                             }
                             else
                             {
-                                string strPath = itms[0].Parent == ShellController.DesktopCSI
-                                    ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-                                    : itms[0].Parent.FullPath;
+                                byte[] cmdBytes = new byte[256];
+                                m_WindowsContextMenu.winMenu.GetCommandString(verbId, (int)GCS.VERBA, 0, cmdBytes, 256);
+                                string cmdName = SzToString(cmdBytes).ToLowerInvariant();
 
-                                m_WindowsContextMenu.InvokeCommand(m_WindowsContextMenu.winMenu, (UInt32)cmi.lpVerb.ToInt32(), strPath, pt);
+                                if (cmdName.Equals("rename"))
+                                {
+                                    _listView.LabelEdit = true;
+                                    tn.BeginEdit();
+                                }
+                                else
+                                {
+                                    string strPath = itms[0].Parent == ShellController.DesktopCSI
+                                        ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+                                        : itms[0].Parent.FullPath;
+
+                                    m_WindowsContextMenu.InvokeCommand(m_WindowsContextMenu.winMenu, (UInt32)verbId, strPath, pt);
+                                }
                             }
 
                             Marshal.ReleaseComObject(m_WindowsContextMenu.winMenu);

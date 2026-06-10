@@ -84,7 +84,6 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
-
         #region    Instance Private Fields
         // m_Folder and m_Pidl must be released/freed at Dispose time
         internal IntPtr m_Pidl;            // The Absolute PIDL for this item (not retained for files)
@@ -1166,8 +1165,6 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
-
-
         #region    Icomparable -- for default Sorting
 
         /// <summary>Computes the Sort key of this CShellItem, based on its attributes</summary>
@@ -1331,31 +1328,36 @@ namespace WindowsApiLib.Shell
         /// </summary>
         internal void AddItem(CShellItem item)
         {
-            bool Changed = false;
-            lock (_itemTreeLock)
+            try
             {
-                try
+                item.m_Parent = this;
+                if (IsFolder)
                 {
-                    item.m_Parent = this;
-                    if (IsFolder)
-                    {
-                        if (!DirectoryList.Contains(item.PIDL))
+                    if (item.IsFolder && !DirectoryList.Contains(item.PIDL))
+                    { 
+                        lock (m_Directories)
                         {
-                            DirectoryList.Append(item);
-                            Changed = true;
+                            m_Directories.Append(item);
+                            return;
                         }
+                    }
+
+                    lock (m_Files)
+                    {
                         if (!FileList.Contains(item.PIDL))
                         {
                             m_Files.Add(item);
-                            Changed = true;
+                            return;
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine("Error in CShellItem.AddItem -- " + ex.ToString());
-                }
             }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error in CShellItem.AddItem -- " + ex.ToString());
+            }
+
+            return;
         }
 
         /// <summary>
@@ -1365,34 +1367,36 @@ namespace WindowsApiLib.Shell
         /// <returns></returns>
         internal bool RemoveItem(CShellItem item)
         {
-            bool changed = false;
-            lock (_itemTreeLock)
+            try
             {
-                try
+                if (IsFolder)
                 {
-                    if (IsFolder)
+                    if (FoldersInitialized && m_Directories.Contains(item))
                     {
-                        if (FoldersInitialized && m_Directories.Contains(item))
+                        lock (m_Directories)
                         {
                             // Debug.WriteLine("Removing " & item.Path & " From " & Me.Path)
                             m_Directories.Remove(item);
-                            changed = true;
+                            return true;
                         }
+                    }
 
-                        if (FilesInitialized && m_Files.Contains(item))
+                    if (FilesInitialized && m_Files.Contains(item))
+                    {
+                        lock (m_Files)
                         {
                             m_Files.Remove(item);
-                            changed = true;
+                            return true;
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine("Error in CShellItem.RemoveItem -- " + ex.ToString());
-                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error in CShellItem.RemoveItem -- " + ex.ToString());
             }
 
-            return changed;
+            return false;
         }
 
         /// <summary>
@@ -1404,13 +1408,17 @@ namespace WindowsApiLib.Shell
         /// the GUI.</remarks>
         public void ClearItems(bool ClearFiles, bool ClearDirectories = false)
         {
-            lock (_itemTreeLock)
+            lock (m_Files)
             {
                 if (ClearFiles && m_Files is not null)
                 {
                     m_Files.Clear();
                     m_Files = null;
                 }
+            }
+
+            lock (m_Directories)
+            {
                 if (ClearDirectories && m_Directories is not null)
                 {
                     m_Directories.Clear();
@@ -1418,57 +1426,6 @@ namespace WindowsApiLib.Shell
                 }
             }
         }
-
-
-        ///// <summary>
-        ///// Stops monitoring of changes to the File System.
-        ///// </summary>
-        ///// <returns>True if Successful, False otherwise</returns>
-        ///// <remarks>Global Change Notification is started by default. Call this function to turn it off.
-        /////          Only turn Notification Off under rare, well understood circumstances. If turned off, NO
-        /////          changes, including those made by the application will be noticed.</remarks>
-        //public bool StopGlobalNotification()
-        //{
-        //    bool StopGlobalNotificationRet = default;
-        //    StopGlobalNotificationRet = false;        // assume failure
-        //    if (!ReferenceEquals(this, CShellItemFactory.DesktopCSI))
-        //        return StopGlobalNotificationRet;
-        //    if (m_updater is null)
-        //    {
-        //        StopGlobalNotificationRet = true;     // Already stopped
-        //        return StopGlobalNotificationRet;
-        //    }
-        //    m_updater.Dispose();
-        //    m_updater = null;
-        //    StopGlobalNotificationRet = true;
-        //    return StopGlobalNotificationRet;
-        //}
-
-        ///// <summary>
-        ///// Restarts the Dynamic Update listening for Windows Notify messages
-        ///// </summary>
-        ///// <returns>True if successful, False otherwise</returns>
-        ///// <remarks>Resumesthe detection of changes to the FileSystem after a StopGlobalNotification call.
-        /////          Changes between that call and a restart will be lost.</remarks>
-        //public bool StartGlobalNotification()
-        //{
-        //    bool StartGlobalNotificationRet = default;
-        //    StartGlobalNotificationRet = false;       // assume failure
-        //    if (!ReferenceEquals(this, CShellItemFactory.DesktopCSI))
-        //        return StartGlobalNotificationRet;
-        //    if (m_updater is not null)
-        //    {
-        //        StartGlobalNotificationRet = true;        // Already started
-        //        return StartGlobalNotificationRet;
-        //    }
-        //    m_updater = new CShellItemUpdater(this, (uint)SHCNE.DISKEVENTS);
-        //    if (m_updater is not null)
-        //    {
-        //        StartGlobalNotificationRet = true;
-        //    }
-
-        //    return StartGlobalNotificationRet;
-        //}
 
         /// <summary>
         /// Returns the sub-directories of the current instance, if the current instance is a
@@ -1527,19 +1484,6 @@ namespace WindowsApiLib.Shell
 
             return GetFilesRet;
         }
-
-        // Previous, unoptimized version of GetItems
-        // Public Function GetItems() As ArrayList
-        // Dim rVal As New ArrayList()
-        // If m_IsFolder Then
-        // rVal.AddRange(Me.Directories)
-        // rVal.AddRange(Me.Files)
-        // rVal.Sort()
-        // Return rVal
-        // Else
-        // Return rVal
-        // End If
-        // End Function
 
         /// <summary>GetFileName returns the Full file name of this item.
         /// Specifically, for a link file (xxx.txt.lnk for example) the
@@ -1701,18 +1645,6 @@ namespace WindowsApiLib.Shell
         #region        Update Methods
 
         /// <summary>
-        /// CShItemUpdate is the Event Raised to notify the using application, typically the GUI portion, of changes made to
-        /// Folders and Files that the application has an interest in.<br />
-        /// See <see cref="WindowsApiLib.ShellItemUpdateEventArgs.UpdateType">UpdateType</see> for details.
-        /// </summary>
-        /// <param name="sender">The CShellItem of the Folder that has changes in its' content.</param>
-        /// <param name="e">A <see cref="ShellItemUpdateEventArgs">ShellItemUpdateEventArgs</see> which provides information about the change.</param>
-        /// <remarks></remarks>
-        //public static event CShItemUpdateEventHandler UpdateEvent;
-
-        //public delegate void CShItemUpdateEventHandler(object sender, ShellItemUpdateEventArgs e);
-
-        /// <summary>
         /// On a Rename operation, we simply modify the existant CShellItem to reflect the new PIDL, Path, and
         /// Folder (if a folder).
         /// Since in this version of CShellItem, m_Pidl is an absolute, fully qualified pidl, it must be updated
@@ -1748,161 +1680,6 @@ namespace WindowsApiLib.Shell
                 }
             }
         }
-
-        /*
-        //todo:move this into ShellController and CShellHierarchyManager
-        /// <summary>For internal use only<br />
-        /// Update is called by the CShItemUpdater Class when that Class receives a WM_Notify message. The purpose 
-        /// of this Class is to translate the information passed to it into the appropriate set of actions needed 
-        /// to maintain the internal cache and to, directly or indirectly (thru the routines it calls), Raise 
-        /// CShItemUpdate events to notify the using application of changes.
-        /// </summary>
-        /// <param name="changedPidl">The absolute PIDL of the affected item. The definition of "affected item" 
-        ///     varies with the type of change being reported.  This is only needed if the pidl changed due to 
-        ///     rename, move, etc.</param>
-        /// <param name="changeType">The type of change.</param>
-        /// <remarks>Serves as a bridge between CShItemUpdater and the CShellItem that should handle a change.</remarks>
-        internal void Update(IntPtr changedPidl, CShItemUpdateType changeType)
-        {
-            Debug.WriteLine("Entered CShellItem Update: " + changeType.ToString());
-            switch (changeType)
-            {
-                case CShItemUpdateType.UpdateDir: // raised when content of a dir changes
-                    {
-                        DoUpdateDir(this); // recursively check this Folder and all known sub-Folders for change     '5/21/2012
-                        break;
-                    }
-                case CShItemUpdateType.Updated: // raised when Attributes (Item or Items under a Folder) change
-                    {
-                        // Debug.WriteLine("Updated for " & Me.Path)
-                        ResetInfo();
-                        // Previous versions called ResetChildren. Changed to UpdateRefresh - which impacts performance.
-                        // Decided for now (6/12/2012) to do neither, so commented it out. This message is often closely followed or preceeded
-                        // by an UPDATEDIR which will, in fact call UpdateRefresh which will also call ResetChildren in many cases.
-                        // Performance impact is greatly aggravated by the (common on Win7) closely paired UPDATEDIR and UPDATEITEM messages
-                        // on the same Folder, caused by the same change! Removing this code limits the impact.
-                        // If Me.IsFolder Then
-                        // 'Me.ResetChildren()     'Original code
-                        // 'Me.UpdateRefresh()     '6/3/2012
-                        // End If
-                        UpdateEvent?.Invoke(Parent, new ShellItemUpdateEventArgs(this, changeType));
-                        //todo: update thumbnail for item
-                        break;
-                    }
-                case CShItemUpdateType.Deleted:
-                    {
-                        Parent?.RemoveItem(this);
-                        //UpdateEvent?.Invoke(this, new ShellItemUpdateEventArgs(this, changeType)); //removeitem will invoke the event
-                        break;
-                    }
-                case CShItemUpdateType.Renamed:      // Item has been renamed or moved
-                    {
-                        IntPtr pidlRel = IntPtr.Zero, newIShellFolderPtr = IntPtr.Zero;
-                        var splitPidl = CPidl.Split(changedPidl);
-                        var oldParentCsi = Parent;    // Save in case "renamed" to a new directory
-                        var allegedParentCsi = ShellController.Instance.HierachyManager.FindCShItem(splitPidl.ParentPidl);
-
-                        try 
-                        {
-                            if (allegedParentCsi is null) // moved to a dir that is not yet in internal tree
-                            {
-                                Parent.RemoveItem(this);
-                                m_Parent = null;           
-                                m_Pidl = changedPidl;
-                                //todo: shouldn't we add the newParentCsi to the tree at this point?
-                            }
-                            else if (SHGetRealIDL(allegedParentCsi.Folder, splitPidl.ChildPidl, out pidlRel) == S_OK) // new parent of this item IS in internal tree, fix up and update any files/folders of THIS item
-                            {
-                                Marshal.FreeCoTaskMem(m_Pidl);
-                                m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, pidlRel);  //Must do this!  newPidlRel is a "simple" PIDL rather than a regular 1-item SHITEMID //don't do this: m_Pidl = changedPidl;
-
-                                if (ReferenceEquals(allegedParentCsi, Parent)) //renamed
-                                {
-                                    ResetInfo();         // Added for fix to the fix
-                                    m_Path = CShellItemFactory.GetFullPath(this); ;
-                                    UpdateEvent?.Invoke(oldParentCsi, new ShellItemUpdateEventArgs(this, changeType));
-                                }
-                                else // item was moved, not renamed
-                                {
-                                    Parent.RemoveItem(this);
-                                    allegedParentCsi.AddItem(this);
-
-                                    this.m_Parent = allegedParentCsi;
-
-                                    ResetInfo();
-                                    m_Path = CShellItemFactory.GetFullPath(this);
-
-                                    if (IsFolder) //update children for folders
-                                    {
-                                        if (allegedParentCsi.Folder.BindToObject(pidlRel, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref newIShellFolderPtr) != S_OK) //get new ishellfolder interface object
-                                        {
-                                            Marshal.Release(newIShellFolderPtr);
-                                            return;
-                                        }
-                                        m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newIShellFolderPtr, typeof(IShellFolder));
-                                        Marshal.Release(newIShellFolderPtr);
-
-                                        if (m_Files is not null)
-                                        {
-                                            foreach (CShellItem item in m_Files)
-                                                item.UpdateFolderPidlAndPath(); //update child paths
-                                        }
-                                        if (m_Directories is not null)
-                                        {
-                                            foreach (CShellItem item in m_Directories)
-                                                item.UpdateFolderPidlAndPath(); //update child paths
-                                        }
-                                    }
-                                    UpdateEvent?.Invoke(oldParentCsi, new ShellItemUpdateEventArgs(this, changeType)); //tell both old and new locations about the change
-                                    UpdateEvent?.Invoke(allegedParentCsi, new ShellItemUpdateEventArgs(this, changeType));
-                                }
-                            }
-                        }
-                        finally 
-                        {
-                            // Note: FreeCoTaskMem will ignore IntPtr.Zero
-                            if (pidlRel != IntPtr.Zero)
-                            {
-                                Marshal.FreeCoTaskMem(pidlRel);
-                            }
-                            Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
-                            Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
-                        }
-                        break;
-                    }
-                case CShItemUpdateType.IconChange:
-                    {
-                        // Debug.WriteLine("IconChange for " & Me.Path)
-                        ResetInfo();
-                        UpdateEvent?.Invoke(Parent, new ShellItemUpdateEventArgs(this, changeType));
-                        //todo: update thumbnail for item
-                        break;
-                    }
-                case CShItemUpdateType.MediaChange:          // CD/DVD/External Drive/Etc Added or Removed
-                    {
-                        // Debug.WriteLine("MediaChange for " & Me.Path)
-                        ClearItems(true, true);
-                        ResetInfo();
-                        m_Path = CShellItemFactory.GetFullPath(this); ;
-                        UpdateEvent?.Invoke(Parent, new ShellItemUpdateEventArgs(this, changeType));
-                        break;
-                    }
-            }
-        }
-
-        private void DoUpdateDir(CShellItem CSI)
-        {
-            if (ReferenceEquals(CSI, CShellItemFactory.RecycleBin)) return;
-
-            CShellItemUpdater.SelectiveFolderUpdate(CSI);
-        }
-
-
-        public void Refresh()
-        {
-            Update(IntPtr.Zero, CShItemUpdateType.Updated);
-        }
-        */
 
         #endregion
 

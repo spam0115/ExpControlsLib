@@ -28,6 +28,7 @@ namespace WindowsApiLib.Shell
         private uint _eventFlags = 0;
         private Thread _backgroundThread;
         private readonly AutoResetEvent _initializedEvent = new AutoResetEvent(false);
+        private LruDictionary<IntPtr, bool> _activeDeletes = new(1000);
 
         public static event CShItemUpdateEventHandler UpdateEvent;
 
@@ -36,6 +37,7 @@ namespace WindowsApiLib.Shell
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool AllowUpdates { get; set; }
 
+        #region Constructors and setup
         /// <summary>
         /// 
         /// </summary>
@@ -87,8 +89,6 @@ namespace WindowsApiLib.Shell
 
             Application.Run();
         }
-
-        private LruDictionary<IntPtr, bool> _activeDeletes = new (1000);
 
         protected override void WndProc(ref Message msg)
         {
@@ -548,8 +548,137 @@ namespace WindowsApiLib.Shell
             base.WndProc(ref msg);
         }
 
-        //todo:move this into ShellController and CShellHierarchyManager
-        /// <summary>For internal use only<br />
+        #endregion
+
+        #region Public Methods
+
+
+        /// <summary>
+        /// The DoUpdateDir function is called when a WM_UPDATEDIR message is received, indicating 
+        /// that the contents of a folder have changed. It compares the current content of the folder 
+        /// with the internal cache (m_Directories and m_Files) and raises appropriate events for any 
+        /// changes detected. The function takes parameters to specify whether to update files, folders, 
+        /// or both. It returns the count of changes made. If an update is already in progress for the 
+        /// same folder (possible because of multiple windows messages causing re-entrancey), it will 
+        /// ignore subsequent update requests to prevent conflicts.
+        /// </summary>
+        /// <param name="csi"></param>
+        /// <param name="updateFiles"></param>
+        /// <param name="updateFolders"></param>
+        /// <returns></returns>
+        public int DoUpdateDir(CShellItem csi, bool updateFiles = true, bool updateFolders = true)
+        {
+            if (_isUpdatingDir)
+            {
+                Debug.WriteLine("DoUpdateDir called but an update is already in progress for this folder. Ignoring.");
+                return 0;
+            }
+            try
+            {
+                _isUpdatingDir = true;
+                if (ReferenceEquals(csi, CShellItemFactory.RecycleBin)) return 0;
+
+                var count = SelectiveFolderUpdate(csi, true, true);
+                Debug.WriteLine("DoUpdateDir end - " + csi.Text + " - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+                return count;
+            }
+            finally
+            {
+                _isUpdatingDir = false;
+            }
+        }
+
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="item"></param>
+        /// <returns></returns>
+        public bool RemoveItem(CShellItem parent, CShellItem item)
+        {
+            bool changed = false;
+            if (parent == null || item == null) return false;
+
+            try
+            {
+                if (parent.IsFolder)
+                {
+                    lock (HierachyManager.Lock)
+                    {
+                        if (parent.FoldersInitialized && parent.m_Directories.Contains(item))
+                        {
+                            // Debug.WriteLine("Removing " & item.Path & " From " & Me.Path)
+                            parent.m_Directories.Remove(item);
+                            changed = true;
+                        }
+
+                        if (parent.FilesInitialized && parent.m_Files.Contains(item))
+                        {
+                            parent.m_Files.Remove(item);
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error in CShellItem.RemoveItem -- " + ex.ToString());
+            }
+
+            if (changed)
+            {
+                RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
+                //RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(parent, CShItemUpdateType.Updated));
+            }
+
+            return changed;
+        }
+
+        public static void RaiseUpdateEvent(object sender, ShellItemUpdateEventArgs e)
+        {
+            var handlers = UpdateEvent?.GetInvocationList();
+            if (handlers == null) return;
+
+            foreach (var handler in handlers)
+            {
+                if (handler.Target is System.Windows.Forms.Control control && control.InvokeRequired)
+                {
+                    control.BeginInvoke(handler, new object[] { sender, e });
+                }
+                else
+                {
+                    try
+                    {
+                        handler.DynamicInvoke(sender, e);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("Error invoking event handler: " + ex.ToString());
+                    }
+                }
+            }
+        }
+
+        public void OnMoveItem(CShellItem item, string newPath)
+        {
+            if (item == null || string.IsNullOrEmpty(newPath)) return;
+
+            IntPtr newPidl = CPidl.PathToPidl(newPath);
+
+            DoRenameOrMove(item, newPidl, CShItemUpdateType.Moved);
+        }
+
+        public void OnMoveItem(CShellItem item, CShellItem newParent)
+        {
+            if (item == null || newParent == null) return;
+
+
+            DoRenameOrMove(item, newParent.PIDL, CShItemUpdateType.Moved);
+        }
+
+        #endregion
+
+        /// <summary>
         /// Update is called by the CShItemUpdater Class when that Class receives a WM_Notify message. The purpose 
         /// of this Class is to translate the information passed to it into the appropriate set of actions needed 
         /// to maintain the internal cache and to, directly or indirectly (thru the routines it calls), Raise 
@@ -704,41 +833,7 @@ namespace WindowsApiLib.Shell
         }
 
         private bool _isUpdatingDir = false; //this is to prevent multiple simultaneous updates on the same folder which can cause problems.  We will ignore any update requests that come in while an update is already in progress.  This can happen when there are multiple changes to a folder in a short period of time, which causes multiple WM_UPDATEDIR messages to be fired before the first one has finished processing.
-        /// <summary>
-        /// The DoUpdateDir function is called when a WM_UPDATEDIR message is received, indicating 
-        /// that the contents of a folder have changed. It compares the current content of the folder 
-        /// with the internal cache (m_Directories and m_Files) and raises appropriate events for any 
-        /// changes detected. The function takes parameters to specify whether to update files, folders, 
-        /// or both. It returns the count of changes made. If an update is already in progress for the 
-        /// same folder (possible because of multiple windows messages causing re-entrancey), it will 
-        /// ignore subsequent update requests to prevent conflicts.
-        /// </summary>
-        /// <param name="csi"></param>
-        /// <param name="updateFiles"></param>
-        /// <param name="updateFolders"></param>
-        /// <returns></returns>
-        public int DoUpdateDir(CShellItem csi, bool updateFiles = true, bool updateFolders = true)
-        {
-            if (_isUpdatingDir)
-            {
-                Debug.WriteLine("DoUpdateDir called but an update is already in progress for this folder. Ignoring.");
-                return 0;
-            }
-            try
-            {
-                _isUpdatingDir = true;
-                if (ReferenceEquals(csi, CShellItemFactory.RecycleBin)) return 0;
-
-                var count = SelectiveFolderUpdate(csi, true, true);
-                Debug.WriteLine("DoUpdateDir end - " + csi.Text + " - " + DateTime.Now.ToString("HH:mm:ss.fff"));
-                return count;
-            }
-            finally
-            {
-                _isUpdatingDir = false;
-            }
-        }
-
+        
         /// <summary>
         /// The UpdateRefresh function compares the Current content of the Folder with the
         /// current state of m_Directories and m_Files, adding/deleting CShItems as appropriate  (thus causing
@@ -1012,76 +1107,6 @@ namespace WindowsApiLib.Shell
             if (Changed)
             {
                 CShellItemUpdater.RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Created));
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="item"></param>
-        /// <returns></returns>
-        public bool RemoveItem(CShellItem parent, CShellItem item)
-        {
-            bool changed = false;
-            if (parent == null || item == null) return false;
-
-            try
-            {
-                if (parent.IsFolder)
-                {
-                    lock (HierachyManager.Lock)
-                    {
-                        if (parent.FoldersInitialized && parent.m_Directories.Contains(item))
-                        {
-                            // Debug.WriteLine("Removing " & item.Path & " From " & Me.Path)
-                            parent.m_Directories.Remove(item);
-                            changed = true;
-                        }
-
-                        if (parent.FilesInitialized && parent.m_Files.Contains(item))
-                        {
-                            parent.m_Files.Remove(item);
-                            changed = true;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("Error in CShellItem.RemoveItem -- " + ex.ToString());
-            }
-
-            if (changed)
-            {
-                RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
-                //RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(parent, CShItemUpdateType.Updated));
-            }
-
-            return changed;
-        }
-
-        public static void RaiseUpdateEvent(object sender, ShellItemUpdateEventArgs e)
-        {
-            var handlers = UpdateEvent?.GetInvocationList();
-            if (handlers == null) return;
-
-            foreach (var handler in handlers)
-            {
-                if (handler.Target is System.Windows.Forms.Control control && control.InvokeRequired)
-                {
-                    control.BeginInvoke(handler, new object[] { sender, e });
-                }
-                else
-                {
-                    try
-                    {
-                        handler.DynamicInvoke(sender, e);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine("Error invoking event handler: " + ex.ToString());
-                    }
-                }
             }
         }
 

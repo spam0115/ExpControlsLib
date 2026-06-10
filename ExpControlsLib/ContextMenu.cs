@@ -122,7 +122,46 @@ namespace ExpControlsLib
             if ((Control.ModifierKeys & Keys.Shift) == Keys.Shift) flags |= (int)CMF.EXTENDEDVERBS;
 
             int idCount = winMenu.QueryContextMenu(comContextMenu, startIndex, min, max, flags);
+
+            // Append separator and custom "Move" menu item
+            AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
+            uint moveCmdId = (uint)(max + 1);
+            AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, moveCmdId, "Move");
+
             int cmd = TrackPopupMenuEx(comContextMenu, (int)TPM.RETURNCMD, pt.X, pt.Y, hwnd, IntPtr.Zero);
+
+            if (cmd == (int)moveCmdId)
+            {
+                cmi = new CMInvokeCommandInfoEx
+                {
+                    cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                    lpVerb = (IntPtr)99999,
+                    lpVerbW = (IntPtr)99999,
+                    nShow = (int)SW.SHOWNORMAL,
+                    fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
+                    ptInvoke = new Point(pt.X, pt.Y)
+                };
+
+                if (winMenu2 != null)
+                {
+                    Marshal.ReleaseComObject(winMenu2);
+                    winMenu2 = null;
+                }
+
+                if (winMenu3 != null)
+                {
+                    Marshal.ReleaseComObject(winMenu3);
+                    winMenu3 = null;
+                }
+
+                if (comContextMenu != IntPtr.Zero)
+                {
+                    DestroyMenu(comContextMenu);
+                    comContextMenu = IntPtr.Zero;
+                }
+
+                return true;
+            }
 
             if (cmd >= min && cmd <= idCount)
             {

@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -107,6 +107,31 @@ namespace WindowsApiLib
         #endregion
 
         #region        Public Static Methods
+
+        /// <summary>
+        /// Creates a native system PIDL (IntPtr) from a path.
+        /// Caller is responsible for freeing the returned IntPtr using Marshal.FreeCoTaskMem.
+        /// </summary>
+        /// <param name="path">The file system or shell path.</param>
+        /// <returns>An IntPtr pointing to the native PIDL.</returns>
+        public static IntPtr PathToPidl(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return IntPtr.Zero;
+
+            return ShellAPI.ILCreateFromPathW(path);
+        }
+
+        /// <summary>
+        /// Creates a native system PIDL (IntPtr) from a path.
+        /// Caller is responsible for freeing the returned IntPtr using Marshal.FreeCoTaskMem.
+        /// </summary>
+        /// <param name="path">The file system or shell path.</param>
+        /// <returns>An IntPtr pointing to the native PIDL.</returns>
+        public static IntPtr ToPidl(string path)
+        {
+            return PathToPidl(path);
+        }
 
         /// <summary> Join two byte arrays containing PIDLS into a managed (non-com) array. 
         /// Returns NOTHING if error
@@ -477,35 +502,37 @@ namespace WindowsApiLib
         private static string NormalizeShellName(string s) => s.Trim();
 
         // worthless and always gives false positives
-        //public static bool ArePidlsLogicallyEqual(IntPtr pidl1, IntPtr pidl2)
-        //{
-        //    if (pidl1 == pidl2) return true;
-        //    if (pidl1 == IntPtr.Zero || pidl2 == IntPtr.Zero) return false;
+        /*
+        public static bool ArePidlsLogicallyEqual(IntPtr pidl1, IntPtr pidl2)
+        {
+            if (pidl1 == pidl2) return true;
+            if (pidl1 == IntPtr.Zero || pidl2 == IntPtr.Zero) return false;
 
-        //    Guid siGuid = typeof(IShellItem).GUID;
+            Guid siGuid = typeof(IShellItem).GUID;
 
-        //    SHCreateItemFromIDList(pidl1, ref siGuid, out IShellItem item1);
-        //    SHCreateItemFromIDList(pidl2, ref siGuid, out IShellItem item2);
+            SHCreateItemFromIDList(pidl1, ref siGuid, out IShellItem item1);
+            SHCreateItemFromIDList(pidl2, ref siGuid, out IShellItem item2);
 
-        //    string path1 = GetParsingName(pidl1); // What does this return?
-        //    string path2 = GetParsingName(pidl2); // What does this return?
+            string path1 = GetParsingName(pidl1); // What does this return?
+            string path2 = GetParsingName(pidl2); // What does this return?
 
-        //    int hr = item1.Compare(item2, SICHINT_CANONICAL | SICHINT_TEST_FILESYSPATH_IF_NOT_EQUAL, out int order);
+            int hr = item1.Compare(item2, SICHINT_CANONICAL | SICHINT_TEST_FILESYSPATH_IF_NOT_EQUAL, out int order);
 
-        //    Marshal.ReleaseComObject(item1);
-        //    Marshal.ReleaseComObject(item2);
+            Marshal.ReleaseComObject(item1);
+            Marshal.ReleaseComObject(item2);
 
-        //    // S_OK (0) = equal, S_FALSE (1) = not equal
-        //    return hr == 0;
-        //}
+            // S_OK (0) = equal, S_FALSE (1) = not equal
+            return hr == 0;
+        }
+        */
 
         /// <summary> Copy the contents of a byte() containing a PIDL to
-         /// CoTaskMemory, returning an IntPtr that points to that mem block
-         /// Assumes that this cPidl is properly terminated, as all New 
-         /// cPidls are.
-         /// </summary>
-         /// <returns>The newly created PIDL</returns>
-         /// <remarks> Caller must Free the returned IntPtr when done with the returned PIDL.</remarks>
+        /// CoTaskMemory, returning an IntPtr that points to that mem block
+        /// Assumes that this cPidl is properly terminated, as all New 
+        /// cPidls are.
+        /// </summary>
+        /// <returns>The newly created PIDL</returns>
+        /// <remarks> Caller must Free the returned IntPtr when done with the returned PIDL.</remarks>
         public IntPtr ToPIDL()
         {
             IntPtr ToPIDLRet = default;

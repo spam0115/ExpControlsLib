@@ -558,6 +558,16 @@
             Occurs when the items in the list view have changed (e.g., created or deleted).
             </summary>
         </member>
+        <member name="T:ExpControlsLib.ExpList.ExpListMoveEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListMove"/> event.
+            </summary>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.ExpListMove">
+            <summary>
+            Occurs when Move is selected from the context menu.
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.ExpList.ExpListSelectedIndexChangedEventHandler">
             <summary>
             Delegate for the <see cref="T:ExpControlsLib.ExpList.ExpListSelectedIndexChangedEventHandler"/> event.
@@ -1078,6 +1088,16 @@
         <member name="P:ExpControlsLib.ExpListGetColumnDataEventArgs.ColumnData">
             <summary>
             Gets the dictionary of column data, keyed by column name.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ExpListMoveEventArgs">
+            <summary>
+            Event arguments for the <see cref="E:ExpControlsLib.ExpList.ExpListMove"/> event.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListMoveEventArgs.Items">
+            <summary>
+            Gets the items to be moved.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ExpTree">
