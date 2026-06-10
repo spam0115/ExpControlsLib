@@ -163,7 +163,7 @@ namespace WindowsApiLib.Shell
                                 var splitPidl = CPidl.Split(shNotify.dwItem1);
 
                                 parentItem = HierachyManager.Find(splitPidl.ParentPidl);
-                                if (!(parentItem == null))
+                                if (parentItem is not null)
                                 {
                                     Debug.WriteLine("  [CREATE] Parent found: " + parentItem.ItemPath);
                                     if (parentItem.FilesInitialized)
@@ -332,7 +332,7 @@ namespace WindowsApiLib.Shell
                         case SHCNE.UPDATEITEM: //this is supposed to be items but that include directories sometimes
                             {
                                 Debug.WriteLine("  [UPDATEITEM] processing... " + DateTime.Now.ToString("HH:mm:ss.fff"));
-                                if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0)
+                                if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0) //note: an empty pidl can refer to the Desktop
                                 {
                                     Debug.WriteLine("  [UPDATEITEM] Empty pidl received from UPDATEITEM event");
                                 }

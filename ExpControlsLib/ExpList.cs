@@ -206,6 +206,17 @@ namespace ExpControlsLib
         public event ExpListMoveEventHandler ExpListMove;
 
         /// <summary>
+        /// Delegate for the <see cref="ExpListCopy"/> event.
+        /// </summary>
+        public delegate void ExpListCopyEventHandler(object sender, ExpListCopyEventArgs e);
+        /// <summary>
+        /// Occurs when Copy to Folder is selected from the context menu.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires when Copy to Folder is selected from the context menu")]
+        public event ExpListCopyEventHandler ExpListCopy;
+
+        /// <summary>
         /// Delegate for the <see cref="ExpListSelectedIndexChangedEventHandler"/> event.
         /// </summary>
         /// <param name="items">The collection of selected list view items.</param>
@@ -1255,7 +1266,7 @@ namespace ExpControlsLib
                             // Select all items in the ListView.
                             if (VirtualMode)
                             {
-                                _listView.BeginUpdate();
+                                _listView.BeginUpdate(); //is this needed?
                                 try
                                 {
                                     for (int i = 0; i < _listView.VirtualListSize; i++)
@@ -1270,7 +1281,7 @@ namespace ExpControlsLib
                             {
                                 EnterListViewEnumeration();
                                 try
-                                {
+                                { //should we use beginupdate here?
                                     foreach (ListViewItem item in _listView.Items)
                                     {
                                         if (item is null) continue;
@@ -1375,7 +1386,7 @@ namespace ExpControlsLib
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
         private void UpdateInvoke(object sender, ShellItemUpdateEventArgs e)
         {
-            Debug.WriteLine("ExpList: UpdateInvoke Begin");
+            //Debug.WriteLine("ExpList: UpdateInvoke Begin");
             try
             {
                 if (sender is null || IsDisposed || !IsHandleCreated)
@@ -1416,11 +1427,11 @@ namespace ExpControlsLib
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
         private void DoItemUpdate(object sender, ShellItemUpdateEventArgs e)
         {
-            Debug.WriteLine("ExpList: DoItemUpdate Begin - " + e.UpdateType.ToString());
-
             try
             {
-                if (sender is null || _currentFolderCsi == null) return;
+                if (sender is null || _currentFolderCsi == null || e?.Item is null) return;
+
+                Debug.WriteLine($"ExpList: DoItemUpdate Begin - {e.UpdateType.ToString()}, {e.Item.Name}");
 
                 // If an enumeration is in progress, defer this update to prevent reentrant
                 // mutation of _listView.Items (which causes null items during foreach).
@@ -3035,6 +3046,10 @@ namespace ExpControlsLib
                             {
                                 ExpListMove?.Invoke(this, new ExpListMoveEventArgs(itms));
                             }
+                            else if (verbId == 99998)
+                            {
+                                ExpListCopy?.Invoke(this, new ExpListCopyEventArgs(itms));
+                            }
                             else
                             {
                                 byte[] cmdBytes = new byte[256];
@@ -3113,6 +3128,7 @@ namespace ExpControlsLib
                 {
                     if (VirtualMode)
                     {
+                        EnterListViewEnumeration();
                         _listView.BeginUpdate();
                         try
                         {
@@ -3122,6 +3138,7 @@ namespace ExpControlsLib
                         finally
                         {
                             _listView.EndUpdate();
+                            ExitListViewEnumeration();
                         }
                     }
                     else

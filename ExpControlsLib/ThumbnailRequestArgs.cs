@@ -7,7 +7,7 @@ namespace ExpControlsLib
     public sealed class ThumbnailRequestArgs
     {
         public CShellItem? Item { get; set; }
-        public string FilePath { get; set; }
+        public string? FilePath { get; set; }
         public int Size { get; set; }
         public int Index { get; set; } = -1;
         public int Generation { get; set; }

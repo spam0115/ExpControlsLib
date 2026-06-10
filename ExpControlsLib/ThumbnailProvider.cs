@@ -106,18 +106,21 @@ namespace ExpControlsLib
 
             string? filePath = reqArgs.FilePath;
             if (string.IsNullOrEmpty(filePath) && reqArgs.Item != null)
-            {
                 filePath = reqArgs.Item.FullPath;
-                reqArgs.FilePath = filePath;
-            }
 
             if (string.IsNullOrEmpty(filePath))
             {
+                Debug.WriteLine("ERROR: EnqueueThumbnailRequest - No file path available.");
                 return;
             }
 
             Debug.WriteLine("EnqueueThumbnailRequest: " + filePath);
 
+            if (reqArgs.Item == null)
+            {
+                Debug.WriteLine("ERROR: EnqueueThumbnailRequest - No shell item available.");
+                return;
+            }
             var csi = reqArgs.Item;
 
             // Check cache first

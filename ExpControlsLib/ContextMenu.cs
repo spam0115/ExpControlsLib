@@ -130,20 +130,22 @@ namespace ExpControlsLib
 
             int idCount = cntxMenuBase.QueryContextMenu(comContextMenu, startIndex, min, max, flags);
 
-            // Append separator and custom "Move" menu item
+            // Append separator and custom "Move" and "Copy to Folder" menu items
             AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
             uint moveCmdId = (uint)(max + 1);
             AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, moveCmdId, "Move");
+            uint copyToFolderCmdId = (uint)(max + 2);
+            AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, copyToFolderCmdId, "Copy to Folder");
 
             int cmd = TrackPopupMenuEx(comContextMenu, (int)TPM.RETURNCMD, pt.X, pt.Y, hwnd, IntPtr.Zero);
 
-            if (cmd == (int)moveCmdId)
+            if (cmd == (int)moveCmdId || cmd == (int)copyToFolderCmdId)
             {
                 cmi = new CMInvokeCommandInfoEx
                 {
                     cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                    lpVerb = (IntPtr)99999,
-                    lpVerbW = (IntPtr)99999,
+                    lpVerb = (IntPtr)(cmd == (int)moveCmdId ? 99999 : 99998),
+                    lpVerbW = (IntPtr)(cmd == (int)moveCmdId ? 99999 : 99998),
                     nShow = (int)SW.SHOWNORMAL,
                     fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
                     ptInvoke = new Point(pt.X, pt.Y)
