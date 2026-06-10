@@ -28,7 +28,7 @@ namespace WindowsApiLib.Shell
         private uint _eventFlags = 0;
         private Thread _backgroundThread;
         private readonly AutoResetEvent _initializedEvent = new AutoResetEvent(false);
-        private LruDictionary<IntPtr, bool> _activeDeletes = new(1000);
+        private LruConcurrentDictionary<IntPtr, bool> _activeDeletes = new(1000);
 
         public static event CShItemUpdateEventHandler UpdateEvent;
 

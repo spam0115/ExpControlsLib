@@ -1418,7 +1418,7 @@ namespace ExpControlsLib
             }
         }
 
-        private LruDictionary<String, bool> _activeDeletes = new(1000);
+        private LruConcurrentDictionary<String, bool> _activeDeletes = new(1000);
         /// <summary>
         /// Performs the actual update of list view items in response to shell changes.
         /// Handles creation, deletion, renaming, and other updates of files and folders.

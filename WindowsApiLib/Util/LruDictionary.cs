@@ -9,16 +9,16 @@ namespace WindowsApiLib
     /// </summary>
     /// <typeparam name="TKey"></typeparam>
     /// <typeparam name="TValue"></typeparam>
-    public class LruConcurrentDictionary<TKey, TValue>
+    public class LruDictionary<TKey, TValue>
     {
         private readonly int _capacity;
-        private readonly ConcurrentDictionary<TKey, LinkedListNode<(TKey Key, TValue Value)>> _dictionary;
+        private readonly Dictionary<TKey, LinkedListNode<(TKey Key, TValue Value)>> _dictionary;
         private readonly LinkedList<(TKey Key, TValue Value)> _list = new();
 
-        public LruConcurrentDictionary(int capacity)
+        public LruDictionary(int capacity)
         {
             _capacity = capacity;
-            _dictionary = new ConcurrentDictionary<TKey, LinkedListNode<(TKey, TValue)>>(-1, capacity);
+            _dictionary = new Dictionary<TKey, LinkedListNode<(TKey, TValue)>>(capacity);
         }
 
         public int Count => _dictionary.Count;
@@ -49,14 +49,14 @@ namespace WindowsApiLib
             {
                 // Update existing - move to end (most recently used)
                 _list.Remove(existingNode);
-                _dictionary.TryRemove(key, out _);
+                _dictionary.Remove(key);
             }
             else if (_dictionary.Count >= _capacity)
             {
                 // Evict least recently used (front of list)
                 var lru = _list.First.Value;
                 _list.RemoveFirst();
-                _dictionary.TryRemove(lru.Key, out _);
+                _dictionary.Remove(lru.Key);
             }
 
             var node = _list.AddLast((key, value));
@@ -103,7 +103,7 @@ namespace WindowsApiLib
                 return false;
 
             _list.Remove(node);
-            _dictionary.TryRemove(key, out _);
+            _dictionary.Remove(key);
             return true;
         }
 

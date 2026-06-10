@@ -221,6 +221,24 @@
             <remarks>Though specifically designed for ListView and TreeView Controls, this Class will work for any Control which
                      is associated with a single Folder and can provide CShItems from that Folder.</remarks>
         </member>
+        <member name="F:ExpControlsLib.ContextMenu.cntxMenuBase">
+            <summary>Base interface for basic context menu commands (Open, Copy, etc.).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ContextMenu.cntxMenuExtended">
+            <summary>Extends IContextMenu to support owner-drawn items and submenus (HandleMenuMsg).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ContextMenu.cntxMenuCascading">
+            <summary>Extends IContextMenu2 to support advanced cascading menus with result return (HandleMenuMsg2).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ContextMenu.newMenuBase">
+            <summary>Base interface for the 'New' submenu creation.</summary>
+        </member>
+        <member name="F:ExpControlsLib.ContextMenu.newMenuExtended">
+            <summary>Extends newMenu to support owner-drawn items and submenus in the 'New' menu.</summary>
+        </member>
+        <member name="F:ExpControlsLib.ContextMenu.newMenuCascading">
+            <summary>Extends newMenu2 to support advanced cascading features in the 'New' menu.</summary>
+        </member>
         <member name="M:ExpControlsLib.ContextMenu.ShowMenu(System.IntPtr,WindowsApiLib.Shell.CShellItem[],System.Drawing.Point,System.Boolean,WindowsApiLib.Shell.ShellAPI.CMInvokeCommandInfoEx@,System.Boolean)">
             <summary>
             If this method returns true then the caller must call ReleaseMenu
@@ -566,6 +584,16 @@
         <member name="E:ExpControlsLib.ExpList.ExpListMove">
             <summary>
             Occurs when Move is selected from the context menu.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ExpList.ExpListCopyEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListCopy"/> event.
+            </summary>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.ExpListCopy">
+            <summary>
+            Occurs when Copy to Folder is selected from the context menu.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ExpList.ExpListSelectedIndexChangedEventHandler">
@@ -1073,6 +1101,16 @@
             <summary> 
             Required method for Designer support - do not modify 
             the contents of this method with the code editor.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ExpListCopyEventArgs">
+            <summary>
+            Event arguments for the <see cref="E:ExpControlsLib.ExpList.ExpListCopy"/> event.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListCopyEventArgs.Items">
+            <summary>
+            Gets the items to be copied.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ExpListGetColumnDataEventArgs">
