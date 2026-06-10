@@ -65,44 +65,46 @@ namespace WindowsApiLib.Shell
         /// <param name="absPidl">An Absolute PIDL referencing the item to be Found.</param>
         /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
         /// <remarks> 5/31/2012 -Function added to replace algorithm used in FindCShItem(ptr as IntPtr) which now only calls this routine.</remarks>
-        public CShellItem? Find(CShellItem BaseItem, IntPtr absPidl)
+        public CShellItem? Find(CShellItem rootItem, IntPtr absPidl)
         {
-            CShellItem? target = null;
+            if (rootItem is null || absPidl == IntPtr.Zero) return null;
+            if (rootItem.PIDL == absPidl) return rootItem;
 
-            if (CPidl.ResolvesToSamePathOrName(BaseItem.PIDL, absPidl))
-                return BaseItem;
-
-            if (BaseItem.DirectoryList is not null) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
+            var name = CPidl.GetFullName(absPidl);
+            if (name == null)
             {
-                foreach (CShellItem DItem in BaseItem.DirectoryList)
+                Debug.WriteLine("Could not get name for pidl using Find...CPidl.GetFullName");
+                return null;
+            }
+
+            var pidlAndName = new PidlAndCanonicalParsingName(absPidl, name);
+
+            return Find(rootItem, pidlAndName);
+        }
+
+        private CShellItem? Find(CShellItem rootItem, PidlAndCanonicalParsingName pidlAndName)
+        {
+            if (rootItem.FullPath == pidlAndName.Name)
+                return rootItem;
+
+            if (rootItem.DirectoryList is not null) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
+            {
+                foreach (CShellItem childFolders in rootItem.DirectoryList)
                 {
-                    if (CPidl.ResolvesToSamePathOrName(DItem.PIDL, absPidl))
-                        return DItem;
-                    if (CPidl.IsAncestorOf(DItem.PIDL, absPidl, false)) //note that items are considered to be ancestors of themselves which is kinda weird
-                        return Find(DItem, absPidl);
+                    if (childFolders.FullPath == pidlAndName.Name)
+                        return childFolders;
+                    if (CPidl.IsAncestorOf(childFolders.PIDL, pidlAndName.Pidl, false)) //note that items are considered to be ancestors of themselves which is kinda weird
+                        return Find(childFolders, pidlAndName);
                 }
             }
 
-            if (BaseItem.FileList is not null && CPidl.IsAncestorOf(BaseItem.PIDL, absPidl, true))
+            if (rootItem.FileList is not null && CPidl.IsAncestorOf(rootItem.PIDL, pidlAndName.Pidl, true))
             {
-                //var name = CPidl.GetFileSystemPath(Abs);//doesn't work with dlna media servers
-                //if (name is null) return null;
-                var name = CPidl.GetDisplayName(absPidl);//doesn't work with dlna media servers
-                if (name is null) return null;
-
-                if (BaseItem.FilesDic.TryGetValue(name, out CShellItem fileItem)) 
+                if (rootItem.FilesDic.TryGetValue(pidlAndName.Name, out CShellItem? fileItem))
                 {
                     return fileItem;
                 }
                 else return null;
-                //foreach (CShellItem FItem in BaseItem.FileList)
-                //{
-                //    //if (CPidl.IsEqual(FItem.PIDL, Abs)) //too slow
-                //    //    return FItem;
-
-                //    if (FItem.FullPath == fullPath)
-                //        return FItem;
-                //}
             }
 
             return null;
@@ -374,5 +376,15 @@ namespace WindowsApiLib.Shell
         }
     }
 
+    public readonly struct PidlAndCanonicalParsingName
+    {
+        public IntPtr Pidl { get; }
+        public string Name { get; }
+        public PidlAndCanonicalParsingName(IntPtr pidl, string name)
+        {
+            Pidl = pidl;
+            Name = name;
+        }
+    }
 
 }

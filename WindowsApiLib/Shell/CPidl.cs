@@ -423,6 +423,26 @@ namespace WindowsApiLib
             return false;
         }
 
+        public static string? GetFullName(IntPtr pidl1)
+        {
+            if (pidl1 == IntPtr.Zero) return null;
+
+            // 1) Filesystem path (preferred when available)
+            if (TryGetFileSystemPathFromPidl(pidl1, out var pathA))
+            {
+                var normName = NormalizePath(pathA);
+                return normName;
+            }
+
+            // 2) Shell canonical parsing name (works for non-filesystem too)
+            if (TryGetCanonicalParsingName(pidl1, out var nameA))
+            {
+                    return nameA;
+            }
+
+            return null;
+        }
+
         private static bool TryGetFileSystemPathFromPidl(IntPtr pidl, out string path)
         {
             path = null!;

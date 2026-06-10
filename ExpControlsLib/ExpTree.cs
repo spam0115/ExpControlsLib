@@ -690,7 +690,7 @@ namespace ExpControlsLib
                                     bool exitSelect = false;
                                     foreach (TreeNode Node in pNode.Nodes)
                                     {
-                                        if (Node.Tag is not null && ReferenceEquals(Node.Tag, e.Item))
+                                        if (Node.Tag is not null && (ReferenceEquals(Node.Tag, e.Item) || CPidl.ResolvesToSamePathOrName(((CShellItem)Node.Tag).PIDL, e.Item.PIDL)))
                                         {
                                             // Debug.WriteLine("Removing Node " & NodePath(Node))
                                             pNode.Nodes.Remove(Node);
@@ -715,7 +715,7 @@ namespace ExpControlsLib
                                     bool exitSelect1 = false;
                                     foreach (TreeNode Node in pNode.Nodes)
                                     {
-                                        if (Node.Tag is not null && ReferenceEquals(Node.Tag, e.Item))
+                                        if (Node.Tag is not null && (ReferenceEquals(Node.Tag, e.Item) || CPidl.ResolvesToSamePathOrName(((CShellItem)Node.Tag).PIDL, e.Item.PIDL)))
                                         {
                                             bool wasSelected = ReferenceEquals(_TreeView.SelectedNode, Node);
                                             Node.Text = e.Item.DisplayName;
@@ -748,9 +748,9 @@ namespace ExpControlsLib
                                     bool exitSelect2 = false;
                                     for (int indx = 0, loopTo = pNode.Nodes.Count - 1; indx <= loopTo; indx++)
                                     {
-                                        if (pNode.Tag is not null && ReferenceEquals(pNode.Nodes[indx].Tag, e.Item))
+                                        var node = pNode.Nodes[indx];
+                                        if (node.Tag is not null && (ReferenceEquals(node.Tag, e.Item) || CPidl.ResolvesToSamePathOrName(((CShellItem)node.Tag).PIDL, e.Item.PIDL)))
                                         {
-                                            var node = pNode.Nodes[indx];
                                             CShellItem item = (CShellItem)node.Tag;
                                             bool wasExpanded = node.IsExpanded;
                                             if (wasExpanded)

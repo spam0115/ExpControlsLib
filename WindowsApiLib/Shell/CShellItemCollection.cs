@@ -126,11 +126,20 @@ namespace WindowsApiLib.Shell
             return -1;
         }
 
-        public int IndexOf(IntPtr pidl)
+	public int IndexOf(IntPtr pidl)
         {
             for (int i = 0; i < m_items.Count; i++)
             {
-                if (CPidl.IsBinaryEqual(m_items[i].PIDL, pidl)) //binary comparisons are no good!
+                if (CPidl.IsBinaryEqual(m_items[i].PIDL, pidl))
+                {
+                    return i;
+                }
+            }
+
+            // Fallback to more expensive but robust comparison for absolute PIDLs
+            for (int i = 0; i < m_items.Count; i++)
+            {
+                if (CPidl.ResolvesToSamePathOrName(m_items[i].PIDL, pidl))
                 {
                     return i;
                 }
@@ -138,15 +147,33 @@ namespace WindowsApiLib.Shell
             return -1;
         }
 
+
         public int IndexOfRelative(IntPtr relPidl)
         {
+            if (relPidl == IntPtr.Zero) return -1;
+
+            // First try binary equal as it is fastest
             for (int i = 0; i < m_items.Count; i++)
             {
-                if (CPidl.IsBinaryEqual(m_items[i].LastPIDL, relPidl)) //binary comparisons are no good!
+                if (CPidl.IsBinaryEqual(m_items[i].LastPIDL, relPidl))
                 {
                     return i;
                 }
             }
+
+            // Fallback to shell-based comparison
+            IShellFolder folder = m_item.IShlFolder;
+            if (folder != null)
+            {
+                for (int i = 0; i < m_items.Count; i++)
+                {
+                    if (CPidl.AreEqual(folder, m_items[i].LastPIDL, relPidl))
+                    {
+                        return i;
+                    }
+                }
+            }
+
             return -1;
         }
 

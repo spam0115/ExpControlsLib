@@ -1958,22 +1958,23 @@ namespace ExpControlsLib
         /// <summary>
         /// Finds a ListViewItem by its Shell ID (PIDL).
         /// </summary>
-        public ListViewItem FindItemByID(IntPtr pidl)
+        /// <remarks>This is inefficient and takes O(n) time.</remarks>
+        public ListViewItem FindItemByPidl(IntPtr pidl)
         {
-            Debug.WriteLine("ExpList: FindItemByID Begin");
+            Debug.WriteLine("ExpList: FindItemByPidl Begin");
             try
             {
                 for (int i = 0; i < _listViewWrapper.Count; i++)
                 {
                     var item = _listViewWrapper.GetItem(i);
-                    if (item != null && CPidl.IsBinaryEqual(item.PIDL, pidl))
+                    if (item != null && (CPidl.IsBinaryEqual(item.PIDL, pidl) || CPidl.ResolvesToSamePathOrName(item.PIDL, pidl)))
                         return _listViewWrapper.GetListViewItem(i);
                 }
                 return null;
             }
             finally
             {
-                //Debug.WriteLine("ExpList: FindItemByID End");
+                //Debug.WriteLine("ExpList: FindItemByPidl End");
             }
         }
 

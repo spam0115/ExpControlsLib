@@ -702,8 +702,11 @@ namespace ExpControlsLib
         {
             //Console.WriteLine("Retrieve virtual item: " + e.ItemIndex);
 
-            if (ExpList._isShuttingDown) return; //windows tries to retrieve every item during shutdown for some reason
-
+            if (ExpList._isShuttingDown) 
+            { 
+                e.Item = new ListViewItem();
+                return; //windows tries to retrieve every item during shutdown for some reason
+            }
             e.Item = GetLviFromVirtual(e.ItemIndex);
         }
 

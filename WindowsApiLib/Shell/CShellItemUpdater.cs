@@ -473,11 +473,11 @@ namespace WindowsApiLib.Shell
                                     // parentItem.DirectoryList was Nothing...
                                     if (parentItem.DirectoryList is not null) // Added code from Calum
                                     {
-                                        int indx = parentItem.DirectoryList.IndexOf(shNotify.dwItem1);
-                                        if (indx > -1)
+                                        CShellItem? itemToRemove = parentItem.DirectoryList[shNotify.dwItem1];
+                                        if (itemToRemove != null)
                                         {
-                                            Debug.WriteLine("  [RMDIR] Found item in DirectoryList. Removing: " + parentItem.DirectoryList[indx].ItemPath);
-                                            RemoveItem(parentItem, parentItem.DirectoryList[indx]);   // 7/2/2012 - incorrectly used Directories
+                                            Debug.WriteLine("  [RMDIR] Found item in DirectoryList. Removing: " + itemToRemove.ItemPath);
+                                            RemoveItem(parentItem, itemToRemove);   // 7/2/2012 - incorrectly used Directories
                                         }
                                         else
                                         {
