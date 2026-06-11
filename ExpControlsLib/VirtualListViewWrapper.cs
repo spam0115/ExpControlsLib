@@ -442,6 +442,8 @@ namespace ExpControlsLib
 
         public CShellItem? GetItem(int index)
         {
+            if (index < 0) return null;
+
             if (VirtualMode)
             {
                 if (index >= 0 && index < VirtualItems.Count)

@@ -28,7 +28,7 @@ namespace ExpControlsLib
         
         private readonly HashedLinkedList<string> _lruKeys = new();
         private readonly System.Collections.Generic.Dictionary<string, ThumbnailSlot> _slotByKey = new();
-        private const int MaxThumbnails = 5000;
+        private const int MaxThumbnails = 1500;
 
         private readonly System.Collections.Generic.HashSet<ImageList> _corruptImageLists = new System.Collections.Generic.HashSet<ImageList>();
 
@@ -307,6 +307,7 @@ namespace ExpControlsLib
                             _slotByKey[key] = newSlot;
                         }
                     }
+                    //Debug.WriteLine("\tImageList size: " + imageList.Images.Count.ToString());
                 }
 
                 if (index != -1 && reqArgs.Item != null)

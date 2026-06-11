@@ -3555,6 +3555,7 @@ namespace ExpControlsLib
                             Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
                         }
 
+                        backFill = backFill < 0 ? 0 : backFill;
                         for (int i = backFill; i < startIndex; i++)
                         {
                             var csi = _listViewWrapper.GetItem(i);
