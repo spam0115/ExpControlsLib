@@ -1824,7 +1824,7 @@ namespace ExpControlsLib
         /// <param name="csi">The <see cref="CShellItem"/> representing the folder to display.</param>
         /// <param name="includeFolder">True to include subdirectories in the list.</param>
         /// <param name="reload">True to force a reload even if the same item was previously selected.</param>
-        public void DisplayFiles(string pathName, CShellItem csi, bool includeFolder, bool reload = false)
+        public void DisplayFiles(string pathName, CShellItem csi, bool includeFolder = true, bool reload = false)
         {
             Debug.WriteLine("ExpList: DisplayFiles Begin");
             try
@@ -2747,24 +2747,22 @@ namespace ExpControlsLib
 
                 if (csi == null) return;
 
-                if (csi.FullPath.StartsWith(":"))
-                    ExpListItemDoubleClick?.Invoke(csi.DisplayName, csi);
-                else
-                    ExpListItemDoubleClick?.Invoke(csi.FullPath, csi);
-
-                if (!csi.IsFolder)
+                if (csi.IsFolder)
                 {
                     try
                     {
-                        // LaunchFile(csi); // Temporarily commented out to let MainForm handle it via the event.
-                        // Actually, if MainForm doesn't handle it, we might want to launch it.
-                        // But for now, we want MainForm to have full control.
+                        // Navigate into the folder
+                        this.DisplayFiles(csi.FullPath, csi, true);
                     }
                     catch (Exception ex)
                     {
                         MessageBox.Show(ex.Message, "Error in starting application", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
+                else if (csi.FullPath.StartsWith(":"))
+                    ExpListItemDoubleClick?.Invoke(csi.DisplayName, csi);
+                else
+                    ExpListItemDoubleClick?.Invoke(csi.FullPath, csi);
             }
             finally
             {
