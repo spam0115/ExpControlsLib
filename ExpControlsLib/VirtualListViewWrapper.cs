@@ -23,18 +23,29 @@ namespace ExpControlsLib
     internal class VirtualListViewWrapper
     {
         private readonly ExpList _expList;
-        public readonly ListView _ListView;
-        private readonly HugeList<CShellItem> _virtualItems = new();
         private readonly Dictionary<int, ListViewItem> _itemCache = new();
         private readonly Dictionary<string, int> _pathToIndex = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, ListViewItem> _itemIndex = new(StringComparer.OrdinalIgnoreCase);
-
         private SortOrder _sortOrder = SortOrder.None;
         private int _sortColumn = 0;
         private SortOrder _prevSortOrder = SortOrder.None;
         private int _prevSortColumn = -1;
         private bool _inSort = false;
 
+        public readonly ListView _ListView;
+        public readonly HugeList<CShellItem> VirtualItems = new();
+
+        /// <summary>
+        /// Callback to create a new ListViewItem for a given CShellItem.
+        /// </summary>
+        public Func<CShellItem, ListViewItem> CreateListviewItemCallback { get; set; }
+
+        /// <summary>
+        /// Callback to update an existing ListViewItem with data from a CShellItem.
+        /// </summary>
+        public Action<ListViewItem, CShellItem> UpdateListviewItemCallback { get; set; }
+
+        #region Properties
         public LVColSorter Sorter { get; private set; }
         public int SortColumn
         {
@@ -62,34 +73,6 @@ namespace ExpControlsLib
 
         public SortOrder Sorting => SortOrder;
 
-        /// <summary>
-        /// Callback to create a new ListViewItem for a given CShellItem.
-        /// </summary>
-        public Func<CShellItem, ListViewItem> CreateListviewItemCallback { get; set; }
-
-        /// <summary>
-        /// Callback to update an existing ListViewItem with data from a CShellItem.
-        /// </summary>
-        public Action<ListViewItem, CShellItem> UpdateListviewItemCallback { get; set; }
-
-        public VirtualListViewWrapper(ExpList expList, ListView listView)
-        {
-            _expList = expList ?? throw new ArgumentNullException(nameof(expList));
-            _ListView = listView ?? throw new ArgumentNullException(nameof(listView));
-
-            _ListView.RetrieveVirtualItem += OnRetrieveVirtualItem;
-        }
-
-        /// <summary>
-        /// Stuff that can't be don't in the constructor because of unavailable dependencies.  
-        /// This should be called in Control.Load().
-        /// </summary>
-        public void Initialize()
-        {
-            //create sorter.  this can't be done earlier because listview columns aren't available during the constructor
-            Sorter = new LVColSorter(_ListView);
-            _ListView.ListViewItemSorter = Sorter;
-        }
 
         [Browsable(true), Category("Behavior"), DefaultValue(false)]
         public bool VirtualMode
@@ -110,14 +93,14 @@ namespace ExpControlsLib
                 else
                 {
                     _ListView.RetrieveVirtualItem -= OnRetrieveVirtualItem;
-                    _virtualItems.Clear();
+                    VirtualItems.Clear();
                     _itemCache.Clear();
                     _pathToIndex.Clear();
                 }
             }
         }
 
-        public int Count => VirtualMode ? _virtualItems.Count : _ListView.Items.Count;
+        public int Count => VirtualMode ? VirtualItems.Count : _ListView.Items.Count;
 
         public int SelectedCount => _ListView.SelectedIndices.Count;
 
@@ -172,6 +155,27 @@ namespace ExpControlsLib
             }
         }
 
+        #endregion
+
+        public VirtualListViewWrapper(ExpList expList, ListView listView)
+        {
+            _expList = expList ?? throw new ArgumentNullException(nameof(expList));
+            _ListView = listView ?? throw new ArgumentNullException(nameof(listView));
+
+            _ListView.RetrieveVirtualItem += OnRetrieveVirtualItem;
+        }
+
+        /// <summary>
+        /// Stuff that can't be don't in the constructor because of unavailable dependencies.  
+        /// This should be called in Control.Load().
+        /// </summary>
+        public void Initialize()
+        {
+            //create sorter.  this can't be done earlier because listview columns aren't available during the constructor
+            Sorter = new LVColSorter(_ListView);
+            _ListView.ListViewItemSorter = Sorter;
+        }
+
         public void Clear()
         {
             Debug.WriteLine("VirtualListViewWrapper.Clear");
@@ -185,7 +189,7 @@ namespace ExpControlsLib
             {
                 _ListView.Items.Clear();
             }
-            _virtualItems.Clear();
+            VirtualItems.Clear();
             _itemCache.Clear();
             _pathToIndex.Clear();
             _itemIndex.Clear();
@@ -203,7 +207,7 @@ namespace ExpControlsLib
             LastTopIndex = -1;
             if (VirtualMode)
             {
-                _virtualItems.AddRange(items);
+                VirtualItems.AddRange(items);
                 UpdateVirtualListSize();
                 RecreateIndexMapping();
             }
@@ -226,9 +230,9 @@ namespace ExpControlsLib
             LastTopIndex = -1;
             if (VirtualMode)
             {
-                _virtualItems.Add(item);
+                VirtualItems.Add(item);
                 UpdateVirtualListSize();
-                _pathToIndex[item.FullPath] = _virtualItems.Count - 1;
+                _pathToIndex[item.FullPath] = VirtualItems.Count - 1;
             }
             else
             {
@@ -264,15 +268,15 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                lock (_virtualItems)
+                lock (VirtualItems)
                 {
-                    _virtualItems.Insert(index, item);
+                    VirtualItems.Insert(index, item);
                     UpdateVirtualListSize();
 
                     // Efficiently update index mapping for the new item and shifted items
-                    for (int i = index; i < _virtualItems.Count; i++)
+                    for (int i = index; i < VirtualItems.Count; i++)
                     {
-                        _pathToIndex[_virtualItems[i].FullPath] = i;
+                        _pathToIndex[VirtualItems[i].FullPath] = i;
                     }
 
                     // Shift cache to reuse existing ListViewItem objects
@@ -286,7 +290,7 @@ namespace ExpControlsLib
 
                 // Only redraw if the insertion affects currently visible items or items that shift into view
                 int startRedraw = Math.Max(index, Math.Max(0, top));
-                int endRedraw = Math.Min(lastVisible, (int)_virtualItems.Count - 1);
+                int endRedraw = Math.Min(lastVisible, (int)VirtualItems.Count - 1);
 
                 if (startRedraw <= endRedraw)
                 {
@@ -331,17 +335,17 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                lock (_virtualItems)
+                lock (VirtualItems)
                 {
-                    var item = _virtualItems[index];
-                    _virtualItems.RemoveAt(index);
+                    var item = VirtualItems[index];
+                    VirtualItems.RemoveAt(index);
                     UpdateVirtualListSize();
 
                     // Efficiently update index mapping for shifted items
                     _pathToIndex.Remove(item.FullPath);
-                    for (int i = index; i < _virtualItems.Count; i++)
+                    for (int i = index; i < VirtualItems.Count; i++)
                     {
-                        _pathToIndex[_virtualItems[i].FullPath] = i;
+                        _pathToIndex[VirtualItems[i].FullPath] = i;
                     }
 
                     // Shift cache to reuse existing ListViewItem objects
@@ -356,7 +360,7 @@ namespace ExpControlsLib
 
                 // Only redraw if the removal affects currently visible items or items that shift into view
                 int startRedraw = Math.Max(index, top);
-                int endRedraw = Math.Min(lastVisible, (int)_virtualItems.Count - 1);
+                int endRedraw = Math.Min(lastVisible, (int)VirtualItems.Count - 1);
 
                 if (startRedraw <= endRedraw)
                 {
@@ -380,11 +384,11 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                lock (_virtualItems)
+                lock (VirtualItems)
                 {
                     // Rebuild virtual items list in one pass
-                    var remaining = new List<CShellItem>(_virtualItems.Count);
-                    foreach (var item in _virtualItems)
+                    var remaining = new List<CShellItem>(VirtualItems.Count);
+                    foreach (var item in VirtualItems)
                     {
                         if (!toRemove.Contains(item))
                         {
@@ -396,15 +400,15 @@ namespace ExpControlsLib
                         }
                     }
 
-                    _virtualItems.Clear();
-                    _virtualItems.AddRange(remaining);
+                    VirtualItems.Clear();
+                    VirtualItems.AddRange(remaining);
                     UpdateVirtualListSize();
 
                     // Rebuild path index
                     _pathToIndex.Clear();
-                    for (int i = 0; i < _virtualItems.Count; i++)
+                    for (int i = 0; i < VirtualItems.Count; i++)
                     {
-                        _pathToIndex[_virtualItems[i].FullPath] = i;
+                        _pathToIndex[VirtualItems[i].FullPath] = i;
                     }
 
                     // For large batches, it's safer and often faster to just clear the cache
@@ -440,8 +444,8 @@ namespace ExpControlsLib
         {
             if (VirtualMode)
             {
-                if (index >= 0 && index < _virtualItems.Count)
-                    return _virtualItems[index];
+                if (index >= 0 && index < VirtualItems.Count)
+                    return VirtualItems[index];
             }
             else
             {
@@ -674,7 +678,7 @@ namespace ExpControlsLib
             {
                 if (!VirtualMode) return;
 
-                foreach (var item in _virtualItems)
+                foreach (var item in VirtualItems)
                 {
                     if (item != null) item.ImageIndex = -1;
                 }
@@ -707,14 +711,24 @@ namespace ExpControlsLib
                 e.Item = new ListViewItem();
                 return; //windows tries to retrieve every item during shutdown for some reason
             }
-            e.Item = GetLviFromVirtual(e.ItemIndex);
+
+            bool isThumbnailMode = IsThumbnailViewMode();
+            if (isThumbnailMode) _expList.EnterImageListMutation();
+            try
+            {
+                e.Item = GetLviFromVirtual(e.ItemIndex);
+            }
+            finally
+            {
+                if (isThumbnailMode) _expList.ExitImageListMutation();
+            }
         }
 
         public ListViewItem GetLviFromVirtual(int index)
         {
-            if (index < 0 || index >= _virtualItems.Count) return null;
+            if (index < 0 || index >= VirtualItems.Count) return null;
 
-            var item = _virtualItems[index];
+            var item = VirtualItems[index];
 
             if (item.NeedsRefresh) //item has been updated in the background and needs to be recreated as a new ListViewItem to reflect changes
             {
@@ -773,15 +787,15 @@ namespace ExpControlsLib
 
         private void UpdateVirtualListSize()
         {
-            _ListView.VirtualListSize = _virtualItems.Count;
+            _ListView.VirtualListSize = VirtualItems.Count;
         }
 
         private void RecreateIndexMapping()
         {
             _pathToIndex.Clear();
-            for (int i = 0; i < _virtualItems.Count; i++)
+            for (int i = 0; i < VirtualItems.Count; i++)
             {
-                _pathToIndex[_virtualItems[i].FullPath] = i;
+                _pathToIndex[VirtualItems[i].FullPath] = i;
             }
         }
 
@@ -845,7 +859,7 @@ namespace ExpControlsLib
 
         private void SortVirtualItems(int column, SortOrder order)
         {
-            if (order == SortOrder.None || _virtualItems.Count == 0) return;
+            if (order == SortOrder.None || VirtualItems.Count == 0) return;
 
             if (column < 0 || column >= _ListView.Columns.Count) return;
             var colHeader = _ListView.Columns[column];
@@ -853,8 +867,8 @@ namespace ExpControlsLib
             var comparer = new CShellItemComparer(_expList, column, order, colHeader, secondaryComparer);
 
             // Copy to a List for sorting because HugeList (B-Tree) sort is impractical in-place
-            var list = new List<CShellItem>((int)_virtualItems.Count);
-            foreach (var item in _virtualItems)
+            var list = new List<CShellItem>((int)VirtualItems.Count);
+            foreach (var item in VirtualItems)
             {
                 list.Add(item);
             }
@@ -862,8 +876,8 @@ namespace ExpControlsLib
             list.Sort(comparer);
 
             _ListView.BeginUpdate();
-            _virtualItems.Clear();
-            _virtualItems.AddRange(list);
+            VirtualItems.Clear();
+            VirtualItems.AddRange(list);
 
             RecreateIndexMapping();
             _itemCache.Clear();
@@ -888,7 +902,7 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                long result = _virtualItems.BinarySearch(0, _virtualItems.Count, item, comparer);
+                long result = VirtualItems.BinarySearch(0, VirtualItems.Count, item, comparer);
                 return (int)(result < 0 ? ~result : result);
             }
             else

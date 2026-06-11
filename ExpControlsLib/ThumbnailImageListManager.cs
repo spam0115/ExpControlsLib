@@ -289,10 +289,9 @@ namespace ExpControlsLib
                             lock (imageList)
                             {
                                 imageList.Images[index] = square;
+                                _lruKeys.Add(key);
+                                _slotByKey[key] = oldestSlot;
                             }
-
-                            _lruKeys.Add(key);
-                            _slotByKey[key] = oldestSlot;
                             reused = true;
                         }
                     }
@@ -334,7 +333,10 @@ namespace ExpControlsLib
         {
             foreach (var imageList in _imageLists.Values)
             {
-                imageList?.Dispose();
+                lock (imageList)
+                {
+                    imageList?.Dispose();
+                }
             }
             _imageLists.Clear();
 

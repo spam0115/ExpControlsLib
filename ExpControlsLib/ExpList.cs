@@ -100,6 +100,11 @@ namespace ExpControlsLib
         private int _enumerationDepth = 0;
         private readonly Queue<(object sender, ShellItemUpdateEventArgs e)> _deferredUpdates = new();
 
+        // Reentrancy guard for image list modifications. Prevents modifying the 
+        // image list while the OS is in the middle of a draw cycle (e.g. RetrieveVirtualItem).
+        private int _imageListMutationDepth = 0;
+        private readonly Queue<(object sender, ThumbnailReadyEventArgs e)> _deferredThumbnailUpdates = new();
+
         internal static bool _isShuttingDown = false;
 
         #endregion
@@ -2365,6 +2370,45 @@ namespace ExpControlsLib
         }
 
         /// <summary>
+        /// Increments the image list mutation depth counter. While depth > 0, 
+        /// ThumbnailManager_ThumbnailReady will defer image list modifications 
+        /// to prevent reentrancy during OS draw cycles.
+        /// Must be paired with <see cref="ExitImageListMutation"/>.
+        /// </summary>
+        internal void EnterImageListMutation()
+        {
+            _imageListMutationDepth++;
+        }
+
+        /// <summary>
+        /// Decrements the image list mutation depth counter. When it reaches 0, 
+        /// any deferred thumbnail updates are drained and applied.
+        /// Must be paired with <see cref="EnterImageListMutation"/>.
+        /// </summary>
+        internal void ExitImageListMutation()
+        {
+            _imageListMutationDepth--;
+            if (_imageListMutationDepth <= 0)
+            {
+                _imageListMutationDepth = 0;
+                DrainDeferredThumbnailUpdates();
+            }
+        }
+
+        /// <summary>
+        /// Processes all deferred thumbnail updates that were queued while an image list 
+        /// mutation guard was active.
+        /// </summary>
+        private void DrainDeferredThumbnailUpdates()
+        {
+            while (_deferredThumbnailUpdates.Count > 0)
+            {
+                var (sender, e) = _deferredThumbnailUpdates.Dequeue();
+                ThumbnailManager_ThumbnailReady(sender, e);
+            }
+        }
+
+        /// <summary>
         /// Executes the action immediately if no enumeration is in progress, otherwise
         /// defers it via BeginInvoke to run after the enumeration completes.
         /// Use this for ListView modification operations outside of DoItemUpdate.
@@ -2908,20 +2952,28 @@ namespace ExpControlsLib
                 return;
             }
 
-            if (e.Size != GetThumbnailSizeForMode()) // check if mode changed
+            // If a draw cycle or another mutation is in progress, defer this update.
+            if (_imageListMutationDepth > 0)
             {
-                e.Thumbnail?.Dispose();
+                _deferredThumbnailUpdates.Enqueue((sender, e));
                 return;
             }
 
-            if (e.Item == null || e.Item.Parent == null || e.Item.Parent.FullPath != CurrentPath)
+            EnterImageListMutation();
+            try
             {
-                e.Thumbnail?.Dispose();
-                return;
-            }
+                if (e.Size != GetThumbnailSizeForMode()) // if the display mode is changed, the thumbnail will have the wrong size. Discard.
+                {
+                    e.Thumbnail?.Dispose();
+                    return;
+                }
 
-            lock (_shellController.HierachyManager.Lock)
-            {
+                if (e.Item == null || e.Item.Parent == null || e.Item.Parent.FullPath != CurrentPath)
+                {
+                    e.Thumbnail?.Dispose();
+                    return;
+                }
+
                 int image_index = -1;
                 if (e.Thumbnail != null)
                 {
@@ -2934,6 +2986,7 @@ namespace ExpControlsLib
                 {
                     image_index = _thumbnailManager.AddThumbnail(e, null);
                 }
+
                 if (image_index == -1)
                 {
                     // Failed to add thumbnail, likely due to disposal or mode change. Just exit.
@@ -2941,26 +2994,32 @@ namespace ExpControlsLib
                     return;
                 }
 
-                //can't use e.Index because some items might have been deleted or added since the thumbnail request was made, so find index by path as fallback
-                e.Item.ImageIndex = image_index;
-                int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
-                if (index == -1)
-                {
-                    // Failed to add thumbnail, likely due to disposal or mode change. Just exit.
-                    Debug.WriteLine("Failed to find the item in the listview: " + e.Item.DisplayName);
-                    return;
-                }
-
                 if (VirtualMode)
                 {
-                    Debug.WriteLine("Redrawing: " + e.Item.DisplayName);
-                    _listView.RedrawItems(index, index, false);
+                    lock (_listViewWrapper.VirtualItems)
+                    {
+                        int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
+                        if (index == -1)
+                        {
+                            // Failed to find item in listview, possibly due to deletion or move. Just exit.
+                            Debug.WriteLine("Failed to find the item in the listview: " + e.Item.DisplayName);
+                            return;
+                        }
+                        _listViewWrapper.GetItem(index).ImageIndex = image_index;
+                        //Debug.WriteLine("Redrawing: " + e.Item.DisplayName);
+                        _listViewWrapper._ListView.RedrawItems(index, index, false);
+                    }
                 }
                 else
                 {
+                    int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
                     var lvi = _listViewWrapper.GetItem(index);
                     if (lvi != null) lvi.ImageIndex = image_index;
                 }
+            }
+            finally
+            {
+                ExitImageListMutation();
             }
 
         }
@@ -3301,7 +3360,15 @@ namespace ExpControlsLib
                     EnterListViewEnumeration();
                     try
                     {
-                        _thumbnailManager.SetImageListForSize(GetThumbnailSizeForMode(value));
+                        EnterImageListMutation();
+                        try
+                        {
+                            _thumbnailManager.SetImageListForSize(GetThumbnailSizeForMode(value));
+                        }
+                        finally
+                        {
+                            ExitImageListMutation();
+                        }
                     }
                     finally
                     {
