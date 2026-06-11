@@ -2747,18 +2747,18 @@ namespace ExpControlsLib
 
                 if (csi == null) return;
 
-                if (csi.IsFolder)
-                {
-                    if (csi.FullPath.StartsWith(":"))
-                        ExpListItemDoubleClick?.Invoke(csi.DisplayName, csi);
-                    else
-                        ExpListItemDoubleClick?.Invoke(csi.FullPath, csi);
-                }
+                if (csi.FullPath.StartsWith(":"))
+                    ExpListItemDoubleClick?.Invoke(csi.DisplayName, csi);
                 else
+                    ExpListItemDoubleClick?.Invoke(csi.FullPath, csi);
+
+                if (!csi.IsFolder)
                 {
                     try
                     {
-                        LaunchFile(csi);
+                        // LaunchFile(csi); // Temporarily commented out to let MainForm handle it via the event.
+                        // Actually, if MainForm doesn't handle it, we might want to launch it.
+                        // But for now, we want MainForm to have full control.
                     }
                     catch (Exception ex)
                     {
@@ -3255,22 +3255,16 @@ namespace ExpControlsLib
                     var csi = GetItem(_listView.SelectedIndices[0]);
                     if (csi == null) return;
 
-                    string name = csi.DisplayName;
-
-                    if (csi.IsFolder)
-                    {
-                        if (csi.FullPath.StartsWith(":"))
-                            ExpListItemDoubleClick?.Invoke(csi.DisplayName, csi);
-                        else
-                            ExpListItemDoubleClick?.Invoke(csi.FullPath, csi);
-                    }
+                    if (csi.FullPath.StartsWith(":"))
+                        ExpListItemDoubleClick?.Invoke(csi.DisplayName, csi);
                     else
+                        ExpListItemDoubleClick?.Invoke(csi.FullPath, csi);
+
+                    if (!csi.IsFolder)
                     {
-                        string path = csi.FullPath;
                         try
                         {
-                            if (name == Path.GetFileName(path))
-                                LaunchFile(csi);
+                            // LaunchFile(csi); // Let MainForm handle it via the event.
                         }
                         catch (Exception ex)
                         {
@@ -3725,6 +3719,11 @@ namespace ExpControlsLib
             {
                 //Debug.WriteLine("ExpList: OnListViewScroll End");
             }
+        }
+
+        public void EnsureVisible(int index)
+        {
+            _listViewWrapper._ListView.EnsureVisible(index);
         }
 
         #endregion
