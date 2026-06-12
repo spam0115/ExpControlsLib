@@ -544,7 +544,7 @@ namespace WindowsApiLib.Shell
 
             try
             {
-                HR = csi.IShlFolder.EnumObjects(0, flags, ref IEnum);
+                HR = csi.IShlFolder.EnumObjects(0, flags, out IEnum);
                 if (HR != S_OK)
                     return listPidls;
 

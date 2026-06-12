@@ -1642,6 +1642,75 @@ namespace WindowsApiLib.Shell
             return null;
         }
 
+        public bool HasAtLeastOneSubfolder()
+        {
+            IEnumIDList enumList = null;
+            IntPtr[] pidlSub = new IntPtr[1];
+            uint fetched = 0;
+                
+            // SHCONTF_FOLDERS: Only look for folders
+            // SHCONTF_INCLUDEHIDDEN: Optional, if you want to be certain about hidden ones
+            int hr = m_IShellFolder.EnumObjects(IntPtr.Zero, SHCONTF.FOLDERS, out enumList);
+
+            if (hr == S_OK && enumList != null)
+            {
+                // Try to get exactly one item
+                hr = enumList.Next(1, pidlSub, out fetched);
+
+                // Clean up immediately
+                if (pidlSub[0] != IntPtr.Zero) Marshal.FreeCoTaskMem(pidlSub[0]);
+                Marshal.ReleaseComObject(enumList);
+
+                // S_OK means at least one was found.
+                // S_FALSE means the folder is empty.
+                return (hr == S_OK && fetched > 0);
+            }
+
+            return false;
+        }
+
+        #region        Utility functions
+
+        /// <summary>
+        /// Given a Byte() containing a valid PIDL of a Folder, return the IShellFolder of that Folder
+        /// </summary>
+        /// <param name="b">Byte() containing a valid PIDL of a Folder</param>
+        /// <returns>The IShellFolder for the requested PIDL. If Byte() does not contain a valid PIDL of a Folder, return Nothing</returns>
+        public static IShellFolder MakeFolderFromBytes(byte[] b)
+        {
+            IShellFolder MakeFolderFromBytesRet = default;
+            //GetDeskTop();                        // ensure we are initialized
+            // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
+            if (!CPidl.IsValid(b))
+                return null;
+            if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
+            {
+                return ShellController.DesktopCSI.IShlFolder;
+            }
+            else if (b.Length == 0)   // Also indicates the desktop
+            {
+                return ShellController.DesktopCSI.IShlFolder;
+            }
+            else
+            {
+                var ptr = Marshal.AllocCoTaskMem(b.Length);
+                if (ptr.Equals(IntPtr.Zero))
+                    return null;
+                Marshal.Copy(b, 0, ptr, b.Length);
+                // the next statement assigns a IshellFolder object to the function return, or has an error
+                MakeFolderFromBytesRet = ShellHelper.GetIShellFolder(ShellController.DesktopCSI, ptr);
+                Marshal.FreeCoTaskMem(ptr);
+            }
+
+            return MakeFolderFromBytesRet;
+        }
+
+
+        #endregion
+
+        #endregion
+
+
         #region        Update Methods
 
         /// <summary>
@@ -1686,7 +1755,6 @@ namespace WindowsApiLib.Shell
         #endregion
 
 
-        #endregion
 
 
         #region    Private Methods
@@ -1875,44 +1943,6 @@ namespace WindowsApiLib.Shell
         #endregion
 
 
-        #region        Utility functions
-
-        /// <summary>
-        /// Given a Byte() containing a valid PIDL of a Folder, return the IShellFolder of that Folder
-        /// </summary>
-        /// <param name="b">Byte() containing a valid PIDL of a Folder</param>
-        /// <returns>The IShellFolder for the requested PIDL. If Byte() does not contain a valid PIDL of a Folder, return Nothing</returns>
-        public static IShellFolder MakeFolderFromBytes(byte[] b)
-        {
-            IShellFolder MakeFolderFromBytesRet = default;
-            //GetDeskTop();                        // ensure we are initialized
-            // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
-            if (!CPidl.IsValid(b))
-                return null;
-            if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
-            {
-                return ShellController.DesktopCSI.IShlFolder;
-            }
-            else if (b.Length == 0)   // Also indicates the desktop
-            {
-                return ShellController.DesktopCSI.IShlFolder;
-            }
-            else
-            {
-                var ptr = Marshal.AllocCoTaskMem(b.Length);
-                if (ptr.Equals(IntPtr.Zero))
-                    return null;
-                Marshal.Copy(b, 0, ptr, b.Length);
-                // the next statement assigns a IshellFolder object to the function return, or has an error
-                MakeFolderFromBytesRet = ShellHelper.GetIShellFolder(ShellController.DesktopCSI, ptr);
-                Marshal.FreeCoTaskMem(ptr);
-            }
-
-            return MakeFolderFromBytesRet;
-        }
-
-
-        #endregion
 
     }
 

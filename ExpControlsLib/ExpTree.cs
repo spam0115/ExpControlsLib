@@ -961,20 +961,9 @@ namespace ExpControlsLib
             if (performAccurateCheck)
             {
                 // Force a one-level lookahead to ensure the arrow accurately reflects visible contents.
-                // Added hierarchy registration
-                var target = ShellController.Instance.LoadFolderContents(item);
-                if (target != null) item = target;
-
-                // item.Directories will perform/retrieve the enumeration.
-                foreach (CShellItem sub in item.Directories)
-                {
-                    if (m_showHiddenFolders || !sub.IsHidden)
-                    {
-                        return true;
-                    }
-                }
-                // If we reach here, we've verified that there are no visible subfolders.
-                return false;
+                if (item.HasAtLeastOneSubfolder())
+                    return true;
+                else return false;
             }
             else
             {

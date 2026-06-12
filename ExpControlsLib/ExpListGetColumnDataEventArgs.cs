@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
 
@@ -8,6 +9,7 @@ namespace ExpControlsLib
     /// <summary>
     /// Event arguments for the <see cref="ExpList.ExpListGetColumnData"/> event.
     /// </summary>
+    [SupportedOSPlatform("windows")]
     public class ExpListGetColumnDataEventArgs : EventArgs
     {
         /// <summary>

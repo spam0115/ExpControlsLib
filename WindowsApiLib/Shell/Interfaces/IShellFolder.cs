@@ -48,7 +48,7 @@ namespace WindowsApiLib.Shell
         int ParseDisplayName(int hwndOwner, IntPtr pbcReserved, [MarshalAs(UnmanagedType.LPWStr)] string lpszDisplayName, ref int pchEaten, ref IntPtr ppidl, ref int pdwAttributes);
 
         [PreserveSig()]
-        int EnumObjects(int hwndOwner, [MarshalAs(UnmanagedType.U4)] SHCONTF grfFlags, ref IEnumIDList ppenumIDList);
+        int EnumObjects(IntPtr hwndOwner, [MarshalAs(UnmanagedType.U4)] SHCONTF grfFlags, out IEnumIDList ppenumIDList);
 
         [PreserveSig()]
         int BindToObject(IntPtr pidl, IntPtr pbcReserved, ref Guid riid, ref IntPtr ppvOut);
