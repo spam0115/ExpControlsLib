@@ -1858,7 +1858,10 @@ namespace ExpControlsLib
                         if (!item.IsDisk) _ = item.LastWriteTime;
                         
                         // Icon index
-                        item.ImageIndex = SystemImageListManager.GetIconIndex(item, isLarge);
+                        if (!IsThumbnailViewMode())
+                        {
+                            item.ImageIndex = SystemImageListManager.GetIconIndex(item, isLarge);
+                        }
                     }
 
                     return new
