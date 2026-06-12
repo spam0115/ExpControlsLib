@@ -8,6 +8,8 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning; // Added to annotate platform support
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
@@ -67,6 +69,77 @@ namespace ExpControlsLib
         private Stack<CShellItem> _forwardHistory = new Stack<CShellItem>();
         private bool _isNavigatingHistory = false;
         private CShellItem _lastSelectedCSI = null;
+
+        private CancellationTokenSource? _rootLoadCts;
+        private static readonly StaThreadRunner _staRunner = new StaThreadRunner(1, "ExpTreeStaRunner");
+
+        private async Task SetRootItemAsync(CShellItem? item, StartDir dir = StartDir.None)
+        {
+            _rootLoadCts?.Cancel();
+            _rootLoadCts = new CancellationTokenSource();
+            var token = _rootLoadCts.Token;
+
+            try
+            {
+                var result = await _staRunner.EnqueueWork(t =>
+                {
+                    CShellItem? value = item;
+                    if (value == null && dir != StartDir.None)
+                    {
+                        value = CShellItemFactory.CreateCShItem((CSIDL)dir);
+                    }
+
+                    if (value == null || !value.IsFolder) return null;
+
+                    var target = ShellController.Instance.LoadFolderContents(value);
+                    if (target != null) value = target;
+
+                    var children = value.Directories;
+                    // Warming up
+                    foreach (var child in children)
+                    {
+                        if (t.IsCancellationRequested) return null;
+                        _ = child.HasSubFolders; // Populates cache
+                        _ = child.IconIndexNormal;
+                        _ = child.IconIndexOpen;
+                    }
+
+                    return new
+                    {
+                        Children = children,
+                        RootItem = value,
+                        DisplayName = value.DisplayName,
+                        IconIndex = GetIconIndex(value, false)
+                    };
+                }, token);
+
+                if (token.IsCancellationRequested || result == null) return;
+
+                _TreeView.BeginUpdate();
+                try
+                {
+                    ClearTree();
+                    Root = new TreeNode(result.DisplayName);
+                    BuildTree(result.Children);
+                    Root.ImageIndex = result.IconIndex;
+                    Root.SelectedImageIndex = result.IconIndex;
+                    Root.Tag = result.RootItem;
+
+                    _TreeView.Nodes.Add(Root);
+                    Root.Expand();
+                    _TreeView.SelectedNode = Root;
+                }
+                finally
+                {
+                    _TreeView.EndUpdate();
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error in SetRootItemAsync: " + ex.ToString());
+            }
+        }
 
         private CtvDropWrapper _DropHandler;
 
@@ -290,22 +363,7 @@ namespace ExpControlsLib
 
                 if (value.IsFolder)
                 {
-                    var target = ShellController.Instance.LoadFolderContents(value);
-                    if (target != null) value = target;
-
-                    CShellItem[] CSI = value.Directories;
-                    Root = new TreeNode(value.DisplayName);
-
-                    _TreeView.BeginUpdate();
-                    ClearTree();
-                    BuildTree(CSI);
-                    Root.ImageIndex = GetIconIndex(value, false);
-                    Root.SelectedImageIndex = Root.ImageIndex;
-                    Root.Tag = value;
-                    _TreeView.Nodes.Add(Root);
-                    Root.Expand();
-                    _TreeView.SelectedNode = Root;
-                    _TreeView.EndUpdate();
+                    _ = SetRootItemAsync(value);
                 }
             }
         }
@@ -857,29 +915,12 @@ namespace ExpControlsLib
                 return;
             }
 
-            _TreeView.BeginUpdate();
-            ClearTree();
-            CShellItem special;
-            special = CShellItemFactory.CreateCShItem((CSIDL)newVal);
-
-            var target = ShellController.Instance.LoadFolderContents(special);
-            if (target != null) special = target;
-
-            Root = new TreeNode(special.DisplayName)
-            {
-                Tag = special,
-                ImageIndex = GetIconIndex(special, false)
-            };
-            Root.SelectedImageIndex = Root.ImageIndex;
-            BuildTree(special.Directories);
-            _TreeView.Nodes.Add(Root);
-            Root.Expand();
-            _TreeView.EndUpdate();
+            _ = SetRootItemAsync(null, newVal);
         }
 
         private void BuildTree(CShellItem[] L1)
         {
-            Array.Sort(L1);
+            Array.Sort(L1); //move further up the call stack
             foreach (var CSI in L1)
             {
                 if (!(CSI.IsHidden & !m_showHiddenFolders))

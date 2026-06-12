@@ -27,7 +27,7 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Keep list of Drives and their DriveType for IsRemote testing
         /// </summary>
-        private static readonly Dictionary<string, bool> DriveDict = new Dictionary<string, bool>();
+        private static readonly ConcurrentDictionary<string, bool> DriveDict = new Dictionary<string, bool>();
 
 
         /// <summary>
@@ -793,7 +793,7 @@ namespace WindowsApiLib.Shell
                     csiOutput.m_XtrInfo = true;
                     if (!DriveDict.ContainsKey(csiOutput.m_Path))
                     {
-                        DriveDict.Add(csiOutput.m_Path, csiOutput.m_IsRemote);
+                        DriveDict.TryAdd(csiOutput.m_Path, csiOutput.m_IsRemote);
                     }
                 }
             }
