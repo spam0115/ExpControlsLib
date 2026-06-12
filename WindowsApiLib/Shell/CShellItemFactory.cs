@@ -27,7 +27,7 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Keep list of Drives and their DriveType for IsRemote testing
         /// </summary>
-        private static readonly ConcurrentDictionary<string, bool> DriveDict = new Dictionary<string, bool>();
+        private static readonly ConcurrentDictionary<string, bool> DriveDict = new ();
 
 
         /// <summary>

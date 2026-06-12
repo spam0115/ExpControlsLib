@@ -5,16 +5,16 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Text;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
-using TreeLib;
 using static System.Windows.Forms.ListView;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
@@ -106,6 +106,9 @@ namespace ExpControlsLib
         private readonly Queue<(object sender, ThumbnailReadyEventArgs e)> _deferredThumbnailUpdates = new();
 
         internal static bool _isShuttingDown = false;
+
+        private CancellationTokenSource? _displayFilesCts;
+        private static readonly StaThreadRunner _staRunner = new StaThreadRunner(1, "ExpListStaRunner");
 
         #endregion
 
@@ -453,21 +456,7 @@ namespace ExpControlsLib
                 {
                     if (value == _currentPath && _currentFolderCsi != null) return;
 
-                    var oldCsi = _currentFolderCsi;
-
-                    var newCsi = _shellController.HierachyManager.FindOrAdd(value);
-
-                    if (newCsi != null && newCsi.IsFolder)
-                        DisplayFiles(value, newCsi, true);
-                    else
-                    {
-                        _listView.BeginUpdate();
-                        _listViewWrapper.Clear();
-                        _currentPath = value;
-                        _currentFolderCsi = null;
-                        ExpListCurrentFolderChanged?.Invoke(newCsi, oldCsi);
-                        _listView.EndUpdate();
-                    }
+                    _ = DisplayFilesAsync(value, null, true);
                 }
             }
         }
@@ -1818,6 +1807,122 @@ namespace ExpControlsLib
         #region Public Methods
 
         /// <summary>
+        /// Populates the list view with files and directories from the specified <see cref="CShellItem"/> asynchronously.
+        /// </summary>
+        public async Task DisplayFilesAsync(string? pathName, CShellItem? csi, bool includeFolder = true, bool reload = false)
+        {
+            _displayFilesCts?.Cancel();
+            _displayFilesCts = new CancellationTokenSource();
+            var token = _displayFilesCts.Token;
+
+            try
+            {
+                var result = await _staRunner.EnqueueWork(t =>
+                {
+                    if (csi == null && !string.IsNullOrEmpty(pathName))
+                        csi = CShellItemFactory.CreateCShItem(pathName);
+
+                    if (csi == null) return null;
+
+                    bool samePath = _currentFolderCsi != null && CPidl.ResolvesToSamePathOrName(_currentFolderCsi.PIDL, csi.PIDL);
+                    if (samePath && !reload) return null;
+
+                    var hierarchyCsi = _shellController.LoadFolderContents(csi);
+                    if (hierarchyCsi == null) return null;
+
+                    var dirList = new List<CShellItem>();
+                    var fileList = new List<CShellItem>();
+
+                    if (includeFolder) dirList.AddRange(hierarchyCsi.Directories);
+                    if (!hierarchyCsi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(hierarchyCsi.Files);
+
+                    fileList.Sort();
+                    if (includeFolder) dirList.Sort();
+
+                    var combined = new List<CShellItem>(dirList.Count + fileList.Count);
+                    if (includeFolder) combined.AddRange(dirList);
+                    combined.AddRange(fileList);
+
+                    // Warming up
+                    bool isLarge = (_listViewWrapper.DisplayMode == ListViewDisplayMode.LargeIcon);
+                    foreach (var item in combined)
+                    {
+                        if (t.IsCancellationRequested) return null;
+                        
+                        // Populate caches
+                        _ = item.TypeName;
+                        if (!item.IsDisk && item.IsFileSystem && !item.IsFolder) _ = item.Size;
+                        if (!item.IsDisk) _ = item.LastWriteTime;
+                        
+                        // Icon index
+                        //item.ImageIndex = SystemImageListManager.GetIconIndex(item, isLarge);
+                    }
+
+                    return new
+                    {
+                        Items = combined,
+                        FolderCsi = hierarchyCsi,
+                        OldCsi = _currentFolderCsi,
+                        IsSamePath = samePath
+                    };
+                }, token);
+
+                if (token.IsCancellationRequested) return;
+
+                _listView.BeginUpdate();
+                try
+                {
+                    if (result != null)
+                    {
+                        _listViewWrapper.Clear();
+                        _currentFolderCsi = result.FolderCsi;
+                        _currentPath = _currentFolderCsi.FullPath;
+
+                        if (!_isNavigatingHistory && !result.IsSamePath)
+                        {
+                            _backHistory.Push(_currentFolderCsi);
+                            _forwardHistory.Clear();
+                        }
+
+                        _selectedItem = null;
+                        _listViewWrapper.AddRange(result.Items);
+                        _listView.Tag = _currentFolderCsi;
+
+                        OnScroll();
+
+                        if (!result.IsSamePath)
+                            ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, result.OldCsi);
+                    }
+                    else
+                    {
+                        // If result is null, it could be same path (no-op) or failure.
+                        // We check if we need to clear (e.g. failure to load or csi is null)
+                        if (csi == null || reload) // Simplification: if we asked for reload or started with null, and got nothing back, clear it.
+                        {
+                            var old = _currentFolderCsi;
+                            if (old != null || !string.IsNullOrEmpty(_currentPath))
+                            {
+                                _listViewWrapper.Clear();
+                                _currentFolderCsi = null;
+                                _currentPath = pathName;
+                                ExpListCurrentFolderChanged?.Invoke(null, old);
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    _listView.EndUpdate();
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error in DisplayFilesAsync: " + ex.ToString());
+            }
+        }
+
+        /// <summary>
         /// Populates the list view with files and directories from the specified <see cref="CShellItem"/>.
         /// </summary>
         /// <param name="pathName">The display path of the folder.</param>
@@ -1826,116 +1931,7 @@ namespace ExpControlsLib
         /// <param name="reload">True to force a reload even if the same item was previously selected.</param>
         public void DisplayFiles(string pathName, CShellItem csi, bool includeFolder = true, bool reload = false)
         {
-            Debug.WriteLine("ExpList: DisplayFiles Begin");
-            try
-            {
-                if (csi == null && !string.IsNullOrEmpty(pathName))
-                    csi = CShellItemFactory.CreateCShItem(pathName);
-
-                if (csi is null)
-                {
-                    _listView.BeginUpdate();
-                    _listViewWrapper.Clear();
-                    var oldCsi_null = _currentFolderCsi;
-                    _currentFolderCsi = null;
-                    _currentPath = pathName;
-                    ExpListCurrentFolderChanged?.Invoke(null, oldCsi_null);
-                    _listView.EndUpdate();
-                    return;
-                }
-
-                bool samePath;
-                if (_currentFolderCsi is null)
-                    samePath = false;
-                else
-                    samePath = CPidl.ResolvesToSamePathOrName(_currentFolderCsi.PIDL, csi.PIDL);
-
-                if (_currentFolderCsi != null && samePath && reload == false) return;
-
-                var oldCsi = _currentFolderCsi;
-                var hierarchyCsi = _shellController.LoadFolderContents(csi);
-                if (hierarchyCsi != null)
-                {
-                    _currentFolderCsi = hierarchyCsi;
-                }
-                else
-                {
-                    // If loading fails, clear the list instead of throwing
-                    _listView.BeginUpdate();
-                    _listViewWrapper.Clear();
-                    _currentFolderCsi = null;
-                    _currentPath = pathName;
-                    ExpListCurrentFolderChanged?.Invoke(null, oldCsi);
-                    _listView.EndUpdate();
-                    return;
-                }
-
-                // record history
-                if (!_isNavigatingHistory && _currentFolderCsi != null && !samePath)
-                {
-                    _backHistory.Push(_currentFolderCsi);
-                    _forwardHistory.Clear();
-                }
-
-                _selectedItem = null; //new folder loaded, no item selected yet
-                _currentPath = _currentFolderCsi.FullPath;
-
-                //display directories separately
-                var dirList = new List<CShellItem>();
-                var fileList = new List<CShellItem>();
-                if (includeFolder) dirList.AddRange(_currentFolderCsi.Directories);
-
-                if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(_currentFolderCsi.Files);
-
-                if ((dirList.Count + fileList.Count) == 0) //no items
-                {
-                    _listView.BeginUpdate();
-                    _listViewWrapper.Clear();
-                    _listView.EndUpdate();
-
-                    if (!samePath) ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
-
-                    return;
-                }
-                else
-                {
-                    int totalItems;
-
-                    Debug.WriteLine("\tSorting..." + DateTime.Now.ToString("HH:mm:ss.fff"));
-                    fileList.Sort();
-                    totalItems = fileList.Count;
-                    if (includeFolder)
-                    {
-                        dirList.Sort();
-                        totalItems += dirList.Count;
-                    }
-                    Debug.WriteLine("\tSorting done" + DateTime.Now.ToString("HH:mm:ss.fff"));
-
-                    var combinedList = new List<CShellItem>(totalItems);
-                    if (includeFolder) combinedList.AddRange(dirList);
-                    combinedList.AddRange(fileList);
-
-                    _listView.BeginUpdate();
-                    try
-                    {
-                        _listViewWrapper.Clear();
-                        _listViewWrapper.AddRange(combinedList);
-                        _listView.Tag = _currentFolderCsi;
-                    }
-                    finally
-                    {
-                        _listView.EndUpdate();
-                    }
-                }
-
-                OnScroll(); //this lazy loads the visible icons/thumbnails and is called here to ensure they are loaded on initial display
-
-                if (!samePath) ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
-            }
-            finally
-            {
-                Debug.WriteLine("ExpList: DisplayFiles End");
-            }
+            _ = DisplayFilesAsync(pathName, csi, includeFolder, reload);
         }
 
         /// <summary>
@@ -2611,7 +2607,7 @@ namespace ExpControlsLib
                     _isNavigatingHistory = true;
                     try
                     {
-                        DisplayFiles(prev.FullPath, prev, true);
+                        _ = DisplayFilesAsync(prev.FullPath, prev, true);
                     }
                     finally
                     {
@@ -2640,7 +2636,7 @@ namespace ExpControlsLib
                     _isNavigatingHistory = true;
                     try
                     {
-                        DisplayFiles(next.FullPath, next, true);
+                        _ = DisplayFilesAsync(next.FullPath, next, true);
                     }
                     finally
                     {
@@ -2665,7 +2661,7 @@ namespace ExpControlsLib
                 if (_currentFolderCsi?.Parent != null)
                 {
                     var parent = _currentFolderCsi.Parent;
-                    DisplayFiles(parent.FullPath, parent, true);
+                    _ = DisplayFilesAsync(parent.FullPath, parent, true);
                 }
             }
             finally
@@ -3609,7 +3605,7 @@ namespace ExpControlsLib
         ///geometry calculations instead of rendering the list. The timer waits for a 200ms pause in scrolling before doing this
         ///calculation.
         /// </summary>
-        private Timer _scrollDebounceTimer;
+        private System.Windows.Forms.Timer _scrollDebounceTimer;
 
         /// <summary>
         /// Hook for capturing scroll and other events from the ListView to trigger lazy loading.
