@@ -73,6 +73,9 @@ namespace ExpControlsLib
         private CancellationTokenSource? _rootLoadCts;
         private static readonly StaThreadRunner _staRunner = new StaThreadRunner(1, "ExpTreeStaRunner");
 
+        private CShellItem? _pendingExpansionItem;
+        private bool _pendingSelectExpandedNode;
+
         private async Task SetRootItemAsync(CShellItem? item, StartDir dir = StartDir.None)
         {
             _rootLoadCts?.Cancel();
@@ -127,7 +130,18 @@ namespace ExpControlsLib
 
                     _TreeView.Nodes.Add(Root);
                     Root.Expand();
-                    _TreeView.SelectedNode = Root;
+
+                    if (_pendingExpansionItem != null)
+                    {
+                        var itemToExpand = _pendingExpansionItem;
+                        var select = _pendingSelectExpandedNode;
+                        _pendingExpansionItem = null;
+                        ExpandANode(itemToExpand, select);
+                    }
+                    else
+                    {
+                        _TreeView.SelectedNode = Root;
+                    }
                 }
                 finally
                 {
@@ -578,7 +592,17 @@ namespace ExpControlsLib
             bool ExpandANodeRet = default;
             ExpandANodeRet = false;     // assume failure
             var baseNode = Root;
-            if (baseNode == null) return false;
+            if (baseNode == null)
+            {
+                // If a load is in progress, store as pending
+                if (_rootLoadCts != null && !_rootLoadCts.IsCancellationRequested)
+                {
+                    _pendingExpansionItem = newItem;
+                    _pendingSelectExpandedNode = SelectExpandedNode;
+                    return true;
+                }
+                return false;
+            }
             _TreeView.BeginUpdate();
 
             // do the drill down -- Node to expand must be included in tree

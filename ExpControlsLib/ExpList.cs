@@ -1815,6 +1815,9 @@ namespace ExpControlsLib
             _displayFilesCts = new CancellationTokenSource();
             var token = _displayFilesCts.Token;
 
+            var oldCsi = _currentFolderCsi;
+            _currentPath = pathName; // Update immediately for UI/Settings consistency
+
             try
             {
                 var result = await _staRunner.EnqueueWork(t =>
@@ -1824,7 +1827,7 @@ namespace ExpControlsLib
 
                     if (csi == null) return null;
 
-                    bool samePath = _currentFolderCsi != null && CPidl.ResolvesToSamePathOrName(_currentFolderCsi.PIDL, csi.PIDL);
+                    bool samePath = oldCsi != null && CPidl.ResolvesToSamePathOrName(oldCsi.PIDL, csi.PIDL);
                     if (samePath && !reload) return null;
 
                     var hierarchyCsi = _shellController.LoadFolderContents(csi);
@@ -1855,14 +1858,13 @@ namespace ExpControlsLib
                         if (!item.IsDisk) _ = item.LastWriteTime;
                         
                         // Icon index
-                        //item.ImageIndex = SystemImageListManager.GetIconIndex(item, isLarge);
+                        item.ImageIndex = SystemImageListManager.GetIconIndex(item, isLarge);
                     }
 
                     return new
                     {
                         Items = combined,
                         FolderCsi = hierarchyCsi,
-                        OldCsi = _currentFolderCsi,
                         IsSamePath = samePath
                     };
                 }, token);
@@ -1891,21 +1893,20 @@ namespace ExpControlsLib
                         OnScroll();
 
                         if (!result.IsSamePath)
-                            ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, result.OldCsi);
+                            ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
                     }
                     else
                     {
                         // If result is null, it could be same path (no-op) or failure.
-                        // We check if we need to clear (e.g. failure to load or csi is null)
-                        if (csi == null || reload) // Simplification: if we asked for reload or started with null, and got nothing back, clear it.
+                        // If csi was null from the start and we got no result, that's a failure.
+                        if (csi == null && !string.IsNullOrEmpty(pathName))
                         {
-                            var old = _currentFolderCsi;
-                            if (old != null || !string.IsNullOrEmpty(_currentPath))
+                            if (oldCsi != null || !string.IsNullOrEmpty(_currentPath))
                             {
                                 _listViewWrapper.Clear();
                                 _currentFolderCsi = null;
                                 _currentPath = pathName;
-                                ExpListCurrentFolderChanged?.Invoke(null, old);
+                                ExpListCurrentFolderChanged?.Invoke(null, oldCsi);
                             }
                         }
                     }
