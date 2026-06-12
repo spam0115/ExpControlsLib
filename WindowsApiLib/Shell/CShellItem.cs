@@ -99,7 +99,7 @@ namespace WindowsApiLib.Shell
         internal bool m_IsBrowsable;
         internal bool m_IsFileSystem;
         internal bool m_IsFolder;
-        internal bool m_HasSubFolders;
+        internal bool? m_HasSubFolders;
         internal bool m_IsLink;
         internal bool m_IsDisk;
         internal bool m_IsShared;
@@ -700,8 +700,6 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        private bool m_HasSubFoldersSetup;
-
         /// <summary>
         /// True if item is a Folder and has sub-Folders
         /// </summary>
@@ -714,31 +712,23 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                if (m_HasSubFoldersSetup)
+                if (m_HasSubFolders != null)
                 {
-                    return m_HasSubFolders;
+                    return m_HasSubFolders.Value;
                 }
                 else if (m_IsRemote)
                 {
                     m_HasSubFolders = true;
-                    m_HasSubFoldersSetup = true;
                 }
                 else
                 {
-                    var psfi = new SHFILEINFO() { dwAttributes = SFGAO.HASSUBFOLDER };
-                    var uFlags = SHGFI.PIDL | SHGFI.ATTRIBUTES | SHGFI.ATTR_SPECIFIED;
-                    int dwAttr = 0;
-                    var H = SHGetFileInfo(m_Pidl, dwAttr, ref psfi, SHFILEINFO_size, uFlags);
-                    if (H.ToInt32() != NOERROR && H.ToInt32() != 1)
-                    {
-                        Marshal.ThrowExceptionForHR(H.ToInt32());
-                    }
-                    m_HasSubFolders = (psfi.dwAttributes & SFGAO.HASSUBFOLDER) != 0;
-                    m_SFGAO_Attributes = m_SFGAO_Attributes | psfi.dwAttributes & SFGAO.HASSUBFOLDER;
-                    m_HasSubFoldersSetup = true;
+                    m_HasSubFolders = HasAtLeastOneSubfolder();
+                    if (m_HasSubFolders.Value) m_SFGAO_Attributes |= SFGAO.HASSUBFOLDER; //set flag
+                    else m_SFGAO_Attributes &= ~SFGAO.HASSUBFOLDER; //unset flag
                 }
-                return m_HasSubFolders;
+                return m_HasSubFolders.Value;
             }
+            set;
         }
 
         /// <summary>
@@ -1764,7 +1754,7 @@ namespace WindowsApiLib.Shell
             m_HasDispType = false;
             m_IsReadOnlySetup = false;
             m_XtrInfo = false;
-            m_HasSubFoldersSetup = false;
+            m_HasSubFolders = null;
             if (W32Data is not null && W32Data is W32Find_Data)
                 W32Data = null;
             ResetIconIndex();
@@ -1917,7 +1907,7 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Sets DisplayName, TypeName, and SortFlag when actually needed
         /// </summary>
-        internal void SetDispType()
+        internal void SetDispType() //todo: remove this.  the functionality is in cshellitemfactory now and is faster
         {
             // Get Displayname, TypeName
             var shfi = new SHFILEINFO();

@@ -290,14 +290,14 @@ namespace ExpControlsLib
 
                 if (value.IsFolder)
                 {
-                    _TreeView.BeginUpdate();
-                    ClearTree();
-
                     var target = ShellController.Instance.LoadFolderContents(value);
                     if (target != null) value = target;
 
                     CShellItem[] CSI = value.Directories;
                     Root = new TreeNode(value.DisplayName);
+
+                    _TreeView.BeginUpdate();
+                    ClearTree();
                     BuildTree(CSI);
                     Root.ImageIndex = GetIconIndex(value, false);
                     Root.SelectedImageIndex = Root.ImageIndex;
@@ -876,6 +876,7 @@ namespace ExpControlsLib
             Root.Expand();
             _TreeView.EndUpdate();
         }
+
         private void BuildTree(CShellItem[] L1)
         {
             Array.Sort(L1);

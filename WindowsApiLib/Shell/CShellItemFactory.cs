@@ -437,7 +437,7 @@ namespace WindowsApiLib.Shell
                 csi.m_Parent = parentCsi;
 
                 // Get some attributes
-                PopulateInitial(csi);
+                PopulateBasicFields(csi);
 
                 if (csi.m_IsFolder)
                 {
@@ -701,7 +701,12 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
-        private static void PopulateInitial(CShellItem csiOutput)
+        /// <summary>
+        /// Get the base attributes of the folder/file that this CShellItem represents, and set the 
+        /// DisplayName and TypeName fields.  The exact fields populated can be changed as desired.
+        /// </summary>
+        /// <param name="csiOutput"></param>
+        private static void PopulateBasicFields(CShellItem csiOutput)
         {
             PopulateBasicAttributes(csiOutput);
             SetDisplayNameAndType(csiOutput);
@@ -841,7 +846,7 @@ namespace WindowsApiLib.Shell
                 // Rare fallback if we couldn't resolve a type name
                 if (string.IsNullOrWhiteSpace(csi.m_TypeName))
                 {
-                    TryPopulateViaShell(csi, out _, out var shellTypeName);
+                    TryGetTypeNameViaShell(csi, out _, out var shellTypeName);
                     if (!string.IsNullOrWhiteSpace(shellTypeName))
                         csi.m_TypeName = shellTypeName;
                 }
@@ -849,7 +854,7 @@ namespace WindowsApiLib.Shell
             else
             {
                 // Folder and non-filesystem items: keep shell semantics
-                if (TryPopulateViaShell(csi, out var shellDisplayName, out var shellTypeName))
+                if (TryGetTypeNameViaShell(csi, out var shellDisplayName, out var shellTypeName))
                 {
                     csi.m_DisplayName = shellDisplayName;
                     csi.m_TypeName = shellTypeName;
@@ -938,7 +943,7 @@ namespace WindowsApiLib.Shell
             return hr == 0 ? sb.ToString() : null;
         }
 
-        private static bool TryPopulateViaShell(CShellItem csi, out string displayName, out string typeName)
+        private static bool TryGetTypeNameViaShell(CShellItem csi, out string displayName, out string typeName)
         {
             displayName = null;
             typeName = null;
