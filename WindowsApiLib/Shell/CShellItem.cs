@@ -1,6 +1,9 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
@@ -1634,13 +1637,31 @@ namespace WindowsApiLib.Shell
 
         public bool HasAtLeastOneSubfolder()
         {
+            if (!m_IsFolder) return false;
+
+            if (m_IsFileSystem && !string.IsNullOrEmpty(FullPath))
+            {
+                try
+                {
+                    // Optimization: For file system objects, using Directory.EnumerateDirectories 
+                    // is significantly faster than the Shell API and avoids heavy blocking.
+                    return Directory.EnumerateDirectories(FullPath).Any();
+                }
+                catch
+                {
+                    // Fall back to Shell API on any error (e.g. Access Denied)
+                }
+            }
+
             IEnumIDList enumList = null;
             IntPtr[] pidlSub = new IntPtr[1];
             uint fetched = 0;
-                
+
+            if (IShlFolder == null) return false;
+
             // SHCONTF_FOLDERS: Only look for folders
             // SHCONTF_INCLUDEHIDDEN: Optional, if you want to be certain about hidden ones
-            int hr = m_IShellFolder.EnumObjects(IntPtr.Zero, SHCONTF.FOLDERS, out enumList);
+            int hr = IShlFolder.EnumObjects(IntPtr.Zero, SHCONTF.FOLDERS, out enumList);
 
             if (hr == S_OK && enumList != null)
             {

@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace ExpControlsLib
 {
     /// <summary>
-    /// Runs queued delegates on a pool of dedicated STA threads.
+    /// Runs queued delegates on a pool of dedicated STA (single threaded apartment) threads.
     /// </summary>
     /// <remarks>Use this class to do work on an STA thread, such as when working with certain Windows Forms,
     /// WPF, or COM APIs (e.g. Windows Shell COM) that require STA threading and will fail with MTA context. The
