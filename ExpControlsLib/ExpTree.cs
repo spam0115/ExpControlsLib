@@ -65,6 +65,7 @@ namespace ExpControlsLib
 
         private bool EnableEventPost = true; // flag to supress ExpTreeNodeSelected raising during refresh and 
 
+        private HashSet<string> _excludedItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private Stack<CShellItem> _backHistory = new Stack<CShellItem>();
         private Stack<CShellItem> _forwardHistory = new Stack<CShellItem>();
         private bool _isNavigatingHistory = false;
@@ -433,6 +434,17 @@ namespace ExpControlsLib
                         RefreshTree(); // Fix 2/5/2012
                 }
             }
+        }
+
+        /// <summary>
+        /// Gets or sets a collection of items (by their full path or GUID) to exclude from the tree display.
+        /// </summary>
+        [Browsable(false)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public HashSet<string> ExcludedItems
+        {
+            get => _excludedItems;
+            set => _excludedItems = value ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
         
         /// <summary>
@@ -862,6 +874,7 @@ namespace ExpControlsLib
                         {
                             case CShItemUpdateType.Created:  // A new Dir has been created under Parent/pNode
                                 {
+                                    if (IsExcluded(e.Item)) break;
                                     var Node = MakeNode(e.Item);
                                     // Debug.WriteLine("Adding Node " & NodePath(Node))
                                     InsertNode(Node, pNode); // 6/25/2012
@@ -904,6 +917,13 @@ namespace ExpControlsLib
                                             bool wasSelected = ReferenceEquals(_TreeView.SelectedNode, Node);
                                             Node.Text = e.Item.DisplayName;
                                             pNode.Nodes.Remove(Node);
+
+                                            if (IsExcluded(e.Item))
+                                            {
+                                                exitSelect1 = true;
+                                                break;
+                                            }
+
                                             if (GetTreeNode(e.Item.Parent, ref curPNode))
                                             {
                                                 InsertNode(Node, curPNode); // 6/25/2012
@@ -1049,7 +1069,7 @@ namespace ExpControlsLib
             Array.Sort(L1); //move further up the call stack
             foreach (var CSI in L1)
             {
-                if (!(CSI.IsHidden & !m_showHiddenFolders))
+                if (!(CSI.IsHidden & !m_showHiddenFolders) && !IsExcluded(CSI))
                 {
                     Root.Nodes.Add(MakeNode(CSI));
                 }
@@ -1673,6 +1693,14 @@ namespace ExpControlsLib
 
         #region Private methods
 
+        private bool IsExcluded(CShellItem item)
+        {
+            if (_excludedItems.Count == 0 || item == null) return false;
+            // Trim to match the logic used in MainForm's RemoveUselessSpecialLocations
+            var path = (item.FullPath ?? "").Trim(':', '{', '}');
+            return _excludedItems.Contains(path);
+        }
+
         /// <summary>RefreshTree Method thanks to Calum McLellan</summary>
         [Description("Refresh the Tree and all nodes through the currently selected item")]
         private void RefreshTree(CShellItem rootCSI = null)
@@ -1790,7 +1818,7 @@ namespace ExpControlsLib
                 NodeToFill.Nodes.Clear();    // 11/03/2012 DO NOT Clear out the dummy prior to calling .Directories which forces a UpdateRefresh!
                 foreach (CShellItem Item in D)
                 {
-                    if (!(Item.IsHidden & !m_showHiddenFolders))
+                    if (!(Item.IsHidden & !m_showHiddenFolders) && !IsExcluded(Item))
                     {
                         NodeToFill.Nodes.Add(MakeNode(Item));
                     }
@@ -1847,7 +1875,7 @@ namespace ExpControlsLib
 
                     foreach (CShellItem Item in children)
                     {
-                        if (!(Item.IsHidden & !m_showHiddenFolders))
+                        if (!(Item.IsHidden & !m_showHiddenFolders) && !IsExcluded(Item))
                         {
                             NodeToFill.Nodes.Add(MakeNode(Item));
                         }

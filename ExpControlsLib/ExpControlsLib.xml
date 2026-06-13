@@ -766,6 +766,14 @@
             Removes the item at the specified index.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ExpList.SetSortState(System.Int32,System.Windows.Forms.SortOrder)">
+            <summary>
+            Sets the sort column and order without triggering an actual sort.
+            This is useful to set at startup before the first location is loaded.
+            </summary>
+            <param name="column">The column index.</param>
+            <param name="order">The sort order.</param>
+        </member>
         <member name="M:ExpControlsLib.ExpList.Sort(System.Int32,System.Windows.Forms.SortOrder)">
             <summary>
             Sets the sort column and order.
@@ -882,6 +890,11 @@
             </summary>
             <param name="item"></param>
         </member>
+        <member name="M:ExpControlsLib.ExpList.DisplayFilesAsync(System.String,WindowsApiLib.Shell.CShellItem,System.Boolean,System.Boolean)">
+            <summary>
+            Populates the list view with files and directories from the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/> asynchronously.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ExpList.DisplayFiles(System.String,WindowsApiLib.Shell.CShellItem,System.Boolean,System.Boolean)">
             <summary>
             Populates the list view with files and directories from the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
@@ -906,10 +919,11 @@
             Finds a ListViewItem by its display name (case-insensitive).
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.FindItemByID(System.IntPtr)">
+        <member name="M:ExpControlsLib.ExpList.FindItemByPidl(System.IntPtr)">
             <summary>
             Finds a ListViewItem by its Shell ID (PIDL).
             </summary>
+            <remarks>This is inefficient and takes O(n) time.</remarks>
         </member>
         <member name="M:ExpControlsLib.ExpList.FindItemByPath(System.String)">
             <summary>
@@ -941,6 +955,27 @@
         <member name="M:ExpControlsLib.ExpList.DrainDeferredUpdates">
             <summary>
             Processes all deferred shell item updates that were queued while an enumeration was in progress.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.EnterImageListMutation">
+            <summary>
+            Increments the image list mutation depth counter. While depth > 0, 
+            ThumbnailManager_ThumbnailReady will defer image list modifications 
+            to prevent reentrancy during OS draw cycles.
+            Must be paired with <see cref="M:ExpControlsLib.ExpList.ExitImageListMutation"/>.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ExitImageListMutation">
+            <summary>
+            Decrements the image list mutation depth counter. When it reaches 0, 
+            any deferred thumbnail updates are drained and applied.
+            Must be paired with <see cref="M:ExpControlsLib.ExpList.EnterImageListMutation"/>.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.DrainDeferredThumbnailUpdates">
+            <summary>
+            Processes all deferred thumbnail updates that were queued while an image list 
+            mutation guard was active.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.InvokeWhenListViewReady(System.Action)">
@@ -1248,7 +1283,7 @@
                                              If False, Do Not Select the Expanded Node.</param>
             <returns>True if Successful, False otherwise.</returns>
             <remarks>The preferred method is to use:
-            <pre lang="vbnet">Public Function ExpandANode(ByVal newItem As CShellItem) As Boolean</pre> 
+            <pre lang="vbnet">Public Function ExpandANode(ByVal newItem : CShellItem) As Boolean</pre> 
             If the item defined by the input Path does not exist, False is returned.<br />
             Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
             ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
@@ -1604,6 +1639,13 @@
             glyphs on the ColumnHeaders.
             </remarks>
         </member>
+        <member name="M:ExpControlsLib.LVColSorter.SetSortState(System.Int32,System.Windows.Forms.SortOrder)">
+            <summary>
+            Sets the sort column and order and the UI glyph without triggering an actual sort.
+            </summary>
+            <param name="column">The column index.</param>
+            <param name="order">The sort order.</param>
+        </member>
         <member name="M:ExpControlsLib.LVColSorter.SetSort(System.Int32,System.Windows.Forms.SortOrder)">
             <summary>
             Sets the sort column and order without toggling the existing order.
@@ -1646,7 +1688,7 @@
         </member>
         <member name="T:ExpControlsLib.StaThreadRunner">
             <summary>
-            Runs queued delegates on a pool of dedicated STA threads.
+            Runs queued delegates on a pool of dedicated STA (single threaded apartment) threads.
             </summary>
             <remarks>Use this class to do work on an STA thread, such as when working with certain Windows Forms,
             WPF, or COM APIs (e.g. Windows Shell COM) that require STA threading and will fail with MTA context. The
@@ -1911,12 +1953,6 @@
             Callback to update an existing ListViewItem with data from a CShellItem.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.VirtualListViewWrapper.Initialize">
-            <summary>
-            Stuff that can't be don't in the constructor because of unavailable dependencies.  
-            This should be called in Control.Load().
-            </summary>
-        </member>
         <member name="P:ExpControlsLib.VirtualListViewWrapper.DisplayMode">
             <summary>
             Gets or sets the display mode used to present items in the list view.
@@ -1926,6 +1962,12 @@
             <remarks>Use this property to select among multiple visual representations for items,
             including standard views and thumbnail modes. Changing the display mode updates the appearance of the list
             view accordingly.</remarks>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.Initialize">
+            <summary>
+            Stuff that can't be don't in the constructor because of unavailable dependencies.  
+            This should be called in Control.Load().
+            </summary>
         </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.AddRange(System.Collections.Generic.IEnumerable{WindowsApiLib.Shell.CShellItem})">
             <summary>
@@ -1955,6 +1997,14 @@
             </summary>
             <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to search for.</param>
             <returns>The matching <see cref="T:System.Windows.Forms.ListViewItem"/>, or null if not found.</returns>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.SetSortState(System.Int32,System.Windows.Forms.SortOrder)">
+            <summary>
+            Sets the sort column and order and the UI glyph without triggering an actual sort.
+            This is useful to set at startup before the first location is loaded.
+            </summary>
+            <param name="column">The column index.</param>
+            <param name="order">The sort order.</param>
         </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.InvalidateVirtualItemImagesIndexes">
             <summary>

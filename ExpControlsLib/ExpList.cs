@@ -76,6 +76,7 @@ namespace ExpControlsLib
         private const uint LVM_GETEDITCONTROL = LVM_FIRST + 24;
 
         private ShellController? _shellController = null;
+        private HashSet<string> _excludedItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private ThumbnailImageListManager _thumbnailManager; // Manager for thumbnail display modes
         private VirtualListViewWrapper _listViewWrapper;
 
@@ -405,6 +406,17 @@ namespace ExpControlsLib
         /// </summary>
         [Browsable(false)]
         public SortOrder SortOrder => _listViewWrapper.SortOrder;
+
+        /// <summary>
+        /// Gets or sets a collection of items (by their full path or GUID) to exclude from the list display.
+        /// </summary>
+        [Browsable(false)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public HashSet<string> ExcludedItems
+        {
+            get => _excludedItems;
+            set => _excludedItems = value ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
 
         /// <summary>
         /// Gets or sets a value indicating whether the list view is in virtual mode.
@@ -1430,7 +1442,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
-        private void DoItemUpdate(object sender, ShellItemUpdateEventArgs e)
+        private async void DoItemUpdate(object sender, ShellItemUpdateEventArgs e)
         {
             try
             {
@@ -1462,6 +1474,7 @@ namespace ExpControlsLib
                         case CShItemUpdateType.Created:
                             {
                                 if (!isTargetFolder) return;
+                                if (IsExcluded(e.Item)) return;
 
                                 _listViewWrapper.InsertSorted(e.Item);
                                 m_CreateNew = false; //I don't think this is even used?
@@ -1530,7 +1543,10 @@ namespace ExpControlsLib
                                 if (index >= 0)
                                 {
                                     _listViewWrapper.RemoveAt(index);
-                                    _listViewWrapper.InsertSorted(csi);
+                                    if (!IsExcluded(csi))
+                                    {
+                                        _listViewWrapper.InsertSorted(csi);
+                                    }
                                 }
                                 break;
                             }
@@ -1548,7 +1564,7 @@ namespace ExpControlsLib
 
                         case CShItemUpdateType.UpdateDir:
                             Debug.WriteLine("\tUpdateDir");
-                            DisplayFiles(_currentPath, _currentFolderCsi, true, reload: true);
+                            await DisplayFilesAsync(_currentPath, _currentFolderCsi, true, reload: true);
                             break;
 
                         case CShItemUpdateType.IconChange:
@@ -1847,8 +1863,21 @@ namespace ExpControlsLib
                     var dirList = new List<CShellItem>();
                     var fileList = new List<CShellItem>();
 
-                    if (includeFolder) dirList.AddRange(hierarchyCsi.Directories);
-                    if (!hierarchyCsi.DisplayName.Equals(CShellItemFactory.StrMyComputer)) fileList.AddRange(hierarchyCsi.Files);
+                    if (includeFolder)
+                    {
+                        foreach (var dir in hierarchyCsi.Directories)
+                        {
+                            if (!IsExcluded(dir)) dirList.Add(dir);
+                        }
+                    }
+
+                    if (!hierarchyCsi.DisplayName.Equals(CShellItemFactory.StrMyComputer))
+                    {
+                        foreach (var file in hierarchyCsi.Files)
+                        {
+                            if (!IsExcluded(file)) fileList.Add(file);
+                        }
+                    }
 
                     fileList.Sort();
                     if (includeFolder) dirList.Sort();
@@ -1867,6 +1896,8 @@ namespace ExpControlsLib
                         _ = item.TypeName;
                         if (!item.IsDisk && item.IsFileSystem && !item.IsFolder) _ = item.Size;
                         if (!item.IsDisk) _ = item.LastWriteTime;
+
+                        EnsureCustomColumnDataFetched(item); // Pre-fetch custom column data (e.g. NSFW scores)
                         
                         // Icon index
                         if (!IsThumbnailViewMode())
@@ -2062,6 +2093,14 @@ namespace ExpControlsLib
 
 
         #region Private Methods
+
+        private bool IsExcluded(CShellItem item)
+        {
+            if (_excludedItems.Count == 0 || item == null) return false;
+            var path = (item.FullPath ?? "").Trim(':', '{', '}');
+            return _excludedItems.Contains(path);
+        }
+
         /// <summary>
         /// Creates a <see cref="ListViewItem"/> for a given <see cref="CShellItem"/>.
         /// Populates columns based on <see cref="ExpListGetColumnData"/> event or <see cref="ColumnHeader.Tag"/> mapping.
@@ -2610,7 +2649,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Navigates back to the previous folder in the history.
         /// </summary>
-        public void GoBack()
+        public async void GoBack()
         {
             Debug.WriteLine("ExpList: GoBack Begin");
             try
@@ -2622,7 +2661,7 @@ namespace ExpControlsLib
                     _isNavigatingHistory = true;
                     try
                     {
-                        _ = DisplayFilesAsync(prev.FullPath, prev, true);
+                        await DisplayFilesAsync(prev.FullPath, prev, true);
                     }
                     finally
                     {
@@ -2639,7 +2678,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Navigates forward to the next folder in the history.
         /// </summary>
-        public void GoForward()
+        public async void GoForward()
         {
             Debug.WriteLine("ExpList: GoForward Begin");
             try
@@ -2651,7 +2690,7 @@ namespace ExpControlsLib
                     _isNavigatingHistory = true;
                     try
                     {
-                        _ = DisplayFilesAsync(next.FullPath, next, true);
+                        await DisplayFilesAsync(next.FullPath, next, true);
                     }
                     finally
                     {
@@ -2668,7 +2707,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Navigates to the parent folder of the currently loaded folder.
         /// </summary>
-        public void GoUp()
+        public async void GoUp()
         {
             Debug.WriteLine("ExpList: GoUp Begin");
             try
@@ -2676,7 +2715,7 @@ namespace ExpControlsLib
                 if (_currentFolderCsi?.Parent != null)
                 {
                     var parent = _currentFolderCsi.Parent;
-                    _ = DisplayFilesAsync(parent.FullPath, parent, true);
+                    await DisplayFilesAsync(parent.FullPath, parent, true);
                 }
             }
             finally
@@ -2743,7 +2782,7 @@ namespace ExpControlsLib
         /// Handles double-click events on list view items. 
         /// Folders are navigated into, while files are launched.
         /// </summary>
-        private void ExpFileList_DoubleClick(object sender, EventArgs e)
+        private async void ExpFileList_DoubleClick(object sender, EventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_DoubleClick Begin");
             try
@@ -2763,7 +2802,7 @@ namespace ExpControlsLib
                     try
                     {
                         // Navigate into the folder
-                        this.DisplayFiles(csi.FullPath, csi, true);
+                        await this.DisplayFilesAsync(csi.FullPath, csi, true);
                     }
                     catch (Exception ex)
                     {
