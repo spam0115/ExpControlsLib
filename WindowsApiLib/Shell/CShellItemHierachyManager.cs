@@ -45,9 +45,9 @@ namespace WindowsApiLib.Shell
         /// <remarks> 5/31/2012 - most code in this function replaced by a call to FindCShItem(BaseItem as CShellItem, Abs as IntPtr)</remarks>
         public CShellItem? Find(IntPtr ptr)
         {
-            Debug.WriteLine("CShellItemHierachyManager.Find begin: " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            //Debug.WriteLine("CShellItemHierachyManager.Find begin: " + DateTime.Now.ToString("HH:mm:ss.fff"));
             var result = Find(Root, ptr);
-            Debug.WriteLine("CShellItemHierachyManager.Find   end: " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            //Debug.WriteLine("CShellItemHierachyManager.Find   end: " + DateTime.Now.ToString("HH:mm:ss.fff"));
             return result;
         }
 

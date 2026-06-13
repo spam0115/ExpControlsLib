@@ -540,6 +540,19 @@ namespace ExpControlsLib
             return -1;
         }
 
+        /// <summary>
+        /// Sets the sort column and order and the UI glyph without triggering an actual sort.
+        /// This is useful to set at startup before the first location is loaded.
+        /// </summary>
+        /// <param name="column">The column index.</param>
+        /// <param name="order">The sort order.</param>
+        public void SetSortState(int column, SortOrder order)
+        {
+            _sortColumn = column;
+            _sortOrder = order;
+            Sorter?.SetSortState(column, order);
+        }
+
         public void Sort()
         {
             Sort(_sortColumn, _sortOrder);

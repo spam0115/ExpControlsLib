@@ -136,7 +136,7 @@ namespace ExpControlsLib
                         var itemToExpand = _pendingExpansionItem;
                         var select = _pendingSelectExpandedNode;
                         _pendingExpansionItem = null;
-                        ExpandANode(itemToExpand, select);
+                        _ = ExpandANodeAsync(itemToExpand, select);
                     }
                     else
                     {
@@ -217,7 +217,7 @@ namespace ExpControlsLib
             // is made invisible.  This remains a problem to be solved.
             SetTreeViewImageList(_TreeView, false);
 
-            StartUpDirectoryChanged += OnStartUpDirectoryChanged;
+            //StartUpDirectoryChanged += OnStartUpDirectoryChanged;
 
             CShellItemUpdater.UpdateEvent += OnItemUpdate;
             expandNodeTimer.Tick += ExpandNodeTimer_Tick;
@@ -524,6 +524,7 @@ namespace ExpControlsLib
                 if (Array.IndexOf(Enum.GetValues(value.GetType()), value) >= 0)
                 {
                     m_StartUpDirectory = value;
+                    OnStartUpDirectoryChanged(value);
                     StartUpDirectoryChanged?.Invoke(value);
                 }
                 else
@@ -549,11 +550,11 @@ namespace ExpControlsLib
         ///                                  If False, Do Not Select the Expanded Node.</param>
         /// <returns>True if Successful, False otherwise.</returns>
         /// <remarks>The preferred method is to use:
-        /// <pre lang="vbnet">Public Function ExpandANode(ByVal newItem As CShellItem) As Boolean</pre> 
+        /// <pre lang="vbnet">Public Function ExpandANode(ByVal newItem : CShellItem) As Boolean</pre> 
         /// If the item defined by the input Path does not exist, False is returned.<br />
         /// Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
         /// ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
-        public bool ExpandANode(string newPath, bool SelectExpandedNode = true)  // 7/13/2012
+        public bool ExpandANode(string newPath, bool SelectExpandedNode = true)
         {
             bool ExpandANodeRet = default;
             ExpandANodeRet = false;     // assume failure
@@ -570,7 +571,25 @@ namespace ExpControlsLib
             {
                 return ExpandANodeRet;
             }
-            return ExpandANode(newItem, SelectExpandedNode); // 7/13/2012
+            return ExpandANode(newItem, SelectExpandedNode);
+        }
+
+        public async Task<bool> ExpandANodeAsync(string newPath, bool SelectExpandedNode = true)
+        {
+            CShellItem newItem;
+            try
+            {
+                newItem = ShellController.Instance.HierachyManager.FindOrAdd(newPath);
+                if (newItem is null)
+                    return false;
+                if (!newItem.IsFolder)
+                    return false;
+            }
+            catch
+            {
+                return false;
+            }
+            return await ExpandANodeAsync(newItem, SelectExpandedNode);
         }
 
         /// <summary>
@@ -603,10 +622,6 @@ namespace ExpControlsLib
                 }
                 return false;
             }
-            _TreeView.BeginUpdate();
-
-            // do the drill down -- Node to expand must be included in tree
-            baseNode.Expand(); // Ensure base is filled in
 
             // Get the pidl value from baseNode.Tag by casting to CShellItem
             if (baseNode.Tag == null)
@@ -617,6 +632,11 @@ namespace ExpControlsLib
             CShellItem baseItem = (CShellItem)baseNode.Tag;
             IntPtr basePidl = baseItem.PIDL;
             int lim = CPidl.SegmentCount(newItem.PIDL) - CPidl.SegmentCount(basePidl);
+
+            _TreeView.BeginUpdate();
+
+            // do the drill down -- Node to expand must be included in tree
+            baseNode.Expand(); // Ensure base is filled in
 
             // TODO: Test ExpandARow again on XP to ensure that the CP problem is fixed
             while (lim > 0)
@@ -647,13 +667,95 @@ namespace ExpControlsLib
             _TreeView.HideSelection = false;
             Select();
             if (SelectExpandedNode)
-                _TreeView.SelectedNode = baseNode; // 7/13/2012
+                _TreeView.SelectedNode = baseNode;
             ExpandANodeRet = true;
         XIT:
             ;
+            baseNode.EnsureVisible();
             _TreeView.EndUpdate();
-            baseNode.EnsureVisible();       // 12/18/13
             return ExpandANodeRet;
+        }
+
+        public async Task<bool> ExpandANodeAsync(CShellItem newItem, bool SelectExpandedNode = true)
+        {
+            var baseNode = Root;
+            if (baseNode == null)
+            {
+                // If a load is in progress, store as pending
+                if (_rootLoadCts != null && !_rootLoadCts.IsCancellationRequested)
+                {
+                    _pendingExpansionItem = newItem;
+                    _pendingSelectExpandedNode = SelectExpandedNode;
+                    return true;
+                }
+                return false;
+            }
+
+            // Get the pidl value from baseNode.Tag by casting to CShellItem
+            if (baseNode.Tag == null)
+            {
+                throw new InvalidOperationException("baseNode.Tag cannot be null.");
+            }
+
+            CShellItem baseItem = (CShellItem)baseNode.Tag;
+            IntPtr basePidl = baseItem.PIDL;
+            int lim = CPidl.SegmentCount(newItem.PIDL) - CPidl.SegmentCount(basePidl);
+
+            try
+            {
+                // do the drill down -- Node to expand must be included in tree
+                if (baseNode.Nodes.Count == 1 && baseNode.Nodes[0].Text == " : ")
+                {
+                    await PopulateNodeAsync(baseNode);
+                }
+                _TreeView.BeginUpdate();
+                baseNode.Expand();
+                _TreeView.EndUpdate();
+
+                while (lim > 0)
+                {
+                    bool continueDo = false;
+                    foreach (TreeNode testNode in baseNode.Nodes)
+                    {
+                        if (CPidl.IsAncestorOf((CShellItem)testNode.Tag, newItem, false))
+                        {
+                            baseNode = testNode;
+                            if (baseNode.Nodes.Count == 1 && baseNode.Nodes[0].Text == " : ")
+                            {
+                                await PopulateNodeAsync(baseNode);
+                            }
+                            _TreeView.BeginUpdate();
+                            baseNode.Expand();
+                            _TreeView.EndUpdate();
+                            lim -= 1;
+                            continueDo = true;
+                            break;
+                        }
+                    }
+
+                    if (continueDo)
+                    {
+                        continue;
+                    }
+                    baseNode.EnsureVisible();
+                    return false;
+                }
+
+                _TreeView.BeginUpdate();
+                _TreeView.HideSelection = false;
+                Select();
+                if (SelectExpandedNode)
+                    _TreeView.SelectedNode = baseNode;
+
+                baseNode.EnsureVisible();
+                _TreeView.EndUpdate();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error in ExpandANodeAsync: " + ex.Message);
+                return false;
+            }
         }
 
         public void ExpCollapseAll(bool collapse = true)
@@ -669,7 +771,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Navigates back to the previous folder in the history.
         /// </summary>
-        public void GoBack()
+        public async void GoBack()
         {
             if (_backHistory.Count > 0)
             {
@@ -678,7 +780,7 @@ namespace ExpControlsLib
                 _isNavigatingHistory = true;
                 try
                 {
-                    ExpandANode(prev, true);
+                    await ExpandANodeAsync(prev, true);
                 }
                 finally
                 {
@@ -690,7 +792,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Navigates forward to the next folder in the history.
         /// </summary>
-        public void GoForward()
+        public async void GoForward()
         {
             if (_forwardHistory.Count > 0)
             {
@@ -699,7 +801,7 @@ namespace ExpControlsLib
                 _isNavigatingHistory = true;
                 try
                 {
-                    ExpandANode(next, true);
+                    await ExpandANodeAsync(next, true);
                 }
                 finally
                 {
@@ -711,11 +813,11 @@ namespace ExpControlsLib
         /// <summary>
         /// Navigates to the parent folder of the currently loaded folder.
         /// </summary>
-        public void GoUp()
+        public async void GoUp()
         {
             if (_lastSelectedCSI?.Parent != null)
             {
-                ExpandANode(_lastSelectedCSI.Parent, true);
+                await ExpandANodeAsync(_lastSelectedCSI.Parent, true);
             }
         }
 
@@ -1013,29 +1115,8 @@ namespace ExpControlsLib
         {
             if (!item.IsFolder) return false;
 
-            // Determine if we should perform the accurate lookahead check.
-            // Rules from user: 
-            // 1. Accurate check for the root node (Desktop) and all file system objects.
-            // 2. Skip slow devices (Network, Removable) and virtual locations (other than the root).
-            
-            bool performAccurateCheck = false;
-            if (ReferenceEquals(item, RootItem) || ReferenceEquals(item, ShellController.DesktopCSI))
-                performAccurateCheck = true;
-            else if (item.IsFileSystem && !item.IsRemote && !item.IsRemovable && !item.IsNetworkDrive)
-                performAccurateCheck = true;
-
-            if (performAccurateCheck)
-            {
-                // Force a one-level lookahead to ensure the arrow accurately reflects visible contents.
-                if (item.HasAtLeastOneSubfolder())
-                    return true;
-                else return false;
-            }
-            else
-            {
-                // Fast-path: rely on shell hints for complex/slow items to maintain responsiveness.
-                return item.HasSubFolders || (item.IsHidden && item.DirCount > 0);
-            }
+            // Fast-path: rely on shell hints (warmed up in background) to maintain responsiveness.
+            return item.HasSubFolders || (item.IsHidden && item.DirCount > 0);
         }
 
         private void ClearTree()
@@ -1049,16 +1130,22 @@ namespace ExpControlsLib
         #region Event Handling
 
 
-        private void Tv1_BeforeExpand(object sender, TreeViewCancelEventArgs e)
+        private async void Tv1_BeforeExpand(object sender, TreeViewCancelEventArgs e)
         {
-            var oldCursor = Cursor;
-            Cursor = Cursors.WaitCursor;
             if (e.Node.Nodes.Count == 1 && e.Node.Nodes[0].Text.Equals(" : "))
             {
-                PopulateNode(e.Node);            // 8/26/2012
+                var oldCursor = Cursor;
+                Cursor = Cursors.WaitCursor;
+                try
+                {
+                    await PopulateNodeAsync(e.Node);
+                }
+                finally
+                {
+                    Cursor = oldCursor;
+                }
             }
             e.Node.ImageIndex = ((CShellItem)e.Node.Tag).IconIndexOpen;
-            Cursor = oldCursor;
         }
 
         private void Tv1_AfterSelect(object sender, TreeViewEventArgs e)
@@ -1712,6 +1799,68 @@ namespace ExpControlsLib
             else        // 11/03/2012 BUT DO get rid of any unnessesary Dummy
             {
                 NodeToFill.Nodes.Clear();
+            }
+        }
+
+        private async Task PopulateNodeAsync(TreeNode NodeToFill)
+        {
+            if (NodeToFill.Tag is not CShellItem CSI) return;
+
+            // If it's already being populated or has more than the dummy, skip.
+            // But Tv1_BeforeExpand already checks for dummy.
+
+            try
+            {
+                var result = await _staRunner.EnqueueWork(t =>
+                {
+                    // Added to ensure item is in hierarchy
+                    var target = ShellController.Instance.LoadFolderContents(CSI);
+                    CShellItem value = target ?? CSI;
+
+                    var children = value.Directories;
+                    // Warming up
+                    foreach (var child in children)
+                    {
+                        if (t.IsCancellationRequested) return null;
+                        _ = child.HasSubFolders; // Populates cache
+                        _ = child.IconIndexNormal;
+                        _ = child.IconIndexOpen;
+                    }
+
+                    return new
+                    {
+                        Children = children,
+                        Target = target
+                    };
+                });
+
+                if (result == null) return;
+
+                _TreeView.BeginUpdate();
+                try
+                {
+                    if (result.Target != null) NodeToFill.Tag = result.Target;
+                    NodeToFill.Nodes.Clear();
+                    
+                    var children = result.Children;
+                    Array.Sort(children);
+
+                    foreach (CShellItem Item in children)
+                    {
+                        if (!(Item.IsHidden & !m_showHiddenFolders))
+                        {
+                            NodeToFill.Nodes.Add(MakeNode(Item));
+                        }
+                    }
+                }
+                finally
+                {
+                    _TreeView.EndUpdate();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error in PopulateNodeAsync: " + ex.ToString());
             }
         }
 

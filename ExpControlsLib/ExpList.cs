@@ -530,6 +530,17 @@ namespace ExpControlsLib
         public void RemoveAt(int index) => _listViewWrapper.RemoveAt(index);
 
         /// <summary>
+        /// Sets the sort column and order without triggering an actual sort.
+        /// This is useful to set at startup before the first location is loaded.
+        /// </summary>
+        /// <param name="column">The column index.</param>
+        /// <param name="order">The sort order.</param>
+        public void SetSortState(int column, SortOrder order)
+        {
+            _listViewWrapper.SetSortState(column, order);
+        }
+
+        /// <summary>
         /// Sets the sort column and order.
         /// </summary>
         /// <param name="column">The column index.</param>

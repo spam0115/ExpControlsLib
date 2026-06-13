@@ -267,6 +267,33 @@ namespace ExpControlsLib
         }
 
         /// <summary>
+        /// Sets the sort column and order and the UI glyph without triggering an actual sort.
+        /// </summary>
+        /// <param name="column">The column index.</param>
+        /// <param name="order">The sort order.</param>
+        public void SetSortState(int column, SortOrder order)
+        {
+            if (column < 0 || column >= m_View.Columns.Count) return;
+
+            m_Col = column;
+            if (order == SortOrder.None)
+            {
+                m_ColOrder[m_Col] = 0;
+            }
+            else if (order == SortOrder.Ascending)
+            {
+                m_ColOrder[m_Col] = 1;
+            }
+            else
+            {
+                m_ColOrder[m_Col] = -1;
+            }
+
+            ListViewSortGlyph.SetSortIcon(m_View, m_Col, order);
+            SortOrderChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
         /// Sets the sort column and order without toggling the existing order.
         /// </summary>
         /// <param name="column">The column index.</param>
