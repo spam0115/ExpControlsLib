@@ -111,6 +111,13 @@ namespace ExpControlsLib
         private CancellationTokenSource? _displayFilesCts;
         private static readonly StaThreadRunner _staRunner = new StaThreadRunner(1, "ExpListStaRunner");
 
+        private void Cleanup()
+        {
+            _displayFilesCts?.Cancel();
+            _displayFilesCts?.Dispose();
+            _displayFilesCts = null;
+        }
+
         #endregion
 
         #region Public fields
@@ -1893,9 +1900,9 @@ namespace ExpControlsLib
                         if (t.IsCancellationRequested) return null;
                         
                         // Populate caches
-                        _ = item.TypeName;
-                        if (!item.IsDisk && item.IsFileSystem && !item.IsFolder) _ = item.Size;
-                        if (!item.IsDisk) _ = item.LastWriteTime;
+                        //_ = item.TypeName;
+                        //if (!item.IsDisk && item.IsFileSystem && !item.IsFolder) _ = item.Size;
+                        //if (!item.IsDisk) _ = item.LastWriteTime;
 
                         EnsureCustomColumnDataFetched(item); // Pre-fetch custom column data (e.g. NSFW scores)
                         

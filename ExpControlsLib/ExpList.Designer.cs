@@ -23,6 +23,7 @@ namespace ExpControlsLib
             {
                 if (disposing)
                 {
+                    Cleanup();
                     CShellItemUpdater.UpdateEvent -= UpdateInvoke;
                     if (components != null)
                     {

@@ -179,8 +179,8 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                if (!m_HasDispType)
-                    SetDispType();
+                //if (!m_HasDispType)
+                //    SetDispType();
                 return m_SortFlag;
             }
         }
@@ -200,8 +200,8 @@ namespace WindowsApiLib.Shell
             {
                 if (m_IconIndexNormal < 0)
                 {
-                    if (!m_HasDispType)
-                        SetDispType();
+                    //if (!m_HasDispType)
+                    //    SetDispType();
                     m_IconIndexNormal = SystemImageListManager.GetIconIndex(this);
                 }
                 return m_IconIndexNormal;
@@ -221,8 +221,8 @@ namespace WindowsApiLib.Shell
             {
                 if (m_IconIndexOpen < 0)
                 {
-                    if (!m_HasDispType)
-                        SetDispType();
+                    //if (!m_HasDispType)
+                    //    SetDispType();
                     if (!m_IsDisk && m_IsFileSystem && m_IsFolder)
                     {
                         m_IconIndexOpen = SystemImageListManager.GetIconIndex(this, true);
@@ -253,8 +253,8 @@ namespace WindowsApiLib.Shell
             {
                 if (m_IconIndexNormalOrig < 0)
                 {
-                    if (!m_HasDispType)
-                        SetDispType();
+                    //if (!m_HasDispType)
+                    //    SetDispType();
                     var shfi = new SHFILEINFO();
                     var dwflag = SHGFI.PIDL | SHGFI.SYSICONINDEX;
                     int dwAttr = 0;
@@ -284,8 +284,8 @@ namespace WindowsApiLib.Shell
             {
                 if (m_IconIndexOpenOrig < 0)
                 {
-                    if (!m_HasDispType)
-                        SetDispType();
+                    //if (!m_HasDispType)
+                    //    SetDispType();
                     if (!m_IsDisk && m_IsFileSystem && m_IsFolder)
                     {
                         var dwflag = SHGFI.SYSICONINDEX | SHGFI.PIDL;
@@ -363,8 +363,8 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                if (!m_HasDispType)
-                    SetDispType();
+                //if (!m_HasDispType)
+                //    SetDispType();
                 return m_DisplayName;
             }
         }
@@ -379,8 +379,8 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                if (!m_HasDispType)
-                    SetDispType();
+                //if (!m_HasDispType)
+                //    SetDispType();
                 return m_DisplayName;
             }
         }
@@ -395,8 +395,8 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                if (!m_HasDispType)
-                    SetDispType();
+                //if (!m_HasDispType)
+                //    SetDispType();
                 return m_DisplayName;
             }
         }
@@ -409,8 +409,8 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                if (!m_HasDispType)
-                    SetDispType();
+                //if (!m_HasDispType)
+                //    SetDispType();
                 return m_TypeName;
             }
             set;
@@ -1215,8 +1215,8 @@ namespace WindowsApiLib.Shell
 #endif
                 return 0; // Ignore this in release builds
             }
-            if (!m_HasDispType)
-                SetDispType();
+            //if (!m_HasDispType)
+            //    SetDispType();
             int cmp = Other.SortFlag - m_SortFlag; // Note the reversal
             if (cmp != 0)
             {
@@ -1928,28 +1928,28 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Sets DisplayName, TypeName, and SortFlag when actually needed
         /// </summary>
-        internal void SetDispType() //todo: remove this.  the functionality is in cshellitemfactory now and is faster
-        {
-            // Get Displayname, TypeName
-            var shfi = new SHFILEINFO();
-            var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL; //you can also ask for attributes here with SHGFI.ATTRIBUTES
-            int dwAttr = 0;
-            if (m_IsFileSystem && !m_IsFolder)
-            {
-                dwflag = dwflag | SHGFI.USEFILEATTRIBUTES;
-                dwAttr = FILE_ATTRIBUTE_NORMAL;
-            }
+        //internal void SetDispType() //todo: remove this.  the functionality is in cshellitemfactory now and is faster
+        //{
+        //    // Get Displayname, TypeName
+        //    var shfi = new SHFILEINFO();
+        //    var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL; //you can also ask for attributes here with SHGFI.ATTRIBUTES
+        //    int dwAttr = 0;
+        //    if (m_IsFileSystem && !m_IsFolder)
+        //    {
+        //        dwflag = dwflag | SHGFI.USEFILEATTRIBUTES;
+        //        dwAttr = FILE_ATTRIBUTE_NORMAL;
+        //    }
 
-            var hr = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
+        //    var hr = SHGetFileInfo(m_Pidl, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
             
-            m_DisplayName = shfi.szDisplayName;
-            m_TypeName = shfi.szTypeName;
-            m_SortFlag = ComputeSortFlag();
-            m_HasDispType = true;
-            // fix DisplayName
-            if (string.IsNullOrEmpty(m_DisplayName))
-                m_DisplayName = Path.GetFileName(FullPath);
-        }
+        //    m_DisplayName = shfi.szDisplayName;
+        //    m_TypeName = shfi.szTypeName;
+        //    m_SortFlag = ComputeSortFlag();
+        //    m_HasDispType = true;
+        //    // fix DisplayName
+        //    if (string.IsNullOrEmpty(m_DisplayName))
+        //        m_DisplayName = Path.GetFileName(FullPath);
+        //}
 
         #endregion
 

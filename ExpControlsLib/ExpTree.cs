@@ -77,6 +77,13 @@ namespace ExpControlsLib
         private CShellItem? _pendingExpansionItem;
         private bool _pendingSelectExpandedNode;
 
+        private void Cleanup()
+        {
+            _rootLoadCts?.Cancel();
+            _rootLoadCts?.Dispose();
+            _rootLoadCts = null;
+        }
+
         private async Task SetRootItemAsync(CShellItem? item, StartDir dir = StartDir.None)
         {
             _rootLoadCts?.Cancel();

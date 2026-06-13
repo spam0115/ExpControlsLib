@@ -710,6 +710,11 @@
             Gets the current sort order.
             </summary>
         </member>
+        <member name="P:ExpControlsLib.ExpList.ExcludedItems">
+            <summary>
+            Gets or sets a collection of items (by their full path or GUID) to exclude from the list display.
+            </summary>
+        </member>
         <member name="P:ExpControlsLib.ExpList.VirtualMode">
             <summary>
             Gets or sets a value indicating whether the list view is in virtual mode.
@@ -1247,6 +1252,11 @@
             <value></value>
             <returns>True if ExpTree is Displaying Hidden Folders, False if not.</returns>
             <remarks>Hidden Folders may be Displayed or not Displayed at run-time.</remarks>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.ExcludedItems">
+            <summary>
+            Gets or sets a collection of items (by their full path or GUID) to exclude from the tree display.
+            </summary>
         </member>
         <member name="P:ExpControlsLib.ExpTree.ShowRootLines">
             <summary>

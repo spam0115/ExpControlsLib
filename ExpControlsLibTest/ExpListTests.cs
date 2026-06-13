@@ -1,14 +1,18 @@
 using ExpControlsLib;
 using NUnit.Framework;
+using System;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
+using static WindowsApiLib.Shell.ShellAPI;
 
 namespace ExpControlsLibTest
 {
     [TestFixture]
     [Apartment(ApartmentState.STA)]
-    public class ExpTreeTests
+    public class ExpListTests
     {
+
         [SetUp]
         public void SetUp()
         {
@@ -21,50 +25,42 @@ namespace ExpControlsLibTest
             TestContext.Progress.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Test Finished: {TestContext.CurrentContext.Test.Name}");
         }
 
+
         [TestCase(ExpTree.StartDir.Desktop)]
         [TestCase(ExpTree.StartDir.MyComputer)]
         [TestCase(ExpTree.StartDir.Windows)]
         public async Task TestInitialLoad(ExpTree.StartDir startDir)
         {
-            var expTree = new ExpTree();
+            var expList = new ExpList();
+            expList.Initialize(ShellController.Instance);
             
             // Host it in a form to ensure handle is created
             using var form = new Form();
-            form.Controls.Add(expTree);
+            form.Controls.Add(expList);
             form.Show();
 
             // Set root
-            expTree.StartUpDirectory = startDir;
+            var csi = CShellItemFactory.CreateCShItem((CSIDL)startDir);
+            await expList.DisplayFilesAsync(csi.FullPath, csi);
 
-            // Wait for nodes to load. 
-            // The loading happens on a background STA thread and then updates UI.
+            // Wait for items to load. 
+            // Although DisplayFilesAsync is awaited, some updates might be async.
             bool loaded = false;
             for (int i = 0; i < 1000; i++) // 10 seconds timeout
             {
-                if (expTree.Nodes.Count > 0)
+                if (expList.Count > 0)
                 {
                     loaded = true;
                     break;
                 }
                 await Task.Delay(10);
-                Application.DoEvents(); // Keep UI alive to allow BeginInvoke/Invoke to process
+                Application.DoEvents(); 
             }
 
-            Assert.IsTrue(loaded, $"Tree nodes should be loaded for {startDir}.");
-            Assert.That(expTree.Nodes.Count, Is.EqualTo(1), "Root node should be present.");
-            
-            var rootNode = expTree.Nodes[0];
-            Assert.That(rootNode.Text, Is.Not.Null.And.Not.Empty);
-            
-            // Wait for children of root to load if they are loaded async
-            // In SetRootItemAsync, it calls BuildTree which adds children to Root.
-            // So if Nodes.Count > 0, Root should already have its immediate children if BuildTree was called.
-            Assert.That(rootNode.Nodes.Count, Is.GreaterThan(0), "Root node should have children.");
-            
-            foreach (TreeNode node in rootNode.Nodes)
-            {
-                Assert.That(node.Tag, Is.InstanceOf<CShellItem>());
-            }
+            Assert.IsTrue(loaded, $"Items should be loaded for {startDir}.");
+            Assert.That(expList.Count, Is.GreaterThan(0), "Items should be present.");
+
+
         }
     }
 }

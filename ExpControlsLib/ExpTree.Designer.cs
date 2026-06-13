@@ -27,6 +27,7 @@ namespace ExpControlsLib
                 {
                     components.Dispose();
                 }
+                Cleanup();
                 CShellItemUpdater.UpdateEvent -= OnItemUpdate;
             }
             finally
