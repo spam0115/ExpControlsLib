@@ -106,7 +106,14 @@ namespace ExpControlsLib
         private int _imageListMutationDepth = 0;
         private readonly Queue<(object sender, ThumbnailReadyEventArgs e)> _deferredThumbnailUpdates = new();
 
-        internal static bool _isShuttingDown = false;
+        public bool IsShuttingDown {
+            get; 
+            set {
+                _listViewWrapper.IsShuttingDown = value;
+                field = value;
+            }
+        }
+
 
         private CancellationTokenSource? _displayFilesCts;
         private static readonly StaThreadRunner _staRunner = new StaThreadRunner(1, "ExpListStaRunner");
@@ -733,9 +740,11 @@ namespace ExpControlsLib
             try
             {
                 if (m.Msg == WindowsMessages.WM_QUERYENDSESSION || m.Msg == WindowsMessages.WM_ENDSESSION || m.Msg == WindowsMessages.WM_CLOSE || m.Msg == WindowsMessages.WM_DESTROY) // || m.Msg == WindowsMessages.WM_NCDESTORY WM_NCDESTORY get's called during creation as well as destruction so it's not really usable.
-                    _isShuttingDown = true;
+                {
+                    IsShuttingDown = true;
+                }
 
-                if (_isShuttingDown)
+                if (IsShuttingDown)
                 {
                     base.WndProc(ref m); //must call before exit or you will get form creation errors.
                     return;
@@ -763,8 +772,20 @@ namespace ExpControlsLib
                 {
                     if (m_WindowsContextMenu.cntxMenuCascading != null)
                     {
-                        hr = m_WindowsContextMenu.cntxMenuCascading.HandleMenuMsg2(m.Msg, m.WParam, m.LParam, IntPtr.Zero);
-                        if (hr == 0) return;
+                        IntPtr plResult = Marshal.AllocHGlobal(IntPtr.Size);
+                        try
+                        {
+                            hr = m_WindowsContextMenu.cntxMenuCascading.HandleMenuMsg2(m.Msg, m.WParam, m.LParam, plResult);
+                            if (hr == 0)
+                            {
+                                m.Result = Marshal.ReadIntPtr(plResult);
+                                return;
+                            }
+                        }
+                        finally
+                        {
+                            Marshal.FreeHGlobal(plResult);
+                        }
                     }
                 }
 
@@ -1369,6 +1390,21 @@ namespace ExpControlsLib
 #endif
                         m_WindowsContextMenu.cntxMenuBase = (IContextMenu)Marshal.GetObjectForIUnknown(iunk);
 
+                        IntPtr p = IntPtr.Zero;
+                        Marshal.QueryInterface(iunk, IID_IContextMenu2, out p);
+                        if (p != IntPtr.Zero)
+                        {
+                            m_WindowsContextMenu.cntxMenuExtended = (IContextMenu2)Marshal.GetObjectForIUnknown(p);
+                            Marshal.Release(p);
+                        }
+
+                        Marshal.QueryInterface(iunk, IID_IContextMenu3, out p);
+                        if (p != IntPtr.Zero)
+                        {
+                            m_WindowsContextMenu.cntxMenuCascading = (IContextMenu3)Marshal.GetObjectForIUnknown(p);
+                            Marshal.Release(p);
+                        }
+
                         HR = m_WindowsContextMenu.cntxMenuBase.InvokeCommand(cmi);
 
                         m_WindowsContextMenu.ReleaseMenu();
@@ -1951,16 +1987,10 @@ namespace ExpControlsLib
                     {
                         // If result is null, it could be same path (no-op) or failure.
                         // If csi was null from the start and we got no result, that's a failure.
-                        if (csi == null && !string.IsNullOrEmpty(pathName))
-                        {
-                            if (oldCsi != null || !string.IsNullOrEmpty(_currentPath))
-                            {
-                                _listViewWrapper.Clear();
-                                _currentFolderCsi = null;
-                                _currentPath = pathName;
-                                ExpListCurrentFolderChanged?.Invoke(null, oldCsi);
-                            }
-                        }
+                        _listViewWrapper.Clear();
+                        _currentFolderCsi = null;
+                        _currentPath = pathName;
+                        ExpListCurrentFolderChanged?.Invoke(null, oldCsi);
                     }
                 }
                 finally
@@ -2831,7 +2861,7 @@ namespace ExpControlsLib
         {
             Debug.WriteLine("ExpList: ExpFileList_SelectedIndexChanged Begin");
 
-            if (_isShuttingDown) return;
+            if (IsShuttingDown) return;
 
             try
             {
@@ -3709,9 +3739,9 @@ namespace ExpControlsLib
                     }
 
                     if (m.Msg == WindowsMessages.WM_QUERYENDSESSION || m.Msg == WindowsMessages.WM_ENDSESSION || m.Msg == WindowsMessages.WM_CLOSE) // || m.Msg == WindowsMessages.WM_NCDESTORY WM_NCDESTORY get's called during startup
-                        ExpList._isShuttingDown = true;
+                        _listViewWrapper.IsShuttingDown = true;
 
-                    if (ExpList._isShuttingDown) return;
+                    if (_listViewWrapper.IsShuttingDown) return;
 
                     switch (m.Msg)
                     {
@@ -3763,7 +3793,7 @@ namespace ExpControlsLib
         private void OnScroll()
         {
             Debug.WriteLine("ExpList: OnListViewScroll Begin");
-            if (_isShuttingDown) return;
+            if (IsShuttingDown) return;
             try
             {
                 //issues a new request to get thumbnails after a brief debounce delay

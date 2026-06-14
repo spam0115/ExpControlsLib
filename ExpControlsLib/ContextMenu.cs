@@ -105,12 +105,16 @@ namespace ExpControlsLib
             if (p != IntPtr.Zero)
             {
                 cntxMenuExtended = (IContextMenu2)Marshal.GetObjectForIUnknown(p);
+                Marshal.Release(p);
+                p = IntPtr.Zero;
             }
 
             Marshal.QueryInterface(pIcontext, IID_IContextMenu3, out p);
             if (p != IntPtr.Zero)
             {
                 cntxMenuCascading = (IContextMenu3)Marshal.GetObjectForIUnknown(p);
+                Marshal.Release(p);
+                p = IntPtr.Zero;
             }
 
             if (pIcontext != IntPtr.Zero)
@@ -240,6 +244,18 @@ namespace ExpControlsLib
                 Marshal.ReleaseComObject(cntxMenuBase);
                 cntxMenuBase = null;
             }
+
+            if (cntxMenuExtended != null)
+            {
+                Marshal.ReleaseComObject(cntxMenuExtended);
+                cntxMenuExtended = null;
+            }
+
+            if (cntxMenuCascading != null)
+            {
+                Marshal.ReleaseComObject(cntxMenuCascading);
+                cntxMenuCascading = null;
+            }
         }
 
         /// <summary>
@@ -300,16 +316,14 @@ namespace ExpControlsLib
                 if (p != IntPtr.Zero)
                 {
                     newMenuExtended = (IContextMenu2)Marshal.GetObjectForIUnknown(p);
+                    Marshal.Release(p);
+                    p = IntPtr.Zero;
                 }
 
                 Marshal.QueryInterface(newMenuPtr, IID_IContextMenu3, out p);
                 if (p != IntPtr.Zero)
                 {
                     newMenuCascading = (IContextMenu3)Marshal.GetObjectForIUnknown(p);
-                }
-
-                if (p != IntPtr.Zero)
-                {
                     Marshal.Release(p);
                     p = IntPtr.Zero;
                 }

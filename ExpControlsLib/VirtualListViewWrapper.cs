@@ -34,6 +34,7 @@ namespace ExpControlsLib
 
         public readonly ListView _ListView;
         public readonly HugeList<CShellItem> VirtualItems = new();
+        public bool IsShuttingDown;
 
         /// <summary>
         /// Callback to create a new ListViewItem for a given CShellItem.
@@ -721,7 +722,7 @@ namespace ExpControlsLib
         {
             //Console.WriteLine("Retrieve virtual item: " + e.ItemIndex);
 
-            if (ExpList._isShuttingDown) 
+            if (_expList.IsShuttingDown) 
             { 
                 e.Item = new ListViewItem();
                 return; //windows tries to retrieve every item during shutdown for some reason
