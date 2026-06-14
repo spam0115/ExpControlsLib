@@ -66,7 +66,6 @@ namespace ExpControlsLib
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            AutoScroll = true;
             Controls.Add(_listView);
             Margin = new Padding(4, 3, 4, 3);
             Name = "ExpList";
