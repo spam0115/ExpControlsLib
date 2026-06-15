@@ -595,7 +595,7 @@ namespace WindowsApiLib.Shell
                 else if (m_FileDic == null)
                 {
                     m_FileDic = new Dictionary<string, CShellItem>();
-                    foreach (var file in m_Files)
+                    foreach (var file in Files)
                     {
                         m_FileDic.Add(file.DisplayName, file);
                     }
