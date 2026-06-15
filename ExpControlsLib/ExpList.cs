@@ -83,8 +83,6 @@ namespace ExpControlsLib
         // Avoid Globalization problem-- an empty timevalue
         private static readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
 
-        public CShellItem? _currentFolderCsi; //todo: get rid of this and just use _listViewWrapper.currentFolderCsi everywhere instead.
-
         private Stack<CShellItem> _backHistory = new();
         private Stack<CShellItem> _forwardHistory = new();
         private bool _isNavigatingHistory = false;
@@ -463,6 +461,8 @@ namespace ExpControlsLib
          DefaultValue("")]
         public CShellItem? SelectedItem;
 
+        private CShellItem? _currentFolderCsi; //todo: get rid of this and just use _listViewWrapper.currentFolderCsi everywhere instead.
+
         /// <summary>
         /// Gets the <see cref="CShellItem"/> representing the currently loaded/displayed folder.
         /// </summary>
@@ -471,11 +471,15 @@ namespace ExpControlsLib
             get { return _currentFolderCsi; }
             set 
             {
-                bool isSameFolder = (_currentFolderCsi == null && value == null)
-                    || !(_currentFolderCsi == null ^ value == null)
-                    || (_currentFolderCsi != null && value != null && string.Equals(_currentFolderCsi.FullPath, value.FullPath, StringComparison.OrdinalIgnoreCase));;
-                
-                if (!_isNavigatingHistory && !isSameFolder && value != null)
+                bool isDifferent = true;
+                if (_currentFolderCsi == null && value == null)
+                    isDifferent = false;
+                else if ((_currentFolderCsi == null && value != null) || (_currentFolderCsi != null && value == null))
+                    isDifferent = true;
+                else if (_currentFolderCsi != null && value != null && string.Equals(_currentFolderCsi.FullPath, value.FullPath, StringComparison.OrdinalIgnoreCase))
+                    isDifferent = false;
+
+                if (!_isNavigatingHistory && isDifferent && value != null)
                 {
                     if ( _currentFolderCsi != null)
                     {

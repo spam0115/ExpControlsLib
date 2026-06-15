@@ -1900,11 +1900,11 @@ namespace WindowsApiLib.Shell
             {
                 if (Length >= 1073741824)
                 {
-                    m_size = $"{Length / 1073741824d:#,##0.#} GB";
+                    m_size = $"{Length / 1073741824d:#,##0.##} GB";
                 }
                 else if (Length >= 1048576L)
                 {
-                    m_size = $"{Length / 1048576d:#,##0.#} MB";
+                    m_size = $"{Length / 1048576d:#,##0.##} MB";
                 }
                 else if (Length >= 1024L)
                 {

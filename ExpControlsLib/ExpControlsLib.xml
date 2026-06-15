@@ -725,7 +725,7 @@
             Gets or sets the current file system path displayed in the list view.
             </summary>
         </member>
-        <member name="P:ExpControlsLib.ExpList.SelectedItem">
+        <member name="F:ExpControlsLib.ExpList.SelectedItem">
             <summary>
             Gets the <see cref="T:WindowsApiLib.Shell.CShellItem"/> representing the currently selected folder in the tree or the folder being viewed.
             </summary>
@@ -887,7 +887,7 @@
             <param name="text"></param>
             <param name="tag"></param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.EnsureCustomColumnDataFetched(WindowsApiLib.Shell.CShellItem)">
+        <member name="M:ExpControlsLib.ExpList.EnsureCustomColumnDataFetched(WindowsApiLib.Shell.CShellItem,System.String)">
             <summary>
             Loads all special custom column data that isn't part of CShellItem's default properties by firing
             the ExpListGetColumnData event.  This allows external handlers to provide bulk data for all columns 
@@ -895,12 +895,7 @@
             </summary>
             <param name="item"></param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.DisplayFilesAsync(System.String,WindowsApiLib.Shell.CShellItem,System.Boolean,System.Boolean)">
-            <summary>
-            Populates the list view with files and directories from the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/> asynchronously.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.DisplayFiles(System.String,WindowsApiLib.Shell.CShellItem,System.Boolean,System.Boolean)">
+        <member name="M:ExpControlsLib.ExpList.LoadDirectory(System.String,System.Boolean,System.Boolean)">
             <summary>
             Populates the list view with files and directories from the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
             </summary>
@@ -908,6 +903,11 @@
             <param name="csi">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> representing the folder to display.</param>
             <param name="includeFolder">True to include subdirectories in the list.</param>
             <param name="reload">True to force a reload even if the same item was previously selected.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.LoadDirectoryBaseAsync(WindowsApiLib.Shell.CShellItem,System.Boolean)">
+            <summary>
+            Populates the list view with files and directories from the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/> asynchronously.
+            </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.GetIndexFromFullPath(System.String)">
             <summary>
