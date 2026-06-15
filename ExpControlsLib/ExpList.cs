@@ -83,7 +83,7 @@ namespace ExpControlsLib
         // Avoid Globalization problem-- an empty timevalue
         private static readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
 
-        public CShellItem? _currentFolder; //todo: get rid of this and just use _listViewWrapper.currentFolderCsi everywhere instead.
+        public CShellItem? _currentFolderCsi; //todo: get rid of this and just use _listViewWrapper.currentFolderCsi everywhere instead.
 
         private Stack<CShellItem> _backHistory = new();
         private Stack<CShellItem> _forwardHistory = new();
@@ -472,25 +472,26 @@ namespace ExpControlsLib
         /// </summary>
         public CShellItem? CurrentFolderCsi 
         {
-            get { return _currentFolder; }
+            get { return _currentFolderCsi; }
             set 
             {
-                bool isSameFolder = (_currentFolder == null && value == null)
-                    || !(_currentFolder == null ^ value == null)
-                    || (_currentFolder != null && value != null && string.Equals(_currentFolder.FullPath, value.FullPath, StringComparison.OrdinalIgnoreCase));;
+                bool isSameFolder = (_currentFolderCsi == null && value == null)
+                    || !(_currentFolderCsi == null ^ value == null)
+                    || (_currentFolderCsi != null && value != null && string.Equals(_currentFolderCsi.FullPath, value.FullPath, StringComparison.OrdinalIgnoreCase));;
                 
                 if (!_isNavigatingHistory && !isSameFolder && value != null)
                 {
-                    _backHistory.Push(_currentFolder);
-                    _forwardHistory.Clear();
+                    if ( _currentFolderCsi != null)
+                    {
+                        _backHistory.Push(_currentFolderCsi);
+                        _forwardHistory.Clear();
+                    }
                 }
 
-                var oldCsi = _currentFolder;
-                _currentFolder = _shellController.HierachyManager.Add(value);
-
-                ExpListCurrentFolderChanged?.Invoke(_currentFolder, oldCsi);
-
-                _currentFolder = value; 
+                var oldCsi = _currentFolderCsi;
+                _currentFolderCsi = _shellController.HierachyManager.Add(value);
+                _currentPath = _currentFolderCsi?.FullPath;
+                ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
             }
         }
 
@@ -808,7 +809,7 @@ namespace ExpControlsLib
             try
             {
                 // Validate preconditions
-                if (_currentFolder == null || !_currentFolder.IsFolder)
+                if (_currentFolderCsi == null || !_currentFolderCsi.IsFolder)
                 {
                     return;
                 }
@@ -828,9 +829,9 @@ namespace ExpControlsLib
                         // Get the target folder for paste operation
                         try
                         {
-                            folder = _currentFolder == ShellController.DesktopCSI
-                                ? _currentFolder.IShlFolder
-                                : _currentFolder.Parent?.IShlFolder;
+                            folder = _currentFolderCsi == ShellController.DesktopCSI
+                                ? _currentFolderCsi.IShlFolder
+                                : _currentFolderCsi.Parent?.IShlFolder;
 
                             if (folder == null)
                             {
@@ -840,7 +841,7 @@ namespace ExpControlsLib
                                 return;
                             }
 
-                            IntPtr relPidl = CPidl.ILFindLastID(_currentFolder.PIDL);
+                            IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
                             if (relPidl == IntPtr.Zero)
                             {
                                 Debug.WriteLine("Failed to get relative PIDL for current folder");
@@ -863,7 +864,7 @@ namespace ExpControlsLib
 
                         try
                         {
-                            folder = _currentFolder.IShlFolder;
+                            folder = _currentFolderCsi.IShlFolder;
                             if (folder == null)
                             {
                                 Debug.WriteLine("Failed to get folder interface for selected items");
@@ -1016,12 +1017,12 @@ namespace ExpControlsLib
                                     OnScroll();
 
                                 // Fire single update event for the folder
-                                if (_currentFolder != null)
+                                if (_currentFolderCsi != null)
                                 {
-                                    string path = _currentFolder.FullPath.StartsWith(":")
-                                        ? _currentFolder.DisplayName
-                                        : _currentFolder.FullPath;
-                                    ExpListItemsChanged?.Invoke(path, _currentFolder);
+                                    string path = _currentFolderCsi.FullPath.StartsWith(":")
+                                        ? _currentFolderCsi.DisplayName
+                                        : _currentFolderCsi.FullPath;
+                                    ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
                                 }
                             }
                             finally
@@ -1159,13 +1160,13 @@ namespace ExpControlsLib
                 var enabled = (uint)MFT.GRAYED;
                 DragDropEffects effects = DragDropEffects.None;
 
-                if (_currentFolder == null)
+                if (_currentFolderCsi == null)
                 {
                     enabled = (uint)MFT.BYCOMMAND;
                 }
                 else
                 {
-                    effects = CanDropClipboard(_currentFolder);
+                    effects = CanDropClipboard(_currentFolderCsi);
                     if ((effects & DragDropEffects.Copy) == DragDropEffects.Copy ||
                         (effects & DragDropEffects.Move) == DragDropEffects.Move)
                     {
@@ -1177,7 +1178,7 @@ namespace ExpControlsLib
                 AppendMenu(comContextMenu, enabled, (int)CMD.PASTE, "Paste (Ctrl+V)");
 
                 // Add additional paste and context operations if a folder is selected.
-                if (_currentFolder != null)
+                if (_currentFolderCsi != null)
                 {
                     enabled = (uint)MFT.GRAYED;
                     if ((effects & DragDropEffects.Link) == DragDropEffects.Link)
@@ -1189,11 +1190,11 @@ namespace ExpControlsLib
                     // Add New menu for writable folders (excluding special shell folders like ::).
                     // The "New" submenu is managed by m_WindowsContextMenu.SetUpNewMenu(),
                     // which adds file creation options for the selected folder.
-                    if (_currentFolder.IsFolder &&
-                        ((!_currentFolder.FullPath.StartsWith("::")) || _currentFolder == ShellController.DesktopCSI))
+                    if (_currentFolderCsi.IsFolder &&
+                        ((!_currentFolderCsi.FullPath.StartsWith("::")) || _currentFolderCsi == ShellController.DesktopCSI))
                     {
                         int xIndex = GetMenuItemCount(comContextMenu.ToInt32());
-                        m_WindowsContextMenu.SetUpNewMenu(_currentFolder, comContextMenu, xIndex);
+                        m_WindowsContextMenu.SetUpNewMenu(_currentFolderCsi, comContextMenu, xIndex);
                         AppendMenu(comContextMenu, (int)MFT.SEPARATOR, 0, string.Empty);
                     }
 
@@ -1298,7 +1299,7 @@ namespace ExpControlsLib
                             goto CLEANUP;
                         case CMD.REFRESH:
                             // Refresh the folder contents and re-sort the ListView items.
-                            _shellController.ShellUpdater.DoUpdateDir(_currentFolder);
+                            _shellController.ShellUpdater.DoUpdateDir(_currentFolderCsi);
                             _listViewWrapper.Sort();
                             goto CLEANUP;
                         case CMD.SELECT_ALL:
@@ -1334,7 +1335,7 @@ namespace ExpControlsLib
                             }
                             goto CLEANUP;
                         case CMD.PASTE:
-                            if (_currentFolder != null)
+                            if (_currentFolderCsi != null)
                             {
                                 cmi.lpVerb = Marshal.StringToHGlobalAnsi("paste");
                                 cmi.lpVerbW = Marshal.StringToHGlobalUni("paste");
@@ -1366,16 +1367,16 @@ namespace ExpControlsLib
                             goto CLEANUP;
                     }
 
-                    if (_currentFolder != null)
+                    if (_currentFolderCsi != null)
                     {
                         int prgf = 0;
                         IntPtr iunk = IntPtr.Zero;
 
-                        IShellFolder folder = _currentFolder == ShellController.DesktopCSI
-                            ? _currentFolder.IShlFolder
-                            : _currentFolder.Parent.IShlFolder;
+                        IShellFolder folder = _currentFolderCsi == ShellController.DesktopCSI
+                            ? _currentFolderCsi.IShlFolder
+                            : _currentFolderCsi.Parent.IShlFolder;
 
-                        IntPtr relPidl = CPidl.ILFindLastID(_currentFolder.PIDL);
+                        IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
 
                         HR = folder.GetUIObjectOf(IntPtr.Zero, 1, new[] { relPidl }, IID_IContextMenu, prgf, out iunk);
 #if DEBUG
@@ -1483,7 +1484,7 @@ namespace ExpControlsLib
         {
             try
             {
-                if (sender is null || _currentFolder == null || e?.Item is null) return;
+                if (sender is null || _currentFolderCsi == null || e?.Item is null) return;
 
                 Debug.WriteLine($"ExpList: DoItemUpdate Begin - {e.UpdateType.ToString()}, {e.Item.Name}");
 
@@ -1499,8 +1500,8 @@ namespace ExpControlsLib
 
                 // For Created/Deleted/UpdateDir, sender is the Folder containing the item.
                 // For Updated/Renamed/IconChange, sender is the Item itself.
-                bool isTargetFolder = CPidl.ResolvesToSamePathOrName(senderCsi.PIDL, _currentFolder.PIDL);
-                bool isTargetItem = senderCsi.Parent != null && CPidl.ResolvesToSamePathOrName(senderCsi.Parent.PIDL, _currentFolder.PIDL);
+                bool isTargetFolder = CPidl.ResolvesToSamePathOrName(senderCsi.PIDL, _currentFolderCsi.PIDL);
+                bool isTargetItem = senderCsi.Parent != null && CPidl.ResolvesToSamePathOrName(senderCsi.Parent.PIDL, _currentFolderCsi.PIDL);
 
                 if (!isTargetFolder && !isTargetItem) return;
 
@@ -1563,7 +1564,7 @@ namespace ExpControlsLib
                             {
                                 var csi = e.Item;
 
-                                if (e.Item.Parent.FullPath != _currentFolder.FullPath) return;
+                                if (e.Item.Parent.FullPath != _currentFolderCsi.FullPath) return;
 
                                 int index = -1;
                                 if (VirtualMode)
@@ -1601,7 +1602,7 @@ namespace ExpControlsLib
 
                         case CShItemUpdateType.UpdateDir:
                             Debug.WriteLine("\tUpdateDir");
-                            await LoadDirectory(_currentFolder, true, reload: true);
+                            await LoadDirectory(_currentFolderCsi, true, reload: true);
                             break;
 
                         case CShItemUpdateType.IconChange:
@@ -1636,12 +1637,12 @@ namespace ExpControlsLib
                     // BeginInvoke is now used (the marshaling path wouldn't fire it).
                     if (e.UpdateType == CShItemUpdateType.Created || e.UpdateType == CShItemUpdateType.Deleted)
                     {
-                        if (_currentFolder != null)
+                        if (_currentFolderCsi != null)
                         {
-                            if (_currentFolder.FullPath.StartsWith(":"))
-                                ExpListItemsChanged?.Invoke(_currentFolder.DisplayName, _currentFolder);
+                            if (_currentFolderCsi.FullPath.StartsWith(":"))
+                                ExpListItemsChanged?.Invoke(_currentFolderCsi.DisplayName, _currentFolderCsi);
                             else
-                                ExpListItemsChanged?.Invoke(_currentFolder.FullPath, _currentFolder);
+                                ExpListItemsChanged?.Invoke(_currentFolderCsi.FullPath, _currentFolderCsi);
                         }
                     }
                 }
@@ -1896,18 +1897,18 @@ namespace ExpControlsLib
         public async Task LoadDirectory(string pathName, bool includeFolder = true, bool reload = false)
         {
             if (string.IsNullOrEmpty(pathName)) return;
-            if (!reload && (_currentFolder is not null && pathName == CurrentPath)) return;
+            if (!reload && (_currentFolderCsi is not null && pathName == CurrentPath)) return;
 
             var csi = CShellItemFactory.CreateCShItem(pathName);
 
             await LoadDirectoryBaseAsync(csi, includeFolder);
 
-            if (!reload && (_currentFolder is not null && pathName == CurrentPath)) CurrentFolderCsi = csi;
+            CurrentFolderCsi = csi;
         }
 
         public async Task LoadDirectory(CShellItem csi, bool includeFolder = true, bool reload = false)
         {
-            if (!reload && (_currentFolder is not null && csi.FullPath == CurrentPath)) return;
+            if (!reload && (_currentFolderCsi is not null && csi.FullPath == CurrentPath)) return;
 
             await LoadDirectoryBaseAsync(csi, includeFolder);
 
@@ -2022,7 +2023,7 @@ namespace ExpControlsLib
                     {
                         _listViewWrapper.Clear();
                         _listViewWrapper.AddRange(result.Items);
-                        _listView.Tag = _currentFolder;
+                        _listView.Tag = _currentFolderCsi;
 
                         OnScroll();
                     }
@@ -2451,7 +2452,7 @@ namespace ExpControlsLib
             {
                 if (_backHistory.Count > 0)
                 {
-                    _forwardHistory.Push(_currentFolder);
+                    _forwardHistory.Push(_currentFolderCsi);
                     var prev = _backHistory.Pop();
                     _isNavigatingHistory = true;
                     try
@@ -2480,7 +2481,7 @@ namespace ExpControlsLib
             {
                 if (_forwardHistory.Count > 0)
                 {
-                    _backHistory.Push(_currentFolder);
+                    _backHistory.Push(_currentFolderCsi);
                     var next = _forwardHistory.Pop();
                     _isNavigatingHistory = true;
                     try
@@ -2507,9 +2508,9 @@ namespace ExpControlsLib
             Debug.WriteLine("ExpList: GoUp Begin");
             try
             {
-                if (_currentFolder?.Parent != null)
+                if (_currentFolderCsi?.Parent != null)
                 {
-                    var parent = _currentFolder.Parent;
+                    var parent = _currentFolderCsi.Parent;
                     await LoadDirectory(parent, true);
                 }
             }
@@ -2532,7 +2533,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Gets a value indicating whether the current folder has a parent folder to navigate to.
         /// </summary>
-        public bool CanGoUp => _currentFolder?.Parent != null;
+        public bool CanGoUp => _currentFolderCsi?.Parent != null;
 
         #endregion
 
@@ -3086,7 +3087,7 @@ namespace ExpControlsLib
 
                 if (e.KeyCode == Keys.F5)
                 {
-                    _shellController.ShellUpdater.DoUpdateDir(_currentFolder);
+                    _shellController.ShellUpdater.DoUpdateDir(_currentFolderCsi);
                     _listViewWrapper.Sort();
                 }
 
