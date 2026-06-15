@@ -441,13 +441,9 @@ namespace ExpControlsLib
             {
                 if (_listViewWrapper.VirtualMode == value) return;
                 _listViewWrapper.VirtualMode = value;
-
-                //if (_currentFolderCsi != null)
-                //    DisplayFiles(_currentPath, _currentFolderCsi, true, reload: true);
             }
         }
 
-        private string? _currentPath = null;
         /// <summary>
         /// Gets or sets the current file system path displayed in the list view.
         /// </summary>
@@ -456,7 +452,7 @@ namespace ExpControlsLib
          DefaultValue(null)]
         public string? CurrentPath
         {
-            get => _currentPath;
+            get => CurrentFolderCsi?.FullPath;
         }
 
         /// <summary>
@@ -490,7 +486,6 @@ namespace ExpControlsLib
 
                 var oldCsi = _currentFolderCsi;
                 _currentFolderCsi = _shellController.HierachyManager.Add(value);
-                _currentPath = _currentFolderCsi?.FullPath;
                 ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
             }
         }
@@ -2065,7 +2060,7 @@ namespace ExpControlsLib
         /// </summary>
         public ListViewItem FindItemByName(string name)
         {
-            var fullPath = _currentPath + name;
+            var fullPath = CurrentPath + name;
             return FindItemByPath(fullPath);
         }
 
