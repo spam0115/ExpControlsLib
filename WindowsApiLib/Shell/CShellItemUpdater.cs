@@ -568,6 +568,9 @@ namespace WindowsApiLib.Shell
         /// <returns></returns>
         public int DoUpdateDir(CShellItem csi, bool updateFiles = true, bool updateFolders = true)
         {
+            if (csi is null) 
+                return 0;
+
             if (_isUpdatingDir)
             {
                 Debug.WriteLine("DoUpdateDir called but an update is already in progress for this folder. Ignoring.");

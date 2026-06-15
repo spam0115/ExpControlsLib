@@ -100,7 +100,8 @@ namespace WindowsApiLib.Shell
 
             if (rootItem.FileList is not null && CPidl.IsAncestorOf(rootItem.PIDL, pidlAndName.Pidl, true))
             {
-                if (rootItem.FilesDic.TryGetValue(pidlAndName.Name, out CShellItem? fileItem))
+                var displayName = CPidl.GetDisplayName(pidlAndName.Pidl);
+                if (rootItem.FilesDic.TryGetValue(displayName, out CShellItem? fileItem))
                 {
                     return fileItem;
                 }
@@ -241,6 +242,11 @@ namespace WindowsApiLib.Shell
             return null;
         }
 
+        public CShellItem? FindOrAdd(CShellItem? value)
+        {
+            throw new NotImplementedException();
+        }
+
         /// <summary>True if parameter "ancestor" is an ancestor of parameter "current" 
         /// </summary>
         /// <returns>IsAncestorOf returns True if input CShellItem ancestor is an ancestor of input CShellItem current</returns>
@@ -374,6 +380,8 @@ namespace WindowsApiLib.Shell
 
             return removedAny;
         }
+
+
     }
 
     public readonly struct PidlAndCanonicalParsingName

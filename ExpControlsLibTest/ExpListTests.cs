@@ -41,7 +41,7 @@ namespace ExpControlsLibTest
 
             // Set root
             var csi = CShellItemFactory.CreateCShItem((CSIDL)startDir);
-            await expList.DisplayFilesAsync(csi.FullPath, csi);
+            await expList.LoadDirectory(csi);
 
             // Wait for items to load. 
             // Although DisplayFilesAsync is awaited, some updates might be async.

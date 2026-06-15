@@ -325,7 +325,7 @@ namespace WindowsApiLib.Shell
             }
             set
             {
-                m_W32Data = value;
+                m_W32Data = value;//this is never set
             }
         }
 
@@ -1896,11 +1896,11 @@ namespace WindowsApiLib.Shell
         private void GetSize()
         {
             // Split the file size into bytes, kb, MB and GB
-            if (!IsFolder & IsFileSystem | IsDisk)
+            if (!IsFolder && IsFileSystem || IsDisk)
             {
-                if (Length >= 1048576 * 1024)
+                if (Length >= 1073741824)
                 {
-                    m_size = $"{Length / (double)(1048576 * 1024):#,##0.#} GB";
+                    m_size = $"{Length / 1073741824d:#,##0.#} GB";
                 }
                 else if (Length >= 1048576L)
                 {
