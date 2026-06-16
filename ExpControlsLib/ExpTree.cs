@@ -175,7 +175,7 @@ namespace ExpControlsLib
 
                     if (value == null || !value.IsFolder) return null;
 
-                    var target = ShellController.Instance.LoadFolderContents(value);
+                    var target = ShellController.Instance.LoadFolderContents(value, SHCONTF.FOLDERS);
                     if (target != null) value = target;
 
                     var children = value.Directories;
@@ -831,7 +831,6 @@ namespace ExpControlsLib
                     if (CPidl.IsAncestorOf((CShellItem)testNode.Tag, newItem, false))
                     {
                         baseNode = testNode;
-                        // RefreshNode(baseNode)   'ensure up-to-date
                         baseNode.Expand();
                         lim -= 1;
                         continueDo = true;
@@ -2145,23 +2144,23 @@ namespace ExpControlsLib
         /// Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
         private void PopulateNode(TreeNode NodeToFill)
         {
-            CShellItem CSI = (CShellItem)NodeToFill.Tag;
+            CShellItem csi = (CShellItem)NodeToFill.Tag;
 
-            var target = ShellController.Instance.LoadFolderContents(CSI);
-            if (target != null && !ReferenceEquals(CSI, target))
+            var target = ShellController.Instance.LoadFolderContents(csi, SHCONTF.FOLDERS);
+            if (target != null && !ReferenceEquals(csi, target))
             {
                 NodeToFill.Tag = target;
-                CSI = target;
+                csi = target;
             }
 
             List<CShellItem> D;
-            if (CSI.DirectoryList is null)
+            if (csi.DirectoryList is null)
             {
-                D = new List<CShellItem>(CSI.Directories);
+                D = new List<CShellItem>(csi.Directories);
             }
             else
             {
-                D = new List<CShellItem>(CSI.DirectoryList);
+                D = new List<CShellItem>(csi.DirectoryList);
             }
             if (D.Count > 0)
             {
@@ -2193,14 +2192,14 @@ namespace ExpControlsLib
         /// </param>
         private async Task PopulateNodeAsync(TreeNode NodeToFill)
         {
-            if (NodeToFill.Tag is not CShellItem CSI) return;
+            if (NodeToFill.Tag is not CShellItem csi) return;
 
             try
             {
                 var result = await _staRunner.EnqueueWork(t =>
                 {
-                    var target = ShellController.Instance.LoadFolderContents(CSI);
-                    CShellItem value = target ?? CSI;
+                    var target = ShellController.Instance.LoadFolderContents(csi, SHCONTF.FOLDERS);
+                    CShellItem value = target ?? csi;
 
                     var children = value.Directories;
                     foreach (var child in children)

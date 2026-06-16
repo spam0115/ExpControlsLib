@@ -2041,7 +2041,7 @@ namespace ExpControlsLib
 
                 var result = await _staRunner.EnqueueWork(t =>
                 {
-                    var hierarchyCsi = _shellController.LoadFolderContents(csi);
+                    var hierarchyCsi = _shellController.LoadFolderContents(csi, SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
                     if (hierarchyCsi == null) return null;
 
                     var dirList = new List<CShellItem>();

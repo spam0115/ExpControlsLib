@@ -532,9 +532,9 @@ namespace WindowsApiLib.Shell
         /// the requested (via flags param) items in this Folder.</returns>
         public static List<IntPtr> GetPidlsOfFolder(CShellItem csi, SHCONTF flags)
         {
-            const int S_OK = 0;
-            const int S_FALSE = 1;
             const uint BATCH_SIZE = 64; //this always only fetches 1 pidl at a time
+            bool includeFolders = (flags & SHCONTF.FOLDERS) != 0;
+            bool includeNonFolders = (flags & SHCONTF.NONFOLDERS) != 0;
 
             List<IntPtr> listPidls = new List<IntPtr>(0);
             int HR;
@@ -547,9 +547,6 @@ namespace WindowsApiLib.Shell
                 HR = csi.IShlFolder.EnumObjects(0, flags, out IEnum);
                 if (HR != S_OK)
                     return listPidls;
-
-                bool includeFolders = (flags & SHCONTF.FOLDERS) != 0;
-                bool includeNonFolders = (flags & SHCONTF.NONFOLDERS) != 0;
 
                 IntPtr[] batch = new IntPtr[BATCH_SIZE];
                 uint fetched = 0;
@@ -579,7 +576,6 @@ namespace WindowsApiLib.Shell
                     // Defensive guard against unusual providers returning S_OK with 0 items.
                     if (fetched == 0)
                         break;
-
 
                     // Handle partial batches (fetched may be < BATCH_SIZE).
                     for (uint i = 0; i < fetched; i++)

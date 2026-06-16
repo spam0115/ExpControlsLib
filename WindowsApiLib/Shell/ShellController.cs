@@ -52,7 +52,7 @@ namespace WindowsApiLib.Shell
         /// </remarks>
         /// <param name="csi"></param>
         /// <returns></returns>
-        public CShellItem? LoadFolderContents(CShellItem csi)
+        public CShellItem? LoadFolderContents(CShellItem csi, SHCONTF flags)
         {
             if (csi == null) return null;
 
@@ -65,7 +65,7 @@ namespace WindowsApiLib.Shell
                 return null;
             }
 
-            var contents = target.GetContents(SHCONTF.INCLUDEHIDDEN | SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
+            var contents = target.GetContents(flags);
 
             if (target.m_Directories is null) target.m_Directories = new CShellItemCollection(target);
             else target.m_Directories.Clear();
