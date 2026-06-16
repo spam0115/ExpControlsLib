@@ -6,7 +6,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning; // Added to annotate platform support
+using System.Runtime.Versioning;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +19,6 @@ using static WindowsApiLib.SystemImageListManager;
 
 namespace ExpControlsLib
 {
-
     /// <summary>
     /// ExpTree is a UserControl encapsulating a TreeView which will display all or part of the Windows Shell
     /// Namespace.  The Shell Namespace is a superset of the Windows file system. It is the Tree commonly shown
@@ -30,10 +29,13 @@ namespace ExpControlsLib
     /// Selected TreeNode changes because of User Action (i.e. -- clicking on the node)</remarks>
     [DefaultProperty("StartUpDirectory")]
     [DefaultEvent("StartUpDirectoryChanged")]
-    [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
+    [SupportedOSPlatform("windows")]
     public partial class ExpTree
     {
-
+        /// <summary>
+        /// The root <see cref="TreeNode"/> of the TreeView. Represents the top-level Shell item
+        /// from which the entire tree is built.
+        /// </summary>
         private TreeNode Root;
 
         /// <summary>
@@ -47,6 +49,10 @@ namespace ExpControlsLib
         /// Event to be raised.</remarks>
         public event StartUpDirectoryChangedEventHandler StartUpDirectoryChanged;
 
+        /// <summary>
+        /// Delegate for the <see cref="StartUpDirectoryChanged"/> event.
+        /// </summary>
+        /// <param name="newVal">The new <see cref="StartDir"/> value that was applied.</param>
         public delegate void StartUpDirectoryChangedEventHandler(StartDir newVal);
 
         /// <summary>
@@ -61,22 +67,76 @@ namespace ExpControlsLib
         [Description("Fires when an item is selected")]
         public event ExpTreeNodeSelectedEventHandler ExpTreeNodeSelected;
 
+        /// <summary>
+        /// Delegate for the <see cref="ExpTreeNodeSelected"/> event.
+        /// </summary>
+        /// <param name="SelPath">The file system path or display name of the selected Shell item.</param>
+        /// <param name="Item">The <see cref="CShellItem"/> associated with the selected TreeNode.</param>
         public delegate void ExpTreeNodeSelectedEventHandler(string SelPath, CShellItem Item);
 
-        private bool EnableEventPost = true; // flag to supress ExpTreeNodeSelected raising during refresh and 
+        /// <summary>
+        /// Flag used to suppress the raising of <see cref="ExpTreeNodeSelected"/> during
+        /// tree refresh and programmatic navigation operations.
+        /// </summary>
+        private bool EnableEventPost = true;
 
+        /// <summary>
+        /// A case-insensitive set of paths or GUIDs representing Shell items that should be
+        /// excluded from display in the tree.
+        /// </summary>
         private HashSet<string> _excludedItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Stack holding the backward navigation history of visited <see cref="CShellItem"/> folders.
+        /// </summary>
         private Stack<CShellItem> _backHistory = new Stack<CShellItem>();
+
+        /// <summary>
+        /// Stack holding the forward navigation history of visited <see cref="CShellItem"/> folders,
+        /// populated when the user navigates back.
+        /// </summary>
         private Stack<CShellItem> _forwardHistory = new Stack<CShellItem>();
+
+        /// <summary>
+        /// Indicates whether a history navigation (back or forward) is currently in progress,
+        /// used to prevent the navigation from being recorded again as a new history entry.
+        /// </summary>
         private bool _isNavigatingHistory = false;
+
+        /// <summary>
+        /// The most recently selected <see cref="CShellItem"/>, used as the source entry
+        /// when recording navigation history.
+        /// </summary>
         private CShellItem _lastSelectedCSI = null;
 
+        /// <summary>
+        /// Cancellation token source for the currently active root-load operation.
+        /// Cancelled and replaced whenever a new root load is initiated.
+        /// </summary>
         private CancellationTokenSource? _rootLoadCts;
+
+        /// <summary>
+        /// Shared STA thread runner used to marshal Shell COM operations onto a dedicated
+        /// Single-Threaded Apartment thread pool, keeping the UI thread responsive.
+        /// </summary>
         private static readonly StaThreadRunner _staRunner = new StaThreadRunner(5, "ExpTreeStaRunner");
 
+        /// <summary>
+        /// A <see cref="CShellItem"/> that is waiting to be expanded once the root load completes.
+        /// Set when <see cref="ExpandANode(CShellItem, bool)"/> is called before the tree is ready.
+        /// </summary>
         private CShellItem? _pendingExpansionItem;
+
+        /// <summary>
+        /// Indicates whether the pending expansion item should also be selected after the root
+        /// load completes and the deferred expansion is performed.
+        /// </summary>
         private bool _pendingSelectExpandedNode;
 
+        /// <summary>
+        /// Cancels and disposes any active root-load cancellation token source,
+        /// releasing associated resources.
+        /// </summary>
         private void Cleanup()
         {
             _rootLoadCts?.Cancel();
@@ -84,6 +144,19 @@ namespace ExpControlsLib
             _rootLoadCts = null;
         }
 
+        /// <summary>
+        /// Asynchronously loads and displays the tree rooted at the specified <see cref="CShellItem"/>
+        /// or <see cref="StartDir"/> value. Any in-progress load is cancelled before the new one begins.
+        /// Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
+        /// </summary>
+        /// <param name="item">
+        /// The <see cref="CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
+        /// should be used to resolve the root instead.
+        /// </param>
+        /// <param name="dir">
+        /// A <see cref="StartDir"/> value used to resolve the root when <paramref name="item"/> is <c>null</c>.
+        /// Defaults to <see cref="StartDir.None"/>.
+        /// </param>
         private async Task SetRootItemAsync(CShellItem? item, StartDir dir = StartDir.None)
         {
             _rootLoadCts?.Cancel();
@@ -163,8 +236,17 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Backing field for the <see cref="DropHandler"/> property.
+        /// Holds the current <see cref="CtvDropWrapper"/> instance managing Shell drop operations.
+        /// </summary>
         private CtvDropWrapper _DropHandler;
 
+        /// <summary>
+        /// Gets or sets the <see cref="CtvDropWrapper"/> that handles Shell drag-and-drop operations
+        /// onto the TreeView. Setting this property automatically wires or unwires the associated
+        /// drag event handlers.
+        /// </summary>
         private CtvDropWrapper DropHandler
         {
             [MethodImpl(MethodImplOptions.Synchronized)]
@@ -195,42 +277,53 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Manages Shell drag-source operations initiated from within the TreeView,
+        /// allowing items to be dragged out to other Shell targets.
+        /// </summary>
         private CDragWrapper DragHandler;
 
+        /// <summary>
+        /// Backing field for <see cref="ShowHiddenFolders"/>. When <c>true</c>, folders
+        /// with the Hidden attribute are included in the tree display.
+        /// </summary>
         private bool m_showHiddenFolders = true;
 
+        /// <summary>
+        /// The Windows Shell context menu helper used to display and process the native
+        /// right-click context menu for selected TreeNode items.
+        /// </summary>
         private readonly ContextMenu m_WindowsContextMenu = new ContextMenu();
 
-        //[DllImport("user32", CharSet = CharSet.Auto)]
-        //private static extern IntPtr SendMessage(IntPtr hWnd, int wMsg, IntPtr wParam, IntPtr lParam);
-        // For ExpFileList label text selection
+        /// <summary>Windows message identifier for setting the selection range in an edit control.</summary>
         private const int EM_SETSEL = 0xB1;
+
+        /// <summary>Base value for TreeView control messages (WM_USER + 0x1100).</summary>
         private const int TVM_FIRST = 0x1100;
+
+        /// <summary>
+        /// TreeView message that retrieves the handle of the edit control used for in-place label editing.
+        /// Equals <c>TVM_FIRST + 15</c>.
+        /// </summary>
         private const int TVM_GETEDITCONTROL = TVM_FIRST + 15;
 
-        #region  Constructor/Destructor
+        #region Constructor/Destructor
 
+        /// <summary>
+        /// Initializes a new instance of <see cref="ExpTree"/>, sets up the TreeView image list,
+        /// wires Shell item update notifications, and configures the node-expansion hover timer.
+        /// </summary>
         public ExpTree() : base()
         {
-            // This call is required by the Windows Form Designer.
             InitializeComponent();
 
-            // expandNodeTimer is used to expand a node that is hovered over, with a delay
             expandNodeTimer = new System.Windows.Forms.Timer();
 
-            // Add any initialization after the InitializeComponent() call
-
-            // setting the imagelist here allows many good things to happen, but
-            // also one bad thing -- the "tooltip" like display of selectednode.text
-            // is made invisible.  This remains a problem to be solved.
             SetTreeViewImageList(_TreeView, false);
-
-            //StartUpDirectoryChanged += OnStartUpDirectoryChanged;
 
             CShellItemUpdater.UpdateEvent += OnItemUpdate;
             expandNodeTimer.Tick += ExpandNodeTimer_Tick;
         }
-
 
         /// <summary>
         /// Windows Message Handler for receiving Messages associated with a System Menu. 
@@ -240,7 +333,6 @@ namespace ExpControlsLib
         /// <remarks>Only Handles Messages relating to Windows Context Menus</remarks>
         protected override void WndProc(ref Message m)
         {
-            // For send to menu in the explorer context menu
             int hr;
             if (m.Msg == (long)WM.INITMENUPOPUP | m.Msg == (long)WM.MEASUREITEM | m.Msg == (long)WM.DRAWITEM)
             {
@@ -278,30 +370,47 @@ namespace ExpControlsLib
 
         #endregion
 
-
+        /// <summary>
+        /// P/Invoke declaration for the UxTheme <c>SetWindowTheme</c> function, which applies
+        /// a visual style to a window, giving the TreeView the standard Explorer appearance.
+        /// </summary>
+        /// <param name="hWnd">Handle to the window to restyle.</param>
+        /// <param name="pszSubAppName">The application name to use for theming (e.g. <c>"explorer"</c>).</param>
+        /// <param name="pszSubIdList">Optional semicolon-delimited list of sub-IDs, or <c>null</c>.</param>
+        /// <returns>An HRESULT indicating success or failure.</returns>
         [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
         private static extern int SetWindowTheme(IntPtr hWnd, string pszSubAppName, string pszSubIdList);
 
+        /// <summary>
+        /// Handles the TreeView's <c>HandleCreated</c> event. Initialises the drag source wrapper,
+        /// optionally creates the drop target wrapper, and applies the Explorer visual theme.
+        /// </summary>
+        /// <param name="sender">The TreeView whose handle was created.</param>
+        /// <param name="e">Event data (unused).</param>
         private void Tv1_HandleCreated(object sender, EventArgs e)
         {
             DragHandler = new ExpControlsLib.CDragWrapper(_TreeView);
             if (m_AllowDrop)
-                DropHandler = new CtvDropWrapper(_TreeView); // 7/11/2012
+                DropHandler = new CtvDropWrapper(_TreeView);
             SetWindowTheme(_TreeView.Handle, "explorer", null);
-            // Update: Check against nothing as when the treeview is used in a modal 
-            // dialog and shown more than once a duplicate call causes a horizontal 
-            // scrollBar to appear in the control???
-            // If tv1.TreeViewNodeSorter Is Nothing Then tv1.TreeViewNodeSorter = New TagComparer  '5/9/2012 Removed - not needed and can cause extreme delays
         }
 
+        /// <summary>
+        /// Handles the TreeView's <c>HandleDestroyed</c> event.
+        /// Reserved for any cleanup that must occur when the underlying window handle is destroyed.
+        /// </summary>
+        /// <param name="sender">The TreeView whose handle was destroyed.</param>
+        /// <param name="e">Event data (unused).</param>
         private void Tv1_HandleDestroyed(object sender, EventArgs e)
         {
-
         }
 
+        #region Public Properties
 
-        #region    Public Properties
-
+        /// <summary>
+        /// Backing field for <see cref="AllowDrop"/>. Stores the last value assigned to the property
+        /// so that the drop handler can be re-created when the TreeView handle is (re-)created.
+        /// </summary>
         private bool m_AllowDrop = false;
 
         /// <summary>
@@ -338,6 +447,10 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Gets or sets the foreground color of the underlying TreeView control.
+        /// </summary>
+        /// <returns>The current foreground <see cref="Color"/> of the TreeView.</returns>
         public override Color ForeColor
         {
             get
@@ -353,6 +466,10 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Gets or sets the background color of the underlying TreeView control.
+        /// </summary>
+        /// <returns>The current background <see cref="Color"/> of the TreeView.</returns>
         public override Color BackColor
         {
             get
@@ -379,14 +496,14 @@ namespace ExpControlsLib
         {
             get
             {
-                if (Root is null || Root.Tag is null)  // 11/05/2013
+                if (Root is null || Root.Tag is null)
                 {
-                    return ShellController.DesktopCSI;                       // 11/05/2013
+                    return ShellController.DesktopCSI;
                 }
-                else                                                // 11/05/2013
+                else
                 {
                     return (CShellItem)Root.Tag;
-                }                                              // 11/05/2013
+                }
             }
             set
             {
@@ -447,7 +564,7 @@ namespace ExpControlsLib
                 {
                     m_showHiddenFolders = value;
                     if (Root is not null)
-                        RefreshTree(); // Fix 2/5/2012
+                        RefreshTree();
                 }
             }
         }
@@ -462,7 +579,7 @@ namespace ExpControlsLib
             get => _excludedItems;
             set => _excludedItems = value ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
-        
+
         /// <summary>
         /// Exposes the normal TreeView ShowRootLines property.
         /// </summary>
@@ -495,42 +612,71 @@ namespace ExpControlsLib
         /// on certain versions of Windows (primarily the older, unsupported versions).</remarks>
         public enum StartDir : int
         {
+            /// <summary>No startup directory specified; the tree will be empty.</summary>
             None = -1,
+            /// <summary>The Desktop virtual folder (CSIDL 0x00).</summary>
             Desktop = 0x0,
+            /// <summary>The Programs folder in the Start Menu (CSIDL 0x02).</summary>
             Programs = 0x2,
+            /// <summary>The Control Panel virtual folder (CSIDL 0x03).</summary>
             Controls = 0x3,
+            /// <summary>The Printers virtual folder (CSIDL 0x04).</summary>
             Printers = 0x4,
+            /// <summary>The current user's Documents folder (CSIDL 0x05).</summary>
             Personal = 0x5,
+            /// <summary>The current user's Favorites folder (CSIDL 0x06).</summary>
             Favorites = 0x6,
+            /// <summary>The Startup folder in the Start Menu (CSIDL 0x07).</summary>
             Startup = 0x7,
+            /// <summary>The Recent Documents folder (CSIDL 0x08).</summary>
             Recent = 0x8,
+            /// <summary>The Send To folder (CSIDL 0x09).</summary>
             SendTo = 0x9,
+            /// <summary>The Start Menu folder (CSIDL 0x0B).</summary>
             StartMenu = 0xB,
+            /// <summary>The My Documents virtual folder (CSIDL 0x0C).</summary>
             MyDocuments = 0xC,
+            /// <summary>The Desktop directory in the file system (CSIDL 0x10).</summary>
+            DesktopDirectory = 0x10,
+            /// <summary>The My Computer virtual folder (CSIDL 0x11).</summary>
+            MyComputer = 0x11,
+            /// <summary>The My Network Places virtual folder (CSIDL 0x12).</summary>
+            My_Network_Places = 0x12,
+            /// <summary>The Application Data roaming folder (CSIDL 0x1A).</summary>
+            ApplicatationData = 0x1A,
+            /// <summary>The Temporary Internet Files (cache) folder (CSIDL 0x20).</summary>
+            Internet_Cache = 0x20,
+            /// <summary>The Cookies folder (CSIDL 0x21).</summary>
+            Cookies = 0x21,
+            /// <summary>The History folder (CSIDL 0x22).</summary>
+            History = 0x22,
+            /// <summary>The Windows installation directory (CSIDL 0x24).</summary>
+            Windows = 0x24,
+            /// <summary>The System32 directory (CSIDL 0x25).</summary>
+            System = 0x25,
+            /// <summary>The Program Files directory (CSIDL 0x26).</summary>
+            Program_Files = 0x26,
+            /// <summary>The My Pictures folder (CSIDL 0x27).</summary>
+            MyPictures = 0x27,
+            /// <summary>The current user's profile directory (CSIDL 0x28).</summary>
+            Profile = 0x28,
+            /// <summary>The 32-bit System directory on a 64-bit OS (CSIDL 0x29).</summary>
+            Systemx86 = 0x29,
+            /// <summary>The Administrative Tools folder (CSIDL 0x30).</summary>
+            AdminTools = 0x30
             // MyMusic = &HD
             // MyVideo = &HE
-            DesktopDirectory = 0x10,
-            MyComputer = 0x11,
-            My_Network_Places = 0x12,
             // NETHOOD = &H13
             // FONTS = &H14
-            ApplicatationData = 0x1A,
             // PRINTHOOD = &H1B
-            Internet_Cache = 0x20,
-            Cookies = 0x21,
-            History = 0x22,
-            Windows = 0x24,
-            System = 0x25,
-            Program_Files = 0x26,
-            MyPictures = 0x27,
-            Profile = 0x28,
-            Systemx86 = 0x29,
-            AdminTools = 0x30
         }
 
+        /// <summary>
+        /// Backing field for <see cref="StartUpDirectory"/>. Stores the currently active
+        /// <see cref="StartDir"/> value.
+        /// </summary>
         private StartDir m_StartUpDirectory = StartDir.None;
 
-        // 11/04/2012 Removed DefaultValue Property from this declaration.
         /// <summary>
         /// Sets the initial Root directory of ExpTree.
         /// </summary>
@@ -564,8 +710,7 @@ namespace ExpControlsLib
 
         #endregion
 
-
-        #region    Public Methods
+        #region Public Methods
 
         /// <summary>
         /// Expands TreeNodes from the tree root through the input Path. All intermediate nodes between the
@@ -585,7 +730,7 @@ namespace ExpControlsLib
         public bool ExpandANode(string newPath, bool SelectExpandedNode = true)
         {
             bool ExpandANodeRet = default;
-            ExpandANodeRet = false;     // assume failure
+            ExpandANodeRet = false;
             CShellItem newItem;
             try
             {
@@ -602,6 +747,21 @@ namespace ExpControlsLib
             return ExpandANode(newItem, SelectExpandedNode);
         }
 
+        /// <summary>
+        /// Asynchronously expands TreeNodes from the tree root through the node identified by
+        /// <paramref name="newPath"/>. This is the async counterpart of
+        /// <see cref="ExpandANode(string, bool)"/>.
+        /// </summary>
+        /// <param name="newPath">The file-system path of the node to expand.</param>
+        /// <param name="SelectExpandedNode">
+        /// If <c>true</c> (the default), the expanded node is selected and an
+        /// <see cref="ExpTreeNodeSelected"/> event is raised. If <c>false</c>, the current
+        /// selection is unchanged and no event is raised.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Task{Boolean}"/> that resolves to <c>true</c> if the expansion succeeded,
+        /// or <c>false</c> if the path could not be resolved or the item is not a folder.
+        /// </returns>
         public async Task<bool> ExpandANodeAsync(string newPath, bool SelectExpandedNode = true)
         {
             CShellItem newItem;
@@ -634,14 +794,13 @@ namespace ExpControlsLib
         /// <remarks>This is the preferred method of ExpandANode.<br />
         /// Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
         /// ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
-        public bool ExpandANode(CShellItem newItem, bool SelectExpandedNode = true)   // 7/13/2012
+        public bool ExpandANode(CShellItem newItem, bool SelectExpandedNode = true)
         {
             bool ExpandANodeRet = default;
-            ExpandANodeRet = false;     // assume failure
+            ExpandANodeRet = false;
             var baseNode = Root;
             if (baseNode == null)
             {
-                // If a load is in progress, store as pending
                 if (_rootLoadCts != null && !_rootLoadCts.IsCancellationRequested)
                 {
                     _pendingExpansionItem = newItem;
@@ -651,7 +810,6 @@ namespace ExpControlsLib
                 return false;
             }
 
-            // Get the pidl value from baseNode.Tag by casting to CShellItem
             if (baseNode.Tag == null)
             {
                 throw new InvalidOperationException("baseNode.Tag cannot be null.");
@@ -663,10 +821,8 @@ namespace ExpControlsLib
 
             _TreeView.BeginUpdate();
 
-            // do the drill down -- Node to expand must be included in tree
-            baseNode.Expand(); // Ensure base is filled in
+            baseNode.Expand();
 
-            // TODO: Test ExpandARow again on XP to ensure that the CP problem is fixed
             while (lim > 0)
             {
                 bool continueDo = false;
@@ -704,6 +860,24 @@ namespace ExpControlsLib
             return ExpandANodeRet;
         }
 
+        /// <summary>
+        /// Asynchronously expands TreeNodes from the tree root through the node represented by
+        /// <paramref name="newItem"/>, populating lazy-loaded (dummy) nodes on demand.
+        /// This is the preferred async counterpart of <see cref="ExpandANode(CShellItem, bool)"/>.
+        /// </summary>
+        /// <param name="newItem">
+        /// The <see cref="CShellItem"/> whose corresponding TreeNode should be expanded and
+        /// optionally selected.
+        /// </param>
+        /// <param name="SelectExpandedNode">
+        /// If <c>true</c> (the default), the target node is selected after expansion and an
+        /// <see cref="ExpTreeNodeSelected"/> event is raised. If <c>false</c>, the current
+        /// selection is unchanged.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Task{Boolean}"/> that resolves to <c>true</c> if the node was found
+        /// and expanded successfully, or <c>false</c> otherwise.
+        /// </returns>
         public async Task<bool> ExpandANodeAsync(CShellItem newItem, bool SelectExpandedNode = true)
         {
             var baseNode = Root;
@@ -786,6 +960,13 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Collapses all nodes in the TreeView.
+        /// </summary>
+        /// <param name="collapse">
+        /// When <c>true</c> (the default), all nodes are collapsed.
+        /// Passing <c>false</c> is a no-op (reserved for future expansion).
+        /// </param>
         public void ExpCollapseAll(bool collapse = true)
         {
             if (collapse == true)
@@ -868,10 +1049,19 @@ namespace ExpControlsLib
 
         #endregion
 
-        #region    Dynamic Update Handler
+        #region Dynamic Update Handler
 
-        // Private WithEvents DeskTopItem As CShellItem = CShellItem.GetDeskTop     '7/1/2012
-
+        /// <summary>
+        /// Handles Shell item update notifications from <see cref="CShellItemUpdater"/>.
+        /// Responds to folder creation, deletion, rename, media change, and general update events
+        /// by adding, removing, or refreshing the corresponding TreeNode in the tree.
+        /// Only folder-related events are processed; non-folder events are silently ignored.
+        /// </summary>
+        /// <param name="sender">The source of the update event.</param>
+        /// <param name="e">
+        /// A <see cref="ShellItemUpdateEventArgs"/> containing the affected <see cref="CShellItem"/>
+        /// and the type of update that occurred.
+        /// </param>
         private void OnItemUpdate(object sender, ShellItemUpdateEventArgs e)
         {
             // Debug.WriteLine("Enter ExpTree OnItemUpdate -- " & e.Item.DisplayName & " - " & e.UpdateType.ToString)
@@ -879,12 +1069,10 @@ namespace ExpControlsLib
             {
                 try
                 {
-                    //CShellItem parent = (CShellItem)sender;
                     CShellItem parent = e.Item.Parent;
                     TreeNode? pNode = default(TreeNode);
                     if (GetTreeNode(parent, ref pNode))
                     {
-                        // Debug.WriteLine("Located Parent Node " & pNode.Text & " of Item " & e.Item.Path)
                         _TreeView.BeginUpdate();
                         switch (e.UpdateType)
                         {
@@ -892,10 +1080,7 @@ namespace ExpControlsLib
                                 {
                                     if (IsExcluded(e.Item)) break;
                                     var Node = MakeNode(e.Item);
-                                    // Debug.WriteLine("Adding Node " & NodePath(Node))
-                                    InsertNode(Node, pNode); // 6/25/2012
-                                                             // pNode.Nodes.Add(Node)  '6/25/2012
-                                                             // tv1.Invalidate()   '6/18/2012 - Trust tv1 to do right thing on an Add
+                                    InsertNode(Node, pNode);
                                     break;
                                 }
                             case CShItemUpdateType.Deleted:  // An old Dir has been deleted from Parent/pNode
@@ -905,9 +1090,7 @@ namespace ExpControlsLib
                                     {
                                         if (Node.Tag is not null && (ReferenceEquals(Node.Tag, e.Item) || CPidl.ResolvesToSamePathOrName(((CShellItem)Node.Tag).PIDL, e.Item.PIDL)))
                                         {
-                                            // Debug.WriteLine("Removing Node " & NodePath(Node))
                                             pNode.Nodes.Remove(Node);
-                                            // tv1.Invalidate()   '6/18/2012 - Trust tv1 to do right thing on a Delete
                                             exitSelect = true;
                                             break;
                                         }
@@ -942,15 +1125,13 @@ namespace ExpControlsLib
 
                                             if (GetTreeNode(e.Item.Parent, ref curPNode))
                                             {
-                                                InsertNode(Node, curPNode); // 6/25/2012
-                                                                            // curPNode.Nodes.Add(Node)  '6/25/2012
-                                                if (wasSelected)     // 6/25/2012
+                                                InsertNode(Node, curPNode);
+                                                if (wasSelected)
                                                 {
                                                     _TreeView.SelectedNode = Node;
                                                     Node.EnsureVisible();
                                                 }
                                             }
-                                            // tv1.Invalidate()   '6/18/2012 - Trust tv1 to do right thing on an Add or Delete
                                             exitSelect1 = true;
                                             break;
                                         }
@@ -963,7 +1144,7 @@ namespace ExpControlsLib
 
                                     break;
                                 }
-                            case CShItemUpdateType.MediaChange:  // Media has been added/removed
+                            case CShItemUpdateType.MediaChange:
                                 {
                                     bool exitSelect2 = false;
                                     for (int indx = 0, loopTo = pNode.Nodes.Count - 1; indx <= loopTo; indx++)
@@ -1013,31 +1194,26 @@ namespace ExpControlsLib
 
                                     break;
                                 }
-                            case CShItemUpdateType.Updated:  // 5/24/2012 - In this case, it is the Item that had some change. Check if Expandability has changed
+                            case CShItemUpdateType.Updated:
                                 {
                                     var UNode = default(TreeNode);
-                                    if (GetTreeNode(e.Item, ref UNode))    // otherwise don't care
+                                    if (GetTreeNode(e.Item, ref UNode))
                                     {
-                                        // If UNode.IsExpanded Then        'Earlier msgs will update the nodes
-                                        // SortNodes(UNode)
-                                        // Else    '6/5/2012 - check Expandable - in case a Folder added or Deleted which may happen without another message (Async ops)
-                                        if (UNode.Nodes.Count == 0)     // Was not Expandable, should it be? (Folder may have been added)
+                                        if (UNode.Nodes.Count == 0)
                                         {
                                             if (ShouldHaveDummy(e.Item))
                                             {
                                                 UNode.Nodes.Add(new TreeNode(" : "));
                                             }
-                                            UNode.Collapse(false);   // 02/12/2014 can only have 0 or 1 (dummy) node - collapse to avoid showing dummy
+                                            UNode.Collapse(false);
                                         }
-                                        // 02/12/2014 ElseIf Block recast and now uses DirCount rather than Directories
-                                        else if (UNode.Nodes.Count == 1 && UNode.Nodes[0].Text.Equals(" : ")) // Should it still have dummy? (Folder may have been Deleted)
+                                        else if (UNode.Nodes.Count == 1 && UNode.Nodes[0].Text.Equals(" : "))
                                         {
                                             if (!ShouldHaveDummy(e.Item))
                                             {
                                                 UNode.Nodes.Clear();
                                             }
                                         }
-                                        // End If
                                     }
 
                                     break;
@@ -1047,7 +1223,6 @@ namespace ExpControlsLib
                                 {
                                     break;
                                 }
-                                // Don't care about any other type of change
                         }
                     }
                 }
@@ -1060,13 +1235,18 @@ namespace ExpControlsLib
                     _TreeView.EndUpdate();
                 }
             }
-            else { } // no find means that node not expanded and therefore of no interest
         }
 
         #endregion
 
-        #region    Initial Dir Set Handler
+        #region Initial Dir Set Handler
 
+        /// <summary>
+        /// Responds to a change in <see cref="StartUpDirectory"/> by clearing the tree (when
+        /// <see cref="StartDir.None"/> is selected) or asynchronously reloading it rooted at
+        /// the newly specified special folder.
+        /// </summary>
+        /// <param name="newVal">The new <see cref="StartDir"/> value that was applied.</param>
         private void OnStartUpDirectoryChanged(StartDir newVal)
         {
             if (newVal == StartDir.None)
@@ -1080,9 +1260,18 @@ namespace ExpControlsLib
             _ = SetRootItemAsync(null, newVal);
         }
 
+        /// <summary>
+        /// Populates the root TreeNode's <see cref="TreeNode.Nodes"/> collection from the
+        /// sorted array of first-level child <see cref="CShellItem"/> folders.
+        /// Hidden items are filtered according to <see cref="ShowHiddenFolders"/>, and
+        /// excluded items are filtered via <see cref="IsExcluded"/>.
+        /// </summary>
+        /// <param name="L1">
+        /// The array of first-level child <see cref="CShellItem"/> folders to add as root children.
+        /// </param>
         private void BuildTree(CShellItem[] L1)
         {
-            Array.Sort(L1); //move further up the call stack
+            Array.Sort(L1); //todo: move further up the call stack
             foreach (var CSI in L1)
             {
                 if (!(CSI.IsHidden & !m_showHiddenFolders) && !IsExcluded(CSI))
@@ -1155,17 +1344,29 @@ namespace ExpControlsLib
             return item.HasSubFolders || (item.IsHidden && item.DirCount > 0);
         }
 
+        /// <summary>
+        /// Removes all nodes from the TreeView and resets <see cref="Root"/> to <c>null</c>,
+        /// effectively clearing the entire tree display.
+        /// </summary>
         private void ClearTree()
         {
             _TreeView.Nodes.Clear();
             Root = null;
         }
-        #endregion
 
+        #endregion
 
         #region Event Handling
 
-
+        /// <summary>
+        /// Handles the TreeView <c>BeforeExpand</c> event. If the node being expanded contains
+        /// only a dummy placeholder node, its real children are loaded asynchronously before
+        /// the expansion is allowed to proceed. Also updates the node's icon to the open-folder state.
+        /// </summary>
+        /// <param name="sender">The TreeView raising the event.</param>
+        /// <param name="e">
+        /// A <see cref="TreeViewCancelEventArgs"/> that can be used to cancel the expansion.
+        /// </param>
         private async void Tv1_BeforeExpand(object sender, TreeViewCancelEventArgs e)
         {
             if (e.Node.Nodes.Count == 1 && e.Node.Nodes[0].Text.Equals(" : "))
@@ -1184,6 +1385,13 @@ namespace ExpControlsLib
             e.Node.ImageIndex = ((CShellItem)e.Node.Tag).IconIndexOpen;
         }
 
+        /// <summary>
+        /// Handles the TreeView <c>AfterSelect</c> event. Records the selection in the navigation
+        /// history, optionally triggers a directory refresh for newly created folders, and raises
+        /// the <see cref="ExpTreeNodeSelected"/> event when <see cref="EnableEventPost"/> is <c>true</c>.
+        /// </summary>
+        /// <param name="sender">The TreeView raising the event.</param>
+        /// <param name="e">A <see cref="TreeViewEventArgs"/> containing the newly selected node.</param>
         private void Tv1_AfterSelect(object sender, TreeViewEventArgs e)
         {
             CShellItem CSI = (CShellItem)e.Node.Tag;
@@ -1211,7 +1419,6 @@ namespace ExpControlsLib
                     Debug.WriteLine("Error reading folder: " + ex.Message);
                 }
             }
-            // **********
 
             if (EnableEventPost) // turned off during RefreshTree
             {
@@ -1225,6 +1432,15 @@ namespace ExpControlsLib
                 }
             }
         }
+
+        /// <summary>
+        /// Handles the <c>MouseUp</c> event on the ExpTree control. On a right-click, determines
+        /// the TreeNode under the cursor and, if <see cref="UseWindowsContextMenu"/> is enabled,
+        /// displays the native Shell context menu for that node. Rename and other Shell verb
+        /// commands are dispatched accordingly. Also forwards the event via <see cref="Control.OnMouseUp"/>.
+        /// </summary>
+        /// <param name="sender">The control raising the event.</param>
+        /// <param name="e">A <see cref="MouseEventArgs"/> describing the mouse action.</param>
         private async void ExpTree_MouseUp(object sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Right)
@@ -1336,37 +1552,74 @@ namespace ExpControlsLib
             OnMouseUp(e);
         }
 
+        /// <summary>
+        /// Forwards the TreeView <c>MouseDown</c> event to the base control's
+        /// <see cref="Control.OnMouseDown"/> handler.
+        /// </summary>
+        /// <param name="sender">The TreeView raising the event.</param>
+        /// <param name="e">A <see cref="MouseEventArgs"/> describing the mouse action.</param>
         private void Tv1_MouseDown(object sender, MouseEventArgs e)
         {
             OnMouseDown(e);
         }
 
+        /// <summary>
+        /// Forwards the TreeView <c>MouseMove</c> event to the base control's
+        /// <see cref="Control.OnMouseMove"/> handler.
+        /// </summary>
+        /// <param name="sender">The TreeView raising the event.</param>
+        /// <param name="e">A <see cref="MouseEventArgs"/> describing the mouse action.</param>
         private void Tv1_MouseMove(object sender, MouseEventArgs e)
         {
             OnMouseMove(e);
         }
 
+        /// <summary>
+        /// Forwards the TreeView <c>MouseEnter</c> event to the base control's
+        /// <see cref="Control.OnMouseEnter"/> handler.
+        /// </summary>
+        /// <param name="sender">The TreeView raising the event.</param>
+        /// <param name="e">Event data (unused).</param>
         private void Tv1_MouseEnter(object sender, EventArgs e)
         {
             OnMouseEnter(e);
         }
 
+        /// <summary>
+        /// Forwards the TreeView <c>MouseLeave</c> event to the base control's
+        /// <see cref="Control.OnMouseLeave"/> handler.
+        /// </summary>
+        /// <param name="sender">The TreeView raising the event.</param>
+        /// <param name="e">Event data (unused).</param>
         private void Tv1_MouseLeave(object sender, EventArgs e)
         {
             OnMouseLeave(e);
         }
+
+        /// <summary>
+        /// Handles the TreeView <c>KeyPress</c> event. Suppresses the default warning beep for
+        /// Ctrl+C, Ctrl+V, Ctrl+X, and Enter key presses, then forwards the event via
+        /// <see cref="Control.OnKeyPress"/>.
+        /// </summary>
+        /// <param name="sender">The TreeView raising the event.</param>
+        /// <param name="e">A <see cref="KeyPressEventArgs"/> containing the pressed character.</param>
         private void Tv1_KeyPress(object sender, KeyPressEventArgs e)
         {
-            if (e.KeyChar == '\u0003' | e.KeyChar == '\u0016' | e.KeyChar == '\u0018' | e.KeyChar == '\r')  // Ctrl + C
-                                                                                                            // Ctrl + V
-                                                                                                            // Ctrl + X
-                                                                                                            // Enter
+            if (e.KeyChar == '\u0003' | e.KeyChar == '\u0016' | e.KeyChar == '\u0018' | e.KeyChar == '\r')
             {
-                e.Handled = true;  // Eliminate warning sound
+                e.Handled = true;
             }
             OnKeyPress(e);
         }
 
+        /// <summary>
+        /// Handles the TreeView <c>KeyUp</c> event. Expands the selected node on Enter,
+        /// invokes the Shell delete verb on Delete, and dispatches cut/copy/paste Shell verbs
+        /// for the corresponding Ctrl key combinations. Forwards the event via
+        /// <see cref="Control.OnKeyUp"/>.
+        /// </summary>
+        /// <param name="sender">The TreeView raising the event.</param>
+        /// <param name="e">A <see cref="KeyEventArgs"/> describing the key that was released.</param>
         private void Tv1_KeyUp(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
@@ -1404,18 +1657,16 @@ namespace ExpControlsLib
             OnKeyUp(e);
         }
 
+        /// <summary>
+        /// Forwards the TreeView <c>KeyDown</c> event to the base control's
+        /// <see cref="Control.OnKeyDown"/> handler.
+        /// </summary>
+        /// <param name="sender">The TreeView raising the event.</param>
+        /// <param name="e">A <see cref="KeyEventArgs"/> describing the key that was pressed.</param>
         private void Tv1_KeyDown(object sender, KeyEventArgs e)
         {
             OnKeyDown(e);
         }
-
-        // Public Event TreeKeyDown(ByVal sender As Object, ByVal e As System.Windows.Forms.KeyEventArgs)
-
-        // Private Sub tv1_KeyDown(ByVal sender, ByVal e As System.Windows.Forms.KeyEventArgs) Handles tv1.KeyDown
-        // Debug.WriteLine("KeyDown in ExpTree Char = " & e.KeyData.ToString)
-        // If e.KeyData = Keys.Escape Then e.Handled = True
-        // RaiseEvent TreeKeyDown(sender, e)
-        // End Sub
 
         /// <summary>When a form containing this control is Hidden and then re-Shown,
         /// the association to the SystemImageList is lost.  Also lost is the
@@ -1460,8 +1711,12 @@ namespace ExpControlsLib
             }
         }
 
-
+        /// <summary>
+        /// Backing field for <see cref="AllowFolderRename"/>. When <c>true</c>, the TreeView's
+        /// <c>LabelEdit</c> is enabled and the Shell rename verb is permitted via the context menu.
+        /// </summary>
         private bool m_allowFolderRename;
+
         /// <summary>
         /// Allow renaming of folders using LabelEdit
         /// </summary>
@@ -1483,15 +1738,15 @@ namespace ExpControlsLib
             }
         }
 
-        // Newest code from Calum for Before and After LabelEdit. His remarks are:
-        // I also made some changes to ExpTree, I added a check for a dummy node as after renaming a folder 
-        // that hadn't been expanded I would receive an error as a BeforeLabelEdit event was fired for the 
-        // dummyx node. This only happened with SharePoint folders 
-        // (Note that SharePoint folder ALWAYS return true for HasSubFolders and this was happening on 
-        // folders without subfolders...) I also replaced the IsFileSystem check (always false for SharePoint) 
-        // with a check for a special folder path - this seemed to cover everthing that CanRename didn't cover.
-        // I removed the character check in AfterLabelEdit as SetNameOf shows the user a message with illegal 
-        // characters if there are any. 
+        /// <summary>
+        /// Handles the TreeView <c>BeforeLabelEdit</c> event. Cancels the edit for dummy nodes,
+        /// disk roots, non-renameable items, and the My Documents folder. When editing is allowed,
+        /// pre-selects only the filename portion (without extension) in the edit control.
+        /// </summary>
+        /// <param name="sender">The TreeView raising the event.</param>
+        /// <param name="e">
+        /// A <see cref="NodeLabelEditEventArgs"/> that can be used to cancel the label edit.
+        /// </param>
         private void Tv1_BeforeLabelEdit(object sender, NodeLabelEditEventArgs e)
         {
             if (e.Node.Text == " : ")
@@ -1500,10 +1755,6 @@ namespace ExpControlsLib
                 return;
             }
             CShellItem item = (CShellItem)e.Node.Tag;
-            // If item.Path.StartsWith("::") Or item.IsDisk Or (Not m_allowFolderRename) Or _
-            // item.Path = CShellItem.GetCShItem(CSIDL.MYDOCUMENTS).Path Or _
-            // Not (item.CanRename) Then
-            // Changed 11/28/2010
             if (item.FullPath.StartsWith("::") || item.IsDisk || !m_allowFolderRename
                 || (item.FullPath ?? "") == (CShellItemFactory.CreateCShItem(CSIDL.MYDOCUMENTS).FullPath ?? "")
                 || !item.CanRename)
@@ -1511,7 +1762,6 @@ namespace ExpControlsLib
                 System.Media.SystemSounds.Beep.Play();
                 e.CancelEdit = true;
             }
-            // **********Added by Lukai-2020.06.19, only select the label without file name extension
             if (e.CancelEdit == false)
             {
                 var editWnd = SendMessage(_TreeView.Handle, TVM_GETEDITCONTROL, (IntPtr)0, IntPtr.Zero);
@@ -1520,6 +1770,15 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Handles the TreeView <c>AfterLabelEdit</c> event. Trims the new label and calls
+        /// <c>IShellFolder.SetNameOf</c> to rename the underlying Shell item. Plays a beep and
+        /// cancels the edit if the rename fails or the label is empty/whitespace.
+        /// </summary>
+        /// <param name="sender">The TreeView raising the event.</param>
+        /// <param name="e">
+        /// A <see cref="NodeLabelEditEventArgs"/> containing the new label text.
+        /// </param>
         private void Tv1_AfterLabelEdit(object sender, NodeLabelEditEventArgs e)
         {
             CShellItem item = (CShellItem)e.Node.Tag;
@@ -1533,12 +1792,10 @@ namespace ExpControlsLib
             catch (Exception ex)
             {
                 e.CancelEdit = true;
-                // **********Added by Lukai-2020.06.19
                 if (string.IsNullOrEmpty(NewName) == false)
                 {
                     System.Media.SystemSounds.Beep.Play();
                 }
-                // System.Media.SystemSounds.Beep.Play()
                 return;
             }
 
@@ -1546,9 +1803,6 @@ namespace ExpControlsLib
             if (item.Parent.IShlFolder.SetNameOf((int)_TreeView.Handle, CPidl.ILFindLastID(item.PIDL), NewName, SHGDN.NORMAL, ref newPidl) == S_OK)
             {
             }
-            // the following line is not needed since use of SetNameOf will cause a renamed WM_Notify msg 
-            // which will be handled thru normal change notification processes
-            // item.Update(newPidl, CShItemUpdater.CShItemUpdateType.Renamed)
             else
             {
                 System.Media.SystemSounds.Beep.Play();
@@ -1558,16 +1812,33 @@ namespace ExpControlsLib
 
         #endregion Event Handling
 
+        #region CtvDropWrapper Event Handling
 
-        #region    CtvDropWrapper Event Handling
-
-        // dropNode is the TreeNode that most recently was DraggedOver or
-        // Dropped onto.  
+        /// <summary>
+        /// The TreeNode most recently dragged over or dropped onto. Used to track highlight
+        /// state and drive the auto-expand timer.
+        /// </summary>
         private TreeNode dropNode;
 
+        /// <summary>
+        /// The client-coordinate position of the most recent drag-over event, used by the
+        /// auto-expand timer to scroll the TreeView when dragging near its edges.
+        /// </summary>
         private Point NodePoint;
+
+        /// <summary>
+        /// Timer that fires after a short hover delay to auto-expand the node currently being
+        /// dragged over, improving drag-and-drop usability.
+        /// </summary>
         private System.Windows.Forms.Timer expandNodeTimer;
 
+        /// <summary>
+        /// Handles the <see cref="expandNodeTimer"/> <c>Tick</c> event. Expands the node
+        /// currently being dragged over (<see cref="dropNode"/>) and scrolls the TreeView
+        /// if the drag position is near the top or bottom edge.
+        /// </summary>
+        /// <param name="sender">The timer raising the event.</param>
+        /// <param name="e">Event data (unused).</param>
         private void ExpandNodeTimer_Tick(object sender, EventArgs e)
         {
             expandNodeTimer.Stop();
@@ -1578,7 +1849,6 @@ namespace ExpControlsLib
                 {
                     _TreeView.BeginUpdate();
                     dropNode.Expand();
-                    // 7/12/2012 - The following block of code relocated from ShDragOver
                     int delta = _TreeView.Height - NodePoint.Y;
                     if (delta < _TreeView.Height / 2d & delta > 0)
                     {
@@ -1594,7 +1864,6 @@ namespace ExpControlsLib
                             dropNode.PrevVisibleNode.EnsureVisible();
                         }
                     }
-                    // 7/12/2012 - end of relocated block
                     dropNode.EnsureVisible();
                 }
                 finally
@@ -1614,8 +1883,7 @@ namespace ExpControlsLib
         /// <summary>Drag has left the control. Cleanup what we have to</summary>
         private void DragWrapper_ShDragLeave()
         {
-            expandNodeTimer.Stop();    // shut off the dragging over nodes timer
-                                       // Debug.WriteLine("Enter ExpTree ShDragLeave")
+            expandNodeTimer.Stop();
             if (!(dropNode == null))
             {
                 ResetTreeviewNodeColor(dropNode);
@@ -1631,10 +1899,7 @@ namespace ExpControlsLib
         /// </summary>
         private void DragWrapper_ShDragOver(TreeNode Node, Point pt, int grfKeyState, int pdwEffect)
         {
-            // Debug.WriteLine("Enter ExpTree ShDragOver. PdwEffect = " & pdwEffect)
-            // Debug.WriteLine(vbTab & "Over node: " & CType(Node, TreeNode).Text)
-
-            if (Node == null)  // clean up node stuff & fix color. Leave Draginfo alone-cleaned up on DragLeave
+            if (Node == null)
             {
                 expandNodeTimer.Stop();
                 if (dropNode is not null)
@@ -1654,19 +1919,6 @@ namespace ExpControlsLib
                 try
                 {
                     _TreeView.BeginUpdate();
-                    // 7/12/2012 - the following block relocated to expandNodeTime.Tick
-                    // Dim delta As Integer = tv1.Height - pt.Y
-                    // If delta < tv1.Height / 2 And delta > 0 Then
-                    // If Not IsNothing(Node) AndAlso Not (Node.NextVisibleNode Is Nothing) Then
-                    // Node.NextVisibleNode.EnsureVisible()
-                    // End If
-                    // End If
-                    // If delta > tv1.Height / 2 And delta < tv1.Height Then
-                    // If Not IsNothing(Node) AndAlso Not (Node.PrevVisibleNode Is Nothing) Then
-                    // Node.PrevVisibleNode.EnsureVisible()
-                    // End If
-                    // End If
-                    // 7/12/2012 - end of relocated block
                     if (!Node.BackColor.Equals(SystemColors.Highlight))
                     {
                         ResetTreeviewNodeColor(_TreeView.Nodes[0]);
@@ -1682,17 +1934,22 @@ namespace ExpControlsLib
                 NodePoint = pt;      // 7/12/2012 NodePoint is the Saved, Form Global Mouse Location (in client coordinates)
                 if (!dropNode.IsExpanded)
                 {
-                    expandNodeTimer.Interval = 500;  // 7/12/2012 - reduced from 1200
+                    expandNodeTimer.Interval = 500;
                     expandNodeTimer.Start();
                 }
             }
         }
 
+        /// <summary>
+        /// Handles the Shell drop event on the TreeView. Stops the auto-expand timer and
+        /// resets the highlight color of the previously highlighted drop-target node.
+        /// </summary>
+        /// <param name="Node">The <see cref="TreeNode"/> onto which the item was dropped.</param>
+        /// <param name="grfKeyState">The current state of keyboard modifier keys during the drop.</param>
+        /// <param name="pdwEffect">The drag-and-drop effect that was applied.</param>
         private void DragWrapper_ShDragDrop(TreeNode Node, int grfKeyState, int pdwEffect)
         {
             expandNodeTimer.Stop();
-            // Debug.WriteLine("Enter ExpTree ShDragDrop. PdwEffect = " & pdwEffect)
-            // Debug.WriteLine(vbTab & "Over node: " & CType(Node, TreeNode).Text)
 
             if (!(dropNode == null))
             {
@@ -1703,9 +1960,13 @@ namespace ExpControlsLib
                 ResetTreeviewNodeColor(_TreeView.Nodes[0]);
             }
             dropNode = null;
-            // Debug.WriteLine("Leaving ExpTree ShDragDrop")
         }
 
+        /// <summary>
+        /// Recursively resets the background and foreground colors of a TreeNode and its
+        /// expanded children back to the default (empty) color, removing any drag-over highlight.
+        /// </summary>
+        /// <param name="node">The root <see cref="TreeNode"/> whose colors should be reset.</param>
         private void ResetTreeviewNodeColor(TreeNode node)
         {
             if (!node.BackColor.Equals(Color.Empty))
@@ -1729,13 +1990,21 @@ namespace ExpControlsLib
                 }
             }
         }
+
         #endregion
 
+        #region Context Menu Methods
 
-        #region    Context Menu Methods
-        // Credit Calum 
-
+        /// <summary>
+        /// Backing field for <see cref="UseWindowsContextMenu"/>. When <c>true</c>, a right-click
+        /// on a TreeNode displays the native Windows Shell context menu.
+        /// </summary>
         private bool m_useWindowsContextMenu = true;
+
+        /// <summary>
+        /// Backing field for <see cref="MinimalContextMenu"/>. When <c>true</c>, most third-party
+        /// Shell extensions are filtered out of the context menu.
+        /// </summary>
         private bool m_minimalContextMenu = false;
 
         /// <summary>
@@ -1772,9 +2041,17 @@ namespace ExpControlsLib
 
         #endregion
 
-
         #region Private methods
 
+        /// <summary>
+        /// Determines whether the specified <see cref="CShellItem"/> should be excluded from
+        /// the tree display based on the <see cref="ExcludedItems"/> collection.
+        /// </summary>
+        /// <param name="item">The <see cref="CShellItem"/> to test.</param>
+        /// <returns>
+        /// <c>true</c> if the item's path (stripped of leading/trailing <c>:</c>, <c>{</c>, and <c>}</c>
+        /// characters) is found in <see cref="ExcludedItems"/>; otherwise <c>false</c>.
+        /// </returns>
         private bool IsExcluded(CShellItem item)
         {
             if (_excludedItems.Count == 0 || item == null) return false;
@@ -1790,7 +2067,6 @@ namespace ExpControlsLib
             // Modified to use ExpandANode(CShellItem) rather than ExpandANode(path)
             // Set refresh variable for BeforeExpand method
             EnableEventPost = false;
-            // Begin Calum's change -- With some modification
             TreeNode Selnode;
             if (_TreeView.SelectedNode == null)
             {
@@ -1800,12 +2076,10 @@ namespace ExpControlsLib
             {
                 Selnode = _TreeView.SelectedNode;
             }
-            // End Calum's change
             try
             {
                 _TreeView.BeginUpdate();
                 CShellItem SelCSI = (CShellItem)Selnode.Tag;
-                // Set root node
                 if (rootCSI == null)
                 {
                     RootItem = RootItem;
@@ -1814,7 +2088,6 @@ namespace ExpControlsLib
                 {
                     RootItem = rootCSI;
                 }
-                // Try to expand the node
                 if (!ExpandANode(SelCSI))
                 {
                     var nodeList = new List<TreeNode>();
@@ -1830,7 +2103,6 @@ namespace ExpControlsLib
                         if (ExpandANode((CShellItem)Selnode.Tag))
                             break;
                     }
-                    // Reset refresh variable for BeforeExpand method
                 }
             }
             finally
@@ -1838,7 +2110,6 @@ namespace ExpControlsLib
                 _TreeView.EndUpdate();
             }
             EnableEventPost = true;
-            // We suppressed EventPosting during refresh, so give it one now
             Tv1_AfterSelect(this, new TreeViewEventArgs(_TreeView.SelectedNode));
         }
 
@@ -1850,7 +2121,7 @@ namespace ExpControlsLib
         /// <remarks>Used only for some Debug.WriteLine statements.</remarks>
         private string NodePath(TreeNode node)
         {
-            var pathlist = new List<TreeNode>() { node };  // pathlist.Add(node)
+            var pathlist = new List<TreeNode>() { node };
             while (node.Parent is not null)
             {
                 pathlist.Add(node.Parent);
@@ -1872,11 +2143,10 @@ namespace ExpControlsLib
         /// <param name="NodeToFill">The unexpanded TreeNode to Fill</param>
         /// <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
         /// Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
-        private void PopulateNode(TreeNode NodeToFill)          // 8/26/2012
+        private void PopulateNode(TreeNode NodeToFill)
         {
             CShellItem CSI = (CShellItem)NodeToFill.Tag;
 
-            // Added to ensure item is in hierarchy
             var target = ShellController.Instance.LoadFolderContents(CSI);
             if (target != null && !ReferenceEquals(CSI, target))
             {
@@ -1884,20 +2154,19 @@ namespace ExpControlsLib
                 CSI = target;
             }
 
-            // 02/12/2014 - Setting of D changed at suggestion of Michael Ruby
             List<CShellItem> D;
             if (CSI.DirectoryList is null)
             {
-                D = new List<CShellItem>(CSI.Directories); //todo: remove this conversion
+                D = new List<CShellItem>(CSI.Directories);
             }
             else
             {
-                D = new List<CShellItem>(CSI.DirectoryList);  //todo: remove this conversion
+                D = new List<CShellItem>(CSI.DirectoryList);
             }
             if (D.Count > 0)
             {
-                D.Sort();    // uses the class comparer
-                NodeToFill.Nodes.Clear();    // 11/03/2012 DO NOT Clear out the dummy prior to calling .Directories which forces a UpdateRefresh!
+                D.Sort();
+                NodeToFill.Nodes.Clear();
                 foreach (CShellItem Item in D)
                 {
                     if (!(Item.IsHidden & !m_showHiddenFolders) && !IsExcluded(Item))
@@ -1906,33 +2175,38 @@ namespace ExpControlsLib
                     }
                 }
             }
-            else        // 11/03/2012 BUT DO get rid of any unnessesary Dummy
+            else
             {
                 NodeToFill.Nodes.Clear();
             }
         }
 
+        /// <summary>
+        /// Asynchronously populates a lazy-loaded TreeNode by fetching its child
+        /// <see cref="CShellItem"/> folders on a background STA thread, then updating
+        /// the TreeView on the UI thread. Icon and sub-folder data are pre-warmed during
+        /// the background pass to keep subsequent expansions responsive.
+        /// </summary>
+        /// <param name="NodeToFill">
+        /// The <see cref="TreeNode"/> containing only a dummy placeholder node that should
+        /// be replaced with its real child nodes.
+        /// </param>
         private async Task PopulateNodeAsync(TreeNode NodeToFill)
         {
             if (NodeToFill.Tag is not CShellItem CSI) return;
-
-            // If it's already being populated or has more than the dummy, skip.
-            // But Tv1_BeforeExpand already checks for dummy.
 
             try
             {
                 var result = await _staRunner.EnqueueWork(t =>
                 {
-                    // Added to ensure item is in hierarchy
                     var target = ShellController.Instance.LoadFolderContents(CSI);
                     CShellItem value = target ?? CSI;
 
                     var children = value.Directories;
-                    // Warming up
                     foreach (var child in children)
                     {
                         if (t.IsCancellationRequested) return null;
-                        _ = child.HasSubFolders; // Populates cache
+                        _ = child.HasSubFolders;
                         _ = child.IconIndexNormal;
                         _ = child.IconIndexOpen;
                     }
@@ -1951,7 +2225,7 @@ namespace ExpControlsLib
                 {
                     if (result.Target != null) NodeToFill.Tag = result.Target;
                     NodeToFill.Nodes.Clear();
-                    
+
                     var children = result.Children;
                     Array.Sort(children);
 
@@ -1974,6 +2248,22 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Walks the Shell namespace hierarchy of <paramref name="shellItem"/> from the Desktop
+        /// downward through the TreeView to locate the corresponding <see cref="TreeNode"/>.
+        /// </summary>
+        /// <param name="shellItem">
+        /// The <see cref="CShellItem"/> whose TreeNode is to be found. If <c>null</c>, the
+        /// Desktop <see cref="CShellItem"/> is used.
+        /// </param>
+        /// <param name="treeNode">
+        /// When this method returns <c>true</c>, contains the matching <see cref="TreeNode"/>;
+        /// otherwise <c>null</c>.
+        /// </param>
+        /// <returns>
+        /// <c>true</c> if a matching TreeNode was found in the currently displayed tree;
+        /// <c>false</c> if the item is not represented by any visible node.
+        /// </returns>
         private bool GetTreeNode(CShellItem shellItem, ref TreeNode? treeNode)
         {
             var pathList = new List<CShellItem>();
@@ -1990,11 +2280,9 @@ namespace ExpControlsLib
             pathList.Reverse();
 
             if (_TreeView.Nodes.Count < 1)
-                return false; // 11/05/2012
+                return false;
             treeNode = _TreeView.Nodes[0];
             int i = 0;
-            // since pathList starts from Desktop and the tree may start somewhere below that, first locate
-            // the tree base in the path
             bool found = false;
             while (i < pathList.Count)
             {
@@ -2005,16 +2293,15 @@ namespace ExpControlsLib
                 }
                 i += 1;
             }
-            if (!found)           // failed to find match between top of tree and top of pathlist -- so exit
+            if (!found)
             {
                 treeNode = null;
                 return false;
             }
-            // have top of tree and pathList(i) as equal -- find actual node, down from top of tree
             i += 1;
             while (i < pathList.Count)
             {
-                found = false;         // reset for next loop
+                found = false;
                 foreach (TreeNode node in treeNode.Nodes)
                 {
                     if (node.Tag is not null && ReferenceEquals(node.Tag, pathList[i]))
@@ -2042,7 +2329,7 @@ namespace ExpControlsLib
         /// <param name="Node">The Node to be inserted</param>
         /// <param name="ParentNode">The Parent Node of the Node to be inserted.</param>
         /// <remarks>Only called from Dynamic update code when the Parent Node is known (ie displayed).</remarks>
-        private void InsertNode(TreeNode Node, TreeNode ParentNode)    // 6/25/2012
+        private void InsertNode(TreeNode Node, TreeNode ParentNode)
         {
             CShellItem Item = (CShellItem)Node.Tag;
             // It is possible that the ParentNode has only a dummy node. Since we are adding a Node,
@@ -2051,9 +2338,9 @@ namespace ExpControlsLib
             // been Initialized so no Create or Rename messages will be passed to ExpTree - thus no InsertNode call.
             if (ParentNode.Nodes.Count == 1 && ParentNode.Nodes[0].Text.Equals(" : "))
             {
-                PopulateNode(ParentNode);        // 8/26/2012 - PopulateNode will insert the node correctly
+                PopulateNode(ParentNode);
             }
-            else                                // 8/26/2012 - Otherwise Insert Node in correct location
+            else
             {
                 for (int i = 0, loopTo = ParentNode.Nodes.Count - 1; i <= loopTo; i++)
                 {
@@ -2065,7 +2352,7 @@ namespace ExpControlsLib
                 }
                 // on fall thru, did not find a spot to insert, so it goes at the end
                 ParentNode.Nodes.Add(Node);
-            }                              // 8/26/2012
+            }
         }
 
         /// <summary>
@@ -2075,22 +2362,31 @@ namespace ExpControlsLib
         /// <remarks></remarks>
         private void SortNodes(TreeNode N)
         {
-            if (N.Nodes.Count > 1)     // if not, why sort
+            if (N.Nodes.Count > 1)
             {
                 var tmp = new TreeNode[N.Nodes.Count];
                 N.Nodes.CopyTo(tmp, 0);
                 Array.Sort(tmp, new WindowsApiLib.Shell.TagComparer());
-                // tv1.BeginUpdate()      '6/18/2012 - not needed already in BeginUpdate when this rtn called
                 N.Nodes.Clear();
                 N.Nodes.AddRange(tmp);
-                // tv1.EndUpdate()        '6/18/2012 - not needed already in BeginUpdate when this rtn called
             }
         }
 
         #endregion
 
-
-        // Only for delete, cut, copy, paste
+        /// <summary>
+        /// Asynchronously invokes a Shell context menu verb (delete, cut, copy, or paste) for
+        /// the specified <see cref="CShellItem"/> on a background STA thread, keeping the UI
+        /// thread unblocked while the Shell operation (which may show its own dialog) completes.
+        /// </summary>
+        /// <param name="CSI">
+        /// The <see cref="CShellItem"/> on which the Shell verb should be invoked.
+        /// If <c>null</c>, the method returns immediately without doing anything.
+        /// </param>
+        /// <param name="cmd">
+        /// The ANSI Shell verb string to invoke (e.g. <c>"delete"</c>, <c>"cut"</c>,
+        /// <c>"copy"</c>, or <c>"paste"</c>).
+        /// </param>
         private async void WinMenuCmd(CShellItem CSI, string cmd)
         {
             if (CSI is not null)
@@ -2101,7 +2397,7 @@ namespace ExpControlsLib
 
                 IntPtr relPidl = CPidl.ILFindLastID(CSI.PIDL);
                 if (relPidl == IntPtr.Zero) return;
-                
+
                 var capturedRelPidl = CPidl.Copy(relPidl);
                 var capturedParentPidl = parentPidl;
 
@@ -2179,7 +2475,6 @@ namespace ExpControlsLib
                             if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
                             if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
                             if (desktop != null) Marshal.ReleaseComObject(desktop);
-
                             Marshal.FreeCoTaskMem(capturedRelPidl);
                         }
                     }
