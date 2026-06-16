@@ -334,7 +334,7 @@ namespace ExpControlsLib
         protected override void WndProc(ref Message m)
         {
             int hr;
-            if (m.Msg == (long)WM.INITMENUPOPUP | m.Msg == (long)WM.MEASUREITEM | m.Msg == (long)WM.DRAWITEM)
+            if (m.Msg == (int)WM.INITMENUPOPUP || m.Msg == (int)WM.MEASUREITEM || m.Msg == (int)WM.DRAWITEM)
             {
                 if (m_WindowsContextMenu.cntxMenuExtended is not null)
                 {
@@ -478,7 +478,7 @@ namespace ExpControlsLib
             }
             set
             {
-                if (value != _TreeView.ForeColor)
+                if (value != _TreeView.BackColor)
                 {
                     _TreeView.BackColor = value;
                 }
@@ -819,44 +819,47 @@ namespace ExpControlsLib
             IntPtr basePidl = baseItem.PIDL;
             int lim = CPidl.SegmentCount(newItem.PIDL) - CPidl.SegmentCount(basePidl);
 
-            _TreeView.BeginUpdate();
-
-            baseNode.Expand();
-
-            while (lim > 0)
+            try
             {
-                bool continueDo = false;
-                foreach (TreeNode testNode in baseNode.Nodes)
-                {
-                    if (CPidl.IsAncestorOf((CShellItem)testNode.Tag, newItem, false))
-                    {
-                        baseNode = testNode;
-                        baseNode.Expand();
-                        lim -= 1;
-                        continueDo = true;
-                        break;
-                    }
-                }
+                _TreeView.BeginUpdate();
 
-                if (continueDo)
+                baseNode.Expand();
+
+                while (lim > 0)
                 {
-                    continue;
+                    bool continueDo = false;
+                    foreach (TreeNode testNode in baseNode.Nodes)
+                    {
+                        if (CPidl.IsAncestorOf((CShellItem)testNode.Tag, newItem, false))
+                        {
+                            baseNode = testNode;
+                            baseNode.Expand();
+                            lim -= 1;
+                            continueDo = true;
+                            break;
+                        }
+                    }
+
+                    if (continueDo)
+                    {
+                        continue;
+                    }
+                    goto XIT;     // on falling thru For, we can't find it, so get out
                 }
-                goto XIT;     // on falling thru For, we can't find it, so get out
-            NEXLEV:
-                ;
+                // after falling thru here, we have found & expanded the node
+                _TreeView.HideSelection = false;
+                Select();
+                if (SelectExpandedNode)
+                    _TreeView.SelectedNode = baseNode;
+                ExpandANodeRet = true;
+            XIT:
+                baseNode.EnsureVisible();
+                return ExpandANodeRet;
             }
-            // after falling thru here, we have found & expanded the node
-            _TreeView.HideSelection = false;
-            Select();
-            if (SelectExpandedNode)
-                _TreeView.SelectedNode = baseNode;
-            ExpandANodeRet = true;
-        XIT:
-            ;
-            baseNode.EnsureVisible();
-            _TreeView.EndUpdate();
-            return ExpandANodeRet;
+            finally
+            {
+                _TreeView.EndUpdate();
+            }
         }
 
         /// <summary>
@@ -1072,7 +1075,6 @@ namespace ExpControlsLib
                     TreeNode? pNode = default(TreeNode);
                     if (GetTreeNode(parent, ref pNode))
                     {
-                        _TreeView.BeginUpdate();
                         switch (e.UpdateType)
                         {
                             case CShItemUpdateType.Created:  // A new Dir has been created under Parent/pNode
@@ -1219,19 +1221,13 @@ namespace ExpControlsLib
                                 }
 
                             default:
-                                {
-                                    break;
-                                }
+                                break;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine("ExpTree Update Error -- " + ex.ToString());
-                }
-                finally
-                {
-                    _TreeView.EndUpdate();
                 }
             }
         }
@@ -1623,7 +1619,7 @@ namespace ExpControlsLib
         {
             if (e.KeyCode == Keys.Enter)
             {
-                if (_TreeView.SelectedNode.GetNodeCount(false) > 0 & _TreeView.SelectedNode.IsExpanded == false)
+                if (_TreeView.SelectedNode?.GetNodeCount(false) > 0 && _TreeView.SelectedNode.IsExpanded == false)
                 {
                     _TreeView.SelectedNode.Expand();
                 }
@@ -1795,14 +1791,12 @@ namespace ExpControlsLib
                 {
                     System.Media.SystemSounds.Beep.Play();
                 }
+                Debug.WriteLine("Invalid label edit value.  Ex:" + ex.ToString());
                 return;
             }
 
             var newPidl = IntPtr.Zero;
-            if (item.Parent.IShlFolder.SetNameOf((int)_TreeView.Handle, CPidl.ILFindLastID(item.PIDL), NewName, SHGDN.NORMAL, ref newPidl) == S_OK)
-            {
-            }
-            else
+            if (item.Parent.IShlFolder.SetNameOf((int)_TreeView.Handle, CPidl.ILFindLastID(item.PIDL), NewName, SHGDN.NORMAL, ref newPidl) != S_OK)
             {
                 System.Media.SystemSounds.Beep.Play();
                 e.CancelEdit = true;
@@ -2378,7 +2372,7 @@ namespace ExpControlsLib
         /// the specified <see cref="CShellItem"/> on a background STA thread, keeping the UI
         /// thread unblocked while the Shell operation (which may show its own dialog) completes.
         /// </summary>
-        /// <param name="CSI">
+        /// <param name="csi">
         /// The <see cref="CShellItem"/> on which the Shell verb should be invoked.
         /// If <c>null</c>, the method returns immediately without doing anything.
         /// </param>
@@ -2386,22 +2380,22 @@ namespace ExpControlsLib
         /// The ANSI Shell verb string to invoke (e.g. <c>"delete"</c>, <c>"cut"</c>,
         /// <c>"copy"</c>, or <c>"paste"</c>).
         /// </param>
-        private async void WinMenuCmd(CShellItem CSI, string cmd)
+        private void WinMenuCmd(CShellItem csi, string cmd)
         {
-            if (CSI is not null)
+            if (csi is not null)
             {
-                IntPtr parentPidl = ReferenceEquals(CSI, ShellController.DesktopCSI)
-                    ? CSI.PIDL
-                    : CSI.Parent.PIDL;
+                IntPtr parentPidl = ReferenceEquals(csi, ShellController.DesktopCSI)
+                    ? csi.PIDL
+                    : csi.Parent.PIDL;
 
-                IntPtr relPidl = CPidl.ILFindLastID(CSI.PIDL);
+                IntPtr relPidl = csi.LastPIDL;
                 if (relPidl == IntPtr.Zero) return;
 
                 var capturedRelPidl = CPidl.Copy(relPidl);
-                var capturedParentPidl = parentPidl;
+                var capturedParentPidl = parentPidl; //not sure if we need to copy this
 
                 // Offload shell interaction to background STA thread to make dialog non-blocking (non-modal to UI thread)
-                await _staRunner.EnqueueWork(_ =>
+                Task task = _staRunner.EnqueueWork(_ =>
                 {
                     IShellFolder desktop = null;
                     IShellFolder parentFolder = null;
@@ -2419,7 +2413,11 @@ namespace ExpControlsLib
                         {
                             // 1. Get Desktop Folder on THIS thread
                             int hr = SHGetDesktopFolder(ref desktop);
-                            if (hr != S_OK || desktop == null) return hr;
+                            if (hr != S_OK || desktop == null) 
+                            {
+                                Debug.WriteLine($"InvokeCommand failed with HRESULT: {hr:X}"); 
+                                return hr;
+                            }
 
                             // 2. Bind to Parent Folder on THIS thread
                             if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
@@ -2440,8 +2438,11 @@ namespace ExpControlsLib
                             var relPidls = new IntPtr[] { capturedRelPidl };
                             hr = parentFolder.GetUIObjectOf(IntPtr.Zero, 1, relPidls, IID_IContextMenu, rgfReserved, out iUnknownOut);
 
-                            if (hr != S_OK || iUnknownOut == IntPtr.Zero) return hr;
-
+                            if (hr != S_OK || iUnknownOut == IntPtr.Zero)
+                            {
+                                Debug.WriteLine($"InvokeCommand failed with HRESULT: {hr:X}");
+                                return hr;
+                            }
                             contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
 
                             // 4. Invoke Command
@@ -2459,7 +2460,9 @@ namespace ExpControlsLib
                                 lpVerbW = lpVerbUni
                             };
 
-                            return contextMenu.InvokeCommand(cmi);
+                            hr = contextMenu.InvokeCommand(cmi);
+                            if (hr != S_OK) Debug.WriteLine($"InvokeCommand failed with HRESULT: {hr:X}");
+                            return hr;
                         }
                         catch (Exception ex)
                         {
