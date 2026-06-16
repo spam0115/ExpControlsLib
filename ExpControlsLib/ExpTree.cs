@@ -72,7 +72,7 @@ namespace ExpControlsLib
         private CShellItem _lastSelectedCSI = null;
 
         private CancellationTokenSource? _rootLoadCts;
-        private static readonly StaThreadRunner _staRunner = new StaThreadRunner(1, "ExpTreeStaRunner");
+        private static readonly StaThreadRunner _staRunner = new StaThreadRunner(5, "ExpTreeStaRunner");
 
         private CShellItem? _pendingExpansionItem;
         private bool _pendingSelectExpandedNode;
@@ -1225,7 +1225,7 @@ namespace ExpControlsLib
                 }
             }
         }
-        private void ExpTree_MouseUp(object sender, MouseEventArgs e)
+        private async void ExpTree_MouseUp(object sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Right)
             {
@@ -1239,9 +1239,11 @@ namespace ExpControlsLib
                     CMInvokeCommandInfoEx cmi = default;
                     if (m_WindowsContextMenu.ShowMenu(Handle, itms, MousePosition, m_allowFolderRename, out cmi, m_minimalContextMenu))
                     {
+                        int verbId = cmi.lpVerb.ToInt32();
+
                         // Check for rename
                         var cmdBytes = new byte[257];
-                        m_WindowsContextMenu.cntxMenuBase.GetCommandString(cmi.lpVerb.ToInt32(), (int)GCS.VERBA, 0, cmdBytes, 256);
+                        m_WindowsContextMenu.cntxMenuBase.GetCommandString(verbId, (int)GCS.VERBA, 0, cmdBytes, 256);
 
                         string cmdName = SzToString(cmdBytes).ToLower();
                         if (cmdName.Equals("rename"))
@@ -1251,18 +1253,76 @@ namespace ExpControlsLib
                         }
                         else
                         {
-                            string strPath;
-                            if (ReferenceEquals(itms[0], ShellController.DesktopCSI))
+                            IntPtr parentPidl = ReferenceEquals(itms[0], ShellController.DesktopCSI)
+                                ? itms[0].PIDL
+                                : itms[0].Parent.PIDL;
+
+                            IntPtr relPidl = CPidl.ILFindLastID(itms[0].PIDL);
+                            if (relPidl != IntPtr.Zero)
                             {
-                                strPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                                var capturedRelPidl = CPidl.Copy(relPidl);
+                                var capturedParentPidl = parentPidl;
+                                string strPath = ReferenceEquals(itms[0], ShellController.DesktopCSI)
+                                    ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+                                    : itms[0].Parent.FullPath;
+
+                                await _staRunner.EnqueueWork(_ =>
+                                {
+                                    IShellFolder desktop = null;
+                                    IShellFolder parentFolder = null;
+                                    IntPtr iUnknownOut = IntPtr.Zero;
+                                    IContextMenu? contextMenu = null;
+
+                                    try
+                                    {
+                                        SHGetDesktopFolder(ref desktop);
+                                        if (desktop == null) return -1;
+
+                                        if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
+                                            parentFolder = desktop;
+                                        else
+                                        {
+                                            IntPtr folderPtr = IntPtr.Zero;
+                                            if (desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr) != S_OK) return -1;
+                                            parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
+                                            Marshal.Release(folderPtr);
+                                        }
+
+                                        IntPtr rgfReserved = IntPtr.Zero;
+                                        var relPidls = new IntPtr[] { capturedRelPidl };
+                                        if (parentFolder.GetUIObjectOf(IntPtr.Zero, 1, relPidls, IID_IContextMenu, rgfReserved, out iUnknownOut) != S_OK) return -1;
+
+                                        contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
+
+                                        var invokeCmi = new CMInvokeCommandInfoEx
+                                        {
+                                            cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                                            hwnd = IntPtr.Zero,
+                                            nShow = (int)SW.SHOWNORMAL,
+                                            fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
+                                            ptInvoke = pt,
+                                            lpVerb = (IntPtr)verbId,
+                                            lpVerbW = (IntPtr)verbId
+                                        };
+
+                                        return contextMenu.InvokeCommand(invokeCmi);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Debug.WriteLine($"Error in background tree context menu invocation: {ex.Message}");
+                                        return -1;
+                                    }
+                                    finally
+                                    {
+                                        if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
+                                        if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
+                                        if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
+                                        if (desktop != null) Marshal.ReleaseComObject(desktop);
+                                        Marshal.FreeCoTaskMem(capturedRelPidl);
+                                    }
+                                });
                             }
-                            else
-                            {
-                                strPath = itms[0].Parent.FullPath;
-                            }
-                            m_WindowsContextMenu.InvokeCommand(m_WindowsContextMenu.cntxMenuBase, (uint)cmi.lpVerb, strPath, pt);
                         }
-                        // Marshal.ReleaseComObject(m_windowsContextMenu.winMenu)
                         m_WindowsContextMenu.ReleaseMenu();
                     }
                 }
@@ -2025,50 +2085,93 @@ namespace ExpControlsLib
 
 
         // Only for delete, cut, copy, paste
-        private void WinMenuCmd(CShellItem CSI, string cmd)
+        private async void WinMenuCmd(CShellItem CSI, string cmd)
         {
             if (CSI is not null)
             {
-                int HR;
-                int prgf = 0;
-                var iunk = IntPtr.Zero;
-                IShellFolder folder = null;
-                if (ReferenceEquals(CSI, ShellController.DesktopCSI))
-                {
-                    folder = CSI.IShlFolder;
-                }
-                else
-                {
-                    folder = CSI.Parent.IShlFolder;
-                }
+                IntPtr parentPidl = ReferenceEquals(CSI, ShellController.DesktopCSI)
+                    ? CSI.PIDL
+                    : CSI.Parent.PIDL;
 
-                var relPidl = CPidl.ILFindLastID(CSI.PIDL);
-                var IID_IContextMenu = ShellAPI.IID_IContextMenu;
-                HR = folder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { relPidl }, ref IID_IContextMenu, prgf, out iunk);
-                #if DEBUG
-                if (!(HR == S_OK))
-                {
-                    Marshal.ThrowExceptionForHR(HR);
-                }
-                #endif
-                m_WindowsContextMenu.cntxMenuBase = (IContextMenu)Marshal.GetObjectForIUnknown(iunk);
-                var cmi = new CMInvokeCommandInfoEx();
-                cmi.cbSize = Marshal.SizeOf(cmi);
-                cmi.nShow = (int)SW.SHOWNORMAL;
-                cmi.fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE);
-                cmi.ptInvoke = new Point(0, 0);
-                cmi.lpVerb = Marshal.StringToHGlobalAnsi(cmd);
-                cmi.lpVerbW = Marshal.StringToHGlobalUni(cmd);
+                IntPtr relPidl = CPidl.ILFindLastID(CSI.PIDL);
+                if (relPidl == IntPtr.Zero) return;
+                
+                var capturedRelPidl = CPidl.Copy(relPidl);
+                var capturedParentPidl = parentPidl;
 
-                HR = m_WindowsContextMenu.cntxMenuBase.InvokeCommand(ref cmi);
-                m_WindowsContextMenu.ReleaseMenu();
-                #if DEBUG 
-                if (!(HR == S_OK))
+                // Offload shell interaction to background STA thread to make dialog non-blocking (non-modal to UI thread)
+                await _staRunner.EnqueueWork(_ =>
                 {
-                    Marshal.ThrowExceptionForHR(HR);
-                }
-                #endif
+                    IShellFolder desktop = null;
+                    IShellFolder parentFolder = null;
+                    IntPtr iUnknownOut = IntPtr.Zero;
+                    IContextMenu? contextMenu = null;
+                    IntPtr lpVerbAnsi = IntPtr.Zero;
+                    IntPtr lpVerbUni = IntPtr.Zero;
 
+                    try
+                    {
+                        // 1. Get Desktop Folder on THIS thread
+                        int hr = SHGetDesktopFolder(ref desktop);
+                        if (hr != S_OK || desktop == null) return hr;
+
+                        // 2. Bind to Parent Folder on THIS thread
+                        if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
+                        {
+                            parentFolder = desktop;
+                        }
+                        else
+                        {
+                            IntPtr folderPtr = IntPtr.Zero;
+                            hr = desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr);
+                            if (hr != S_OK || folderPtr == IntPtr.Zero) return hr;
+                            parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
+                            Marshal.Release(folderPtr);
+                        }
+
+                        // 3. Get UI Object (IContextMenu) on THIS thread
+                        IntPtr rgfReserved = IntPtr.Zero;
+                        var relPidls = new IntPtr[] { capturedRelPidl };
+                        hr = parentFolder.GetUIObjectOf(IntPtr.Zero, 1, relPidls, IID_IContextMenu, rgfReserved, out iUnknownOut);
+
+                        if (hr != S_OK || iUnknownOut == IntPtr.Zero) return hr;
+
+                        contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
+                        
+                        // 4. Invoke Command
+                        lpVerbAnsi = Marshal.StringToHGlobalAnsi(cmd);
+                        lpVerbUni = Marshal.StringToHGlobalUni(cmd);
+
+                        var cmi = new CMInvokeCommandInfoEx
+                        {
+                            cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                            hwnd = IntPtr.Zero, // Explicitly no owner to avoid modality
+                            nShow = (int)SW.SHOWNORMAL,
+                            fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
+                            ptInvoke = new Point(0, 0),
+                            lpVerb = lpVerbAnsi,
+                            lpVerbW = lpVerbUni
+                        };
+
+                        return contextMenu.InvokeCommand(cmi);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Error in background WinMenuCmd: {ex.Message}");
+                        return -1;
+                    }
+                    finally
+                    {
+                        if (lpVerbAnsi != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbAnsi);
+                        if (lpVerbUni != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbUni);
+                        if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
+                        if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
+                        if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
+                        if (desktop != null) Marshal.ReleaseComObject(desktop);
+                        
+                        Marshal.FreeCoTaskMem(capturedRelPidl);
+                    }
+                });
             }
         }
     }

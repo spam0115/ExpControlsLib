@@ -903,6 +903,21 @@ namespace WindowsApiLib
         }
 
         /// <summary>
+        /// Copies to unmanaged memory and returns a pointer to the copy. 
+        /// Caller must free the returned pointer when done with it.
+        /// </summary>
+        /// <param name="pidl"></param>
+        /// <returns>void pointer</returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static nint Copy(nint pidl)
+        {
+            if (pidl == IntPtr.Zero) throw new ArgumentException("Invalid path provided to CPidl.Copy");
+            IntPtr pidlCopy = ILClone(pidl);
+
+            return pidlCopy;    
+        }
+
+        /// <summary>
         /// Converts a PIDL to text.
         /// </summary>
         public static string? ToString(IntPtr pidl, bool absolute = true)
@@ -1361,6 +1376,15 @@ namespace WindowsApiLib
             return true;
         }
 
+        /// <summary>
+        /// Obtains a new Enumerator for this cPidl
+        /// </summary>
+        /// <returns>a new Enumerator for this cPidl</returns>
+        public IEnumerator GetEnumerator()
+        {
+            return new ICPidlEnumerator(m_bytes);
+        }
+
         #endregion
 
         #region Private methods
@@ -1448,18 +1472,6 @@ namespace WindowsApiLib
 
 
 
-
-        #endregion
-
-        #region        GetEnumerator
-        /// <summary>
-        /// Obtains a new Enumerator for this cPidl
-        /// </summary>
-        /// <returns>a new Enumerator for this cPidl</returns>
-        public IEnumerator GetEnumerator()
-        {
-            return new ICPidlEnumerator(m_bytes);
-        }
 
         #endregion
 

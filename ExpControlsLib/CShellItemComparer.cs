@@ -17,7 +17,7 @@ namespace ExpControlsLib
         private readonly ExpList _expList;
         private readonly int _column;
         private readonly SortOrder _order;
-        private readonly ColumnHeader _columnHeader;
+        private readonly string _columnText;
         private readonly string _mapping;
         private readonly CShellItemComparer _secondaryComparer;
 
@@ -34,7 +34,7 @@ namespace ExpControlsLib
             _expList = expList;
             _column = column;
             _order = order;
-            _columnHeader = columnHeader;
+            _columnText = columnHeader?.Text ?? string.Empty;
             _mapping = columnHeader?.Tag?.ToString().Trim() ?? string.Empty;
             _secondaryComparer = secondaryComparer;
         }
@@ -92,8 +92,8 @@ namespace ExpControlsLib
             }
 
             // 2. Default to ColumnDic using GetColumnData to ensure data is fetched
-            var xData = _expList.GetColumnData(x, _columnHeader);
-            var yData = _expList.GetColumnData(y, _columnHeader);
+            var xData = _expList.GetColumnData(x, _columnText, _column, _mapping);
+            var yData = _expList.GetColumnData(y, _columnText, _column, _mapping);
 
             // Sort based on Tag if it's IComparable (float, boolean, string, etc.)
             if (xData.Tag is IComparable cx && yData.Tag is IComparable cy && cx.GetType() == cy.GetType())

@@ -112,7 +112,7 @@ namespace ExpControlsLib
 
 
         private CancellationTokenSource? _displayFilesCts;
-        private static readonly StaThreadRunner _staRunner = new StaThreadRunner(1, "ExpListStaRunner");
+        private static readonly StaThreadRunner _staRunner = new StaThreadRunner(5, "ExpListStaRunner");
 
         private void Cleanup()
         {
@@ -802,7 +802,7 @@ namespace ExpControlsLib
         /// Invokes a standard shell action (cut, copy, paste, delete) on the selected items.
         /// </summary>
         /// <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
-        private void WinMenu(string cmd)
+        private async void WinMenu(string cmd)
         {
             Debug.WriteLine("ExpList: WinMenu Begin");
             try
@@ -813,173 +813,179 @@ namespace ExpControlsLib
                     return;
                 }
 
-                IntPtr rgfReserved = IntPtr.Zero;
-                IntPtr iUnknownOut = IntPtr.Zero;
                 IShellFolder? folder = null;
-                IntPtr lpVerbAnsi = IntPtr.Zero;
-                IntPtr lpVerbUni = IntPtr.Zero;
                 List<IntPtr>? pidls = null;
                 CShellItem[] selectedItems = Array.Empty<CShellItem>();
 
-                try
+                if (cmd == "paste")
                 {
-                    if (cmd == "paste")
-                    {
-                        // Get the target folder for paste operation
-                        try
-                        {
-                            folder = _currentFolderCsi == ShellController.DesktopCSI
-                                ? _currentFolderCsi.IShlFolder
-                                : _currentFolderCsi.Parent?.IShlFolder;
-
-                            if (folder == null)
-                            {
-                                Debug.WriteLine("Failed to get folder interface for paste operation");
-                                MessageBox.Show("Cannot paste: folder interface is unavailable.", "Paste Error",
-                                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                return;
-                            }
-
-                            IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
-                            if (relPidl == IntPtr.Zero)
-                            {
-                                Debug.WriteLine("Failed to get relative PIDL for current folder");
-                                return;
-                            }
-
-                            pidls = new List<IntPtr> { relPidl };
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.WriteLine($"Error preparing paste operation: {ex.Message}");
-                            MessageBox.Show($"Error preparing paste: {ex.Message}", "Paste Error",
-                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            return;
-                        }
-                    }
-                    else // Handle cut, copy, delete operations
-                    {
-                        if (SelectedCount <= 0) return;
-
-                        try
-                        {
-                            folder = _currentFolderCsi.IShlFolder;
-                            if (folder == null)
-                            {
-                                Debug.WriteLine("Failed to get folder interface for selected items");
-                                MessageBox.Show("Cannot perform operation: folder interface is unavailable.", "Error",
-                                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                return;
-                            }
-
-                            if (VirtualMode)
-                            {
-                                selectedItems = SelectedCShellItems.ToArray(); //materialize selection to array for consistent processing
-                            }
-                            else
-                            {
-                                selectedItems = _listView?.SelectedItems?.Cast<ListViewItem>()?.Select(item => item.Tag as CShellItem)?.ToArray() ?? new CShellItem[0];
-                            }
-
-                            pidls = new List<IntPtr>(selectedItems.Length);
-
-                            for (int i = 0; i < selectedItems.Length; i++)
-                            {
-                                var sel = selectedItems[i];
-                                if (sel == null)
-                                {
-                                    Debug.WriteLine($"Selected item {i} is null");
-                                    continue;
-                                }
-
-                                // For delete operations, validate that item can be deleted
-                                if (cmd == "delete" && !sel.CanDelete)
-                                {
-                                    MessageBox.Show($"Cannot delete: {sel.DisplayName}", "Cannot Delete",
-                                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                    continue;
-                                }
-
-                                IntPtr pidl = CPidl.ILFindLastID(sel.PIDL);
-                                if (pidl == IntPtr.Zero)
-                                {
-                                    Debug.WriteLine($"Failed to get PIDL for item: {sel.DisplayName}");
-                                    MessageBox.Show($"Failed to get ID for item: {sel.DisplayName}", "Error",
-                                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                                    continue;
-                                }
-
-                                pidls.Add(pidl);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.WriteLine($"Error preparing {cmd} operation: {ex.Message}");
-                            MessageBox.Show($"Error preparing operation: {ex.Message}", "Error",
-                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            return;
-                        }
-#if DEBUG
-                        var path = CPidl.ToString(pidls[0]);
-#endif
-                    }
-
-#if DEBUG
-                    var path2 = CPidl.ToString(pidls[0]);
-#endif
-                    // Get IContextMenu interface from the shell folder
-                    if (pidls == null || pidls.Count == 0)
-                    {
-                        Debug.WriteLine("No items to process");
-                        return;
-                    }
-
+                    // Get the target folder for paste operation
                     try
                     {
-                        int HR = folder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Count, pidls.ToArray(),
-                            IID_IContextMenu, rgfReserved, out iUnknownOut);
+                        folder = _currentFolderCsi == ShellController.DesktopCSI
+                            ? _currentFolderCsi.IShlFolder
+                            : _currentFolderCsi.Parent?.IShlFolder;
 
-                        if (HR != S_OK || iUnknownOut == IntPtr.Zero)
+                        if (folder == null)
                         {
-                            Debug.WriteLine($"GetUIObjectOf failed: HRESULT=0x{HR:X8}");
-                            MessageBox.Show("Failed to get context menu interface from shell.", "Error",
+                            Debug.WriteLine("Failed to get folder interface for paste operation");
+                            MessageBox.Show("Cannot paste: folder interface is unavailable.", "Paste Error",
                                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             return;
                         }
+
+                        IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
+                        if (relPidl == IntPtr.Zero)
+                        {
+                            Debug.WriteLine("Failed to get relative PIDL for current folder");
+                            return;
+                        }
+
+                        pidls = new List<IntPtr> { relPidl };
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Exception in GetUIObjectOf: {ex.Message}");
-                        MessageBox.Show($"Error accessing shell interface: {ex.Message}", "Error",
+                        Debug.WriteLine($"Error preparing paste operation: {ex.Message}");
+                        MessageBox.Show($"Error preparing paste: {ex.Message}", "Paste Error",
                             MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
+                }
+                else // Handle cut, copy, delete operations
+                {
+                    if (SelectedCount <= 0) return;
 
-                    // Marshal the COM interface
                     try
                     {
-                        m_WindowsContextMenu.cntxMenuBase = (IContextMenu)Marshal.GetObjectForIUnknown(iUnknownOut);
-                        if (m_WindowsContextMenu.cntxMenuBase == null)
+                        folder = _currentFolderCsi.IShlFolder;
+                        if (folder == null)
                         {
-                            Debug.WriteLine("Failed to marshal IContextMenu interface");
+                            Debug.WriteLine("Failed to get folder interface for selected items");
+                            MessageBox.Show("Cannot perform operation: folder interface is unavailable.", "Error",
+                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             return;
+                        }
+
+                        if (VirtualMode)
+                        {
+                            selectedItems = SelectedCShellItems.ToArray(); //materialize selection to array for consistent processing
+                        }
+                        else
+                        {
+                            selectedItems = _listView?.SelectedItems?.Cast<ListViewItem>()?.Select(item => item.Tag as CShellItem)?.ToArray() ?? new CShellItem[0];
+                        }
+
+                        pidls = new List<IntPtr>(selectedItems.Length);
+
+                        for (int i = 0; i < selectedItems.Length; i++)
+                        {
+                            var sel = selectedItems[i];
+                            if (sel == null)
+                            {
+                                Debug.WriteLine($"Selected item {i} is null");
+                                continue;
+                            }
+
+                            // For delete operations, validate that item can be deleted
+                            if (cmd == "delete" && !sel.CanDelete)
+                            {
+                                MessageBox.Show($"Cannot delete: {sel.DisplayName}", "Cannot Delete",
+                                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                continue;
+                            }
+
+                            IntPtr pidl = sel.LastPIDL;
+                            if (pidl == IntPtr.Zero)
+                            {
+                                Debug.WriteLine($"Failed to get PIDL for item: {sel.DisplayName}");
+                                MessageBox.Show($"Failed to get ID for item: {sel.DisplayName}", "Error",
+                                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                continue;
+                            }
+
+                            pidls.Add(pidl);
                         }
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Failed to marshal IContextMenu: {ex.Message}");
+                        Debug.WriteLine($"Error preparing {cmd} operation: {ex.Message}");
+                        MessageBox.Show($"Error preparing operation: {ex.Message}", "Error",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
+                }
 
-                    // Prepare command structure with allocated strings
+                // Validate items to process
+                if (pidls == null || pidls.Count == 0)
+                {
+                    Debug.WriteLine("No items to process");
+                    return;
+                }
+
+                int topItemIndex = -1;
+                bool hasItems = VirtualMode ? _listView.VirtualListSize > 0 : _listView.Items.Count > 0;
+                if (cmd == "delete" && hasItems)
+                { //prevent null references from invalid selections that are about to be deleted
+                    topItemIndex = _listViewWrapper.GetTopIndex();
+                    _listView.SelectedIndices.Clear();
+                    if (!VirtualMode)
+                    {
+                        _listView.SelectedItems.Clear();
+                    }
+                }
+
+                // Capture for background thread
+                var capturedParentPidl = _currentFolderCsi.PIDL;
+                var capturedRelPidls = pidls;
+
+                // Offload shell interaction to background STA thread. 
+                // Binding MUST happen on this thread to avoid marshaling back to UI thread.
+                int invokeHR = await _staRunner.EnqueueWork(_ =>
+                {
+                    IShellFolder desktop = null;
+                    IShellFolder parentFolder = null;
+                    IntPtr iUnknownOut = IntPtr.Zero;
+                    IContextMenu? contextMenu = null;
+                    IntPtr lpVerbAnsi = IntPtr.Zero;
+                    IntPtr lpVerbUni = IntPtr.Zero;
+
                     try
                     {
+                        // 1. Get Desktop Folder on THIS thread
+                        int hr = SHGetDesktopFolder(ref desktop);
+                        if (hr != S_OK || desktop == null) return hr;
+
+                        // 2. Bind to Parent Folder on THIS thread
+                        if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
+                        {
+                            parentFolder = desktop;
+                        }
+                        else
+                        {
+                            IntPtr folderPtr = IntPtr.Zero;
+                            hr = desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr);
+                            if (hr != S_OK || folderPtr == IntPtr.Zero) return hr;
+                            parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
+                            Marshal.Release(folderPtr);
+                        }
+
+                        // 3. Get IContextMenu on THIS thread
+                        IntPtr rgfReserved = IntPtr.Zero;
+                        hr = parentFolder.GetUIObjectOf(IntPtr.Zero, (uint)capturedRelPidls.Count, capturedRelPidls.ToArray(),
+                            IID_IContextMenu, rgfReserved, out iUnknownOut);
+
+                        if (hr != S_OK || iUnknownOut == IntPtr.Zero) return hr;
+
+                        contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
+                        
+                        // 4. Invoke Command
                         lpVerbAnsi = Marshal.StringToHGlobalAnsi(cmd);
                         lpVerbUni = Marshal.StringToHGlobalUni(cmd);
 
                         var cmi = new CMInvokeCommandInfoEx
                         {
                             cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                            hwnd = IntPtr.Zero, // Explicitly no owner to avoid modality
                             nShow = (int)SW.SHOWNORMAL,
                             fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
                             ptInvoke = new Point(0, 0),
@@ -987,93 +993,77 @@ namespace ExpControlsLib
                             lpVerbW = lpVerbUni
                         };
 
-                        int topItemIndex = -1;
-                        bool hasItems = VirtualMode ? _listView.VirtualListSize > 0 : _listView.Items.Count > 0;
-                        if (cmd == "delete" && hasItems)
-                        { //prevent null references from invalid selections that are about to be deleted
-                            topItemIndex = _listViewWrapper.GetTopIndex();
-                            _listView.SelectedIndices.Clear();
-                            if (!VirtualMode)
-                            {
-                                _listView.SelectedItems.Clear();
-                            }
-                        }
-                        // Execute the shell command
-                        int invokeHR = m_WindowsContextMenu.cntxMenuBase.InvokeCommand(cmi); //the important part
-
-                        if (cmd == "delete" && hasItems)
-                        {
-                            _listView.BeginUpdate();
-                            try
-                            {
-                                // Batch remove from hierarchy (suppress individual events)
-                                _shellController.HierachyManager.RemoveRange(selectedItems, raiseEvents: false);
-
-                                // Batch remove from list view wrapper
-                                _listViewWrapper.RemoveItems(selectedItems);
-
-                                if (selectedItems.Length > this._listViewWrapper.GetApproxVisibleCount())
-                                    OnScroll();
-
-                                // Fire single update event for the folder
-                                if (_currentFolderCsi != null)
-                                {
-                                    string path = _currentFolderCsi.FullPath.StartsWith(":")
-                                        ? _currentFolderCsi.DisplayName
-                                        : _currentFolderCsi.FullPath;
-                                    ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
-                                }
-                            }
-                            finally
-                            {
-                                _listView.EndUpdate();
-                            }
-                        }
-
-                        if (topItemIndex >= 0)
-                        {
-                            _listView.BeginInvoke(new Action(() =>
-                            {
-                                int count = VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
-                                if (topItemIndex < count)
-                                {
-                                    if (VirtualMode)
-                                        _listView.EnsureVisible(topItemIndex);
-                                    else
-                                        _listView.Items[topItemIndex].EnsureVisible();
-                                }
-                            }));
-                        }
-
-                        if (invokeHR != S_OK)
-                        {
-                            Debug.WriteLine($"InvokeCommand failed: HRESULT=0x{invokeHR:X8}, cmd='{cmd}'");
-                            // Don't show error to user for most cases - shell handles UI
-                        }
+                        return contextMenu.InvokeCommand(cmi);
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Error invoking command '{cmd}': {ex.Message}");
-                        MessageBox.Show($"Error executing command: {ex.Message}", "Error",
-                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        Debug.WriteLine($"Error in background shell operation: {ex.Message}");
+                        return -1;
                     }
                     finally
                     {
-                        m_WindowsContextMenu.ReleaseMenu();
+                        if (lpVerbAnsi != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbAnsi);
+                        if (lpVerbUni != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbUni);
+                        if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
+                        if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
+                        if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
+                        if (desktop != null) Marshal.ReleaseComObject(desktop);
+                        
+                        foreach (var pidl in capturedRelPidls) Marshal.FreeCoTaskMem(pidl);
+                    }
+                });
 
-                        // Clean up allocated strings
-                        if (lpVerbAnsi != IntPtr.Zero)
-                            Marshal.FreeHGlobal(lpVerbAnsi);
-                        if (lpVerbUni != IntPtr.Zero)
-                            Marshal.FreeHGlobal(lpVerbUni);
+                if (cmd == "delete" && hasItems)
+                {
+                    _listView.BeginUpdate();
+                    try
+                    {
+                        // Batch remove from hierarchy (suppress individual events)
+                        _shellController.HierachyManager.RemoveRange(selectedItems, raiseEvents: false);
+
+                        // Batch remove from list view wrapper
+                        _listViewWrapper.RemoveItems(selectedItems);
+
+                        if (selectedItems.Length > this._listViewWrapper.GetApproxVisibleCount())
+                            OnScroll();
+
+                        // Fire single update event for the folder
+                        if (_currentFolderCsi != null)
+                        {
+                            string path = _currentFolderCsi.FullPath.StartsWith(":")
+                                ? _currentFolderCsi.DisplayName
+                                : _currentFolderCsi.FullPath;
+                            ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
+                        }
+                    }
+                    finally
+                    {
+                        _listView.EndUpdate();
                     }
                 }
-                catch (Exception ex)
+
+                if (topItemIndex >= 0)
                 {
-                    Debug.WriteLine($"Unexpected error in WinMenu: {ex.Message}");
-                    MessageBox.Show($"Unexpected error: {ex.Message}", "Error",
-                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    int count = VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+                    if (topItemIndex < count)
+                    {
+                        if (VirtualMode)
+                            _listView.EnsureVisible(topItemIndex);
+                        else
+                            _listView.Items[topItemIndex].EnsureVisible();
+                    }
                 }
+
+                if (invokeHR != S_OK && invokeHR != -1)
+                {
+                    Debug.WriteLine($"InvokeCommand failed: HRESULT=0x{invokeHR:X8}, cmd='{cmd}'");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Unexpected error in WinMenu: {ex.Message}");
+                MessageBox.Show($"Unexpected error: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             finally
             {
@@ -1229,12 +1219,11 @@ namespace ExpControlsLib
         /// IShellFolder) must be released by ReleaseComObject() to prevent heap corruption.
         /// Mixing release mechanisms or skipping releases can cause access violations.
         /// </remarks>
-        private void ShowAndHandleContextMenu(Point pt)
+        private async void ShowAndHandleContextMenu(Point pt)
         {
             Debug.WriteLine("ExpList: ShowAndHandleContextMenu Begin");
             try
             {
-                int HR;
                 int MIN = 1;
                 var cmi = new CMInvokeCommandInfoEx();
 
@@ -1266,9 +1255,10 @@ namespace ExpControlsLib
                     cmi = new CMInvokeCommandInfoEx
                     {
                         cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                        hwnd = IntPtr.Zero,
                         nShow = (int)SW.SHOWNORMAL,
                         fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
-                        ptInvoke = new Point(pt.X, pt.Y)
+                        ptInvoke = pt
                     };
 
                     // Handle view mode changes and built-in operations.
@@ -1334,23 +1324,24 @@ namespace ExpControlsLib
                             }
                             goto CLEANUP;
                         case CMD.PASTE:
+                        case CMD.PASTELINK:
+                        case CMD.PROPERTIES:
                             if (_currentFolderCsi != null)
                             {
-                                cmi.lpVerb = Marshal.StringToHGlobalAnsi("paste");
-                                cmi.lpVerbW = Marshal.StringToHGlobalUni("paste");
+                                string verb = cmdEnum switch
+                                {
+                                    CMD.PASTE => "paste",
+                                    CMD.PASTELINK => "pastelink",
+                                    CMD.PROPERTIES => "properties",
+                                    _ => ""
+                                };
+                                cmi.lpVerb = Marshal.StringToHGlobalAnsi(verb);
+                                cmi.lpVerbW = Marshal.StringToHGlobalUni(verb);
                             }
                             else
                             {
                                 goto CLEANUP;
                             }
-                            break;
-                        case CMD.PASTELINK:
-                            cmi.lpVerb = Marshal.StringToHGlobalAnsi("pastelink");
-                            cmi.lpVerbW = Marshal.StringToHGlobalUni("pastelink");
-                            break;
-                        case CMD.PROPERTIES:
-                            cmi.lpVerb = Marshal.StringToHGlobalAnsi("properties");
-                            cmi.lpVerbW = Marshal.StringToHGlobalUni("properties");
                             break;
                         default:
                             // Handle commands from the "New" submenu.
@@ -1358,54 +1349,75 @@ namespace ExpControlsLib
                             cmi.lpVerb = (IntPtr)cmdID;
                             cmi.lpVerbW = (IntPtr)cmdID;
                             m_CreateNew = true;
-                            HR = m_WindowsContextMenu.newMenuBase.InvokeCommand(cmi);
-#if DEBUG
-                            if (HR != S_OK)
-                                Marshal.ThrowExceptionForHR(HR);
-#endif
+                            
+                            var newMenuBase = m_WindowsContextMenu.newMenuBase;
+                            var cmi_new = cmi;
+                            await _staRunner.EnqueueWork(_ =>
+                            {
+                                return newMenuBase.InvokeCommand(cmi_new);
+                            });
                             goto CLEANUP;
                     }
 
                     if (_currentFolderCsi != null)
                     {
-                        int prgf = 0;
-                        IntPtr iunk = IntPtr.Zero;
-
-                        IShellFolder folder = _currentFolderCsi == ShellController.DesktopCSI
-                            ? _currentFolderCsi.IShlFolder
-                            : _currentFolderCsi.Parent.IShlFolder;
+                        IntPtr parentPidl = _currentFolderCsi == ShellController.DesktopCSI
+                            ? _currentFolderCsi.PIDL
+                            : _currentFolderCsi.Parent.PIDL;
 
                         IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
+                        var capturedRelPidl = relPidl != IntPtr.Zero ? CPidl.Copy(relPidl) : IntPtr.Zero;
+                        var capturedParentPidl = parentPidl;
+                        var cmi_shell = cmi;
 
-                        HR = folder.GetUIObjectOf(IntPtr.Zero, 1, new[] { relPidl }, IID_IContextMenu, prgf, out iunk);
-#if DEBUG
-                        if (HR != S_OK)
-                            Marshal.ThrowExceptionForHR(HR);
-#endif
-                        m_WindowsContextMenu.cntxMenuBase = (IContextMenu)Marshal.GetObjectForIUnknown(iunk);
-
-                        IntPtr p = IntPtr.Zero;
-                        Marshal.QueryInterface(iunk, IID_IContextMenu2, out p);
-                        if (p != IntPtr.Zero)
+                        await _staRunner.EnqueueWork(_ =>
                         {
-                            m_WindowsContextMenu.cntxMenuExtended = (IContextMenu2)Marshal.GetObjectForIUnknown(p);
-                            Marshal.Release(p);
-                        }
+                            IShellFolder desktop = null;
+                            IShellFolder parentFolder = null;
+                            IntPtr iUnknownOut = IntPtr.Zero;
+                            IContextMenu? contextMenu = null;
 
-                        Marshal.QueryInterface(iunk, IID_IContextMenu3, out p);
-                        if (p != IntPtr.Zero)
-                        {
-                            m_WindowsContextMenu.cntxMenuCascading = (IContextMenu3)Marshal.GetObjectForIUnknown(p);
-                            Marshal.Release(p);
-                        }
+                            try
+                            {
+                                SHGetDesktopFolder(ref desktop);
+                                if (desktop == null) return -1;
 
-                        HR = m_WindowsContextMenu.cntxMenuBase.InvokeCommand(cmi);
+                                if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
+                                    parentFolder = desktop;
+                                else
+                                {
+                                    IntPtr folderPtr = IntPtr.Zero;
+                                    if (desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr) != S_OK) return -1;
+                                    parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
+                                    Marshal.Release(folderPtr);
+                                }
 
-                        m_WindowsContextMenu.ReleaseMenu();
-#if DEBUG
-                        if (HR != S_OK)
-                            Marshal.ThrowExceptionForHR(HR);
-#endif
+                                IntPtr rgfReserved = IntPtr.Zero;
+                                var relPidls = new IntPtr[] { capturedRelPidl };
+                                if (parentFolder.GetUIObjectOf(IntPtr.Zero, 1, relPidls, IID_IContextMenu, rgfReserved, out iUnknownOut) != S_OK) return -1;
+
+                                contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
+                                
+                                return contextMenu.InvokeCommand(cmi_shell);
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.WriteLine($"Error in background context menu shell operation: {ex.Message}");
+                                return -1;
+                            }
+                            finally
+                            {
+                                if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
+                                if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
+                                if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
+                                if (desktop != null) Marshal.ReleaseComObject(desktop);
+                                if (capturedRelPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(capturedRelPidl);
+                            }
+                        });
+
+                        // Clean up allocated strings
+                        if (cmi.lpVerb != IntPtr.Zero && cmi.lpVerb.ToInt64() > 0xFFFF) Marshal.FreeHGlobal(cmi.lpVerb);
+                        if (cmi.lpVerbW != IntPtr.Zero && cmi.lpVerbW.ToInt64() > 0xFFFF) Marshal.FreeHGlobal(cmi.lpVerbW);
                     }
                 }
 
@@ -1419,6 +1431,10 @@ namespace ExpControlsLib
                 }
 
                 // Note: viewSubMenu and sortSubMenu are destroyed when comContextMenu is destroyed.
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Unexpected error in ShowAndHandleContextMenu: {ex.Message}");
             }
             finally
             {
@@ -1726,6 +1742,11 @@ namespace ExpControlsLib
         /// <param name="tag"></param>
         internal ListViewSubitemData GetColumnData(CShellItem item, ColumnHeader col)
         {
+            return GetColumnData(item, col.Text, col.Index, col.Tag?.ToString().Trim() ?? string.Empty);
+        }
+
+        internal ListViewSubitemData GetColumnData(CShellItem item, string colText, int colIndex, string mapping)
+        {
             //Debug.WriteLine("ExpList: GetColumnData Begin");
             try
             {
@@ -1733,7 +1754,6 @@ namespace ExpControlsLib
                 object? tag = null;
 
                 // 1. Try Tag Mapping
-                string mapping = col.Tag?.ToString().Trim();
                 if (!string.IsNullOrEmpty(mapping) && mapping.StartsWith("."))
                 {
                     string propName = mapping.Substring(1);
@@ -1773,7 +1793,7 @@ namespace ExpControlsLib
                     }
 
 
-                    if (item.ColumnDic.TryGetValue(col.Text, out ListViewSubitemData propInfo)) //maybe it was already fetched before
+                    if (item.ColumnDic.TryGetValue(colText, out ListViewSubitemData propInfo)) //maybe it was already fetched before
                         return propInfo;
 
                     // Fallback to reflection for other properties
@@ -1818,22 +1838,22 @@ namespace ExpControlsLib
                     }
                 }
 
-                if (col.Index == 0)
+                if (colIndex == 0)
                 {
                     text = item.DisplayName;
                 }
                 else
                 {
                     // 2. Try bulk fetch if still not found
-                    EnsureCustomColumnDataFetched(item, col.Text);
-                    if (item.ColumnDic.TryGetValue(col.Text, out ListViewSubitemData propInfo))
+                    EnsureCustomColumnDataFetched(item, colText);
+                    if (item.ColumnDic.TryGetValue(colText, out ListViewSubitemData propInfo))
                         return propInfo;
                 }
 
             END:
                 var result = new ListViewSubitemData(text, tag);
 
-                item.ColumnDic.TryAdd(col.Name, result); //save for future use
+                item.ColumnDic.TryAdd(colText, result); //save for future use
 
                 return result;
             }
@@ -1925,6 +1945,16 @@ namespace ExpControlsLib
             _displayFilesCts = new CancellationTokenSource();
             var token = _displayFilesCts.Token;
 
+            // Capture sort settings and create comparer on UI thread to ensure thread-safe access to ColumnHeader properties
+            int sortCol = _listViewWrapper.SortColumn;
+            SortOrder sortOrder = _listViewWrapper.SortOrder;
+            ColumnHeader colHeader = (sortCol >= 0 && sortCol < _listView.Columns.Count) ? _listView.Columns[sortCol] : null;
+            CShellItemComparer comparer = null;
+            if (sortOrder != SortOrder.None && colHeader != null)
+            {
+                comparer = new CShellItemComparer(this, sortCol, sortOrder, colHeader);
+            }
+
             //CurrentPath = csi.FullPath; // Update immediately for UI/Settings consistency
 
             try
@@ -2003,6 +2033,12 @@ namespace ExpControlsLib
                         {
                             item.ImageIndex = SystemImageListManager.GetIconIndex(item, isLarge);
                         }
+                    }
+
+                    // Sort according to current settings after data is fetched
+                    if (comparer != null)
+                    {
+                        combined.Sort(comparer);
                     }
 
                     return new
@@ -2919,7 +2955,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Handles the MouseUp event to trigger context menus or middle-click actions.
         /// </summary>
-        private void ExpFileList_MouseUp(object sender, MouseEventArgs e)
+        private async void ExpFileList_MouseUp(object sender, MouseEventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_MouseUp Begin");
             try
@@ -2963,15 +2999,72 @@ namespace ExpControlsLib
                                 }
                                 else
                                 {
-                                    string strPath = itms[0].Parent == ShellController.DesktopCSI
-                                        ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-                                        : itms[0].Parent.FullPath;
+                                    IntPtr parentPidl = itms[0].Parent == ShellController.DesktopCSI
+                                        ? itms[0].PIDL
+                                        : itms[0].Parent.PIDL;
+                                    
+                                    var capturedRelPidls = itms.Select(i => CPidl.Copy(i.LastPIDL)).ToArray();
+                                    var capturedParentPidl = parentPidl;
 
-                                    m_WindowsContextMenu.InvokeCommand(m_WindowsContextMenu.cntxMenuBase, (UInt32)verbId, strPath, pt);
+                                    await _staRunner.EnqueueWork(_ =>
+                                    {
+                                        IShellFolder desktop = null;
+                                        IShellFolder parentFolder = null;
+                                        IntPtr iUnknownOut = IntPtr.Zero;
+                                        IContextMenu? contextMenu = null;
+
+                                        try
+                                        {
+                                            SHGetDesktopFolder(ref desktop);
+                                            if (desktop == null) return -1;
+
+                                            if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
+                                                parentFolder = desktop;
+                                            else
+                                            {
+                                                IntPtr folderPtr = IntPtr.Zero;
+                                                if (desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr) != S_OK) return -1;
+                                                parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
+                                                Marshal.Release(folderPtr);
+                                            }
+
+                                            IntPtr rgfReserved = IntPtr.Zero;
+                                            if (parentFolder.GetUIObjectOf(IntPtr.Zero, (uint)capturedRelPidls.Length, capturedRelPidls, IID_IContextMenu, rgfReserved, out iUnknownOut) != S_OK) return -1;
+
+                                            contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
+
+                                            var invokeCmi = new CMInvokeCommandInfoEx
+                                            {
+                                                cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                                                hwnd = IntPtr.Zero,
+                                                nShow = (int)SW.SHOWNORMAL,
+                                                fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
+                                                ptInvoke = pt,
+                                                lpVerb = (IntPtr)verbId,
+                                                lpVerbW = (IntPtr)verbId
+                                            };
+
+                                            return contextMenu.InvokeCommand(invokeCmi);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Debug.WriteLine($"Error in background context menu invocation: {ex.Message}");
+                                            return -1;
+                                        }
+                                        finally
+                                        {
+                                            if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
+                                            if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
+                                            if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
+                                            if (desktop != null) Marshal.ReleaseComObject(desktop);
+                                            foreach (var p in capturedRelPidls) Marshal.FreeCoTaskMem(p);
+                                        }
+                                    });
                                 }
                             }
 
-                            Marshal.ReleaseComObject(m_WindowsContextMenu.cntxMenuBase);
+                            if (m_WindowsContextMenu.cntxMenuBase != null)
+                                Marshal.ReleaseComObject(m_WindowsContextMenu.cntxMenuBase);
                         }
                     }
                     else
