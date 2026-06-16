@@ -1273,52 +1273,58 @@ namespace ExpControlsLib
                                     IntPtr iUnknownOut = IntPtr.Zero;
                                     IContextMenu? contextMenu = null;
 
-                                    try
+                                    // Create a hidden dummy window on this thread to act as the owner.
+                                    using (Control dummy = new Control())
                                     {
-                                        SHGetDesktopFolder(ref desktop);
-                                        if (desktop == null) return -1;
+                                        IntPtr dummyHandle = dummy.Handle;
 
-                                        if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
-                                            parentFolder = desktop;
-                                        else
+                                        try
                                         {
-                                            IntPtr folderPtr = IntPtr.Zero;
-                                            if (desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr) != S_OK) return -1;
-                                            parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
-                                            Marshal.Release(folderPtr);
+                                            SHGetDesktopFolder(ref desktop);
+                                            if (desktop == null) return -1;
+
+                                            if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
+                                                parentFolder = desktop;
+                                            else
+                                            {
+                                                IntPtr folderPtr = IntPtr.Zero;
+                                                if (desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr) != S_OK) return -1;
+                                                parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
+                                                Marshal.Release(folderPtr);
+                                            }
+
+                                            IntPtr rgfReserved = IntPtr.Zero;
+                                            var relPidls = new IntPtr[] { capturedRelPidl };
+                                            if (parentFolder.GetUIObjectOf(IntPtr.Zero, 1, relPidls, IID_IContextMenu, rgfReserved, out iUnknownOut) != S_OK) return -1;
+
+                                            contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
+
+                                            var invokeCmi = new CMInvokeCommandInfoEx
+                                            {
+                                                cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                                                hwnd = dummyHandle,
+                                                nShow = (int)SW.SHOWNORMAL,
+                                                fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE | CMIC.ASYNCOK),
+                                                ptInvoke = pt,
+                                                lpVerb = (IntPtr)verbId,
+                                                lpVerbW = (IntPtr)verbId
+                                            };
+
+                                            return contextMenu.InvokeCommand(invokeCmi);
                                         }
-
-                                        IntPtr rgfReserved = IntPtr.Zero;
-                                        var relPidls = new IntPtr[] { capturedRelPidl };
-                                        if (parentFolder.GetUIObjectOf(IntPtr.Zero, 1, relPidls, IID_IContextMenu, rgfReserved, out iUnknownOut) != S_OK) return -1;
-
-                                        contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
-
-                                        var invokeCmi = new CMInvokeCommandInfoEx
+                                        catch (Exception ex)
                                         {
-                                            cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                                            hwnd = IntPtr.Zero,
-                                            nShow = (int)SW.SHOWNORMAL,
-                                            fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
-                                            ptInvoke = pt,
-                                            lpVerb = (IntPtr)verbId,
-                                            lpVerbW = (IntPtr)verbId
-                                        };
-
-                                        return contextMenu.InvokeCommand(invokeCmi);
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Debug.WriteLine($"Error in background tree context menu invocation: {ex.Message}");
-                                        return -1;
-                                    }
-                                    finally
-                                    {
-                                        if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
-                                        if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
-                                        if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
-                                        if (desktop != null) Marshal.ReleaseComObject(desktop);
-                                        Marshal.FreeCoTaskMem(capturedRelPidl);
+                                            Debug.WriteLine($"Error in background tree context menu invocation: {ex.Message}");
+                                            return -1;
+                                        }
+                                        finally
+                                        {
+                                            if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
+                                            if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
+                                            if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
+                                            if (desktop != null) Marshal.ReleaseComObject(desktop);
+                                            Marshal.FreeCoTaskMem(capturedRelPidl);
+                                        }
                                     }
                                 });
                             }
@@ -2109,67 +2115,73 @@ namespace ExpControlsLib
                     IntPtr lpVerbAnsi = IntPtr.Zero;
                     IntPtr lpVerbUni = IntPtr.Zero;
 
-                    try
+                    // Create a hidden dummy window on this thread to act as the owner.
+                    using (Control dummy = new Control())
                     {
-                        // 1. Get Desktop Folder on THIS thread
-                        int hr = SHGetDesktopFolder(ref desktop);
-                        if (hr != S_OK || desktop == null) return hr;
+                        IntPtr dummyHandle = dummy.Handle;
 
-                        // 2. Bind to Parent Folder on THIS thread
-                        if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
+                        try
                         {
-                            parentFolder = desktop;
+                            // 1. Get Desktop Folder on THIS thread
+                            int hr = SHGetDesktopFolder(ref desktop);
+                            if (hr != S_OK || desktop == null) return hr;
+
+                            // 2. Bind to Parent Folder on THIS thread
+                            if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
+                            {
+                                parentFolder = desktop;
+                            }
+                            else
+                            {
+                                IntPtr folderPtr = IntPtr.Zero;
+                                hr = desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr);
+                                if (hr != S_OK || folderPtr == IntPtr.Zero) return hr;
+                                parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
+                                Marshal.Release(folderPtr);
+                            }
+
+                            // 3. Get UI Object (IContextMenu) on THIS thread
+                            IntPtr rgfReserved = IntPtr.Zero;
+                            var relPidls = new IntPtr[] { capturedRelPidl };
+                            hr = parentFolder.GetUIObjectOf(IntPtr.Zero, 1, relPidls, IID_IContextMenu, rgfReserved, out iUnknownOut);
+
+                            if (hr != S_OK || iUnknownOut == IntPtr.Zero) return hr;
+
+                            contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
+
+                            // 4. Invoke Command
+                            lpVerbAnsi = Marshal.StringToHGlobalAnsi(cmd);
+                            lpVerbUni = Marshal.StringToHGlobalUni(cmd);
+
+                            var cmi = new CMInvokeCommandInfoEx
+                            {
+                                cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                                hwnd = dummyHandle,
+                                nShow = (int)SW.SHOWNORMAL,
+                                fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE | CMIC.ASYNCOK),
+                                ptInvoke = new Point(0, 0),
+                                lpVerb = lpVerbAnsi,
+                                lpVerbW = lpVerbUni
+                            };
+
+                            return contextMenu.InvokeCommand(cmi);
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            IntPtr folderPtr = IntPtr.Zero;
-                            hr = desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr);
-                            if (hr != S_OK || folderPtr == IntPtr.Zero) return hr;
-                            parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
-                            Marshal.Release(folderPtr);
+                            Debug.WriteLine($"Error in background WinMenuCmd: {ex.Message}");
+                            return -1;
                         }
-
-                        // 3. Get UI Object (IContextMenu) on THIS thread
-                        IntPtr rgfReserved = IntPtr.Zero;
-                        var relPidls = new IntPtr[] { capturedRelPidl };
-                        hr = parentFolder.GetUIObjectOf(IntPtr.Zero, 1, relPidls, IID_IContextMenu, rgfReserved, out iUnknownOut);
-
-                        if (hr != S_OK || iUnknownOut == IntPtr.Zero) return hr;
-
-                        contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
-                        
-                        // 4. Invoke Command
-                        lpVerbAnsi = Marshal.StringToHGlobalAnsi(cmd);
-                        lpVerbUni = Marshal.StringToHGlobalUni(cmd);
-
-                        var cmi = new CMInvokeCommandInfoEx
+                        finally
                         {
-                            cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                            hwnd = IntPtr.Zero, // Explicitly no owner to avoid modality
-                            nShow = (int)SW.SHOWNORMAL,
-                            fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
-                            ptInvoke = new Point(0, 0),
-                            lpVerb = lpVerbAnsi,
-                            lpVerbW = lpVerbUni
-                        };
+                            if (lpVerbAnsi != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbAnsi);
+                            if (lpVerbUni != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbUni);
+                            if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
+                            if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
+                            if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
+                            if (desktop != null) Marshal.ReleaseComObject(desktop);
 
-                        return contextMenu.InvokeCommand(cmi);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Error in background WinMenuCmd: {ex.Message}");
-                        return -1;
-                    }
-                    finally
-                    {
-                        if (lpVerbAnsi != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbAnsi);
-                        if (lpVerbUni != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbUni);
-                        if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
-                        if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
-                        if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
-                        if (desktop != null) Marshal.ReleaseComObject(desktop);
-                        
-                        Marshal.FreeCoTaskMem(capturedRelPidl);
+                            Marshal.FreeCoTaskMem(capturedRelPidl);
+                        }
                     }
                 });
             }
