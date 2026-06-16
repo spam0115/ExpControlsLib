@@ -143,6 +143,8 @@ namespace WindowsApiLib.Shell
 
         public CShellItem? FindOrAdd(string path)
         {
+            if (string.IsNullOrEmpty(path)) throw new ArgumentNullException(nameof(path));
+
             IntPtr pidl = ShellAPI.ILCreateFromPathW(path);
             if (pidl == IntPtr.Zero)
             {
@@ -188,6 +190,8 @@ namespace WindowsApiLib.Shell
         public CShellItem? FindOrAdd(IntPtr absPidl, out CShellItem? Parent)
         {
             Parent = null;
+
+            if (absPidl == IntPtr.Zero) throw new ArgumentNullException(nameof(absPidl));
 
             var currentFolder = Root;
             if (currentFolder == null) throw new Exception("The root of the shell hierarchy was null.");
