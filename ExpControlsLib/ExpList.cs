@@ -489,7 +489,10 @@ namespace ExpControlsLib
                 }
 
                 var oldCsi = _currentFolderCsi;
-                _currentFolderCsi = _shellController.HierachyManager.Add(value);
+                if (value != null)
+                    _currentFolderCsi = _shellController.HierachyManager.Add(value);
+                else
+                    _currentFolderCsi = value;
                 ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
             }
         }
@@ -1959,10 +1962,13 @@ namespace ExpControlsLib
         /// <param name="reload">True to force a reload even if the same item was previously selected.</param>
         public async Task LoadDirectory(string pathName, bool includeFolder = true, bool reload = false)
         {
-            if (string.IsNullOrEmpty(pathName)) return;
             if (!reload && (_currentFolderCsi is not null && pathName == CurrentPath)) return;
 
-            var csi = CShellItemFactory.CreateCShItem(pathName);
+            CShellItem csi;
+            if (pathName == null) 
+                csi = null;
+            else
+                csi = CShellItemFactory.CreateCShItem(pathName);
 
             await LoadDirectoryBaseAsync(csi, includeFolder);
 

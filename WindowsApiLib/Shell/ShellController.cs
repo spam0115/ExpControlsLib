@@ -54,6 +54,8 @@ namespace WindowsApiLib.Shell
         /// <returns></returns>
         public CShellItem? LoadFolderContents(CShellItem csi)
         {
+            if (csi == null) return null;
+
             CShellItem target = HierachyManager.Add(csi); //ensure the item exists in the hierarchy
 
             if (target is null)

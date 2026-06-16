@@ -136,6 +136,7 @@ namespace WindowsApiLib.Shell
 
         public CShellItem Add(CShellItem csi)
         {
+            if (csi == null) throw new ArgumentNullException(nameof(csi));
             var result = FindOrAdd(csi.PIDL, out CShellItem parent);
             return result;
         }
