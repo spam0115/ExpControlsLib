@@ -386,20 +386,29 @@ namespace ExpControlsLib
 
             if (toRemove.Count <= BatchThreshold)
             {
-                // Process small number of removals individually to avoid full redraw
-                var indices = new List<int>();
-                foreach (var item in items)
+                try { 
+                    _ListView.SuspendLayout();
+                    // Process small number of removals individually to avoid full redraw
+                    var indices = new List<int>();
+                    foreach (var item in items)
+                    {
+                        int index = GetIndex(item);
+                        if (index >= 0) indices.Add(index);
+                    }
+
+                    // Remove in reverse order to avoid index shifting problems
+                    indices.Sort((a, b) => b.CompareTo(a));
+                    foreach (int index in indices)
+                    {
+                        RemoveAt(index);
+                    }
+
+                }
+                finally
                 {
-                    int index = GetIndex(item);
-                    if (index >= 0) indices.Add(index);
+                    _ListView.ResumeLayout();
                 }
 
-                // Remove in descending order to avoid index shifting problems
-                indices.Sort((a, b) => b.CompareTo(a));
-                foreach (int index in indices)
-                {
-                    RemoveAt(index);
-                }
                 return;
             }
 

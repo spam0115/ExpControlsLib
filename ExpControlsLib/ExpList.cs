@@ -950,8 +950,6 @@ namespace ExpControlsLib
 
                 if (cmd == "delete" && hasItems)
                 {
-                    bool useUpdate = selectedItems.Length > BatchThreshold;
-                    if (useUpdate) _listView.BeginUpdate();
                     try
                     {
                         // Batch remove from hierarchy (suppress individual events)
@@ -961,7 +959,7 @@ namespace ExpControlsLib
                         _listViewWrapper.RemoveItems(selectedItems);
 
                         if (selectedItems.Length > this._listViewWrapper.GetApproxVisibleCount())
-                            OnScroll();
+                            OnScroll(); //to fetch thumbnails for new items that have come into view after the batch removal
 
                         // Fire single update event for the folder
                         if (_currentFolderCsi != null)
@@ -974,7 +972,6 @@ namespace ExpControlsLib
                     }
                     finally
                     {
-                        if (useUpdate) _listView.EndUpdate();
                     }
                 }
 
