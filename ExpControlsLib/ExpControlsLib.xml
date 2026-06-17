@@ -843,7 +843,7 @@
             </summary>
             <param name="m">The Windows <see cref="T:System.Windows.Forms.Message"/> to process.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.WinMenu(System.String)">
+        <member name="M:ExpControlsLib.ExpList.ExecuteShellCommand(System.String)">
             <summary>
             Invokes a standard shell action (cut, copy, paste, delete) on the selected items.
             </summary>

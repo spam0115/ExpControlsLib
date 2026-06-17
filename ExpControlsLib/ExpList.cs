@@ -66,6 +66,8 @@ namespace ExpControlsLib
 
         #region Private fields
 
+        private const int BatchThreshold = 20;
+
         // InitialLoadLimit is the number of ExpFileList.Items whose IconIndex will be fetched on initial load
         // the balance will be fetched AFTER ExpFileList.EndUpdate
         private const int InitialLoadLimit = 128;
@@ -948,7 +950,8 @@ namespace ExpControlsLib
 
                 if (cmd == "delete" && hasItems)
                 {
-                    _listView.BeginUpdate();
+                    bool useUpdate = selectedItems.Length > BatchThreshold;
+                    if (useUpdate) _listView.BeginUpdate();
                     try
                     {
                         // Batch remove from hierarchy (suppress individual events)
@@ -971,7 +974,7 @@ namespace ExpControlsLib
                     }
                     finally
                     {
-                        _listView.EndUpdate();
+                        if (useUpdate) _listView.EndUpdate();
                     }
                 }
 
@@ -2776,7 +2779,8 @@ namespace ExpControlsLib
         {
             if (e.Effect == DragDropEffects.Move && _shellController != null)
             {
-                _listView.BeginUpdate();
+                bool useUpdate = e.Items.Length > BatchThreshold;
+                if (useUpdate) _listView.BeginUpdate();
                 try
                 {
                     // Batch remove from hierarchy (suppress individual events)
@@ -2799,7 +2803,7 @@ namespace ExpControlsLib
                 }
                 finally
                 {
-                    _listView.EndUpdate();
+                    if (useUpdate) _listView.EndUpdate();
                 }
             }
         }

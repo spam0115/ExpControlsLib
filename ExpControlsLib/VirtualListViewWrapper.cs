@@ -22,6 +22,7 @@ namespace ExpControlsLib
     [SupportedOSPlatform("windows")]
     internal class VirtualListViewWrapper
     {
+        private const int BatchThreshold = 20;
         private readonly ExpList _expList;
         private readonly Dictionary<int, ListViewItem> _itemCache = new();
         private readonly Dictionary<string, int> _pathToIndex = new(StringComparer.OrdinalIgnoreCase);
@@ -382,6 +383,25 @@ namespace ExpControlsLib
             if (items == null) return;
             var toRemove = new HashSet<CShellItem>(items);
             if (toRemove.Count == 0) return;
+
+            if (toRemove.Count <= BatchThreshold)
+            {
+                // Process small number of removals individually to avoid full redraw
+                var indices = new List<int>();
+                foreach (var item in items)
+                {
+                    int index = GetIndex(item);
+                    if (index >= 0) indices.Add(index);
+                }
+
+                // Remove in descending order to avoid index shifting problems
+                indices.Sort((a, b) => b.CompareTo(a));
+                foreach (int index in indices)
+                {
+                    RemoveAt(index);
+                }
+                return;
+            }
 
             if (VirtualMode)
             {
