@@ -1332,8 +1332,7 @@ namespace ExpControlsLib
                             goto CLEANUP;
                         case CMD.REFRESH:
                             // Refresh the folder contents and re-sort the ListView items.
-                            _shellController.ShellUpdater.DoUpdateDir(_currentFolderCsi);
-                            _listViewWrapper.Sort();
+                            await RefreshContents();
                             goto CLEANUP;
                         case CMD.SELECT_ALL:
                             // Select all items in the ListView.
@@ -1941,6 +1940,57 @@ namespace ExpControlsLib
                     item.ColumnDic[col.Text] = value;
                 }
             }
+        }
+
+        /// <summary>
+        /// Refreshes all items in the current folder, clearing all caches and re-reading from disk.
+        /// </summary>
+        public async Task RefreshContents()
+        {
+            if (_currentFolderCsi == null) return;
+
+            // Invalidate thumbnails
+            _thumbnailManager.Clear();
+            SetImageListForMode(DisplayMode);
+
+            // Invalidate cached data in shell items
+            if (VirtualMode)
+            {
+                foreach (var item in _listViewWrapper.VirtualItems)
+                {
+                    item.ColumnDic.Clear();
+                    item.ResetInfo();
+                }
+            }
+            else
+            {
+                EnterListViewEnumeration();
+                try
+                {
+                    foreach (ListViewItem lvi in _listView.Items)
+                    {
+                        if (lvi.Tag is CShellItem csi)
+                        {
+                            csi.ColumnDic.Clear();
+                            csi.ResetInfo();
+                        }
+                    }
+                }
+                finally
+                {
+                    ExitListViewEnumeration();
+                }
+            }
+
+            // Also reset the folder itself
+            _currentFolderCsi.ResetInfo();
+            _currentFolderCsi.ResetChildren();
+
+            // Force reload from disk
+            await LoadDirectory(_currentFolderCsi, reload: true);
+
+            // Re-sort
+            _listViewWrapper.Sort();
         }
 
         public void RefreshItemByFullPath(string path)
@@ -3205,7 +3255,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Handles KeyDown events for shortcuts (Ctrl+A, Ctrl+C/V/X, Delete, F2, F5, Enter).
         /// </summary>
-        private void ExpFileList_KeyDown(object sender, KeyEventArgs e)
+        private async void ExpFileList_KeyDown(object sender, KeyEventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_KeyDown Begin");
             try
@@ -3280,8 +3330,7 @@ namespace ExpControlsLib
 
                 if (e.KeyCode == Keys.F5)
                 {
-                    _shellController.ShellUpdater.DoUpdateDir(_currentFolderCsi);
-                    _listViewWrapper.Sort();
+                    await RefreshContents();
                 }
 
                 if (e.KeyCode == Keys.Enter && _listView.SelectedIndices.Count > 0)

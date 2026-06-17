@@ -1770,7 +1770,7 @@ namespace WindowsApiLib.Shell
 
         #region    Private Methods
 
-        internal void ResetInfo()
+        public void ResetInfo()
         {
             m_HasDispType = false;
             m_IsReadOnlySetup = false;
@@ -1782,7 +1782,7 @@ namespace WindowsApiLib.Shell
             m_columnDic?.Clear();
         }
         
-        internal void ResetChildren()
+        public void ResetChildren()
         {
             // propogate changes to the known children
             if (m_Files is not null)
