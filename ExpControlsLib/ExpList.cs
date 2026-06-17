@@ -661,6 +661,7 @@ namespace ExpControlsLib
             {
                 // Setup Drag and Drop Wrappers
                 DW = new CDragWrapper(_listView);
+                DW.DragEnd += DW_DragEnd;
                 DropWrap = new ClvDropWrapper(_listView);
 
                 // Initialize Thumbnail Manager
@@ -805,9 +806,9 @@ namespace ExpControlsLib
         /// Invokes a standard shell action (cut, copy, paste, delete) on the selected items.
         /// </summary>
         /// <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
-        private async void WinMenu(string cmd)
+        public void ExecuteShellCommand(string cmd)
         {
-            Debug.WriteLine("ExpList: WinMenu Begin");
+            Debug.WriteLine("ExpList: ExecuteShellCommand Begin");
             try
             {
                 // Validate preconditions
@@ -994,13 +995,13 @@ namespace ExpControlsLib
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Unexpected error in WinMenu: {ex.Message}");
+                Debug.WriteLine($"Unexpected error in ExecuteShellCommand: {ex.Message}");
                 MessageBox.Show($"Unexpected error: {ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             finally
             {
-                Debug.WriteLine("ExpList: WinMenu End");
+                Debug.WriteLine("ExpList: ExecuteShellCommand End");
             }
         }
 
@@ -2771,6 +2772,38 @@ namespace ExpControlsLib
             }
         }
 
+        private void DW_DragEnd(object? sender, DragEndEventArgs e)
+        {
+            if (e.Effect == DragDropEffects.Move && _shellController != null)
+            {
+                _listView.BeginUpdate();
+                try
+                {
+                    // Batch remove from hierarchy (suppress individual events)
+                    _shellController.HierachyManager.RemoveRange(e.Items, raiseEvents: false);
+
+                    // Batch remove from list view wrapper
+                    _listViewWrapper.RemoveItems(e.Items);
+
+                    if (e.Items.Length > this._listViewWrapper.GetApproxVisibleCount())
+                        OnScroll();
+
+                    // Fire single update event for the folder
+                    if (_currentFolderCsi != null)
+                    {
+                        string path = _currentFolderCsi.FullPath.StartsWith(":")
+                            ? _currentFolderCsi.DisplayName
+                            : _currentFolderCsi.FullPath;
+                        ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
+                    }
+                }
+                finally
+                {
+                    _listView.EndUpdate();
+                }
+            }
+        }
+
         /// <summary>
         /// Handles the <see cref="Control.Leave"/> event of the <see cref="_listView"/> ListView.
         /// Clears the current selection.
@@ -3213,10 +3246,18 @@ namespace ExpControlsLib
                 {
                     switch (e.KeyCode)
                     {
-                        case Keys.X: WinMenu("cut"); break;
-                        case Keys.C: WinMenu("copy"); break;
-                        case Keys.V: WinMenu("paste"); break;
-                        case Keys.Z: MessageBox.Show("Don't support UNDO now!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information); break;
+                        case Keys.X:
+                            ExecuteShellCommand("cut"); 
+                            break;
+                        case Keys.C:
+                            ExecuteShellCommand("copy"); 
+                            break;
+                        case Keys.V:
+                            ExecuteShellCommand("paste"); 
+                            break;
+                        case Keys.Z: 
+                            MessageBox.Show("Don't support UNDO now!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information); 
+                            break;
                     }
                 }
 
@@ -3287,7 +3328,7 @@ namespace ExpControlsLib
                 }
                 else if (e.KeyCode == Keys.Delete)
                 {
-                    WinMenu("delete");
+                    ExecuteShellCommand("delete");
                 }
 
                 OnKeyUp(e);

@@ -42,7 +42,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Event Raised when a Drag from the associated Control is complete (Dropped)
         /// </summary>
-        public event EventHandler DragEnd;
+        public event DragEndEventHandler DragEnd;
 
         /// <summary>
         /// Creates and registers this instance to receive events when an item is being dragged
@@ -151,13 +151,15 @@ namespace ExpControlsLib
             startButton = button;
 
             CShellItem item;
+            CShellItem[] itemsToReport;
             if (isTreeView) // Can only drag 1 Item
             {
                 item = (itemToDrag as TreeNode)?.Tag as CShellItem;
                 if (item == null)
                     return;
 
-                dataObjectPtr = ShellHelper.GetIDataObject(new[] { item });
+                itemsToReport = new[] { item };
+                dataObjectPtr = ShellHelper.GetIDataObject(itemsToReport);
             }
             else // ListView may have more than one item to drag
             {
@@ -200,7 +202,8 @@ namespace ExpControlsLib
                 }
 
                 item = items[0];
-                dataObjectPtr = ShellHelper.GetIDataObject(items);
+                itemsToReport = items;
+                dataObjectPtr = ShellHelper.GetIDataObject(itemsToReport);
             }
 
             if (dataObjectPtr != IntPtr.Zero)
@@ -220,9 +223,10 @@ namespace ExpControlsLib
 
                 DragStart?.Invoke(sender, new DragStartEventArgs(parent, m_Client));
                 ShellAPI.DoDragDrop(dataObjectPtr, this, allowedEffects, out effects);
-                DragEnd?.Invoke(m_Client, EventArgs.Empty);
+                DragEnd?.Invoke(m_Client, new DragEndEventArgs(effects, itemsToReport));
             }
         }
+
 
         /// <summary>
         /// Provides a minimal implementation of IDropSource.QueryContinueDrag
@@ -335,5 +339,38 @@ namespace ExpControlsLib
         /// The Control in which the Drag originated
         /// </summary>
         public Control DragStartControl => m_DragStartControl;
+    }
+
+    /// <summary>
+    /// The Delegate defining the signature of an Event Handler to Handle the Event Raised when
+    /// a Drag from a Control associated with an instance of CDragWrapper is complete.
+    /// </summary>
+    public delegate void DragEndEventHandler(object? sender, DragEndEventArgs e);
+
+    /// <summary>
+    /// An EventArgs which provides information about the completion of a Drag operation.
+    /// </summary>
+    public class DragEndEventArgs : EventArgs
+    {
+        /// <summary>
+        /// Constructs a new instance of DragEndEventArgs.
+        /// </summary>
+        /// <param name="effect">The final effect of the drag-and-drop operation.</param>
+        /// <param name="items">The items that were dragged.</param>
+        public DragEndEventArgs(DragDropEffects effect, CShellItem[] items)
+        {
+            Effect = effect;
+            Items = items;
+        }
+
+        /// <summary>
+        /// Gets the final effect of the drag-and-drop operation.
+        /// </summary>
+        public DragDropEffects Effect { get; }
+
+        /// <summary>
+        /// Gets the items that were dragged.
+        /// </summary>
+        public CShellItem[] Items { get; }
     }
 }

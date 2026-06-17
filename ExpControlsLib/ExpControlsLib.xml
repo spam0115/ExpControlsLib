@@ -102,6 +102,34 @@
             The Control in which the Drag originated
             </summary>
         </member>
+        <member name="T:ExpControlsLib.DragEndEventHandler">
+            <summary>
+            The Delegate defining the signature of an Event Handler to Handle the Event Raised when
+            a Drag from a Control associated with an instance of CDragWrapper is complete.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.DragEndEventArgs">
+            <summary>
+            An EventArgs which provides information about the completion of a Drag operation.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.DragEndEventArgs.#ctor(System.Windows.Forms.DragDropEffects,WindowsApiLib.Shell.CShellItem[])">
+            <summary>
+            Constructs a new instance of DragEndEventArgs.
+            </summary>
+            <param name="effect">The final effect of the drag-and-drop operation.</param>
+            <param name="items">The items that were dragged.</param>
+        </member>
+        <member name="P:ExpControlsLib.DragEndEventArgs.Effect">
+            <summary>
+            Gets the final effect of the drag-and-drop operation.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DragEndEventArgs.Items">
+            <summary>
+            Gets the items that were dragged.
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.ClvDropWrapper">
             <summary>The ClvDropWrapper class deals with the mechanics of receiving a
             Drag/Drop operation for a ListView.  In effect, it implements the IDropTarget interface
@@ -821,6 +849,15 @@
             </summary>
             <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
         </member>
+        <member name="M:ExpControlsLib.ExpList.InvokeMenuCommand(System.String,System.IntPtr,System.Collections.Generic.List{System.IntPtr})">
+            <summary>
+            This invokes the specified shell command on a background STA thread with it's own window handle.
+            </summary>
+            <param name="cmd"></param>
+            <param name="capturedParentPidl"></param>
+            <param name="capturedRelPidls"></param>
+            <returns></returns>
+        </member>
         <member name="M:ExpControlsLib.ExpList.CreateContextMenu(System.IntPtr@,System.IntPtr@,System.IntPtr@)">
             <summary>
             Creates a native Windows context menu for the current folder.
@@ -1188,6 +1225,12 @@
             <remarks>ExpTree raises one major Event, ExpTreeNodeSelected. That event is raised whenever the 
             Selected TreeNode changes because of User Action (i.e. -- clicking on the node)</remarks>
         </member>
+        <member name="F:ExpControlsLib.ExpTree.Root">
+            <summary>
+            The root <see cref="T:System.Windows.Forms.TreeNode"/> of the TreeView. Represents the top-level Shell item
+            from which the entire tree is built.
+            </summary>
+        </member>
         <member name="E:ExpControlsLib.ExpTree.StartUpDirectoryChanged">
             <summary>
             StartUpDirectoryChanged is raised when the root of the TreeView is changed via StartUpDirectory
@@ -1199,6 +1242,12 @@
             value is the Selection of the new root node.  That change in SelectedNode will cause an ExpTreeNodeSelected
             Event to be raised.</remarks>
         </member>
+        <member name="T:ExpControlsLib.ExpTree.StartUpDirectoryChangedEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpTree.StartUpDirectoryChanged"/> event.
+            </summary>
+            <param name="newVal">The new <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value that was applied.</param>
+        </member>
         <member name="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected">
             <summary>
             ExpTreeNodeSelected is raised when a Node in the TreeView is Selected.
@@ -1209,6 +1258,142 @@
             TreeNode's Tag.</param>
             <remarks></remarks>
         </member>
+        <member name="T:ExpControlsLib.ExpTree.ExpTreeNodeSelectedEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/> event.
+            </summary>
+            <param name="SelPath">The file system path or display name of the selected Shell item.</param>
+            <param name="Item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> associated with the selected TreeNode.</param>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.EnableEventPost">
+            <summary>
+            Flag used to suppress the raising of <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/> during
+            tree refresh and programmatic navigation operations.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._excludedItems">
+            <summary>
+            A case-insensitive set of paths or GUIDs representing Shell items that should be
+            excluded from display in the tree.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._backHistory">
+            <summary>
+            Stack holding the backward navigation history of visited <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._forwardHistory">
+            <summary>
+            Stack holding the forward navigation history of visited <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders,
+            populated when the user navigates back.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._isNavigatingHistory">
+            <summary>
+            Indicates whether a history navigation (back or forward) is currently in progress,
+            used to prevent the navigation from being recorded again as a new history entry.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._lastSelectedCSI">
+            <summary>
+            The most recently selected <see cref="T:WindowsApiLib.Shell.CShellItem"/>, used as the source entry
+            when recording navigation history.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._rootLoadCts">
+            <summary>
+            Cancellation token source for the currently active root-load operation.
+            Cancelled and replaced whenever a new root load is initiated.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._staRunner">
+            <summary>
+            Shared STA thread runner used to marshal Shell COM operations onto a dedicated
+            Single-Threaded Apartment thread pool, keeping the UI thread responsive.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._pendingExpansionItem">
+            <summary>
+            A <see cref="T:WindowsApiLib.Shell.CShellItem"/> that is waiting to be expanded once the root load completes.
+            Set when <see cref="M:ExpControlsLib.ExpTree.ExpandANode(WindowsApiLib.Shell.CShellItem,System.Boolean)"/> is called before the tree is ready.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._pendingSelectExpandedNode">
+            <summary>
+            Indicates whether the pending expansion item should also be selected after the root
+            load completes and the deferred expansion is performed.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Cleanup">
+            <summary>
+            Cancels and disposes any active root-load cancellation token source,
+            releasing associated resources.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.SetRootItemAsync(WindowsApiLib.Shell.CShellItem,ExpControlsLib.ExpTree.StartDir)">
+            <summary>
+            Asynchronously loads and displays the tree rooted at the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>
+            or <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value. Any in-progress load is cancelled before the new one begins.
+            Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
+            </summary>
+            <param name="item">
+            The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
+            should be used to resolve the root instead.
+            </param>
+            <param name="dir">
+            A <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value used to resolve the root when <paramref name="item"/> is <c>null</c>.
+            Defaults to <see cref="F:ExpControlsLib.ExpTree.StartDir.None"/>.
+            </param>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._DropHandler">
+            <summary>
+            Backing field for the <see cref="P:ExpControlsLib.ExpTree.DropHandler"/> property.
+            Holds the current <see cref="T:ExpControlsLib.CtvDropWrapper"/> instance managing Shell drop operations.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.DropHandler">
+            <summary>
+            Gets or sets the <see cref="T:ExpControlsLib.CtvDropWrapper"/> that handles Shell drag-and-drop operations
+            onto the TreeView. Setting this property automatically wires or unwires the associated
+            drag event handlers.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.DragHandler">
+            <summary>
+            Manages Shell drag-source operations initiated from within the TreeView,
+            allowing items to be dragged out to other Shell targets.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.m_showHiddenFolders">
+            <summary>
+            Backing field for <see cref="P:ExpControlsLib.ExpTree.ShowHiddenFolders"/>. When <c>true</c>, folders
+            with the Hidden attribute are included in the tree display.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.m_WindowsContextMenu">
+            <summary>
+            The Windows Shell context menu helper used to display and process the native
+            right-click context menu for selected TreeNode items.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.EM_SETSEL">
+            <summary>Windows message identifier for setting the selection range in an edit control.</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.TVM_FIRST">
+            <summary>Base value for TreeView control messages (WM_USER + 0x1100).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.TVM_GETEDITCONTROL">
+            <summary>
+            TreeView message that retrieves the handle of the edit control used for in-place label editing.
+            Equals <c>TVM_FIRST + 15</c>.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.#ctor">
+            <summary>
+            Initializes a new instance of <see cref="T:ExpControlsLib.ExpTree"/>, sets up the TreeView image list,
+            wires Shell item update notifications, and configures the node-expansion hover timer.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.WndProc(System.Windows.Forms.Message@)">
             <summary>
             Windows Message Handler for receiving Messages associated with a System Menu. 
@@ -1216,6 +1401,38 @@
             </summary>
             <param name="m">A Windows Message</param>
             <remarks>Only Handles Messages relating to Windows Context Menus</remarks>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.SetWindowTheme(System.IntPtr,System.String,System.String)">
+            <summary>
+            P/Invoke declaration for the UxTheme <c>SetWindowTheme</c> function, which applies
+            a visual style to a window, giving the TreeView the standard Explorer appearance.
+            </summary>
+            <param name="hWnd">Handle to the window to restyle.</param>
+            <param name="pszSubAppName">The application name to use for theming (e.g. <c>"explorer"</c>).</param>
+            <param name="pszSubIdList">Optional semicolon-delimited list of sub-IDs, or <c>null</c>.</param>
+            <returns>An HRESULT indicating success or failure.</returns>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_HandleCreated(System.Object,System.EventArgs)">
+            <summary>
+            Handles the TreeView's <c>HandleCreated</c> event. Initialises the drag source wrapper,
+            optionally creates the drop target wrapper, and applies the Explorer visual theme.
+            </summary>
+            <param name="sender">The TreeView whose handle was created.</param>
+            <param name="e">Event data (unused).</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_HandleDestroyed(System.Object,System.EventArgs)">
+            <summary>
+            Handles the TreeView's <c>HandleDestroyed</c> event.
+            Reserved for any cleanup that must occur when the underlying window handle is destroyed.
+            </summary>
+            <param name="sender">The TreeView whose handle was destroyed.</param>
+            <param name="e">Event data (unused).</param>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.m_AllowDrop">
+            <summary>
+            Backing field for <see cref="P:ExpControlsLib.ExpTree.AllowDrop"/>. Stores the last value assigned to the property
+            so that the drop handler can be re-created when the TreeView handle is (re-)created.
+            </summary>
         </member>
         <member name="P:ExpControlsLib.ExpTree.AllowDrop">
             <summary>
@@ -1225,6 +1442,18 @@
             </summary>
             <returns>True or False</returns>
             <remarks>Works by assigning or  removing an instance of CtvDropWrapper to the Local variable DropHandler.</remarks>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.ForeColor">
+            <summary>
+            Gets or sets the foreground color of the underlying TreeView control.
+            </summary>
+            <returns>The current foreground <see cref="T:System.Drawing.Color"/> of the TreeView.</returns>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.BackColor">
+            <summary>
+            Gets or sets the background color of the underlying TreeView control.
+            </summary>
+            <returns>The current background <see cref="T:System.Drawing.Color"/> of the TreeView.</returns>
         </member>
         <member name="P:ExpControlsLib.ExpTree.RootItem">
             <summary>
@@ -1273,6 +1502,90 @@
             <remarks>Certain Special Folders are disallowed since they may not exist, or may cause program failure
             on certain versions of Windows (primarily the older, unsupported versions).</remarks>
         </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.None">
+            <summary>No startup directory specified; the tree will be empty.</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Desktop">
+            <summary>The Desktop virtual folder (CSIDL 0x00).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Programs">
+            <summary>The Programs folder in the Start Menu (CSIDL 0x02).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Controls">
+            <summary>The Control Panel virtual folder (CSIDL 0x03).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Printers">
+            <summary>The Printers virtual folder (CSIDL 0x04).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Personal">
+            <summary>The current user's Documents folder (CSIDL 0x05).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Favorites">
+            <summary>The current user's Favorites folder (CSIDL 0x06).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Startup">
+            <summary>The Startup folder in the Start Menu (CSIDL 0x07).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Recent">
+            <summary>The Recent Documents folder (CSIDL 0x08).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.SendTo">
+            <summary>The Send To folder (CSIDL 0x09).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.StartMenu">
+            <summary>The Start Menu folder (CSIDL 0x0B).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.MyDocuments">
+            <summary>The My Documents virtual folder (CSIDL 0x0C).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.DesktopDirectory">
+            <summary>The Desktop directory in the file system (CSIDL 0x10).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.MyComputer">
+            <summary>The My Computer virtual folder (CSIDL 0x11).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.My_Network_Places">
+            <summary>The My Network Places virtual folder (CSIDL 0x12).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.ApplicatationData">
+            <summary>The Application Data roaming folder (CSIDL 0x1A).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Internet_Cache">
+            <summary>The Temporary Internet Files (cache) folder (CSIDL 0x20).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Cookies">
+            <summary>The Cookies folder (CSIDL 0x21).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.History">
+            <summary>The History folder (CSIDL 0x22).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Windows">
+            <summary>The Windows installation directory (CSIDL 0x24).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.System">
+            <summary>The System32 directory (CSIDL 0x25).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Program_Files">
+            <summary>The Program Files directory (CSIDL 0x26).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.MyPictures">
+            <summary>The My Pictures folder (CSIDL 0x27).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Profile">
+            <summary>The current user's profile directory (CSIDL 0x28).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Systemx86">
+            <summary>The 32-bit System directory on a 64-bit OS (CSIDL 0x29).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.AdminTools">
+            <summary>The Administrative Tools folder (CSIDL 0x30).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.m_StartUpDirectory">
+            <summary>
+            Backing field for <see cref="P:ExpControlsLib.ExpTree.StartUpDirectory"/>. Stores the currently active
+            <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value.
+            </summary>
+        </member>
         <member name="P:ExpControlsLib.ExpTree.StartUpDirectory">
             <summary>
             Sets the initial Root directory of ExpTree.
@@ -1298,6 +1611,23 @@
             Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
             ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.ExpandANodeAsync(System.String,System.Boolean)">
+            <summary>
+            Asynchronously expands TreeNodes from the tree root through the node identified by
+            <paramref name="newPath"/>. This is the async counterpart of
+            <see cref="M:ExpControlsLib.ExpTree.ExpandANode(System.String,System.Boolean)"/>.
+            </summary>
+            <param name="newPath">The file-system path of the node to expand.</param>
+            <param name="SelectExpandedNode">
+            If <c>true</c> (the default), the expanded node is selected and an
+            <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/> event is raised. If <c>false</c>, the current
+            selection is unchanged and no event is raised.
+            </param>
+            <returns>
+            A <see cref="T:System.Threading.Tasks.Task`1"/> that resolves to <c>true</c> if the expansion succeeded,
+            or <c>false</c> if the path could not be resolved or the item is not a folder.
+            </returns>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.ExpandANode(WindowsApiLib.Shell.CShellItem,System.Boolean)">
             <summary>
             Expands TreeNodes from the tree root through the input CShellItem. All intermediate nodes between the
@@ -1313,6 +1643,35 @@
             <remarks>This is the preferred method of ExpandANode.<br />
             Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
             ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.ExpandANodeAsync(WindowsApiLib.Shell.CShellItem,System.Boolean)">
+            <summary>
+            Asynchronously expands TreeNodes from the tree root through the node represented by
+            <paramref name="newItem"/>, populating lazy-loaded (dummy) nodes on demand.
+            This is the preferred async counterpart of <see cref="M:ExpControlsLib.ExpTree.ExpandANode(WindowsApiLib.Shell.CShellItem,System.Boolean)"/>.
+            </summary>
+            <param name="newItem">
+            The <see cref="T:WindowsApiLib.Shell.CShellItem"/> whose corresponding TreeNode should be expanded and
+            optionally selected.
+            </param>
+            <param name="SelectExpandedNode">
+            If <c>true</c> (the default), the target node is selected after expansion and an
+            <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/> event is raised. If <c>false</c>, the current
+            selection is unchanged.
+            </param>
+            <returns>
+            A <see cref="T:System.Threading.Tasks.Task`1"/> that resolves to <c>true</c> if the node was found
+            and expanded successfully, or <c>false</c> otherwise.
+            </returns>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.ExpCollapseAll(System.Boolean)">
+            <summary>
+            Collapses all nodes in the TreeView.
+            </summary>
+            <param name="collapse">
+            When <c>true</c> (the default), all nodes are collapsed.
+            Passing <c>false</c> is a no-op (reserved for future expansion).
+            </param>
         </member>
         <member name="M:ExpControlsLib.ExpTree.GoBack">
             <summary>
@@ -1343,6 +1702,38 @@
             <summary>
             Gets a value indicating whether the current folder has a parent folder to navigate to.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.OnItemUpdate(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
+            <summary>
+            Handles Shell item update notifications from <see cref="T:WindowsApiLib.Shell.CShellItemUpdater"/>.
+            Responds to folder creation, deletion, rename, media change, and general update events
+            by adding, removing, or refreshing the corresponding TreeNode in the tree.
+            Only folder-related events are processed; non-folder events are silently ignored.
+            </summary>
+            <param name="sender">The source of the update event.</param>
+            <param name="e">
+            A <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the affected <see cref="T:WindowsApiLib.Shell.CShellItem"/>
+            and the type of update that occurred.
+            </param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.OnStartUpDirectoryChanged(ExpControlsLib.ExpTree.StartDir)">
+            <summary>
+            Responds to a change in <see cref="P:ExpControlsLib.ExpTree.StartUpDirectory"/> by clearing the tree (when
+            <see cref="F:ExpControlsLib.ExpTree.StartDir.None"/> is selected) or asynchronously reloading it rooted at
+            the newly specified special folder.
+            </summary>
+            <param name="newVal">The new <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value that was applied.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.BuildTree(WindowsApiLib.Shell.CShellItem[])">
+            <summary>
+            Populates the root TreeNode's <see cref="P:System.Windows.Forms.TreeNode.Nodes"/> collection from the
+            sorted array of first-level child <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders.
+            Hidden items are filtered according to <see cref="P:ExpControlsLib.ExpTree.ShowHiddenFolders"/>, and
+            excluded items are filtered via <see cref="M:ExpControlsLib.ExpTree.IsExcluded(WindowsApiLib.Shell.CShellItem)"/>.
+            </summary>
+            <param name="L1">
+            The array of first-level child <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders to add as root children.
+            </param>
         </member>
         <member name="M:ExpControlsLib.ExpTree.MakeNode(WindowsApiLib.Shell.CShellItem)">
             <summary>
@@ -1387,6 +1778,101 @@
             <param name="item">The CShellItem to check.</param>
             <returns>True if it should have a dummy node, false otherwise.</returns>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.ClearTree">
+            <summary>
+            Removes all nodes from the TreeView and resets <see cref="F:ExpControlsLib.ExpTree.Root"/> to <c>null</c>,
+            effectively clearing the entire tree display.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_BeforeExpand(System.Object,System.Windows.Forms.TreeViewCancelEventArgs)">
+            <summary>
+            Handles the TreeView <c>BeforeExpand</c> event. If the node being expanded contains
+            only a dummy placeholder node, its real children are loaded asynchronously before
+            the expansion is allowed to proceed. Also updates the node's icon to the open-folder state.
+            </summary>
+            <param name="sender">The TreeView raising the event.</param>
+            <param name="e">
+            A <see cref="T:System.Windows.Forms.TreeViewCancelEventArgs"/> that can be used to cancel the expansion.
+            </param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_AfterSelect(System.Object,System.Windows.Forms.TreeViewEventArgs)">
+            <summary>
+            Handles the TreeView <c>AfterSelect</c> event. Records the selection in the navigation
+            history, optionally triggers a directory refresh for newly created folders, and raises
+            the <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/> event when <see cref="F:ExpControlsLib.ExpTree.EnableEventPost"/> is <c>true</c>.
+            </summary>
+            <param name="sender">The TreeView raising the event.</param>
+            <param name="e">A <see cref="T:System.Windows.Forms.TreeViewEventArgs"/> containing the newly selected node.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.ExpTree_MouseUp(System.Object,System.Windows.Forms.MouseEventArgs)">
+            <summary>
+            Handles the <c>MouseUp</c> event on the ExpTree control. On a right-click, determines
+            the TreeNode under the cursor and, if <see cref="P:ExpControlsLib.ExpTree.UseWindowsContextMenu"/> is enabled,
+            displays the native Shell context menu for that node. Rename and other Shell verb
+            commands are dispatched accordingly. Also forwards the event via <see cref="M:System.Windows.Forms.Control.OnMouseUp(System.Windows.Forms.MouseEventArgs)"/>.
+            </summary>
+            <param name="sender">The control raising the event.</param>
+            <param name="e">A <see cref="T:System.Windows.Forms.MouseEventArgs"/> describing the mouse action.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_MouseDown(System.Object,System.Windows.Forms.MouseEventArgs)">
+            <summary>
+            Forwards the TreeView <c>MouseDown</c> event to the base control's
+            <see cref="M:System.Windows.Forms.Control.OnMouseDown(System.Windows.Forms.MouseEventArgs)"/> handler.
+            </summary>
+            <param name="sender">The TreeView raising the event.</param>
+            <param name="e">A <see cref="T:System.Windows.Forms.MouseEventArgs"/> describing the mouse action.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_MouseMove(System.Object,System.Windows.Forms.MouseEventArgs)">
+            <summary>
+            Forwards the TreeView <c>MouseMove</c> event to the base control's
+            <see cref="M:System.Windows.Forms.Control.OnMouseMove(System.Windows.Forms.MouseEventArgs)"/> handler.
+            </summary>
+            <param name="sender">The TreeView raising the event.</param>
+            <param name="e">A <see cref="T:System.Windows.Forms.MouseEventArgs"/> describing the mouse action.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_MouseEnter(System.Object,System.EventArgs)">
+            <summary>
+            Forwards the TreeView <c>MouseEnter</c> event to the base control's
+            <see cref="M:System.Windows.Forms.Control.OnMouseEnter(System.EventArgs)"/> handler.
+            </summary>
+            <param name="sender">The TreeView raising the event.</param>
+            <param name="e">Event data (unused).</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_MouseLeave(System.Object,System.EventArgs)">
+            <summary>
+            Forwards the TreeView <c>MouseLeave</c> event to the base control's
+            <see cref="M:System.Windows.Forms.Control.OnMouseLeave(System.EventArgs)"/> handler.
+            </summary>
+            <param name="sender">The TreeView raising the event.</param>
+            <param name="e">Event data (unused).</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_KeyPress(System.Object,System.Windows.Forms.KeyPressEventArgs)">
+            <summary>
+            Handles the TreeView <c>KeyPress</c> event. Suppresses the default warning beep for
+            Ctrl+C, Ctrl+V, Ctrl+X, and Enter key presses, then forwards the event via
+            <see cref="M:System.Windows.Forms.Control.OnKeyPress(System.Windows.Forms.KeyPressEventArgs)"/>.
+            </summary>
+            <param name="sender">The TreeView raising the event.</param>
+            <param name="e">A <see cref="T:System.Windows.Forms.KeyPressEventArgs"/> containing the pressed character.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_KeyUp(System.Object,System.Windows.Forms.KeyEventArgs)">
+            <summary>
+            Handles the TreeView <c>KeyUp</c> event. Expands the selected node on Enter,
+            invokes the Shell delete verb on Delete, and dispatches cut/copy/paste Shell verbs
+            for the corresponding Ctrl key combinations. Forwards the event via
+            <see cref="M:System.Windows.Forms.Control.OnKeyUp(System.Windows.Forms.KeyEventArgs)"/>.
+            </summary>
+            <param name="sender">The TreeView raising the event.</param>
+            <param name="e">A <see cref="T:System.Windows.Forms.KeyEventArgs"/> describing the key that was released.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_KeyDown(System.Object,System.Windows.Forms.KeyEventArgs)">
+            <summary>
+            Forwards the TreeView <c>KeyDown</c> event to the base control's
+            <see cref="M:System.Windows.Forms.Control.OnKeyDown(System.Windows.Forms.KeyEventArgs)"/> handler.
+            </summary>
+            <param name="sender">The TreeView raising the event.</param>
+            <param name="e">A <see cref="T:System.Windows.Forms.KeyEventArgs"/> describing the key that was pressed.</param>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.Tv1_VisibleChanged(System.Object,System.EventArgs)">
             <summary>When a form containing this control is Hidden and then re-Shown,
             the association to the SystemImageList is lost.  Also lost is the
@@ -1402,6 +1888,12 @@
             theoretically possible for the code to request a collapse of this node
             If it occurs, cancel it</summary>
         </member>
+        <member name="F:ExpControlsLib.ExpTree.m_allowFolderRename">
+            <summary>
+            Backing field for <see cref="P:ExpControlsLib.ExpTree.AllowFolderRename"/>. When <c>true</c>, the TreeView's
+            <c>LabelEdit</c> is enabled and the Shell rename verb is permitted via the context menu.
+            </summary>
+        </member>
         <member name="P:ExpControlsLib.ExpTree.AllowFolderRename">
             <summary>
             Allow renaming of folders using LabelEdit
@@ -1409,6 +1901,55 @@
             <value></value>
             <returns></returns>
             <remarks></remarks>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_BeforeLabelEdit(System.Object,System.Windows.Forms.NodeLabelEditEventArgs)">
+            <summary>
+            Handles the TreeView <c>BeforeLabelEdit</c> event. Cancels the edit for dummy nodes,
+            disk roots, non-renameable items, and the My Documents folder. When editing is allowed,
+            pre-selects only the filename portion (without extension) in the edit control.
+            </summary>
+            <param name="sender">The TreeView raising the event.</param>
+            <param name="e">
+            A <see cref="T:System.Windows.Forms.NodeLabelEditEventArgs"/> that can be used to cancel the label edit.
+            </param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_AfterLabelEdit(System.Object,System.Windows.Forms.NodeLabelEditEventArgs)">
+            <summary>
+            Handles the TreeView <c>AfterLabelEdit</c> event. Trims the new label and calls
+            <c>IShellFolder.SetNameOf</c> to rename the underlying Shell item. Plays a beep and
+            cancels the edit if the rename fails or the label is empty/whitespace.
+            </summary>
+            <param name="sender">The TreeView raising the event.</param>
+            <param name="e">
+            A <see cref="T:System.Windows.Forms.NodeLabelEditEventArgs"/> containing the new label text.
+            </param>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.dropNode">
+            <summary>
+            The TreeNode most recently dragged over or dropped onto. Used to track highlight
+            state and drive the auto-expand timer.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.NodePoint">
+            <summary>
+            The client-coordinate position of the most recent drag-over event, used by the
+            auto-expand timer to scroll the TreeView when dragging near its edges.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.expandNodeTimer">
+            <summary>
+            Timer that fires after a short hover delay to auto-expand the node currently being
+            dragged over, improving drag-and-drop usability.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.ExpandNodeTimer_Tick(System.Object,System.EventArgs)">
+            <summary>
+            Handles the <see cref="F:ExpControlsLib.ExpTree.expandNodeTimer"/> <c>Tick</c> event. Expands the node
+            currently being dragged over (<see cref="F:ExpControlsLib.ExpTree.dropNode"/>) and scrolls the TreeView
+            if the drag position is near the top or bottom edge.
+            </summary>
+            <param name="sender">The timer raising the event.</param>
+            <param name="e">Event data (unused).</param>
         </member>
         <member name="M:ExpControlsLib.ExpTree.DragWrapper_ShDragEnter(System.IntPtr,System.Int32,System.Int32)">
             <summary>ShDragEnter does nothing. It is here for debug tracking</summary>
@@ -1424,6 +1965,34 @@
             Node expansion based on expandNodeTimer added by me.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.DragWrapper_ShDragDrop(System.Windows.Forms.TreeNode,System.Int32,System.Int32)">
+            <summary>
+            Handles the Shell drop event on the TreeView. Stops the auto-expand timer and
+            resets the highlight color of the previously highlighted drop-target node.
+            </summary>
+            <param name="Node">The <see cref="T:System.Windows.Forms.TreeNode"/> onto which the item was dropped.</param>
+            <param name="grfKeyState">The current state of keyboard modifier keys during the drop.</param>
+            <param name="pdwEffect">The drag-and-drop effect that was applied.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.ResetTreeviewNodeColor(System.Windows.Forms.TreeNode)">
+            <summary>
+            Recursively resets the background and foreground colors of a TreeNode and its
+            expanded children back to the default (empty) color, removing any drag-over highlight.
+            </summary>
+            <param name="node">The root <see cref="T:System.Windows.Forms.TreeNode"/> whose colors should be reset.</param>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.m_useWindowsContextMenu">
+            <summary>
+            Backing field for <see cref="P:ExpControlsLib.ExpTree.UseWindowsContextMenu"/>. When <c>true</c>, a right-click
+            on a TreeNode displays the native Windows Shell context menu.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.m_minimalContextMenu">
+            <summary>
+            Backing field for <see cref="P:ExpControlsLib.ExpTree.MinimalContextMenu"/>. When <c>true</c>, most third-party
+            Shell extensions are filtered out of the context menu.
+            </summary>
+        </member>
         <member name="P:ExpControlsLib.ExpTree.UseWindowsContextMenu">
             <summary>
             Sets whether or not the control should use Windows System context menu for TreeNode items.
@@ -1435,6 +2004,17 @@
             <summary>
             Gets or sets whether to show a minimal context menu by filtering out most 3rd party extensions.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.IsExcluded(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Determines whether the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/> should be excluded from
+            the tree display based on the <see cref="P:ExpControlsLib.ExpTree.ExcludedItems"/> collection.
+            </summary>
+            <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to test.</param>
+            <returns>
+            <c>true</c> if the item's path (stripped of leading/trailing <c>:</c>, <c>{</c>, and <c>}</c>
+            characters) is found in <see cref="P:ExpControlsLib.ExpTree.ExcludedItems"/>; otherwise <c>false</c>.
+            </returns>
         </member>
         <member name="M:ExpControlsLib.ExpTree.RefreshTree(WindowsApiLib.Shell.CShellItem)">
             <summary>RefreshTree Method thanks to Calum McLellan</summary>
@@ -1455,6 +2035,36 @@
             <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
             Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.PopulateNodeAsync(System.Windows.Forms.TreeNode)">
+            <summary>
+            Asynchronously populates a lazy-loaded TreeNode by fetching its child
+            <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders on a background STA thread, then updating
+            the TreeView on the UI thread. Icon and sub-folder data are pre-warmed during
+            the background pass to keep subsequent expansions responsive.
+            </summary>
+            <param name="NodeToFill">
+            The <see cref="T:System.Windows.Forms.TreeNode"/> containing only a dummy placeholder node that should
+            be replaced with its real child nodes.
+            </param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.GetTreeNode(WindowsApiLib.Shell.CShellItem,System.Windows.Forms.TreeNode@)">
+            <summary>
+            Walks the Shell namespace hierarchy of <paramref name="shellItem"/> from the Desktop
+            downward through the TreeView to locate the corresponding <see cref="T:System.Windows.Forms.TreeNode"/>.
+            </summary>
+            <param name="shellItem">
+            The <see cref="T:WindowsApiLib.Shell.CShellItem"/> whose TreeNode is to be found. If <c>null</c>, the
+            Desktop <see cref="T:WindowsApiLib.Shell.CShellItem"/> is used.
+            </param>
+            <param name="treeNode">
+            When this method returns <c>true</c>, contains the matching <see cref="T:System.Windows.Forms.TreeNode"/>;
+            otherwise <c>null</c>.
+            </param>
+            <returns>
+            <c>true</c> if a matching TreeNode was found in the currently displayed tree;
+            <c>false</c> if the item is not represented by any visible node.
+            </returns>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.InsertNode(System.Windows.Forms.TreeNode,System.Windows.Forms.TreeNode)">
             <summary>
             Insert a TreeNode into its' Parent's Nodes list in its' proper location
@@ -1470,6 +2080,21 @@
             </summary>
             <param name="N">The Node whose Nodes.Collection is to be sorted</param>
             <remarks></remarks>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.WinMenuCmd(WindowsApiLib.Shell.CShellItem,System.String)">
+            <summary>
+            Asynchronously invokes a Shell context menu verb (delete, cut, copy, or paste) for
+            the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/> on a background STA thread, keeping the UI
+            thread unblocked while the Shell operation (which may show its own dialog) completes.
+            </summary>
+            <param name="csi">
+            The <see cref="T:WindowsApiLib.Shell.CShellItem"/> on which the Shell verb should be invoked.
+            If <c>null</c>, the method returns immediately without doing anything.
+            </param>
+            <param name="cmd">
+            The ANSI Shell verb string to invoke (e.g. <c>"delete"</c>, <c>"cut"</c>,
+            <c>"copy"</c>, or <c>"paste"</c>).
+            </param>
         </member>
         <member name="F:ExpControlsLib.ExpTree.components">
             <summary> 
