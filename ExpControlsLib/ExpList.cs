@@ -74,16 +74,16 @@ namespace ExpControlsLib
 
         // For ExpFileList label text selection
         private const int EM_SETSEL = 0xB1;
-        private const int LVM_FIRST = 0x1000;
-        private const uint LVM_GETEDITCONTROL = LVM_FIRST + 24;
 
         private ShellController? _shellController = null;
         private HashSet<string> _excludedItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private ThumbnailImageListManager _thumbnailManager; // Manager for thumbnail display modes
         private VirtualListViewWrapper _listViewWrapper;
+        private bool _initialized = false;
 
         // Avoid Globalization problem-- an empty timevalue
         private static readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
+
 
         private Stack<CShellItem> _backHistory = new();
         private Stack<CShellItem> _forwardHistory = new();
@@ -495,7 +495,8 @@ namespace ExpControlsLib
                     _currentFolderCsi = _shellController.HierachyManager.Add(value);
                 else
                     _currentFolderCsi = value;
-                ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
+                if (_initialized)
+                    ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
             }
         }
 
@@ -610,7 +611,7 @@ namespace ExpControlsLib
                     LoadImagesForVisibleItems();
                 };
 
-                VisibleChanged += ExpList_VisibleChanged;
+                VisibleChanged += ExpFileList_VisibleChanged;
 
                 _listView.HandleCreated += ExpFileList_HandleCreated;
                 _listView.Resize += (s, e) => OnScroll();
@@ -641,15 +642,8 @@ namespace ExpControlsLib
 
         public void Initialize(ShellController shellController)
         {
-            Debug.WriteLine("ExpList: Initialize Begin");
-            try
-            {
-                _shellController = shellController;
-            }
-            finally
-            {
-                Debug.WriteLine("ExpList: Initialize End");
-            }
+            _shellController = shellController;
+            _initialized = true;
         }
 
         /// <summary>
@@ -716,7 +710,7 @@ namespace ExpControlsLib
         /// Handles the <see cref="Control.VisibleChanged"/> event of the <see cref="ExpList"/> control.
         /// Re-configures image lists for the current display mode when the control becomes visible.
         /// </summary>
-        private void ExpList_VisibleChanged(object sender, EventArgs e) //occurs when the control become visible
+        private void ExpFileList_VisibleChanged(object? sender, EventArgs e)
         {
             Debug.WriteLine("ExpList: ExpList_VisibleChanged Begin");
             try
@@ -2882,7 +2876,7 @@ namespace ExpControlsLib
                 SendMessage(editWnd, EM_SETSEL, IntPtr.Zero, (IntPtr)textLen);
 
                 if ((!csi.IsFileSystem) || csi.IsDisk ||
-                    csi.FullPath == CShellItemFactory.CreateCShItem(CSIDL.MYDOCUMENTS).FullPath ||
+                    csi.FullPath == CShellItemFactory.MyDocuments.FullPath ||
                     !csi.CanRename)
                 {
                     System.Media.SystemSounds.Beep.Play();

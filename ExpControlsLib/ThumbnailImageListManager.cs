@@ -28,7 +28,7 @@ namespace ExpControlsLib
         
         private readonly HashedLinkedList<string> _lruKeys = new();
         private readonly System.Collections.Generic.Dictionary<string, ThumbnailSlot> _slotByKey = new();
-        private const int MaxThumbnails = 1000;
+        private readonly int _maxThumbnails;
 
         private readonly System.Collections.Generic.HashSet<ImageList> _corruptImageLists = new System.Collections.Generic.HashSet<ImageList>();
 
@@ -48,9 +48,10 @@ namespace ExpControlsLib
 
         public event EventHandler<ThumbnailReadyEventArgs> ThumbnailReady;
 
-        public ThumbnailImageListManager(ExpList expList)
+        public ThumbnailImageListManager(ExpList expList, int capacity = 1000)
         {
             _expList = expList;
+            _maxThumbnails = capacity;
             _thumbnailProvider = new ThumbnailProvider();
             _thumbnailProvider.ThumbnailReady += OnThumbnailReady;
         }
@@ -271,7 +272,7 @@ namespace ExpControlsLib
                 else //new thumbnail
                 {
                     bool reused = false;
-                    if (_lruKeys.Count >= MaxThumbnails)
+                    if (_lruKeys.Count >= _maxThumbnails)
                     {
                         string oldestKey = _lruKeys.RemoveFirst();
                         if (_slotByKey.TryGetValue(oldestKey, out var oldestSlot))

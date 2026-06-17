@@ -41,6 +41,7 @@ namespace WindowsApiLib.Shell
         // ListView Message Constants
         public const int LVM_FIRST = 0x1000;
         public const int LVM_SCROLL = LVM_FIRST + 20;
+        public const int LVM_GETEDITCONTROL = LVM_FIRST + 24;
         public const int LVM_SETITEMSTATE = LVM_FIRST + 43;
         public const int LVM_SETBKIMAGE = LVM_FIRST + 68;
         public const int LVM_SETTEXTBKCOLOR = LVM_FIRST + 38;
@@ -52,7 +53,7 @@ namespace WindowsApiLib.Shell
         public const int LVM_GETHEADER = 4127;
         public const int LVM_SETCOLUMN = 4122;
         public const int LVM_SETEXTENDEDLISTVIEWSTYLE = LVM_FIRST + 54;
-
+        
         // 'For ListItem State
         public const int LVIF_STATE = 0x8;
         public const int LVIS_SELECTED = 0x2;

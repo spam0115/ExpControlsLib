@@ -1,0 +1,38 @@
+Here are several suggestions for ThumbnailImageListManager unit tests. Since this
+  class manages UI components like ImageList and ListView, these tests should ideally run in an STAThread (already
+  supported by your test project's configuration).
+
+  1. ImageList Lifecycle Management
+   * TestGetImageList_CreatesCorrectSize: Verify that GetImageList(size) returns an ImageList with the requested
+     dimensions and a ColorDepth of Depth32Bit.
+   * TestGetImageList_ReturnsSameInstance: Verify that subsequent calls for the same size return the same ImageList
+     instance.
+   * TestClear_DisposesImageLists: Verify that calling Clear() disposes of all cached ImageList objects and sets the
+     ListView.LargeImageList to null.
+
+  2. Cache & LRU Logic (Critical)
+   * TestAddThumbnail_Success: Verify that adding a valid bitmap returns a valid index and updates the
+     CShellItem.ImageIndex.
+   * TestAddThumbnail_ReplacesExisting: Verify that if you add a thumbnail for the same file/size twice, it overwrites
+     the image at the same index in the ImageList rather than appending a new one.
+   * TestLRUEviction_FullCache: Since MaxThumbnails is 1000, verify that adding the 1001st thumbnail evicts the oldest
+     entry from the cache.
+   * TestSlotReuse_Efficiency: Verify that when the cache is full, AddThumbnail reuses the index of the evicted item in
+     the ImageList (this prevents the ImageList from growing indefinitely).
+
+  3. State & Navigation
+   * TestGetThumbnailIndex_CacheHit: Verify that GetThumbnailIndex returns the correct index for an item already in the
+     cache and updates its position in the LRU list.
+   * TestGetThumbnailIndex_CacheMiss: Verify that it returns -1 for missing items and initiates a new request via the
+     ThumbnailProvider.
+   * TestSetImageListForSize: Verify that switching sizes correctly updates the ListView.LargeImageList and resets
+     ImageIndex for non-virtual items.
+
+  4. Error Handling
+   * TestAddThumbnail_NullBitmap: Verify that passing a null bitmap returns -1 and sets the item's ImageIndex to -1.
+   * TestAddThumbnail_CorruptImageList: Verify that if an exception occurs during image addition, the ImageList is
+     marked as corrupt and a fresh one is created on the next request.
+
+  5. Integration with Shell Items
+   * TestThumbnailReady_EventFires: Verify that the ThumbnailReady event is correctly forwarded from the
+     ThumbnailProvider.

@@ -63,6 +63,7 @@ namespace ExpControlsLib
             _TreeView.AfterLabelEdit += Tv1_AfterLabelEdit;
             _TreeView.BeforeCollapse += Tv1_BeforeCollapse;
             _TreeView.BeforeExpand += Tv1_BeforeExpand;
+            _TreeView.BeforeSelect += Tv1_BeforeSelect;
             _TreeView.AfterSelect += Tv1_AfterSelect;
             _TreeView.VisibleChanged += Tv1_VisibleChanged;
             _TreeView.HandleCreated += Tv1_HandleCreated;

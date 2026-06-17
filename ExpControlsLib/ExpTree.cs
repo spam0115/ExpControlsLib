@@ -1380,6 +1380,14 @@ namespace ExpControlsLib
             e.Node.ImageIndex = ((CShellItem)e.Node.Tag).IconIndexOpen;
         }
 
+        private void Tv1_BeforeSelect(object sender, TreeViewCancelEventArgs e)
+        {
+            CShellItem csi = (CShellItem)e.Node.Tag;
+            if (csi is null) return;
+
+            Debug.WriteLine("Tv1_BeforeSelect: item selected: " + csi.Name + " " + sender?.ToString());
+        }
+
         /// <summary>
         /// Handles the TreeView <c>AfterSelect</c> event. Records the selection in the navigation
         /// history, optionally triggers a directory refresh for newly created folders, and raises
@@ -1389,41 +1397,42 @@ namespace ExpControlsLib
         /// <param name="e">A <see cref="TreeViewEventArgs"/> containing the newly selected node.</param>
         private void Tv1_AfterSelect(object sender, TreeViewEventArgs e)
         {
-            CShellItem CSI = (CShellItem)e.Node.Tag;
+            CShellItem csi = (CShellItem)e.Node.Tag;
+            if (csi is null) return;
 
             // record history
-            if (!_isNavigatingHistory && _lastSelectedCSI != null && !ReferenceEquals(_lastSelectedCSI, CSI))
+            if (!_isNavigatingHistory && _lastSelectedCSI != null && !ReferenceEquals(_lastSelectedCSI, csi))
             {
                 _backHistory.Push(_lastSelectedCSI);
                 _forwardHistory.Clear();
             }
-            _lastSelectedCSI = CSI;
+            _lastSelectedCSI = csi;
 
             // **********Added by Lukai-2021.12.02, If a folder is created by code "My.Computer.FileSystem.CreateDirectory(folderPath)", then this folder can't be shown automatically, I need to refresh it in here manually
-            if (System.IO.Directory.Exists(CSI.FullPath))
-            {
-                try
-                {
-                    if (e.Node.GetNodeCount(false) != System.IO.Directory.GetDirectories(CSI.FullPath).Length)
-                    {
-                        ShellController.Instance.ShellUpdater.DoUpdateDir(CSI, false, true);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine("Error reading folder: " + ex.Message);
-                }
-            }
+            //if (System.IO.Directory.Exists(csi.FullPath))
+            //{
+            //    try
+            //    {
+            //        if (e.Node.GetNodeCount(false) != System.IO.Directory.GetDirectories(csi.FullPath).Length)
+            //        {
+            //            ShellController.Instance.ShellUpdater.DoUpdateDir(csi, false, true);
+            //        }
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        Debug.WriteLine("Error reading folder: " + ex.Message);
+            //    }
+            //}
 
             if (EnableEventPost) // turned off during RefreshTree
             {
-                if (CSI.FullPath.StartsWith(":"))
+                if (csi.FullPath.StartsWith(":"))
                 {
-                    ExpTreeNodeSelected?.Invoke(CSI.DisplayName, CSI);
+                    ExpTreeNodeSelected?.Invoke(csi.DisplayName, csi);
                 }
                 else
                 {
-                    ExpTreeNodeSelected?.Invoke(CSI.FullPath, CSI);
+                    ExpTreeNodeSelected?.Invoke(csi.FullPath, csi);
                 }
             }
         }
@@ -1751,7 +1760,7 @@ namespace ExpControlsLib
             }
             CShellItem item = (CShellItem)e.Node.Tag;
             if (item.FullPath.StartsWith("::") || item.IsDisk || !m_allowFolderRename
-                || (item.FullPath ?? "") == (CShellItemFactory.CreateCShItem(CSIDL.MYDOCUMENTS).FullPath ?? "")
+                || (item.FullPath ?? "") == (CShellItemFactory.MyDocuments.FullPath ?? "")
                 || !item.CanRename)
             {
                 System.Media.SystemSounds.Beep.Play();
