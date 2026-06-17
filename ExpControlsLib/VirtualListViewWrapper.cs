@@ -753,7 +753,7 @@ namespace ExpControlsLib
 
             if (_expList.IsShuttingDown) 
             { 
-                e.Item = new ListViewItem();
+                e.Item = new ListViewItem(); //send back a dummy or else the whole program will crash
                 return; //windows tries to retrieve every item during shutdown for some reason
             }
 
@@ -761,7 +761,18 @@ namespace ExpControlsLib
             if (isThumbnailMode) _expList.EnterImageListMutation();
             try
             {
-                e.Item = GetLviFromVirtual(e.ItemIndex);
+                var lvi = GetLviFromVirtual(e.ItemIndex);
+                if (lvi is null)
+                {
+                    e.Item = new ListViewItem(); //send back a dummy
+                }
+                else
+                    e.Item = lvi;
+            }
+            catch(Exception ex)
+            {
+                Debug.WriteLine("Error in OnRetrieveVirtualItem: " + ex.Message);
+                e.Item = new ListViewItem(); //send back a dummy to avoid crashing the ListView
             }
             finally
             {
