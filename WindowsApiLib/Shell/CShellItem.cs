@@ -592,15 +592,20 @@ namespace WindowsApiLib.Shell
                 {
                     return new Dictionary<string, CShellItem>();
                 }
-                else if (m_FileDic == null)
+                
+                var filesArray = Files; // Ensures m_Files is initialized
+                lock (m_Files.SyncRoot)
                 {
-                    m_FileDic = new Dictionary<string, CShellItem>();
-                    foreach (var file in Files)
+                    if (m_FileDic == null)
                     {
-                        m_FileDic.Add(file.DisplayName, file);
+                        m_FileDic = new Dictionary<string, CShellItem>();
+                        foreach (var file in filesArray)
+                        {
+                            m_FileDic[file.DisplayName] = file;
+                        }
                     }
+                    return m_FileDic;
                 }
-                return m_FileDic;
             }
         }
 
@@ -613,16 +618,28 @@ namespace WindowsApiLib.Shell
                 {
                     return new Dictionary<string, CShellItem>();
                 }
-                else if (m_DirectoriesDic == null)
+
+                var dirsArray = Directories; // Ensures m_Directories is initialized
+                lock (m_Directories.SyncRoot)
                 {
-                    m_DirectoriesDic = new Dictionary<string, CShellItem>();
-                    foreach (var file in m_Files)
+                    if (m_DirectoriesDic == null)
                     {
-                        m_DirectoriesDic.Add(file.FullPath, file);
+                        m_DirectoriesDic = new Dictionary<string, CShellItem>();
+                        foreach (var dir in dirsArray)
+                        {
+                            m_DirectoriesDic[dir.DisplayName] = dir;
+                        }
                     }
+                    return m_DirectoriesDic;
                 }
-                return m_DirectoriesDic;
             }
+        }
+
+        internal void ClearCaches()
+        {
+            m_FileDic = null;
+            m_DirectoriesDic = null;
+            m_ChildrenDic = null;
         }
 
 
@@ -1326,6 +1343,7 @@ namespace WindowsApiLib.Shell
                 item.m_Parent = this;
                 if (IsFolder)
                 {
+                    ClearCaches();
                     if (item.IsFolder && !DirectoryList.Contains(item.PIDL))
                     { 
                         lock (m_Directories)
@@ -1364,6 +1382,7 @@ namespace WindowsApiLib.Shell
             {
                 if (IsFolder)
                 {
+                    ClearCaches();
                     if (FoldersInitialized && m_Directories.Contains(item))
                     {
                         lock (m_Directories)

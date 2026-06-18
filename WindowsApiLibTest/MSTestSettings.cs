@@ -18,7 +18,7 @@ namespace WindowsApiLibTest
             _runner = new StaThreadRunner(1, "Global STA Test Runner");
             _runner.EnqueueWork(() =>
             {
-                CShellItemFactory.Initialize();
+                ShellController.Initialize();
             }).Wait();
         }
 

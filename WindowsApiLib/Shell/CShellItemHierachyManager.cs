@@ -201,12 +201,11 @@ namespace WindowsApiLib.Shell
                 Parent = null;
                 return currentFolder;
             }
-            //todo: for filesystem objects we should make an optimization that skips scanning locations and just goes directly to the destination folder
-            var splitPidl = CPidl.Split(absPidl);
+
             bool foundFinalExtantParentDirectory = false;
             while (!foundFinalExtantParentDirectory)
-            { //todo: I don't like how reading of folder contents is hidden inside the Directories and Files properties rather than being explicit
-                foreach (var currentCSI in currentFolder.Directories) //check directories before files because there tend to be fewer directories and there's no point checking files if we haven't delved deeply enough into the tree yet
+            { 
+                foreach (var currentCSI in currentFolder.Directories) 
                 {
                     if (IsAncestorOf(currentCSI.PIDL, absPidl))
                     {
@@ -228,9 +227,9 @@ namespace WindowsApiLib.Shell
             }
 
             //Test for invalid paths and mismatched path lengths
-            if (CPidl.SegmentCount(currentFolder.PIDL) + 1 != CPidl.SegmentCount(absPidl)) //the root folder plus 1 final pidl should be the same length as the given pidl if the given pidl is real
+            if (CPidl.SegmentCount(currentFolder.PIDL) + 1 != CPidl.SegmentCount(absPidl)) 
             {
-                Debug.WriteLine("Invalid pidl provided to FindOrAdd(): '" + CPidl.ToString(absPidl) + "'");
+                // Debug.WriteLine("Invalid pidl provided to FindOrAdd(): '" + CPidl.ToString(absPidl) + "'");
                 return null;
             }
 
@@ -243,7 +242,6 @@ namespace WindowsApiLib.Shell
                 return fileItem;
             }
 
-            Debug.WriteLine("Could not find file in the current folder: '" + CPidl.ToString(absPidl) + "'");
             return null;
         }
 
@@ -366,6 +364,7 @@ namespace WindowsApiLib.Shell
                             parent.m_Directories.RemoveRange(dirsToRemove);
                         }
                         
+                        parent.ClearCaches();
                         removedAny = true;
                     }
 

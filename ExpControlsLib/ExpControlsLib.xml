@@ -1230,7 +1230,7 @@
             <remarks>ExpTree raises one major Event, ExpTreeNodeSelected. That event is raised whenever the 
             Selected TreeNode changes because of User Action (i.e. -- clicking on the node)</remarks>
         </member>
-        <member name="F:ExpControlsLib.ExpTree.Root">
+        <member name="F:ExpControlsLib.ExpTree._Root">
             <summary>
             The root <see cref="T:System.Windows.Forms.TreeNode"/> of the TreeView. Represents the top-level Shell item
             from which the entire tree is built.
@@ -1245,7 +1245,9 @@
             <remarks>Seldom listened for since, in typical use, the Method which set the StartUpDirectory value
             is the only Method which is interested. It is also true that a by-product of setting the StartUpDirectory 
             value is the Selection of the new root node.  That change in SelectedNode will cause an ExpTreeNodeSelected
-            Event to be raised.</remarks>
+            Event to be raised.
+            Is this event even useful?  It seems kinda useless.
+            </remarks>
         </member>
         <member name="T:ExpControlsLib.ExpTree.StartUpDirectoryChangedEventHandler">
             <summary>
@@ -1393,7 +1395,7 @@
             Equals <c>TVM_FIRST + 15</c>.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.#ctor">
+        <member name="M:ExpControlsLib.ExpTree.#ctor(System.String)">
             <summary>
             Initializes a new instance of <see cref="T:ExpControlsLib.ExpTree"/>, sets up the TreeView image list,
             wires Shell item update notifications, and configures the node-expansion hover timer.
@@ -1460,7 +1462,7 @@
             </summary>
             <returns>The current background <see cref="T:System.Drawing.Color"/> of the TreeView.</returns>
         </member>
-        <member name="P:ExpControlsLib.ExpTree.RootItem">
+        <member name="P:ExpControlsLib.ExpTree.Root">
             <summary>
             RootItem is a Run-Time only Property. Setting this Item via an External call results in
             re-setting the entire tree to be rooted in the input CShellItem.
@@ -1790,7 +1792,7 @@
         </member>
         <member name="M:ExpControlsLib.ExpTree.ClearTree">
             <summary>
-            Removes all nodes from the TreeView and resets <see cref="F:ExpControlsLib.ExpTree.Root"/> to <c>null</c>,
+            Removes all nodes from the TreeView and resets <see cref="F:ExpControlsLib.ExpTree._Root"/> to <c>null</c>,
             effectively clearing the entire tree display.
             </summary>
         </member>
