@@ -1468,6 +1468,11 @@
             Attempts to set it using a non-Folder CShellItem are ignored.
             </summary>
         </member>
+        <member name="P:ExpControlsLib.ExpTree.SelectedNode">
+            <summary>
+            Gets or sets the selected tree node in the underlying TreeView control.
+            </summary>
+        </member>
         <member name="P:ExpControlsLib.ExpTree.SelectedItem">
             <summary>
             Run-time only Property which returns the CShellItem underlying the SelectedNode of the TreeView.

@@ -30,7 +30,7 @@ namespace WindowsApiLib.Shell
         private readonly AutoResetEvent _initializedEvent = new AutoResetEvent(false);
         private LruConcurrentDictionary<IntPtr, bool> _activeDeletes = new(1000);
 
-        public static event CShItemUpdateEventHandler UpdateEvent;
+        public event CShItemUpdateEventHandler UpdateEvent;
 
         public delegate void CShItemUpdateEventHandler(object sender, ShellItemUpdateEventArgs e);
 
@@ -637,7 +637,7 @@ namespace WindowsApiLib.Shell
             return changed;
         }
 
-        public static void RaiseUpdateEvent(object sender, ShellItemUpdateEventArgs e)
+        public void RaiseUpdateEvent(object sender, ShellItemUpdateEventArgs e)
         {
             var handlers = UpdateEvent?.GetInvocationList();
             if (handlers == null) return;
@@ -1109,7 +1109,7 @@ namespace WindowsApiLib.Shell
             }
             if (Changed)
             {
-                CShellItemUpdater.RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Created));
+                RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Created));
             }
         }
 

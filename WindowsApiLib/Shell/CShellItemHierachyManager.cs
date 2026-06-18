@@ -201,7 +201,7 @@ namespace WindowsApiLib.Shell
                 Parent = null;
                 return currentFolder;
             }
-
+            //todo: for filesystem objects we should make an optimization that skips scanning locations and just goes directly to the destination folder
             var splitPidl = CPidl.Split(absPidl);
             bool foundFinalExtantParentDirectory = false;
             while (!foundFinalExtantParentDirectory)
@@ -373,7 +373,7 @@ namespace WindowsApiLib.Shell
                     {
                         foreach (var target in targets)
                         {
-                            CShellItemUpdater.RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(target, CShItemUpdateType.Deleted));
+                            ShellController.Instance.ShellUpdater.RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(target, CShItemUpdateType.Deleted));
                         }
                     }
                 }

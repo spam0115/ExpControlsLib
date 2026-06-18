@@ -36,7 +36,7 @@ namespace ExpControlsLib
         /// The root <see cref="TreeNode"/> of the TreeView. Represents the top-level Shell item
         /// from which the entire tree is built.
         /// </summary>
-        private TreeNode Root;
+        private TreeNode _Root;
 
         /// <summary>
         /// StartUpDirectoryChanged is raised when the root of the TreeView is changed via StartUpDirectory
@@ -46,7 +46,9 @@ namespace ExpControlsLib
         /// <remarks>Seldom listened for since, in typical use, the Method which set the StartUpDirectory value
         /// is the only Method which is interested. It is also true that a by-product of setting the StartUpDirectory 
         /// value is the Selection of the new root node.  That change in SelectedNode will cause an ExpTreeNodeSelected
-        /// Event to be raised.</remarks>
+        /// Event to be raised.
+        /// Is this event even useful?  It seems kinda useless.
+        /// </remarks>
         public event StartUpDirectoryChangedEventHandler StartUpDirectoryChanged;
 
         /// <summary>
@@ -175,7 +177,9 @@ namespace ExpControlsLib
 
                     if (value == null || !value.IsFolder) return null;
 
-                    var target = ShellController.Instance.LoadFolderContents(value, SHCONTF.FOLDERS);
+                    var flags = SHCONTF.FOLDERS;
+                    if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
+                    var target = ShellController.Instance.LoadFolderContents(value, flags);
                     if (target != null) value = target;
 
                     var children = value.Directories;
@@ -203,14 +207,14 @@ namespace ExpControlsLib
                 try
                 {
                     ClearTree();
-                    Root = new TreeNode(result.DisplayName);
+                    _Root = new TreeNode(result.DisplayName);
                     BuildTree(result.Children);
-                    Root.ImageIndex = result.IconIndex;
-                    Root.SelectedImageIndex = result.IconIndex;
-                    Root.Tag = result.RootItem;
+                    _Root.ImageIndex = result.IconIndex;
+                    _Root.SelectedImageIndex = result.IconIndex;
+                    _Root.Tag = result.RootItem;
 
-                    _TreeView.Nodes.Add(Root);
-                    Root.Expand();
+                    _TreeView.Nodes.Add(_Root);
+                    _Root.Expand();
 
                     if (_pendingExpansionItem != null)
                     {
@@ -221,7 +225,7 @@ namespace ExpControlsLib
                     }
                     else
                     {
-                        _TreeView.SelectedNode = Root;
+                        _TreeView.SelectedNode = _Root;
                     }
                 }
                 finally
@@ -313,15 +317,23 @@ namespace ExpControlsLib
         /// Initializes a new instance of <see cref="ExpTree"/>, sets up the TreeView image list,
         /// wires Shell item update notifications, and configures the node-expansion hover timer.
         /// </summary>
-        public ExpTree() : base()
+        public ExpTree(string? rootPath = null) : base()
         {
             InitializeComponent();
+
+            if (rootPath is not null)
+            {
+                var csi = ShellController.Instance.HierachyManager.FindOrAdd(rootPath.Trim());
+                if (csi is null) throw new ArgumentException("ExpTree: root path could not be found.");
+                m_StartUpDirectory = StartDir.None;
+                Root = csi;
+            }
 
             expandNodeTimer = new System.Windows.Forms.Timer();
 
             SetTreeViewImageList(_TreeView, false);
 
-            CShellItemUpdater.UpdateEvent += OnItemUpdate;
+            ShellController.Instance.ShellUpdater.UpdateEvent += OnItemUpdate;
             expandNodeTimer.Tick += ExpandNodeTimer_Tick;
         }
 
@@ -492,17 +504,17 @@ namespace ExpControlsLib
         /// Attempts to set it using a non-Folder CShellItem are ignored.
         /// </summary>
         [Browsable(false)]
-        public CShellItem RootItem
+        public CShellItem Root
         {
             get
             {
-                if (Root is null || Root.Tag is null)
+                if (_Root is null || _Root.Tag is null)
                 {
                     return ShellController.DesktopCSI;
                 }
                 else
                 {
-                    return (CShellItem)Root.Tag;
+                    return (CShellItem)_Root.Tag;
                 }
             }
             set
@@ -514,6 +526,16 @@ namespace ExpControlsLib
                     _ = SetRootItemAsync(value);
                 }
             }
+        }
+
+        /// <summary>
+        /// Gets or sets the selected tree node in the underlying TreeView control.
+        /// </summary>
+        [Browsable(false)]
+        public TreeNode SelectedNode
+        {
+            get => _TreeView.SelectedNode;
+            set => _TreeView.SelectedNode = value;
         }
 
         /// <summary>
@@ -563,7 +585,7 @@ namespace ExpControlsLib
                 if (m_showHiddenFolders ^ value)
                 {
                     m_showHiddenFolders = value;
-                    if (Root is not null)
+                    if (_Root is not null)
                         RefreshTree();
                 }
             }
@@ -798,7 +820,7 @@ namespace ExpControlsLib
         {
             bool ExpandANodeRet = default;
             ExpandANodeRet = false;
-            var baseNode = Root;
+            var baseNode = _Root;
             if (baseNode == null)
             {
                 if (_rootLoadCts != null && !_rootLoadCts.IsCancellationRequested)
@@ -882,7 +904,7 @@ namespace ExpControlsLib
         /// </returns>
         public async Task<bool> ExpandANodeAsync(CShellItem newItem, bool SelectExpandedNode = true)
         {
-            var baseNode = Root;
+            var baseNode = _Root;
             if (baseNode == null)
             {
                 // If a load is in progress, store as pending
@@ -1271,7 +1293,7 @@ namespace ExpControlsLib
             {
                 if (!(CSI.IsHidden & !m_showHiddenFolders) && !IsExcluded(CSI))
                 {
-                    Root.Nodes.Add(MakeNode(CSI));
+                    _Root.Nodes.Add(MakeNode(CSI));
                 }
             }
         }
@@ -1340,13 +1362,13 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Removes all nodes from the TreeView and resets <see cref="Root"/> to <c>null</c>,
+        /// Removes all nodes from the TreeView and resets <see cref="_Root"/> to <c>null</c>,
         /// effectively clearing the entire tree display.
         /// </summary>
         private void ClearTree()
         {
             _TreeView.Nodes.Clear();
-            Root = null;
+            _Root = null;
         }
 
         #endregion
@@ -1684,16 +1706,16 @@ namespace ExpControlsLib
             if (_TreeView.Visible)
             {
                 SetTreeViewImageList(_TreeView, false);
-                if (Root is not null)
+                if (_Root is not null)
                 {
-                    Root.Expand();
+                    _Root.Expand();
                     if (!(_TreeView.SelectedNode == null))
                     {
                         _TreeView.SelectedNode.Expand();
                     }
                     else
                     {
-                        _TreeView.SelectedNode = Root;
+                        _TreeView.SelectedNode = _Root;
                     }
                 }
             }
@@ -1705,7 +1727,7 @@ namespace ExpControlsLib
         /// If it occurs, cancel it</summary>
         private void Tv1_BeforeCollapse(object sender, TreeViewCancelEventArgs e)
         {
-            if (!_TreeView.ShowRootLines && ReferenceEquals(e.Node, Root))
+            if (!_TreeView.ShowRootLines && ReferenceEquals(e.Node, _Root))
             {
                 e.Cancel = true;
             }
@@ -2069,43 +2091,49 @@ namespace ExpControlsLib
             // Modified to use ExpandANode(CShellItem) rather than ExpandANode(path)
             // Set refresh variable for BeforeExpand method
             EnableEventPost = false;
-            TreeNode Selnode;
+            TreeNode selnode;
             if (_TreeView.SelectedNode == null)
             {
-                Selnode = Root;
+                selnode = _Root;
             }
             else
             {
-                Selnode = _TreeView.SelectedNode;
+                selnode = _TreeView.SelectedNode;
             }
             try
             {
                 _TreeView.BeginUpdate();
-                CShellItem SelCSI = (CShellItem)Selnode.Tag;
+                CShellItem selCSI = (CShellItem)selnode.Tag;
+                Task task;
                 if (rootCSI == null)
                 {
-                    RootItem = RootItem;
+                    task = SetRootItemAsync(Root); 
                 }
                 else
                 {
-                    RootItem = rootCSI;
+                    task = SetRootItemAsync(rootCSI);
                 }
-                if (!ExpandANode(SelCSI))
-                {
-                    var nodeList = new List<TreeNode>();
-                    while (!(Selnode.Parent == null))
-                    {
-                        nodeList.Add(Selnode.Parent);
-                        Selnode = Selnode.Parent;
-                    }
 
-                    foreach (TreeNode currentSelnode in nodeList)
+                task.ContinueWith(antecedent =>
+                {
+                    if (!ExpandANode(selCSI))
                     {
-                        Selnode = currentSelnode;
-                        if (ExpandANode((CShellItem)Selnode.Tag))
-                            break;
+                        var nodeList = new List<TreeNode>();
+                        while (!(selnode.Parent == null))
+                        {
+                            nodeList.Add(selnode.Parent);
+                            selnode = selnode.Parent;
+                        }
+
+                        foreach (TreeNode currentSelnode in nodeList)
+                        {
+                            selnode = currentSelnode;
+                            if (ExpandANode((CShellItem)selnode.Tag))
+                                break;
+                        }
                     }
-                }
+                });
+
             }
             finally
             {
@@ -2149,7 +2177,9 @@ namespace ExpControlsLib
         {
             CShellItem csi = (CShellItem)NodeToFill.Tag;
 
-            var target = ShellController.Instance.LoadFolderContents(csi, SHCONTF.FOLDERS);
+            var flags = SHCONTF.FOLDERS;
+            if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
+            var target = ShellController.Instance.LoadFolderContents(csi, flags);
             if (target != null && !ReferenceEquals(csi, target))
             {
                 NodeToFill.Tag = target;
@@ -2201,7 +2231,9 @@ namespace ExpControlsLib
             {
                 var result = await _staRunner.EnqueueWork(t =>
                 {
-                    var target = ShellController.Instance.LoadFolderContents(csi, SHCONTF.FOLDERS);
+                    var flags = SHCONTF.FOLDERS;
+                    if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
+                    var target = ShellController.Instance.LoadFolderContents(csi, flags);
                     CShellItem value = target ?? csi;
 
                     var children = value.Directories;

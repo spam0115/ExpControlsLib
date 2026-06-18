@@ -677,7 +677,7 @@ namespace ExpControlsLib
                 };
 
                 // Setup Change Notification
-                CShellItemUpdater.UpdateEvent += UpdateInvoke;
+                ShellController.Instance.ShellUpdater.UpdateEvent += UpdateInvoke;
 
                 //DisplayMode = (ListViewDisplayMode)_listView.View;
 
@@ -3802,7 +3802,29 @@ namespace ExpControlsLib
 
         #endregion
 
-
+        /// <summary> 
+        /// Clean up any resources being used.
+        /// </summary>
+        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        protected override void Dispose(bool disposing)
+        {
+            try
+            {
+                if (disposing)
+                {
+                    Cleanup();
+                    _shellController.ShellUpdater.UpdateEvent -= UpdateInvoke;
+                    if (components != null)
+                    {
+                        components.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                base.Dispose(disposing);
+            }
+        }
 
 
     }
