@@ -9,7 +9,7 @@ namespace WindowsApiLib
     /// </summary>
     /// <typeparam name="TKey"></typeparam>
     /// <typeparam name="TValue"></typeparam>
-    public class LruDictionary<TKey, TValue>
+    public class LruDictionary<TKey, TValue> where TKey : notnull
     {
         private readonly int _capacity;
         private readonly Dictionary<TKey, LinkedListNode<(TKey Key, TValue Value)>> _dictionary;

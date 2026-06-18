@@ -1236,42 +1236,6 @@
             from which the entire tree is built.
             </summary>
         </member>
-        <member name="E:ExpControlsLib.ExpTree.StartUpDirectoryChanged">
-            <summary>
-            StartUpDirectoryChanged is raised when the root of the TreeView is changed via StartUpDirectory
-            Property. 
-            </summary>
-            <param name="newVal">One of the StartDir Enum values that represent the possible Start Up Directories.</param>
-            <remarks>Seldom listened for since, in typical use, the Method which set the StartUpDirectory value
-            is the only Method which is interested. It is also true that a by-product of setting the StartUpDirectory 
-            value is the Selection of the new root node.  That change in SelectedNode will cause an ExpTreeNodeSelected
-            Event to be raised.
-            Is this event even useful?  It seems kinda useless.
-            </remarks>
-        </member>
-        <member name="T:ExpControlsLib.ExpTree.StartUpDirectoryChangedEventHandler">
-            <summary>
-            Delegate for the <see cref="E:ExpControlsLib.ExpTree.StartUpDirectoryChanged"/> event.
-            </summary>
-            <param name="newVal">The new <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value that was applied.</param>
-        </member>
-        <member name="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected">
-            <summary>
-            ExpTreeNodeSelected is raised when a Node in the TreeView is Selected.
-            </summary>
-            <param name="SelPath">The Path of the CShellItem represented by the TreeNode, and stored in the
-            TreeNode's Tag.</param>
-            <param name="Item">The CShellItem represented by the TreeNode, and stored in the
-            TreeNode's Tag.</param>
-            <remarks></remarks>
-        </member>
-        <member name="T:ExpControlsLib.ExpTree.ExpTreeNodeSelectedEventHandler">
-            <summary>
-            Delegate for the <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/> event.
-            </summary>
-            <param name="SelPath">The file system path or display name of the selected Shell item.</param>
-            <param name="Item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> associated with the selected TreeNode.</param>
-        </member>
         <member name="F:ExpControlsLib.ExpTree.EnableEventPost">
             <summary>
             Flag used to suppress the raising of <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/> during
@@ -1331,27 +1295,6 @@
             load completes and the deferred expansion is performed.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.Cleanup">
-            <summary>
-            Cancels and disposes any active root-load cancellation token source,
-            releasing associated resources.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.SetRootItemAsync(WindowsApiLib.Shell.CShellItem,ExpControlsLib.ExpTree.StartDir)">
-            <summary>
-            Asynchronously loads and displays the tree rooted at the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>
-            or <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value. Any in-progress load is cancelled before the new one begins.
-            Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
-            </summary>
-            <param name="item">
-            The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
-            should be used to resolve the root instead.
-            </param>
-            <param name="dir">
-            A <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value used to resolve the root when <paramref name="item"/> is <c>null</c>.
-            Defaults to <see cref="F:ExpControlsLib.ExpTree.StartDir.None"/>.
-            </param>
-        </member>
         <member name="F:ExpControlsLib.ExpTree._DropHandler">
             <summary>
             Backing field for the <see cref="P:ExpControlsLib.ExpTree.DropHandler"/> property.
@@ -1395,45 +1338,41 @@
             Equals <c>TVM_FIRST + 15</c>.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.#ctor(System.String)">
+        <member name="E:ExpControlsLib.ExpTree.StartUpDirectoryChanged">
             <summary>
-            Initializes a new instance of <see cref="T:ExpControlsLib.ExpTree"/>, sets up the TreeView image list,
-            wires Shell item update notifications, and configures the node-expansion hover timer.
+            StartUpDirectoryChanged is raised when the root of the TreeView is changed via StartUpDirectory
+            Property. 
             </summary>
+            <param name="newVal">One of the StartDir Enum values that represent the possible Start Up Directories.</param>
+            <remarks>Seldom listened for since, in typical use, the Method which set the StartUpDirectory value
+            is the only Method which is interested. It is also true that a by-product of setting the StartUpDirectory 
+            value is the Selection of the new root node.  That change in SelectedNode will cause an ExpTreeNodeSelected
+            Event to be raised.
+            Is this event even useful?  It seems kinda useless.
+            </remarks>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.WndProc(System.Windows.Forms.Message@)">
+        <member name="T:ExpControlsLib.ExpTree.StartUpDirectoryChangedEventHandler">
             <summary>
-            Windows Message Handler for receiving Messages associated with a System Menu. 
-            This is what causes Cascading menus to Display
+            Delegate for the <see cref="E:ExpControlsLib.ExpTree.StartUpDirectoryChanged"/> event.
             </summary>
-            <param name="m">A Windows Message</param>
-            <remarks>Only Handles Messages relating to Windows Context Menus</remarks>
+            <param name="newVal">The new <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value that was applied.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.SetWindowTheme(System.IntPtr,System.String,System.String)">
+        <member name="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected">
             <summary>
-            P/Invoke declaration for the UxTheme <c>SetWindowTheme</c> function, which applies
-            a visual style to a window, giving the TreeView the standard Explorer appearance.
+            ExpTreeNodeSelected is raised when a Node in the TreeView is Selected.
             </summary>
-            <param name="hWnd">Handle to the window to restyle.</param>
-            <param name="pszSubAppName">The application name to use for theming (e.g. <c>"explorer"</c>).</param>
-            <param name="pszSubIdList">Optional semicolon-delimited list of sub-IDs, or <c>null</c>.</param>
-            <returns>An HRESULT indicating success or failure.</returns>
+            <param name="SelPath">The Path of the CShellItem represented by the TreeNode, and stored in the
+            TreeNode's Tag.</param>
+            <param name="Item">The CShellItem represented by the TreeNode, and stored in the
+            TreeNode's Tag.</param>
+            <remarks></remarks>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.Tv1_HandleCreated(System.Object,System.EventArgs)">
+        <member name="T:ExpControlsLib.ExpTree.ExpTreeNodeSelectedEventHandler">
             <summary>
-            Handles the TreeView's <c>HandleCreated</c> event. Initialises the drag source wrapper,
-            optionally creates the drop target wrapper, and applies the Explorer visual theme.
+            Delegate for the <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/> event.
             </summary>
-            <param name="sender">The TreeView whose handle was created.</param>
-            <param name="e">Event data (unused).</param>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.Tv1_HandleDestroyed(System.Object,System.EventArgs)">
-            <summary>
-            Handles the TreeView's <c>HandleDestroyed</c> event.
-            Reserved for any cleanup that must occur when the underlying window handle is destroyed.
-            </summary>
-            <param name="sender">The TreeView whose handle was destroyed.</param>
-            <param name="e">Event data (unused).</param>
+            <param name="SelPath">The file system path or display name of the selected Shell item.</param>
+            <param name="Item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> associated with the selected TreeNode.</param>
         </member>
         <member name="F:ExpControlsLib.ExpTree.m_AllowDrop">
             <summary>
@@ -1449,6 +1388,20 @@
             </summary>
             <returns>True or False</returns>
             <remarks>Works by assigning or  removing an instance of CtvDropWrapper to the Local variable DropHandler.</remarks>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.m_allowFolderRename">
+            <summary>
+            Backing field for <see cref="P:ExpControlsLib.ExpTree.AllowFolderRename"/>. When <c>true</c>, the TreeView's
+            <c>LabelEdit</c> is enabled and the Shell rename verb is permitted via the context menu.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.AllowFolderRename">
+            <summary>
+            Allow renaming of folders using LabelEdit
+            </summary>
+            <value></value>
+            <returns></returns>
+            <remarks></remarks>
         </member>
         <member name="P:ExpControlsLib.ExpTree.ForeColor">
             <summary>
@@ -1507,91 +1460,6 @@
             <returns>The state of the underlying TreeView property.</returns>
             <remarks></remarks>
         </member>
-        <member name="T:ExpControlsLib.ExpTree.StartDir">
-            <summary>
-            The values representing the System's Special Folders.
-            </summary>
-            <remarks>Certain Special Folders are disallowed since they may not exist, or may cause program failure
-            on certain versions of Windows (primarily the older, unsupported versions).</remarks>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.None">
-            <summary>No startup directory specified; the tree will be empty.</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Desktop">
-            <summary>The Desktop virtual folder (CSIDL 0x00).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Programs">
-            <summary>The Programs folder in the Start Menu (CSIDL 0x02).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Controls">
-            <summary>The Control Panel virtual folder (CSIDL 0x03).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Printers">
-            <summary>The Printers virtual folder (CSIDL 0x04).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Personal">
-            <summary>The current user's Documents folder (CSIDL 0x05).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Favorites">
-            <summary>The current user's Favorites folder (CSIDL 0x06).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Startup">
-            <summary>The Startup folder in the Start Menu (CSIDL 0x07).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Recent">
-            <summary>The Recent Documents folder (CSIDL 0x08).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.SendTo">
-            <summary>The Send To folder (CSIDL 0x09).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.StartMenu">
-            <summary>The Start Menu folder (CSIDL 0x0B).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.MyDocuments">
-            <summary>The My Documents virtual folder (CSIDL 0x0C).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.DesktopDirectory">
-            <summary>The Desktop directory in the file system (CSIDL 0x10).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.MyComputer">
-            <summary>The My Computer virtual folder (CSIDL 0x11).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.My_Network_Places">
-            <summary>The My Network Places virtual folder (CSIDL 0x12).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.ApplicatationData">
-            <summary>The Application Data roaming folder (CSIDL 0x1A).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Internet_Cache">
-            <summary>The Temporary Internet Files (cache) folder (CSIDL 0x20).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Cookies">
-            <summary>The Cookies folder (CSIDL 0x21).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.History">
-            <summary>The History folder (CSIDL 0x22).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Windows">
-            <summary>The Windows installation directory (CSIDL 0x24).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.System">
-            <summary>The System32 directory (CSIDL 0x25).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Program_Files">
-            <summary>The Program Files directory (CSIDL 0x26).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.MyPictures">
-            <summary>The My Pictures folder (CSIDL 0x27).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Profile">
-            <summary>The current user's profile directory (CSIDL 0x28).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.Systemx86">
-            <summary>The 32-bit System directory on a 64-bit OS (CSIDL 0x29).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.StartDir.AdminTools">
-            <summary>The Administrative Tools folder (CSIDL 0x30).</summary>
-        </member>
         <member name="F:ExpControlsLib.ExpTree.m_StartUpDirectory">
             <summary>
             Backing field for <see cref="P:ExpControlsLib.ExpTree.StartUpDirectory"/>. Stores the currently active
@@ -1605,6 +1473,30 @@
             <value>Must be one of the StartDir Enum values.</value>
             <returns>Current StartDir value.</returns>
             <remarks></remarks>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.#ctor">
+            <summary>
+            Initializes a new instance of <see cref="T:ExpControlsLib.ExpTree"/>, sets up the TreeView image list,
+            wires Shell item update notifications, and configures the node-expansion hover timer.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.WndProc(System.Windows.Forms.Message@)">
+            <summary>
+            Windows Message Handler for receiving Messages associated with a System Menu. 
+            This is what causes Cascading menus to Display
+            </summary>
+            <param name="m">A Windows Message</param>
+            <remarks>Only Handles Messages relating to Windows Context Menus</remarks>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.SetWindowTheme(System.IntPtr,System.String,System.String)">
+            <summary>
+            P/Invoke declaration for the UxTheme <c>SetWindowTheme</c> function, which applies
+            a visual style to a window, giving the TreeView the standard Explorer appearance.
+            </summary>
+            <param name="hWnd">Handle to the window to restyle.</param>
+            <param name="pszSubAppName">The application name to use for theming (e.g. <c>"explorer"</c>).</param>
+            <param name="pszSubIdList">Optional semicolon-delimited list of sub-IDs, or <c>null</c>.</param>
+            <returns>An HRESULT indicating success or failure.</returns>
         </member>
         <member name="M:ExpControlsLib.ExpTree.ExpandANode(System.String,System.Boolean)">
             <summary>
@@ -1796,6 +1688,22 @@
             effectively clearing the entire tree display.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_HandleCreated(System.Object,System.EventArgs)">
+            <summary>
+            Handles the TreeView's <c>HandleCreated</c> event. Initialises the drag source wrapper,
+            optionally creates the drop target wrapper, and applies the Explorer visual theme.
+            </summary>
+            <param name="sender">The TreeView whose handle was created.</param>
+            <param name="e">Event data (unused).</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.Tv1_HandleDestroyed(System.Object,System.EventArgs)">
+            <summary>
+            Handles the TreeView's <c>HandleDestroyed</c> event.
+            Reserved for any cleanup that must occur when the underlying window handle is destroyed.
+            </summary>
+            <param name="sender">The TreeView whose handle was destroyed.</param>
+            <param name="e">Event data (unused).</param>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.Tv1_BeforeExpand(System.Object,System.Windows.Forms.TreeViewCancelEventArgs)">
             <summary>
             Handles the TreeView <c>BeforeExpand</c> event. If the node being expanded contains
@@ -1816,7 +1724,7 @@
             <param name="sender">The TreeView raising the event.</param>
             <param name="e">A <see cref="T:System.Windows.Forms.TreeViewEventArgs"/> containing the newly selected node.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.ExpTree_MouseUp(System.Object,System.Windows.Forms.MouseEventArgs)">
+        <member name="M:ExpControlsLib.ExpTree.Tv1_MouseUp(System.Object,System.Windows.Forms.MouseEventArgs)">
             <summary>
             Handles the <c>MouseUp</c> event on the ExpTree control. On a right-click, determines
             the TreeNode under the cursor and, if <see cref="P:ExpControlsLib.ExpTree.UseWindowsContextMenu"/> is enabled,
@@ -1899,20 +1807,6 @@
             the user should never be able to Collapse the node. However, it is
             theoretically possible for the code to request a collapse of this node
             If it occurs, cancel it</summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.m_allowFolderRename">
-            <summary>
-            Backing field for <see cref="P:ExpControlsLib.ExpTree.AllowFolderRename"/>. When <c>true</c>, the TreeView's
-            <c>LabelEdit</c> is enabled and the Shell rename verb is permitted via the context menu.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpTree.AllowFolderRename">
-            <summary>
-            Allow renaming of folders using LabelEdit
-            </summary>
-            <value></value>
-            <returns></returns>
-            <remarks></remarks>
         </member>
         <member name="M:ExpControlsLib.ExpTree.Tv1_BeforeLabelEdit(System.Object,System.Windows.Forms.NodeLabelEditEventArgs)">
             <summary>
@@ -2017,6 +1911,36 @@
             Gets or sets whether to show a minimal context menu by filtering out most 3rd party extensions.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.WinMenuCmd(WindowsApiLib.Shell.CShellItem,System.String)">
+            <summary>
+            Asynchronously invokes a Shell context menu verb (delete, cut, copy, or paste) for
+            the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/> on a background STA thread, keeping the UI
+            thread unblocked while the Shell operation (which may show its own dialog) completes.
+            </summary>
+            <param name="csi">
+            The <see cref="T:WindowsApiLib.Shell.CShellItem"/> on which the Shell verb should be invoked.
+            If <c>null</c>, the method returns immediately without doing anything.
+            </param>
+            <param name="cmd">
+            The ANSI Shell verb string to invoke (e.g. <c>"delete"</c>, <c>"cut"</c>,
+            <c>"copy"</c>, or <c>"paste"</c>).
+            </param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.SetRootItemAsync(WindowsApiLib.Shell.CShellItem,ExpControlsLib.ExpTree.StartDir)">
+            <summary>
+            Asynchronously loads and displays the tree rooted at the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>
+            or <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value. Any in-progress load is cancelled before the new one begins.
+            Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
+            </summary>
+            <param name="item">
+            The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
+            should be used to resolve the root instead.
+            </param>
+            <param name="dir">
+            A <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value used to resolve the root when <paramref name="item"/> is <c>null</c>.
+            Defaults to <see cref="F:ExpControlsLib.ExpTree.StartDir.None"/>.
+            </param>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.IsExcluded(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Determines whether the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/> should be excluded from
@@ -2093,24 +2017,10 @@
             <param name="N">The Node whose Nodes.Collection is to be sorted</param>
             <remarks></remarks>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.WinMenuCmd(WindowsApiLib.Shell.CShellItem,System.String)">
+        <member name="M:ExpControlsLib.ExpTree.Cleanup">
             <summary>
-            Asynchronously invokes a Shell context menu verb (delete, cut, copy, or paste) for
-            the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/> on a background STA thread, keeping the UI
-            thread unblocked while the Shell operation (which may show its own dialog) completes.
-            </summary>
-            <param name="csi">
-            The <see cref="T:WindowsApiLib.Shell.CShellItem"/> on which the Shell verb should be invoked.
-            If <c>null</c>, the method returns immediately without doing anything.
-            </param>
-            <param name="cmd">
-            The ANSI Shell verb string to invoke (e.g. <c>"delete"</c>, <c>"cut"</c>,
-            <c>"copy"</c>, or <c>"paste"</c>).
-            </param>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.components">
-            <summary> 
-            Required designer variable.
+            Cancels and disposes any active root-load cancellation token source,
+            releasing associated resources.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpTree.Dispose(System.Boolean)">
@@ -2118,6 +2028,96 @@
             Clean up any resources being used.
             </summary>
             <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        </member>
+        <member name="T:ExpControlsLib.ExpTree.StartDir">
+            <summary>
+            The values representing the System's Special Folders.
+            </summary>
+            <remarks>Certain Special Folders are disallowed since they may not exist, or may cause program failure
+            on certain versions of Windows (primarily the older, unsupported versions).</remarks>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.None">
+            <summary>No startup directory specified; the tree will be empty.</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Desktop">
+            <summary>The Desktop virtual folder (CSIDL 0x00).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Programs">
+            <summary>The Programs folder in the Start Menu (CSIDL 0x02).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Controls">
+            <summary>The Control Panel virtual folder (CSIDL 0x03).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Printers">
+            <summary>The Printers virtual folder (CSIDL 0x04).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Personal">
+            <summary>The current user's Documents folder (CSIDL 0x05).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Favorites">
+            <summary>The current user's Favorites folder (CSIDL 0x06).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Startup">
+            <summary>The Startup folder in the Start Menu (CSIDL 0x07).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Recent">
+            <summary>The Recent Documents folder (CSIDL 0x08).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.SendTo">
+            <summary>The Send To folder (CSIDL 0x09).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.StartMenu">
+            <summary>The Start Menu folder (CSIDL 0x0B).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.MyDocuments">
+            <summary>The My Documents virtual folder (CSIDL 0x0C).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.DesktopDirectory">
+            <summary>The Desktop directory in the file system (CSIDL 0x10).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.MyComputer">
+            <summary>The My Computer virtual folder (CSIDL 0x11).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.My_Network_Places">
+            <summary>The My Network Places virtual folder (CSIDL 0x12).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.ApplicatationData">
+            <summary>The Application Data roaming folder (CSIDL 0x1A).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Internet_Cache">
+            <summary>The Temporary Internet Files (cache) folder (CSIDL 0x20).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Cookies">
+            <summary>The Cookies folder (CSIDL 0x21).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.History">
+            <summary>The History folder (CSIDL 0x22).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Windows">
+            <summary>The Windows installation directory (CSIDL 0x24).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.System">
+            <summary>The System32 directory (CSIDL 0x25).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Program_Files">
+            <summary>The Program Files directory (CSIDL 0x26).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.MyPictures">
+            <summary>The My Pictures folder (CSIDL 0x27).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Profile">
+            <summary>The current user's profile directory (CSIDL 0x28).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.Systemx86">
+            <summary>The 32-bit System directory on a 64-bit OS (CSIDL 0x29).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.StartDir.AdminTools">
+            <summary>The Administrative Tools folder (CSIDL 0x30).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree.components">
+            <summary> 
+            Required designer variable.
+            </summary>
         </member>
         <member name="M:ExpControlsLib.ExpTree.InitializeComponent">
             <summary> 

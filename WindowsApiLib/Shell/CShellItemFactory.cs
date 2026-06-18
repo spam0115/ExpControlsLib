@@ -289,7 +289,7 @@ namespace WindowsApiLib.Shell
             return csi;
         }
 
-        public static CShellItem Create(IntPtr pidl, CShellItem parent = null)
+        public static CShellItem Create(IntPtr pidl, CShellItem? parent = null)
         {
             var csi = new CShellItem();
 
@@ -414,7 +414,7 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <param name="csi">the CShellItem to populate</param>
         /// <param name="pidl">A full pidl</param>
-        internal static void PopulateCsi(CShellItem csi, IntPtr pidl, CShellItem parentCsi = null)
+        internal static void PopulateCsi(CShellItem csi, IntPtr pidl, CShellItem? parentCsi = null)
         {
             // Set unfetched value for IconIndex....
             csi.m_IconIndexNormal = -1;
@@ -937,7 +937,7 @@ namespace WindowsApiLib.Shell
             return hr == 0 ? sb.ToString() : null;
         }
 
-        private static bool TryGetTypeNameViaShell(CShellItem csi, out string displayName, out string typeName)
+        private static bool TryGetTypeNameViaShell(CShellItem csi, out string? displayName, out string? typeName)
         {
             displayName = null;
             typeName = null;

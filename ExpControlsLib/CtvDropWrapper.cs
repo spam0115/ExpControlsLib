@@ -144,7 +144,7 @@ namespace ExpControlsLib
 
         #region    Handle Changes
 
-        private void View_HandleCreated(object sender, EventArgs e)
+        private void View_HandleCreated(object? sender, EventArgs e)
         {
             int res;
             res = RegisterDragDrop(m_TreeView.Handle, this);
@@ -155,7 +155,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void View_HandleDestroyed(object sender, EventArgs e)
+        private void View_HandleDestroyed(object? sender, EventArgs e)
         {
             if (m_TreeView is not null && m_TreeView.IsHandleCreated)
             {

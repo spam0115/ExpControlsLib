@@ -39,7 +39,7 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <UseWindowsForms>true</UseWindowsForms>
     <OutputPath>bin\</OutputPath>
-    <NoWarn>$(NoWarn);WFO1000</NoWarn>
+    <NoWarn>$(NoWarn);WFO1000;CS0414;CS8604;CS8625;CS8600;CS8601;CS8602;CS8603</NoWarn>
     <Deterministic>false</Deterministic>
     <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>

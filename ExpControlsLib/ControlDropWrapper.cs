@@ -81,7 +81,7 @@ namespace ExpControlsLib
 
         #region    Handle Changes
 
-        private void Ctl_HandleCreated(object sender, EventArgs e)
+        private void Ctl_HandleCreated(object? sender, EventArgs e)
         {
             int res;
             res = RegisterDragDrop(m_Owner.Handle, this);
@@ -92,7 +92,7 @@ namespace ExpControlsLib
             m_Target = m_DirCSI.GetDropTargetOf(m_Owner);
         }
 
-        private void Ctl_HandleDestroyed(object sender, EventArgs e)
+        private void Ctl_HandleDestroyed(object? sender, EventArgs e)
         {
             if (m_Owner is not null && m_Owner.IsHandleCreated)
             {

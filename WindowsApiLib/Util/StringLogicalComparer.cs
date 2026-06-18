@@ -47,7 +47,7 @@ namespace WindowsApiLib
         /// <param name="y">Second String to Compare</param>
         /// <returns>Negative value if x less than y, 0 if x=y, or a positive value if x greater than y</returns>
         /// <remarks></remarks>
-        public int Compare(object x, object y)
+        public int Compare(object? x, object? y)
         {
             if (x is null && y is null)
             {

@@ -77,7 +77,7 @@ namespace ExpControlsLib
         /// <summary>
         /// This method initialises the dragging of a TreeNode or 1 or more ListViewItems
         /// </summary>
-        private void ItemDrag(object sender, ItemDragEventArgs e)
+        private void ItemDrag(object? sender, ItemDragEventArgs e)
         {
             // Guard against accidental drags by checking if the mouse has moved beyond the system drag threshold
             Point currentPoint = m_Client.PointToClient(Cursor.Position);
@@ -145,7 +145,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void StartDragInternal(object sender, object? itemToDrag, MouseButtons button)
+        private void StartDragInternal(object? sender, object? itemToDrag, MouseButtons button)
         {
             ReleaseCom();
             startButton = button;
@@ -301,7 +301,7 @@ namespace ExpControlsLib
     /// </summary>
     /// <param name="sender">The Control from which the Drag originates</param>
     /// <param name="e">A DragStartEventArgs constructed by CDragWrapper</param>
-    public delegate void DragStartEventHandler(object sender, DragStartEventArgs e);
+    public delegate void DragStartEventHandler(object? sender, DragStartEventArgs e);
 
     /// <summary>
     /// An EventArgs which provides information about a Drag started within a Control managed by an instance of CDragWrapper.

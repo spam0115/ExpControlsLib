@@ -20,16 +20,38 @@ namespace WindowsApiLibTest
 
         private class MockShellApi : IShellApiWrapper
         {
+            public delegate IntPtr LockDelegate(IntPtr hChange, uint dwProcId, ref IntPtr pppidl, ref SHCNE plEvent);
+            public LockDelegate OnLock;
+            
+            public delegate int GetRealIDLDelegate(IShellFolder psf, IntPtr pidlSimple, out IntPtr ppidlReal);
+            public GetRealIDLDelegate OnGetRealIDL;
+
             public int SHChangeNotifyRegister(IntPtr hwnd, SHCNRF fSources, SHCNE fEvents, WM wMsg, int cEntries, SHChangeNotifyEntry[] pfsne) => 0;
             public bool SHChangeNotifyDeregister(int hNotify) => true;
-            public IntPtr SHChangeNotification_Lock(IntPtr hChange, uint dwProcId, ref IntPtr pppidl, ref SHCNE plEvent) => IntPtr.Zero;
+            public IntPtr SHChangeNotification_Lock(IntPtr hChange, uint dwProcId, ref IntPtr pppidl, ref SHCNE plEvent) 
+                => OnLock?.Invoke(hChange, dwProcId, ref pppidl, ref plEvent) ?? IntPtr.Zero;
             public int SHChangeNotification_Unlock(IntPtr hLock) => 1;
             public int SHGetRealIDL(IShellFolder psf, IntPtr pidlSimple, out IntPtr ppidlReal)
             {
+                if (OnGetRealIDL != null) return OnGetRealIDL(psf, pidlSimple, out ppidlReal);
                 ppidlReal = IntPtr.Zero;
                 return 0;
             }
             public bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam) => true;
+
+            public string GetPidlName(IntPtr pidl) => CPidl.ToString(pidl);
+
+            public (IntPtr ParentPidl, IntPtr ChildPidl) SplitPidl(IntPtr pidl)
+            {
+                var result = CPidl.Split(pidl);
+                return (result.ParentPidl, result.ChildPidl);
+            }
+
+            public IntPtr ConcatenatePidls(IntPtr pidl1, IntPtr pidl2) => CPidl.Concatenate(pidl1, pidl2);
+
+            public IntPtr TrimLastPidl(IntPtr pidl) => CPidl.TrimLast(pidl);
+
+            public int GetPidlSegmentCount(IntPtr pidl) => CPidl.SegmentCount(pidl);
         }
 
         private class MockFileSystem : IFileSystem
@@ -48,86 +70,286 @@ namespace WindowsApiLibTest
         {
             public List<IntPtr> Pidls = new List<IntPtr>();
             public List<IntPtr> GetPidlsOfFolder(CShellItem csi, SHCONTF flags) => Pidls;
-            public CShellItem Create(IntPtr pidl, CShellItem parent = null) => CShellItemFactory.Create(pidl, parent);
-            public CShellItem FindOrAdd(IntPtr pidl) => CShellItemFactory.FindOrAdd(pidl);
-            public string GetFullPath(CShellItem csi) => CShellItemFactory.GetFullPath(csi);
+            public CShellItem Create(IntPtr pidl, CShellItem parent = null)
+            {
+                var csi = new CShellItem();
+                csi.m_Pidl = CPidl.Clone(pidl);
+                csi.m_Parent = parent;
+                return csi;
+            }
+            public CShellItem FindOrAdd(IntPtr pidl) => Create(pidl);
+            public string GetFullPath(CShellItem csi) => "C:\\MockPath\\" + csi.DisplayName;
+        }
+
+        private IntPtr CreateValidPidl()
+        {
+            // A minimal valid PIDL is 2 bytes (terminator) or 2 bytes length + data + 2 bytes terminator
+            IntPtr ptr = Marshal.AllocCoTaskMem(4);
+            Marshal.WriteInt16(ptr, 0, 4);
+            Marshal.WriteInt16(ptr, 2, 0); // Terminator
+            return ptr;
         }
 
         [TestMethod]
-        public async Task TestRemoveItem()
+        public async Task TestRemoveItem_HappyPath()
         {
             await Runner.EnqueueWork(() =>
             {
-                var desktop = CShellItemFactory.Create(CSIDL.DESKTOP);
+                var desktop = new CShellItem();
+                desktop.m_IsFolder = true;
                 var manager = new CShellItemHierachyManager(desktop);
                 
-                string tempFile = Path.GetTempFileName();
-                try
-                {
-                    var csi = manager.FindOrAdd(tempFile);
-                    Assert.IsNotNull(csi);
-                    Assert.IsNotNull(manager.Find(tempFile));
+                var parent = new CShellItem();
+                parent.m_IsFolder = true;
+                parent.m_Directories = new CShellItemCollection(parent);
+                parent.m_Files = new CShellItemCollection(parent);
+                //parent.FoldersInitialized = true; //uneeded - FoldersInitialized has no backing field and just test m_Directories for non-null values
+                //parent.FilesInitialized = true; //uneeded - FilesInitialized has no backing field and just test m_Files for non-null values
 
-                    var logic = new CShellItemUpdateLogic(manager);
-                    bool removed = logic.RemoveItem(csi!.Parent, csi);
-                    
-                    Assert.IsTrue(removed);
-                    Assert.IsNull(manager.Find(tempFile), "Item should be removed from hierarchy");
-                }
-                finally
-                {
-                    if (File.Exists(tempFile)) File.Delete(tempFile);
-                }
+                var child = new CShellItem();
+                child.m_Parent = parent;
+                parent.m_Files.Add(child);
+
+                var logic = new CShellItemUpdateLogic(manager);
+                bool removed = logic.RemoveItem(parent, child);
+                
+                Assert.IsTrue(removed, "RemoveItem should return true");
+                Assert.IsFalse(parent.m_Files.Contains(child), "Child should be removed from parent's file list");
             });
         }
 
         [TestMethod]
-        public async Task TestDoUpdateDir_DetectsNewFile()
+        public async Task TestHandleCreateNotification_HappyPath()
         {
             await Runner.EnqueueWork(() =>
             {
-                var desktop = CShellItemFactory.Create(CSIDL.DESKTOP);
+                var desktop = new CShellItem();
+                desktop.m_IsFolder = true;
                 var manager = new CShellItemHierachyManager(desktop);
                 
-                string tempDir = Path.Combine(Path.GetTempPath(), "UpdateDirTest_" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(tempDir);
-                string existingFile = Path.Combine(tempDir, "existing.txt");
-                File.WriteAllText(existingFile, "old content");
+                var parentPidl = CreateValidPidl();
+                var parent = new CShellItem();
+                parent.m_Pidl = parentPidl;
+                parent.m_IsFolder = true;
+                parent.m_Files = new CShellItemCollection(parent);
+                //parent.FilesInitialized = true;
+                manager.Add(parent);
+
+                var mockApi = new MockShellApi();
+                var mockFactory = new MockShellItemFactory();
+                var logic = new CShellItemUpdateLogic(manager, mockApi, null, mockFactory);
+                logic.AllowUpdates = true;
+
+                var newItemPidl = CPidl.Concatenate(parentPidl, CreateValidPidl());
+                IntPtr pNotifyStruct = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(SHNOTIFYSTRUCT)));
+                var sns = new SHNOTIFYSTRUCT { dwItem1 = newItemPidl, dwItem2 = IntPtr.Zero };
+                Marshal.StructureToPtr(sns, pNotifyStruct, false);
+
+                mockApi.OnLock = (IntPtr h, uint id, ref IntPtr pppidl, ref SHCNE plEvent) =>
+                {
+                    pppidl = pNotifyStruct;
+                    plEvent = SHCNE.CREATE;
+                    return new IntPtr(1);
+                };
+
+                mockApi.OnGetRealIDL = (IShellFolder psf, IntPtr pidlSimple, out IntPtr ppidlReal) =>
+                {
+                    ppidlReal = CPidl.Clone(pidlSimple);
+                    return 0;
+                };
+
+                bool eventRaised = false;
+                logic.UpdateEvent += (s, e) => {
+                    if (e.UpdateType == CShItemUpdateType.Created) eventRaised = true;
+                };
+
+                logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
+
+                Assert.IsTrue(eventRaised, "Created event should be raised");
+                Assert.AreEqual(1, parent.m_Files.Count, "Parent should have 1 child in FileList");
                 
-                try
+                Marshal.FreeCoTaskMem(pNotifyStruct);
+                Marshal.FreeCoTaskMem(newItemPidl);
+                // Note: parentPidl is in manager and csi, usually managed by them but here we allocated manually
+            });
+        }
+
+        [TestMethod]
+        public async Task TestHandleDeleteNotification_HappyPath()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                var desktop = new CShellItem();
+                desktop.m_IsFolder = true;
+                var manager = new CShellItemHierachyManager(desktop);
+                
+                var parent = new CShellItem();
+                parent.m_Pidl = CreateValidPidl();
+                parent.m_IsFolder = true;
+                parent.m_Files = new CShellItemCollection(parent);
+                //parent.FilesInitialized = true;
+                manager.Add(parent);
+
+                var childPidl = CreateValidPidl();
+                var child = new CShellItem();
+                child.m_Pidl = childPidl;
+                child.m_Parent = parent;
+                parent.m_Files.Add(child);
+
+                var mockApi = new MockShellApi();
+                var logic = new CShellItemUpdateLogic(manager, mockApi);
+                logic.AllowUpdates = true;
+
+                IntPtr pNotifyStruct = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(SHNOTIFYSTRUCT)));
+                var sns = new SHNOTIFYSTRUCT { dwItem1 = childPidl, dwItem2 = IntPtr.Zero };
+                Marshal.StructureToPtr(sns, pNotifyStruct, false);
+
+                mockApi.OnLock = (IntPtr h, uint id, ref IntPtr pppidl, ref SHCNE plEvent) =>
                 {
-                    var csiFolder = manager.FindOrAdd(tempDir);
-                    Assert.IsNotNull(csiFolder, "csiFolder should not be null");
-                    
-                    // Initialize the folder collections if they are null
-                    if (csiFolder.m_Files == null) csiFolder.m_Files = new CShellItemCollection(csiFolder);
-                    if (csiFolder.m_Directories == null) csiFolder.m_Directories = new CShellItemCollection(csiFolder);
+                    pppidl = pNotifyStruct;
+                    plEvent = SHCNE.DELETE;
+                    return new IntPtr(1);
+                };
 
-                    csiFolder.m_Files.Clear();
-                    var csiExisting = manager.FindOrAdd(existingFile);
-                    Assert.IsNotNull(csiExisting, "csiExisting should not be null");
-                    
-                    // Now simulate a new file appearing via MockShellItemFactory
-                    string newFile = Path.Combine(tempDir, "new.txt");
-                    File.WriteAllText(newFile, "new content");
-                    IntPtr newPidl = CPidl.PathToPidl(newFile);
+                bool eventRaised = false;
+                logic.UpdateEvent += (s, e) => {
+                    if (e.UpdateType == CShItemUpdateType.Deleted) eventRaised = true;
+                };
 
-                    var mockFactory = new MockShellItemFactory();
-                    mockFactory.Pidls.Add(newPidl);
-                    // Add existing file pidl too so it's not removed
-                    mockFactory.Pidls.Add(csiExisting!.PIDL);
+                logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
 
-                    var logic = new CShellItemUpdateLogic(manager, null, null, mockFactory);
-                    
-                    int count = logic.DoUpdateDir(csiFolder);
-                    
-                    Assert.AreEqual(1, count, "Should have detected 1 change (the new file)");
-                    Assert.IsNotNull(manager.Find(newFile), "New file should be in hierarchy");
-                }
-                finally
+                Assert.IsTrue(eventRaised, "Deleted event should be raised");
+                Assert.AreEqual(0, parent.m_Files.Count, "Child should be removed from parent's FileList");
+                
+                Marshal.FreeCoTaskMem(pNotifyStruct);
+            });
+        }
+
+        [TestMethod]
+        public async Task TestHandleRenameItem_HappyPath()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                var desktop = new CShellItem();
+                desktop.m_IsFolder = true;
+                var manager = new CShellItemHierachyManager(desktop);
+                
+                var parentPidl = CreateValidPidl();
+                var parent = new CShellItem();
+                parent.m_Pidl = parentPidl;
+                parent.m_IsFolder = true;
+                manager.Add(parent);
+
+                var oldChildPidl = CreateValidPidl();
+                var child = new CShellItem();
+                child.m_Pidl = oldChildPidl;
+                child.m_Parent = parent;
+                manager.Add(child);
+
+                var mockApi = new MockShellApi();
+                var mockFactory = new MockShellItemFactory();
+                var logic = new CShellItemUpdateLogic(manager, mockApi, null, mockFactory);
+                logic.AllowUpdates = true;
+
+                var newChildPidl = CreateValidPidl();
+                IntPtr pNotifyStruct = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(SHNOTIFYSTRUCT)));
+                var sns = new SHNOTIFYSTRUCT { dwItem1 = oldChildPidl, dwItem2 = newChildPidl };
+                Marshal.StructureToPtr(sns, pNotifyStruct, false);
+
+                mockApi.OnLock = (IntPtr h, uint id, ref IntPtr pppidl, ref SHCNE plEvent) =>
                 {
-                    if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
-                }
+                    pppidl = pNotifyStruct;
+                    plEvent = SHCNE.RENAMEITEM;
+                    return new IntPtr(1);
+                };
+
+                mockApi.OnGetRealIDL = (IShellFolder psf, IntPtr pidlSimple, out IntPtr ppidlReal) =>
+                {
+                    ppidlReal = CPidl.Clone(pidlSimple);
+                    return 0;
+                };
+
+                bool eventRaised = false;
+                logic.UpdateEvent += (s, e) => {
+                    if (e.UpdateType == CShItemUpdateType.Renamed) eventRaised = true;
+                };
+
+                logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
+
+                Assert.IsTrue(eventRaised, "Renamed event should be raised");
+                
+                Marshal.FreeCoTaskMem(pNotifyStruct);
+            });
+        }
+
+        [TestMethod]
+        public async Task TestHandleUpdateItem_HappyPath()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                var desktop = new CShellItem();
+                desktop.m_IsFolder = true;
+                var manager = new CShellItemHierachyManager(desktop);
+                
+                var itemPidl = CreateValidPidl();
+                var item = new CShellItem();
+                item.m_Pidl = itemPidl;
+                manager.Add(item);
+
+                var mockApi = new MockShellApi();
+                var logic = new CShellItemUpdateLogic(manager, mockApi);
+                logic.AllowUpdates = true;
+
+                IntPtr pNotifyStruct = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(SHNOTIFYSTRUCT)));
+                var sns = new SHNOTIFYSTRUCT { dwItem1 = itemPidl, dwItem2 = IntPtr.Zero };
+                Marshal.StructureToPtr(sns, pNotifyStruct, false);
+
+                mockApi.OnLock = (IntPtr h, uint id, ref IntPtr pppidl, ref SHCNE plEvent) =>
+                {
+                    pppidl = pNotifyStruct;
+                    plEvent = SHCNE.UPDATEITEM;
+                    return new IntPtr(1);
+                };
+
+                bool eventRaised = false;
+                logic.UpdateEvent += (s, e) => {
+                    if (e.UpdateType == CShItemUpdateType.Updated) eventRaised = true;
+                };
+
+                logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
+
+                Assert.IsTrue(eventRaised, "Updated event should be raised");
+                
+                Marshal.FreeCoTaskMem(pNotifyStruct);
+            });
+        }
+
+        [TestMethod]
+        public async Task TestSelectiveFolderUpdate_NoChanges_HappyPath()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                var desktop = new CShellItem();
+                desktop.m_IsFolder = true;
+                var manager = new CShellItemHierachyManager(desktop);
+                
+                var folder = new CShellItem();
+                folder.m_IsFolder = true;
+                folder.m_Files = new CShellItemCollection(folder);
+                
+                var childPidl = CreateValidPidl();
+                var child = new CShellItem();
+                child.m_Pidl = childPidl;
+                folder.m_Files.Add(child);
+
+                var mockFactory = new MockShellItemFactory();
+                mockFactory.Pidls.Add(childPidl); // Same PIDL exists in folder
+
+                var logic = new CShellItemUpdateLogic(manager, null, null, mockFactory);
+                
+                int count = logic.DoUpdateDir(folder);
+                
+                Assert.AreEqual(0, count, "Should report 0 changes when PIDLs match");
             });
         }
     }

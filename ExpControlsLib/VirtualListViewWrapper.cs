@@ -747,7 +747,7 @@ namespace ExpControlsLib
         /// </remarks>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        private void OnRetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e)
+        private void OnRetrieveVirtualItem(object? sender, RetrieveVirtualItemEventArgs e)
         {
             //Console.WriteLine("Retrieve virtual item: " + e.ItemIndex);
 

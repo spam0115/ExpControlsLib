@@ -46,7 +46,7 @@ namespace WindowsApiLib
         /// <param name="hbm">Handle to the GDI bitmap to convert. Ownership is not transferred.</param>
         /// <returns>A managed top-down 32bpp ARGB bitmap, or <c>null</c> if the conversion fails.</returns>
 
-        public static Bitmap HBitmapToBitmapWithAlpha(IntPtr hbm)
+        public static Bitmap? HBitmapToBitmapWithAlpha(IntPtr hbm)
         {
             var info = new BITMAP();
             if (WinSDK.GetObject(hbm, Marshal.SizeOf<BITMAP>(), ref info) == 0) return null;

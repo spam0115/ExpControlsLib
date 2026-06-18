@@ -257,6 +257,8 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
+                Assert.IsNotNull(expTree.Nodes, $"expTree.Nodes is null.");
+
                 await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
 
                 // 1. Simulate Created

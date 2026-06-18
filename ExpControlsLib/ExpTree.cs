@@ -500,7 +500,7 @@ namespace ExpControlsLib
         {
             ConstructorBase(null);
         }
-
+        
         public ExpTree(string? rootPath) : base()
         {
             ConstructorBase(rootPath);

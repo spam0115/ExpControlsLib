@@ -42,7 +42,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Compares two CShellItems based on the specified column and order.
         /// </summary>
-        public int Compare(CShellItem x, CShellItem y)
+        public int Compare(CShellItem? x, CShellItem? y)
         {
             if (ReferenceEquals(x, y)) return 0;
             if (x == null) return -1;

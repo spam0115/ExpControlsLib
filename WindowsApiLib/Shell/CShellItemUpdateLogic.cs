@@ -67,7 +67,7 @@ namespace WindowsApiLib.Shell
 
                 if (shNotify.dwItem1 != IntPtr.Zero)
                 {
-                    Debug.WriteLine(", dwItem1: " + CPidl.ToString(shNotify.dwItem1));
+                    Debug.WriteLine(", dwItem1: " + _shellApi.GetPidlName(shNotify.dwItem1));
                 }
 
                 lock (_hierarchyManager.Lock)
@@ -81,7 +81,7 @@ namespace WindowsApiLib.Shell
                             {
                                 Debug.WriteLine("  [CREATE] processing...");
                                 IntPtr realRel;
-                                var splitPidl = CPidl.Split(shNotify.dwItem1);
+                                var splitPidl = _shellApi.SplitPidl(shNotify.dwItem1);
 
                                 parentItem = _hierarchyManager.Find(splitPidl.ParentPidl);
                                 if (parentItem is not null)
@@ -149,11 +149,11 @@ namespace WindowsApiLib.Shell
                             {
                                 _activeDeletes.Add(shNotify.dwItem1, true);
 
-                                var splitResult = CPidl.Split(shNotify.dwItem1);
+                                var splitResult = _shellApi.SplitPidl(shNotify.dwItem1);
                                 parentPidl = splitResult.ParentPidl;
                                 var relPidl = splitResult.ChildPidl;
-                                Debug.WriteLine($"  {CPidl.ToString(shNotify.dwItem1)}");
-                                Debug.WriteLine($"  {CPidl.ToString(parentPidl)}");
+                                Debug.WriteLine($"  {_shellApi.GetPidlName(shNotify.dwItem1)}");
+                                Debug.WriteLine($"  {_shellApi.GetPidlName(parentPidl)}");
                                 parentItem = _hierarchyManager.Find(parentPidl);
 
                                 if (parentItem != null)
@@ -213,7 +213,7 @@ namespace WindowsApiLib.Shell
                         case SHCNE.UPDATEDIR:
                             {
                                 Debug.WriteLine("  [UPDATEDIR] processing...");
-                                if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0)
+                                if (shNotify.dwItem1 == IntPtr.Zero || _shellApi.GetPidlSegmentCount(shNotify.dwItem1) == 0)
                                 {
                                     Debug.WriteLine("  [UPDATEDIR] message with no location specified.");
                                     return;
@@ -238,7 +238,7 @@ namespace WindowsApiLib.Shell
                         case SHCNE.UPDATEITEM:
                             {
                                 Debug.WriteLine("  [UPDATEITEM] processing... " + DateTime.Now.ToString("HH:mm:ss.fff"));
-                                if (shNotify.dwItem1 == IntPtr.Zero || CPidl.SegmentCount(shNotify.dwItem1) == 0)
+                                if (shNotify.dwItem1 == IntPtr.Zero || _shellApi.GetPidlSegmentCount(shNotify.dwItem1) == 0)
                                 {
                                     Debug.WriteLine("  [UPDATEITEM] Empty pidl received from UPDATEITEM event");
                                 }
@@ -268,7 +268,7 @@ namespace WindowsApiLib.Shell
                         case SHCNE.DRIVEADD:
                             {
                                 Debug.WriteLine("  [MKDIR/DRIVEADD] processing... " + DateTime.Now.ToString("HH:mm:ss.fff"));
-                                var splitPidls = CPidl.Split(shNotify.dwItem1);
+                                var splitPidls = _shellApi.SplitPidl(shNotify.dwItem1);
                                 parentItem = _hierarchyManager.Find(splitPidls.ParentPidl);
                                 if (parentItem is not null)
                                 {
@@ -346,7 +346,7 @@ namespace WindowsApiLib.Shell
                         case SHCNE.DRIVEREMOVED:
                             {
                                 Debug.WriteLine("  [RMDIR/DRIVEREMOVED] processing...");
-                                var parent = CPidl.TrimLast(shNotify.dwItem1);
+                                var parent = _shellApi.TrimLastPidl(shNotify.dwItem1);
 
                                 parentItem = _hierarchyManager.Find(parent);
                                 if (parentItem is not null)

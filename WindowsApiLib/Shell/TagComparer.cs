@@ -16,7 +16,7 @@ namespace WindowsApiLib.Shell
         /// <param name="y">Second Object with a CShellItem in its' .Tag</param>
         /// <returns>-1, 0, or 1 depending on the results of comparing the two CShItems</returns>
         /// <remarks>See CShellItem.CompareTo for discussion of the Comparison of two CShItems</remarks>
-        public int Compare(object x, object y)
+        public int Compare(object? x, object? y)
         {
             CShellItem xTag = null;
             CShellItem yTag = null;

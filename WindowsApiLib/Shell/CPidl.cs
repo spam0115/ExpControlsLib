@@ -909,13 +909,19 @@ namespace WindowsApiLib
         /// <param name="pidl"></param>
         /// <returns>void pointer</returns>
         /// <exception cref="ArgumentException"></exception>
-        public static nint Copy(nint pidl)
+        public static nint Clone(nint pidl)
         {
-            if (pidl == IntPtr.Zero) throw new ArgumentException("Invalid path provided to CPidl.Copy");
+            if (pidl == IntPtr.Zero) throw new ArgumentException("Invalid path provided to CPidl.Clone");
             IntPtr pidlCopy = ILClone(pidl);
 
             return pidlCopy;    
         }
+
+        public static nint Copy(nint pidl)
+        {
+            return Clone(pidl);
+        }
+
 
         /// <summary>
         /// Converts a PIDL to text.

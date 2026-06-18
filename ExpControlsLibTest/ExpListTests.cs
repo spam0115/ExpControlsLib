@@ -152,6 +152,8 @@ namespace ExpControlsLibTest
             Assert.That(expList.Count, Is.GreaterThan(10), "Windows folder should load.");
 
             var itemToExclude = expList.GetItem(0);
+            Assert.IsNotNull(itemToExclude, "itemToExclude is null.");
+
             var pathToExclude = itemToExclude.FullPath;
 
             expList.ExcludedItems.Add(pathToExclude.Trim(':', '{', '}'));

@@ -25,7 +25,7 @@ namespace WindowsApiLib
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
     public class LinkFile : IDisposable
     {
-        private IShellLink m_Link;
+        private IShellLink? m_Link;
         private bool m_Disposed = false;
         private readonly string m_LinkPath;
         private readonly bool m_IsValidLink = false;
@@ -33,7 +33,7 @@ namespace WindowsApiLib
         public LinkFile(string fPath)
         {
             IPersistFile pf;
-            Type tShellLink;
+            Type? tShellLink;
             tShellLink = Type.GetTypeFromCLSID(CLSID_ShellLink);
             m_Link = (IShellLink)Activator.CreateInstance(tShellLink);
             

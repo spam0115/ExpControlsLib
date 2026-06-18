@@ -93,8 +93,8 @@ namespace WindowsApiLib.Shell
         internal IShellFolder? m_IShellFolder = null;    // if item is a folder, contains the Folder interface for this instance
         internal CShellItem? m_Parent = null;
         internal string m_DisplayName = "";
-        internal string m_Path = null;
-        internal string m_TypeName = null;
+        internal string? m_Path = null;
+        internal string? m_TypeName = null;
         internal int m_IconIndexNormal = -1;        // index into the SystemImageListManager list for Normal icon
         internal int m_IconIndexOpen = -1;          // index into the SystemImageListManager list for Open icon
         internal int m_IconIndexNormalOrig = -1;    // index into the System Image list for Normal icon
@@ -117,14 +117,14 @@ namespace WindowsApiLib.Shell
         internal bool m_CanLink;
         internal bool m_CanRename;
 
-        internal CShellItemCollection m_Directories;
-        internal CShellItemCollection m_Files;
+        internal CShellItemCollection? m_Directories;
+        internal CShellItemCollection? m_Files;
 
         internal FileAttributes m_Attributes;  // True FileAttributes from FileInfo
         internal SFGAO m_SFGAO_Attributes;
         internal bool m_IsRemote;
 
-        internal W32Find_Data m_W32Data;
+        internal W32Find_Data? m_W32Data;
 
         internal int m_SortFlag;       // Used in comparisons
 
@@ -154,7 +154,7 @@ namespace WindowsApiLib.Shell
         // Private m_IsDisposing As Boolean
         internal bool m_Disposed;
 
-        internal Dictionary<uint, CShellItem> m_ChildrenDic = null;
+        internal Dictionary<uint, CShellItem>? m_ChildrenDic = null;
 
         #endregion
 
@@ -317,15 +317,15 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <returns>The current value or Nothing if not set</returns>
         /// <remarks>Used to optimize the fetching of information otherwise only easily available from FileInfo/DirectoryInfo.</remarks>
-        public W32Find_Data W32Data
+        public W32Find_Data? W32Data
         {
             get
             {
                 return m_W32Data;
             }
-            set
+            set //this is never called
             {
-                m_W32Data = value;//this is never set
+                m_W32Data = value; 
             }
         }
 
@@ -583,7 +583,7 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        private Dictionary<string, CShellItem> m_FileDic = null;
+        private Dictionary<string, CShellItem>? m_FileDic = null;
         public Dictionary<string, CShellItem> FilesDic
         {
             get
@@ -609,7 +609,7 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        private Dictionary<string, CShellItem> m_DirectoriesDic = null;
+        private Dictionary<string, CShellItem>? m_DirectoriesDic = null;
         public Dictionary<string, CShellItem> DirectoriesDic
         {
             get
@@ -1039,7 +1039,7 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        private Dictionary<string, ListViewSubitemData> m_columnDic = null;
+        private Dictionary<string, ListViewSubitemData>? m_columnDic = null;
         
         public Dictionary<string, ListViewSubitemData> ColumnDic
         {
@@ -1219,7 +1219,7 @@ namespace WindowsApiLib.Shell
         /// <item><description>Files</description></item>
         /// </list>
         /// </remarks>
-        public virtual int CompareTo(object obj)
+        public virtual int CompareTo(object? obj)
         {
             if (obj == null)
                 return 1; // non-existant is always low
@@ -1795,8 +1795,8 @@ namespace WindowsApiLib.Shell
             m_IsReadOnlySetup = false;
             m_XtrInfo = false;
             m_HasSubFolders = null;
-            if (W32Data is not null && W32Data is W32Find_Data)
-                W32Data = null;
+            if (m_W32Data is not null && m_W32Data is W32Find_Data)
+                m_W32Data = null;
             ResetIconIndex();
             m_columnDic?.Clear();
         }

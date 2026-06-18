@@ -105,7 +105,7 @@ namespace ExpControlsLib
         ///                    Ascending or Decending. This sort order is determined by reversing the
         ///                    sort order of the last click on this column.</description></item>
         /// </list></remarks>
-        public int Compare(object x, object y)
+        public int Compare(object? x, object? y)
         {
             if (x == null || y == null) return 0;
 
@@ -338,7 +338,7 @@ namespace ExpControlsLib
         #endregion
 
         #region    ColumnClick Handler
-        private void ListView_ColumnClick(object sender, ColumnClickEventArgs e)
+        private void ListView_ColumnClick(object? sender, ColumnClickEventArgs e)
         {
             ListView LV = (ListView)sender;   // simplify code a bit -- will throw exception if sender is not a ListView
                                               // Check that this instance of ListViewColumnSorter is still the operative one

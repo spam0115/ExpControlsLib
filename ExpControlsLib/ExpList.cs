@@ -97,12 +97,12 @@ namespace ExpControlsLib
         // while an enumeration is in progress (Invoke() pumps messages and can trigger
         // reentrant shell notifications on the same UI thread).
         private int _enumerationDepth = 0;
-        private readonly Queue<(object sender, ShellItemUpdateEventArgs e)> _deferredUpdates = new();
+        private readonly Queue<(object? sender, ShellItemUpdateEventArgs e)> _deferredUpdates = new();
 
         // Reentrancy guard for image list modifications. Prevents modifying the 
         // image list while the OS is in the middle of a draw cycle (e.g. RetrieveVirtualItem).
         private int _imageListMutationDepth = 0;
-        private readonly Queue<(object sender, ThumbnailReadyEventArgs e)> _deferredThumbnailUpdates = new();
+        private readonly Queue<(object? sender, ThumbnailReadyEventArgs e)> _deferredThumbnailUpdates = new();
 
         public bool IsShuttingDown {
             get; 
@@ -220,7 +220,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Delegate for the <see cref="ExpListMove"/> event.
         /// </summary>
-        public delegate void ExpListMoveEventHandler(object sender, ExpListMoveEventArgs e);
+        public delegate void ExpListMoveEventHandler(object? sender, ExpListMoveEventArgs e);
         /// <summary>
         /// Occurs when Move is selected from the context menu.
         /// </summary>
@@ -231,7 +231,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Delegate for the <see cref="ExpListCopy"/> event.
         /// </summary>
-        public delegate void ExpListCopyEventHandler(object sender, ExpListCopyEventArgs e);
+        public delegate void ExpListCopyEventHandler(object? sender, ExpListCopyEventArgs e);
         /// <summary>
         /// Occurs when Copy to Folder is selected from the context menu.
         /// </summary>
@@ -276,7 +276,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Delegate for the <see cref="ExpListGetColumnData"/> event.
         /// </summary>
-        public delegate void ExpListGetColumnDataEventHandler(object sender, ExpListGetColumnDataEventArgs e);
+        public delegate void ExpListGetColumnDataEventHandler(object? sender, ExpListGetColumnDataEventArgs e);
         /// <summary>
         /// Occurs when data for a custom column is requested.
         /// </summary>
@@ -652,7 +652,7 @@ namespace ExpControlsLib
         /// Handles the <see cref="Control.Load"/> event of the <see cref="ExpList"/> control.
         /// Initializes drag and drop wrappers, thumbnail manager, and shell item update notifications.
         /// </summary>
-        private void ExpList_Load(object sender, EventArgs e)
+        private void ExpList_Load(object? sender, EventArgs e)
         {
             Debug.WriteLine("ExpList: ExpList_Load Begin");
             try
@@ -695,7 +695,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Handles the <see cref="Control.HandleCreated"/> event of the <see cref="_listView"/> ListView.
         /// </summary>
-        private void ExpFileList_HandleCreated(object sender, EventArgs e)
+        private void ExpFileList_HandleCreated(object? sender, EventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_HandleCreated Begin");
             try
@@ -1485,7 +1485,7 @@ namespace ExpControlsLib
             }
         }
 
-        private delegate void InvokeUpdate(object sender, ShellItemUpdateEventArgs e);
+        private delegate void InvokeUpdate(object? sender, ShellItemUpdateEventArgs e);
 
         /// <summary>
         /// Exposes the SelectedItems collection of the internal ListView to allow external handlers to access the currently selected items.
@@ -1497,7 +1497,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
-        private void UpdateInvoke(object sender, ShellItemUpdateEventArgs e)
+        private void UpdateInvoke(object? sender, ShellItemUpdateEventArgs e)
         {
             //Debug.WriteLine("ExpList: UpdateInvoke Begin");
             try
@@ -1538,7 +1538,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
-        private async void DoItemUpdate(object sender, ShellItemUpdateEventArgs e)
+        private async void DoItemUpdate(object? sender, ShellItemUpdateEventArgs e)
         {
             try
             {
@@ -2022,8 +2022,9 @@ namespace ExpControlsLib
             CurrentFolderCsi = csi;
         }
 
-        public async Task LoadDirectory(CShellItem csi, bool includeFolder = true, bool reload = false)
+        public async Task LoadDirectory(CShellItem? csi, bool includeFolder = true, bool reload = false)
         {
+            if (csi is null) return;
             if (!reload && (_currentFolderCsi is not null && csi.FullPath == CurrentPath)) return;
 
             await LoadDirectoryBaseAsync(csi, includeFolder);
@@ -2670,7 +2671,7 @@ namespace ExpControlsLib
         #endregion
 
         #region Event Handlers
-        private void ExpFileList_Click(object sender, EventArgs e)
+        private void ExpFileList_Click(object? sender, EventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_Click Begin");
             try
@@ -2707,7 +2708,7 @@ namespace ExpControlsLib
         /// Handles double-click events on list view items. 
         /// Folders are navigated into, while files are launched.
         /// </summary>
-        private async void ExpFileList_DoubleClick(object sender, EventArgs e)
+        private async void ExpFileList_DoubleClick(object? sender, EventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_DoubleClick Begin");
             try
@@ -2745,7 +2746,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void ExpFileList_SelectedIndexChanged(object sender, EventArgs e)
+        private void ExpFileList_SelectedIndexChanged(object? sender, EventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_SelectedIndexChanged Begin");
 
@@ -2801,7 +2802,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void ExpFileList_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
+        private void ExpFileList_ItemSelectionChanged(object? sender, ListViewItemSelectionChangedEventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_ItemSelectionChanged Begin");
             try
@@ -2856,7 +2857,7 @@ namespace ExpControlsLib
         /// Clears the current selection.
         /// </summary>
         /// what the hell good is this?  It makes it impossible to use any selections to do anything.
-        //private void ExpFileList_Leave(object sender, EventArgs e)
+        //private void ExpFileList_Leave(object? sender, EventArgs e)
         //{
         //    ExpFileList.SelectedItems.Clear();
         //}
@@ -2865,7 +2866,7 @@ namespace ExpControlsLib
         /// Handles the <see cref="ListView.BeforeLabelEdit"/> event.
         /// Determines if an item can be renamed and sets up the edit control.
         /// </summary>
-        private void ExpFileList_BeforeLabelEdit(object sender, LabelEditEventArgs e)
+        private void ExpFileList_BeforeLabelEdit(object? sender, LabelEditEventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_BeforeLabelEdit Begin");
             try
@@ -2895,7 +2896,7 @@ namespace ExpControlsLib
         /// Handles the <see cref="ListView.AfterLabelEdit"/> event.
         /// Applies the new name to the shell item.
         /// </summary>
-        private void ExpFileList_AfterLabelEdit(object sender, LabelEditEventArgs e)
+        private void ExpFileList_AfterLabelEdit(object? sender, LabelEditEventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_AfterLabelEdit Begin");
             try
@@ -2947,7 +2948,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void ThumbnailManager_ThumbnailReady(object sender, ThumbnailReadyEventArgs e)
+        private void ThumbnailManager_ThumbnailReady(object? sender, ThumbnailReadyEventArgs e)
         {
             if (InvokeRequired)
             {
@@ -3038,7 +3039,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Handles the MouseLeave event to track when the mouse is outside the list view.
         /// </summary>
-        private void ExpFileList_MouseLeave(object sender, EventArgs e)
+        private void ExpFileList_MouseLeave(object? sender, EventArgs e)
         {
             //Debug.WriteLine("ExpList: ExpFileList_MouseLeave Begin");
             try
@@ -3052,7 +3053,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void ExpFileList_MouseEnter(object sender, EventArgs e)
+        private void ExpFileList_MouseEnter(object? sender, EventArgs e)
         {
             //Debug.WriteLine("ExpList: ExpFileList_MouseEnter Begin");
             try
@@ -3068,7 +3069,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Handles the MouseDown event to reset the out-of-range flag for right-clicks.
         /// </summary>
-        private void ExpFileList_MouseDown(object sender, MouseEventArgs e)
+        private void ExpFileList_MouseDown(object? sender, MouseEventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_MouseDown Begin");
             try
@@ -3085,7 +3086,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Handles the MouseUp event to trigger context menus or middle-click actions.
         /// </summary>
-        private async void ExpFileList_MouseUp(object sender, MouseEventArgs e)
+        private async void ExpFileList_MouseUp(object? sender, MouseEventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_MouseUp Begin");
             try
@@ -3229,7 +3230,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void ExpFileList_MouseMove(object sender, MouseEventArgs e)
+        private void ExpFileList_MouseMove(object? sender, MouseEventArgs e)
         {
             //Debug.WriteLine("ExpList: ExpFileList_MouseMove Begin");
             try
@@ -3248,7 +3249,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Handles KeyDown events for shortcuts (Ctrl+A, Ctrl+C/V/X, Delete, F2, F5, Enter).
         /// </summary>
-        private async void ExpFileList_KeyDown(object sender, KeyEventArgs e)
+        private async void ExpFileList_KeyDown(object? sender, KeyEventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_KeyDown Begin");
             try
@@ -3361,7 +3362,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Handles the KeyUp event for navigation keys.
         /// </summary>
-        private void ExpFileList_KeyUp(object sender, KeyEventArgs e)
+        private void ExpFileList_KeyUp(object? sender, KeyEventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_KeyUp Begin");
             try
@@ -3385,7 +3386,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void ExpFileList_KeyPress(object sender, KeyPressEventArgs e)
+        private void ExpFileList_KeyPress(object? sender, KeyPressEventArgs e)
         {
             Debug.WriteLine("ExpList: ExpFileList_KeyPress Begin");
             try

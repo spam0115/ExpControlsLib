@@ -66,7 +66,7 @@ namespace ExpControlsLib
         private ListViewItem m_LastItem;              // Most recent ListViewItem dragged over
         private Color m_OriginalColor;                // Original BackColor of ListViewItem Dragged Over
         private IDropTargetHelper m_DropHelper;       // IDropTargetHelper interface for this control
-        private CShellItem m_ParentItem;                 // CShellItem of Parent dir, if any, otherwise Nothing
+        private CShellItem? m_ParentItem;                 // CShellItem of Parent dir, if any, otherwise Nothing
         private WindowsApiLib.Shell.IDropTarget m_ParentTarget;  // IDropTarget of the Parent dir of all Items in control, or Nothing
         private bool m_disposed = false;           // To detect redundant Dispose calls
 
@@ -112,7 +112,7 @@ namespace ExpControlsLib
 
         #region    Handle Changes
 
-        private void View_HandleCreated(object sender, EventArgs e)
+        private void View_HandleCreated(object? sender, EventArgs e)
         {
             int res;
             res = RegisterDragDrop(m_ListView.Handle, this);
@@ -123,7 +123,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void View_HandleDestroyed(object sender, EventArgs e)
+        private void View_HandleDestroyed(object? sender, EventArgs e)
         {
             if (m_ListView is not null)
             {
