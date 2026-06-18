@@ -15,27 +15,6 @@ namespace ExpControlsLib
         /// </summary>
         private System.ComponentModel.IContainer components = null;
 
-        /// <summary> 
-        /// Clean up any resources being used.
-        /// </summary>
-        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
-        protected override void Dispose(bool disposing)
-        {
-            try
-            {
-                if (disposing && components != null)
-                {
-                    components.Dispose();
-                }
-                Cleanup();
-                ShellController.Instance.ShellUpdater.UpdateEvent -= OnItemUpdate;
-            }
-            finally
-            {
-                base.Dispose(disposing);
-            }
-        }
-
         #region Component Designer generated code
 
         /// <summary> 
@@ -70,7 +49,7 @@ namespace ExpControlsLib
             _TreeView.HandleDestroyed += Tv1_HandleDestroyed;
             _TreeView.KeyPress += Tv1_KeyPress;
             _TreeView.KeyUp += Tv1_KeyUp;
-            _TreeView.MouseUp += ExpTree_MouseUp;
+            _TreeView.MouseUp += Tv1_MouseUp;
             // 
             // ExpTree
             // 

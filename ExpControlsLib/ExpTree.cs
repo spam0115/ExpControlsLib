@@ -32,12 +32,148 @@ namespace ExpControlsLib
     [SupportedOSPlatform("windows")]
     public partial class ExpTree
     {
+        #region Private fields
         /// <summary>
         /// The root <see cref="TreeNode"/> of the TreeView. Represents the top-level Shell item
         /// from which the entire tree is built.
         /// </summary>
-        private TreeNode _Root;
+        private TreeNode? _Root;
 
+        /// <summary>
+        /// Flag used to suppress the raising of <see cref="ExpTreeNodeSelected"/> during
+        /// tree refresh and programmatic navigation operations.
+        /// </summary>
+        private bool EnableEventPost = true;
+
+        /// <summary>
+        /// A case-insensitive set of paths or GUIDs representing Shell items that should be
+        /// excluded from display in the tree.
+        /// </summary>
+        private HashSet<string> _excludedItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Stack holding the backward navigation history of visited <see cref="CShellItem"/> folders.
+        /// </summary>
+        private Stack<CShellItem> _backHistory = new Stack<CShellItem>();
+
+        /// <summary>
+        /// Stack holding the forward navigation history of visited <see cref="CShellItem"/> folders,
+        /// populated when the user navigates back.
+        /// </summary>
+        private Stack<CShellItem> _forwardHistory = new Stack<CShellItem>();
+
+        /// <summary>
+        /// Indicates whether a history navigation (back or forward) is currently in progress,
+        /// used to prevent the navigation from being recorded again as a new history entry.
+        /// </summary>
+        private bool _isNavigatingHistory = false;
+
+        /// <summary>
+        /// The most recently selected <see cref="CShellItem"/>, used as the source entry
+        /// when recording navigation history.
+        /// </summary>
+        private CShellItem? _lastSelectedCSI = null;
+
+        /// <summary>
+        /// Cancellation token source for the currently active root-load operation.
+        /// Cancelled and replaced whenever a new root load is initiated.
+        /// </summary>
+        private CancellationTokenSource? _rootLoadCts;
+
+        /// <summary>
+        /// Shared STA thread runner used to marshal Shell COM operations onto a dedicated
+        /// Single-Threaded Apartment thread pool, keeping the UI thread responsive.
+        /// </summary>
+        private StaThreadRunner? _staRunner = null;
+
+        /// <summary>
+        /// A <see cref="CShellItem"/> that is waiting to be expanded once the root load completes.
+        /// Set when <see cref="ExpandANode(CShellItem, bool)"/> is called before the tree is ready.
+        /// </summary>
+        private CShellItem? _pendingExpansionItem;
+
+        /// <summary>
+        /// Indicates whether the pending expansion item should also be selected after the root
+        /// load completes and the deferred expansion is performed.
+        /// </summary>
+        private bool _pendingSelectExpandedNode;
+
+        /// <summary>
+        /// Backing field for the <see cref="DropHandler"/> property.
+        /// Holds the current <see cref="CtvDropWrapper"/> instance managing Shell drop operations.
+        /// </summary>
+        private CtvDropWrapper? _DropHandler;
+
+        /// <summary>
+        /// Gets or sets the <see cref="CtvDropWrapper"/> that handles Shell drag-and-drop operations
+        /// onto the TreeView. Setting this property automatically wires or unwires the associated
+        /// drag event handlers.
+        /// </summary>
+        private CtvDropWrapper? DropHandler
+        {
+            [MethodImpl(MethodImplOptions.Synchronized)]
+            get
+            {
+                return _DropHandler;
+            }
+
+            [MethodImpl(MethodImplOptions.Synchronized)]
+            set
+            {
+                if (_DropHandler != null)
+                {
+                    _DropHandler.ShDragEnter -= DragWrapper_ShDragEnter;
+                    _DropHandler.ShDragLeave -= DragWrapper_ShDragLeave;
+                    _DropHandler.ShDragOver -= DragWrapper_ShDragOver;
+                    _DropHandler.ShDragDrop -= DragWrapper_ShDragDrop;
+                }
+
+                _DropHandler = value;
+                if (_DropHandler != null)
+                {
+                    _DropHandler.ShDragEnter += DragWrapper_ShDragEnter;
+                    _DropHandler.ShDragLeave += DragWrapper_ShDragLeave;
+                    _DropHandler.ShDragOver += DragWrapper_ShDragOver;
+                    _DropHandler.ShDragDrop += DragWrapper_ShDragDrop;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Manages Shell drag-source operations initiated from within the TreeView,
+        /// allowing items to be dragged out to other Shell targets.
+        /// </summary>
+        private CDragWrapper? DragHandler;
+
+        /// <summary>
+        /// Backing field for <see cref="ShowHiddenFolders"/>. When <c>true</c>, folders
+        /// with the Hidden attribute are included in the tree display.
+        /// </summary>
+        private bool m_showHiddenFolders = true;
+
+        /// <summary>
+        /// The Windows Shell context menu helper used to display and process the native
+        /// right-click context menu for selected TreeNode items.
+        /// </summary>
+        private readonly ContextMenu m_WindowsContextMenu = new ContextMenu();
+
+        private bool IsInDesignMode => (DesignMode || LicenseManager.UsageMode == LicenseUsageMode.Designtime);
+
+        /// <summary>Windows message identifier for setting the selection range in an edit control.</summary>
+        private const int EM_SETSEL = 0xB1;
+
+        /// <summary>Base value for TreeView control messages (WM_USER + 0x1100).</summary>
+        private const int TVM_FIRST = 0x1100;
+
+        /// <summary>
+        /// TreeView message that retrieves the handle of the edit control used for in-place label editing.
+        /// Equals <c>TVM_FIRST + 15</c>.
+        /// </summary>
+        private const int TVM_GETEDITCONTROL = TVM_FIRST + 15;
+
+        #endregion
+
+        #region Event delegates
         /// <summary>
         /// StartUpDirectoryChanged is raised when the root of the TreeView is changed via StartUpDirectory
         /// Property. 
@@ -76,240 +212,283 @@ namespace ExpControlsLib
         /// <param name="Item">The <see cref="CShellItem"/> associated with the selected TreeNode.</param>
         public delegate void ExpTreeNodeSelectedEventHandler(string SelPath, CShellItem Item);
 
-        /// <summary>
-        /// Flag used to suppress the raising of <see cref="ExpTreeNodeSelected"/> during
-        /// tree refresh and programmatic navigation operations.
-        /// </summary>
-        private bool EnableEventPost = true;
+        #endregion region
+
+        #region Public Properties
 
         /// <summary>
-        /// A case-insensitive set of paths or GUIDs representing Shell items that should be
-        /// excluded from display in the tree.
+        /// Backing field for <see cref="AllowDrop"/>. Stores the last value assigned to the property
+        /// so that the drop handler can be re-created when the TreeView handle is (re-)created.
         /// </summary>
-        private HashSet<string> _excludedItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private bool m_AllowDrop = false;
 
         /// <summary>
-        /// Stack holding the backward navigation history of visited <see cref="CShellItem"/> folders.
+        /// Turns this ExpTree Control's ability to accept Drops on or Off.<br />
+        /// True - Enables the ExpTree Control to accept Drops.<br />
+        /// False - Disables the ExpTree Control acceptance of  Drops.
         /// </summary>
-        private Stack<CShellItem> _backHistory = new Stack<CShellItem>();
-
-        /// <summary>
-        /// Stack holding the forward navigation history of visited <see cref="CShellItem"/> folders,
-        /// populated when the user navigates back.
-        /// </summary>
-        private Stack<CShellItem> _forwardHistory = new Stack<CShellItem>();
-
-        /// <summary>
-        /// Indicates whether a history navigation (back or forward) is currently in progress,
-        /// used to prevent the navigation from being recorded again as a new history entry.
-        /// </summary>
-        private bool _isNavigatingHistory = false;
-
-        /// <summary>
-        /// The most recently selected <see cref="CShellItem"/>, used as the source entry
-        /// when recording navigation history.
-        /// </summary>
-        private CShellItem _lastSelectedCSI = null;
-
-        /// <summary>
-        /// Cancellation token source for the currently active root-load operation.
-        /// Cancelled and replaced whenever a new root load is initiated.
-        /// </summary>
-        private CancellationTokenSource? _rootLoadCts;
-
-        /// <summary>
-        /// Shared STA thread runner used to marshal Shell COM operations onto a dedicated
-        /// Single-Threaded Apartment thread pool, keeping the UI thread responsive.
-        /// </summary>
-        private static readonly StaThreadRunner _staRunner = new StaThreadRunner(5, "ExpTreeStaRunner");
-
-        /// <summary>
-        /// A <see cref="CShellItem"/> that is waiting to be expanded once the root load completes.
-        /// Set when <see cref="ExpandANode(CShellItem, bool)"/> is called before the tree is ready.
-        /// </summary>
-        private CShellItem? _pendingExpansionItem;
-
-        /// <summary>
-        /// Indicates whether the pending expansion item should also be selected after the root
-        /// load completes and the deferred expansion is performed.
-        /// </summary>
-        private bool _pendingSelectExpandedNode;
-
-        /// <summary>
-        /// Cancels and disposes any active root-load cancellation token source,
-        /// releasing associated resources.
-        /// </summary>
-        private void Cleanup()
+        /// <returns>True or False</returns>
+        /// <remarks>Works by assigning or  removing an instance of CtvDropWrapper to the Local variable DropHandler.</remarks>
+        public override bool AllowDrop
         {
-            _rootLoadCts?.Cancel();
-            _rootLoadCts?.Dispose();
-            _rootLoadCts = null;
-        }
-
-        /// <summary>
-        /// Asynchronously loads and displays the tree rooted at the specified <see cref="CShellItem"/>
-        /// or <see cref="StartDir"/> value. Any in-progress load is cancelled before the new one begins.
-        /// Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
-        /// </summary>
-        /// <param name="item">
-        /// The <see cref="CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
-        /// should be used to resolve the root instead.
-        /// </param>
-        /// <param name="dir">
-        /// A <see cref="StartDir"/> value used to resolve the root when <paramref name="item"/> is <c>null</c>.
-        /// Defaults to <see cref="StartDir.None"/>.
-        /// </param>
-        private async Task SetRootItemAsync(CShellItem? item, StartDir dir = StartDir.None)
-        {
-            _rootLoadCts?.Cancel();
-            _rootLoadCts = new CancellationTokenSource();
-            var token = _rootLoadCts.Token;
-
-            try
-            {
-                var result = await _staRunner.EnqueueWork(t =>
-                {
-                    CShellItem? value = item;
-                    if (value == null && dir != StartDir.None)
-                    {
-                        value = CShellItemFactory.Create((CSIDL)dir);
-                    }
-
-                    if (value == null || !value.IsFolder) return null;
-
-                    var flags = SHCONTF.FOLDERS;
-                    if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-                    var target = ShellController.Instance.LoadFolderContents(value, flags);
-                    if (target != null) value = target;
-
-                    var children = value.Directories;
-                    // Warming up
-                    foreach (var child in children)
-                    {
-                        if (t.IsCancellationRequested) return null;
-                        _ = child.HasSubFolders; // Populates cache
-                        _ = child.IconIndexNormal;
-                        _ = child.IconIndexOpen;
-                    }
-
-                    return new
-                    {
-                        Children = children,
-                        RootItem = value,
-                        DisplayName = value.DisplayName,
-                        IconIndex = GetIconIndex(value, false)
-                    };
-                }, token);
-
-                if (token.IsCancellationRequested || result == null) return;
-
-                _TreeView.BeginUpdate();
-                try
-                {
-                    ClearTree();
-                    _Root = new TreeNode(result.DisplayName);
-                    BuildTree(result.Children);
-                    _Root.ImageIndex = result.IconIndex;
-                    _Root.SelectedImageIndex = result.IconIndex;
-                    _Root.Tag = result.RootItem;
-
-                    _TreeView.Nodes.Add(_Root);
-                    _Root.Expand();
-
-                    if (_pendingExpansionItem != null)
-                    {
-                        var itemToExpand = _pendingExpansionItem;
-                        var select = _pendingSelectExpandedNode;
-                        _pendingExpansionItem = null;
-                        _ = ExpandANodeAsync(itemToExpand, select);
-                    }
-                    else
-                    {
-                        _TreeView.SelectedNode = _Root;
-                    }
-                }
-                finally
-                {
-                    _TreeView.EndUpdate();
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("Error in SetRootItemAsync: " + ex.ToString());
-            }
-        }
-
-        /// <summary>
-        /// Backing field for the <see cref="DropHandler"/> property.
-        /// Holds the current <see cref="CtvDropWrapper"/> instance managing Shell drop operations.
-        /// </summary>
-        private CtvDropWrapper _DropHandler;
-
-        /// <summary>
-        /// Gets or sets the <see cref="CtvDropWrapper"/> that handles Shell drag-and-drop operations
-        /// onto the TreeView. Setting this property automatically wires or unwires the associated
-        /// drag event handlers.
-        /// </summary>
-        private CtvDropWrapper DropHandler
-        {
-            [MethodImpl(MethodImplOptions.Synchronized)]
             get
             {
-                return _DropHandler;
+                return DropHandler is not null;
             }
-
-            [MethodImpl(MethodImplOptions.Synchronized)]
             set
             {
-                if (_DropHandler != null)
+                m_AllowDrop = value;
+                if (value)
                 {
-                    _DropHandler.ShDragEnter -= DragWrapper_ShDragEnter;
-                    _DropHandler.ShDragLeave -= DragWrapper_ShDragLeave;
-                    _DropHandler.ShDragOver -= DragWrapper_ShDragOver;
-                    _DropHandler.ShDragDrop -= DragWrapper_ShDragDrop;
+                    if (_TreeView?.IsHandleCreated ?? false)
+                    {
+                        if (DropHandler is null)      // otherwise, already running
+                        {
+                            DropHandler = new CtvDropWrapper(_TreeView);
+                        }
+                    }
                 }
-
-                _DropHandler = value;
-                if (_DropHandler != null)
+                else if (DropHandler is not null)
                 {
-                    _DropHandler.ShDragEnter += DragWrapper_ShDragEnter;
-                    _DropHandler.ShDragLeave += DragWrapper_ShDragLeave;
-                    _DropHandler.ShDragOver += DragWrapper_ShDragOver;
-                    _DropHandler.ShDragDrop += DragWrapper_ShDragDrop;
+                    DropHandler.Dispose();
+                    DropHandler = null;
                 }
             }
         }
 
         /// <summary>
-        /// Manages Shell drag-source operations initiated from within the TreeView,
-        /// allowing items to be dragged out to other Shell targets.
+        /// Backing field for <see cref="AllowFolderRename"/>. When <c>true</c>, the TreeView's
+        /// <c>LabelEdit</c> is enabled and the Shell rename verb is permitted via the context menu.
         /// </summary>
-        private CDragWrapper DragHandler;
+        private bool m_allowFolderRename;
 
         /// <summary>
-        /// Backing field for <see cref="ShowHiddenFolders"/>. When <c>true</c>, folders
-        /// with the Hidden attribute are included in the tree display.
+        /// Allow renaming of folders using LabelEdit
         /// </summary>
-        private bool m_showHiddenFolders = true;
+        /// <value></value>
+        /// <returns></returns>
+        /// <remarks></remarks>
+        [Category("Behavior")]
+        [Description("Allow renaming of folders using LabelEdit")]
+        public bool AllowFolderRename
+        {
+            get
+            {
+                return m_allowFolderRename;
+            }
+            set
+            {
+                m_allowFolderRename = value;
+                _TreeView?.LabelEdit = value;
+            }
+        }
 
         /// <summary>
-        /// The Windows Shell context menu helper used to display and process the native
-        /// right-click context menu for selected TreeNode items.
+        /// Gets or sets the foreground color of the underlying TreeView control.
         /// </summary>
-        private readonly ContextMenu m_WindowsContextMenu = new ContextMenu();
-
-        /// <summary>Windows message identifier for setting the selection range in an edit control.</summary>
-        private const int EM_SETSEL = 0xB1;
-
-        /// <summary>Base value for TreeView control messages (WM_USER + 0x1100).</summary>
-        private const int TVM_FIRST = 0x1100;
+        /// <returns>The current foreground <see cref="Color"/> of the TreeView.</returns>
+        public override Color ForeColor
+        {
+            get
+            {
+                return _TreeView?.ForeColor ?? base.ForeColor;
+            }
+            set
+            {
+                if (value != _TreeView?.ForeColor)
+                {
+                    _TreeView?.ForeColor = value;
+                }
+            }
+        }
 
         /// <summary>
-        /// TreeView message that retrieves the handle of the edit control used for in-place label editing.
-        /// Equals <c>TVM_FIRST + 15</c>.
+        /// Gets or sets the background color of the underlying TreeView control.
         /// </summary>
-        private const int TVM_GETEDITCONTROL = TVM_FIRST + 15;
+        /// <returns>The current background <see cref="Color"/> of the TreeView.</returns>
+        public override Color BackColor
+        {
+            get
+            {
+                return _TreeView?.BackColor ?? base.BackColor;
+            }
+            set
+            {
+                if (value != _TreeView?.BackColor)
+                {
+                    _TreeView?.BackColor = value;
+                }
+            }
+        }
+
+        /// <summary>
+        /// RootItem is a Run-Time only Property. Setting this Item via an External call results in
+        /// re-setting the entire tree to be rooted in the input CShellItem.
+        /// The new CShellItem must be a valid CShellItem of some kind of Folder (File Folder or System Folder).
+        /// Attempts to set it using a non-Folder CShellItem are ignored.
+        /// </summary>
+        [Browsable(false)]
+        public CShellItem? Root
+        {
+            get
+            {
+                if (_Root is null || _Root.Tag is null)
+                {
+                    return ShellController.DesktopCSI;
+                }
+                else
+                {
+                    return (CShellItem)_Root.Tag;
+                }
+            }
+            set
+            {
+                if (value is null) return;
+
+                if (value.IsFolder)
+                {
+                    _ = SetRootItemAsync(value);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the selected tree node in the underlying TreeView control.
+        /// </summary>
+        [Browsable(false)]
+        public TreeNode? SelectedNode
+        {
+            get => _TreeView?.SelectedNode;
+            set => _TreeView?.SelectedNode = value;
+        }
+
+        /// <summary>
+        /// Run-time only Property which returns the CShellItem underlying the SelectedNode of the TreeView.
+        /// </summary>
+        /// <returns>The underlying CShellItem of the TreeView.SelectedNode. If none Selected, returns Nothing.</returns>
+        [Browsable(false)]
+        public CShellItem? SelectedItem
+        {
+            get
+            {
+                if (!(_TreeView?.SelectedNode == null))
+                {
+                    return (CShellItem?)_TreeView?.SelectedNode?.Tag;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the collection of tree nodes that are assigned to the tree view control.
+        /// </summary>
+        [Browsable(false)]
+        public TreeNodeCollection? Nodes => _TreeView?.Nodes;
+
+        /// <summary>
+        /// ShowHiddenFolders sets or gets a Boolean indicating whether or not to Display Folders with the Hidden Attribute.
+        /// </summary>
+        /// <value></value>
+        /// <returns>True if ExpTree is Displaying Hidden Folders, False if not.</returns>
+        /// <remarks>Hidden Folders may be Displayed or not Displayed at run-time.</remarks>
+        [Browsable(true)]
+        [Category("Options")]
+        [Description("Show Hidden Directories.")]
+        [DefaultValue(true)]
+        public bool ShowHiddenFolders
+        {
+            get
+            {
+                return m_showHiddenFolders;
+            }
+            set
+            {
+                if (m_showHiddenFolders ^ value)
+                {
+                    m_showHiddenFolders = value;
+                    if (_Root is not null)
+                        RefreshTree();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets a collection of items (by their full path or GUID) to exclude from the tree display.
+        /// </summary>
+        [Browsable(false)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public HashSet<string> ExcludedItems
+        {
+            get => _excludedItems;
+            set => _excludedItems = value ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Exposes the normal TreeView ShowRootLines property.
+        /// </summary>
+        /// <value></value>
+        /// <returns>The state of the underlying TreeView property.</returns>
+        /// <remarks></remarks>
+        [Category("Options")]
+        [Description("Allow Collapse of Root Item.")]
+        [Browsable(true)]
+        public bool ShowRootLines
+        {
+            get
+            {
+                return _TreeView?.ShowRootLines ?? false;
+            }
+            set
+            {
+                if (!(value == _TreeView?.ShowRootLines))
+                {
+                    _TreeView?.ShowRootLines = value;
+                    _TreeView?.Refresh();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Backing field for <see cref="StartUpDirectory"/>. Stores the currently active
+        /// <see cref="StartDir"/> value.
+        /// </summary>
+        private StartDir m_StartUpDirectory = StartDir.None;
+
+        /// <summary>
+        /// Sets the initial Root directory of ExpTree.
+        /// </summary>
+        /// <value>Must be one of the StartDir Enum values.</value>
+        /// <returns>Current StartDir value.</returns>
+        /// <remarks></remarks>
+        [Category("Options")]
+        [Description("Sets the Initial Directory of the Tree")]
+        [Browsable(true)]
+        [DefaultValue(StartDir.None)]
+        public StartDir StartUpDirectory
+        {
+            get
+            {
+                return m_StartUpDirectory;
+            }
+            set
+            {
+                if (Array.IndexOf(Enum.GetValues(value.GetType()), value) >= 0)
+                {
+                    m_StartUpDirectory = value;
+                    OnStartUpDirectoryChanged(value);
+                    StartUpDirectoryChanged?.Invoke(value);
+                }
+                else
+                {
+                    throw new ApplicationException("Invalid Initial StartUpDirectory");
+                }
+            }
+        }
+
+        #endregion
 
         #region Constructor/Destructor
 
@@ -317,9 +496,26 @@ namespace ExpControlsLib
         /// Initializes a new instance of <see cref="ExpTree"/>, sets up the TreeView image list,
         /// wires Shell item update notifications, and configures the node-expansion hover timer.
         /// </summary>
-        public ExpTree(string? rootPath = null) : base()
+        public ExpTree() : base()
+        {
+            ConstructorBase(null);
+        }
+
+        public ExpTree(string? rootPath) : base()
+        {
+            ConstructorBase(rootPath);
+        }
+
+        private void ConstructorBase(string? rootPath)
         {
             InitializeComponent();
+
+            expandNodeTimer = new System.Windows.Forms.Timer();
+
+            if (IsInDesignMode)
+                return;
+
+            _staRunner = new StaThreadRunner(5, "ExpTreeStaRunner");
 
             if (rootPath is not null)
             {
@@ -328,8 +524,6 @@ namespace ExpControlsLib
                 m_StartUpDirectory = StartDir.None;
                 Root = csi;
             }
-
-            expandNodeTimer = new System.Windows.Forms.Timer();
 
             SetTreeViewImageList(_TreeView, false);
 
@@ -392,345 +586,6 @@ namespace ExpControlsLib
         /// <returns>An HRESULT indicating success or failure.</returns>
         [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
         private static extern int SetWindowTheme(IntPtr hWnd, string pszSubAppName, string pszSubIdList);
-
-        /// <summary>
-        /// Handles the TreeView's <c>HandleCreated</c> event. Initialises the drag source wrapper,
-        /// optionally creates the drop target wrapper, and applies the Explorer visual theme.
-        /// </summary>
-        /// <param name="sender">The TreeView whose handle was created.</param>
-        /// <param name="e">Event data (unused).</param>
-        private void Tv1_HandleCreated(object sender, EventArgs e)
-        {
-            DragHandler = new ExpControlsLib.CDragWrapper(_TreeView);
-            if (m_AllowDrop)
-                DropHandler = new CtvDropWrapper(_TreeView);
-            SetWindowTheme(_TreeView.Handle, "explorer", null);
-        }
-
-        /// <summary>
-        /// Handles the TreeView's <c>HandleDestroyed</c> event.
-        /// Reserved for any cleanup that must occur when the underlying window handle is destroyed.
-        /// </summary>
-        /// <param name="sender">The TreeView whose handle was destroyed.</param>
-        /// <param name="e">Event data (unused).</param>
-        private void Tv1_HandleDestroyed(object sender, EventArgs e)
-        {
-        }
-
-        #region Public Properties
-
-        /// <summary>
-        /// Backing field for <see cref="AllowDrop"/>. Stores the last value assigned to the property
-        /// so that the drop handler can be re-created when the TreeView handle is (re-)created.
-        /// </summary>
-        private bool m_AllowDrop = false;
-
-        /// <summary>
-        /// Turns this ExpTree Control's ability to accept Drops on or Off.<br />
-        /// True - Enables the ExpTree Control to accept Drops.<br />
-        /// False - Disables the ExpTree Control acceptance of  Drops.
-        /// </summary>
-        /// <returns>True or False</returns>
-        /// <remarks>Works by assigning or  removing an instance of CtvDropWrapper to the Local variable DropHandler.</remarks>
-        public override bool AllowDrop
-        {
-            get
-            {
-                return DropHandler is not null;
-            }
-            set
-            {
-                m_AllowDrop = value;
-                if (value)
-                {
-                    if (_TreeView.IsHandleCreated)
-                    {
-                        if (DropHandler is null)      // otherwise, already running
-                        {
-                            DropHandler = new CtvDropWrapper(_TreeView);
-                        }
-                    }
-                }
-                else if (DropHandler is not null)
-                {
-                    DropHandler.Dispose();
-                    DropHandler = null;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the foreground color of the underlying TreeView control.
-        /// </summary>
-        /// <returns>The current foreground <see cref="Color"/> of the TreeView.</returns>
-        public override Color ForeColor
-        {
-            get
-            {
-                return _TreeView.ForeColor;
-            }
-            set
-            {
-                if (value != _TreeView.ForeColor)
-                {
-                    _TreeView.ForeColor = value;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the background color of the underlying TreeView control.
-        /// </summary>
-        /// <returns>The current background <see cref="Color"/> of the TreeView.</returns>
-        public override Color BackColor
-        {
-            get
-            {
-                return _TreeView.BackColor;
-            }
-            set
-            {
-                if (value != _TreeView.BackColor)
-                {
-                    _TreeView.BackColor = value;
-                }
-            }
-        }
-
-        /// <summary>
-        /// RootItem is a Run-Time only Property. Setting this Item via an External call results in
-        /// re-setting the entire tree to be rooted in the input CShellItem.
-        /// The new CShellItem must be a valid CShellItem of some kind of Folder (File Folder or System Folder).
-        /// Attempts to set it using a non-Folder CShellItem are ignored.
-        /// </summary>
-        [Browsable(false)]
-        public CShellItem Root
-        {
-            get
-            {
-                if (_Root is null || _Root.Tag is null)
-                {
-                    return ShellController.DesktopCSI;
-                }
-                else
-                {
-                    return (CShellItem)_Root.Tag;
-                }
-            }
-            set
-            {
-                if (value is null) return;
-
-                if (value.IsFolder)
-                {
-                    _ = SetRootItemAsync(value);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the selected tree node in the underlying TreeView control.
-        /// </summary>
-        [Browsable(false)]
-        public TreeNode SelectedNode
-        {
-            get => _TreeView.SelectedNode;
-            set => _TreeView.SelectedNode = value;
-        }
-
-        /// <summary>
-        /// Run-time only Property which returns the CShellItem underlying the SelectedNode of the TreeView.
-        /// </summary>
-        /// <returns>The underlying CShellItem of the TreeView.SelectedNode. If none Selected, returns Nothing.</returns>
-        [Browsable(false)]
-        public CShellItem SelectedItem
-        {
-            get
-            {
-                if (!(_TreeView.SelectedNode == null))
-                {
-                    return (CShellItem)_TreeView.SelectedNode.Tag;
-                }
-                else
-                {
-                    return null;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets the collection of tree nodes that are assigned to the tree view control.
-        /// </summary>
-        [Browsable(false)]
-        public TreeNodeCollection Nodes => _TreeView.Nodes;
-
-        /// <summary>
-        /// ShowHiddenFolders sets or gets a Boolean indicating whether or not to Display Folders with the Hidden Attribute.
-        /// </summary>
-        /// <value></value>
-        /// <returns>True if ExpTree is Displaying Hidden Folders, False if not.</returns>
-        /// <remarks>Hidden Folders may be Displayed or not Displayed at run-time.</remarks>
-        [Browsable(true)]
-        [Category("Options")]
-        [Description("Show Hidden Directories.")]
-        [DefaultValue(true)]
-        public bool ShowHiddenFolders
-        {
-            get
-            {
-                return m_showHiddenFolders;
-            }
-            set
-            {
-                if (m_showHiddenFolders ^ value)
-                {
-                    m_showHiddenFolders = value;
-                    if (_Root is not null)
-                        RefreshTree();
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets a collection of items (by their full path or GUID) to exclude from the tree display.
-        /// </summary>
-        [Browsable(false)]
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public HashSet<string> ExcludedItems
-        {
-            get => _excludedItems;
-            set => _excludedItems = value ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        /// <summary>
-        /// Exposes the normal TreeView ShowRootLines property.
-        /// </summary>
-        /// <value></value>
-        /// <returns>The state of the underlying TreeView property.</returns>
-        /// <remarks></remarks>
-        [Category("Options")]
-        [Description("Allow Collapse of Root Item.")]
-        [Browsable(true)]
-        public bool ShowRootLines
-        {
-            get
-            {
-                return _TreeView.ShowRootLines;
-            }
-            set
-            {
-                if (!(value == _TreeView.ShowRootLines))
-                {
-                    _TreeView.ShowRootLines = value;
-                    _TreeView.Refresh();
-                }
-            }
-        }
-
-        /// <summary>
-        /// The values representing the System's Special Folders.
-        /// </summary>
-        /// <remarks>Certain Special Folders are disallowed since they may not exist, or may cause program failure
-        /// on certain versions of Windows (primarily the older, unsupported versions).</remarks>
-        public enum StartDir : int
-        {
-            /// <summary>No startup directory specified; the tree will be empty.</summary>
-            None = -1,
-            /// <summary>The Desktop virtual folder (CSIDL 0x00).</summary>
-            Desktop = 0x0,
-            /// <summary>The Programs folder in the Start Menu (CSIDL 0x02).</summary>
-            Programs = 0x2,
-            /// <summary>The Control Panel virtual folder (CSIDL 0x03).</summary>
-            Controls = 0x3,
-            /// <summary>The Printers virtual folder (CSIDL 0x04).</summary>
-            Printers = 0x4,
-            /// <summary>The current user's Documents folder (CSIDL 0x05).</summary>
-            Personal = 0x5,
-            /// <summary>The current user's Favorites folder (CSIDL 0x06).</summary>
-            Favorites = 0x6,
-            /// <summary>The Startup folder in the Start Menu (CSIDL 0x07).</summary>
-            Startup = 0x7,
-            /// <summary>The Recent Documents folder (CSIDL 0x08).</summary>
-            Recent = 0x8,
-            /// <summary>The Send To folder (CSIDL 0x09).</summary>
-            SendTo = 0x9,
-            /// <summary>The Start Menu folder (CSIDL 0x0B).</summary>
-            StartMenu = 0xB,
-            /// <summary>The My Documents virtual folder (CSIDL 0x0C).</summary>
-            MyDocuments = 0xC,
-            /// <summary>The Desktop directory in the file system (CSIDL 0x10).</summary>
-            DesktopDirectory = 0x10,
-            /// <summary>The My Computer virtual folder (CSIDL 0x11).</summary>
-            MyComputer = 0x11,
-            /// <summary>The My Network Places virtual folder (CSIDL 0x12).</summary>
-            My_Network_Places = 0x12,
-            /// <summary>The Application Data roaming folder (CSIDL 0x1A).</summary>
-            ApplicatationData = 0x1A,
-            /// <summary>The Temporary Internet Files (cache) folder (CSIDL 0x20).</summary>
-            Internet_Cache = 0x20,
-            /// <summary>The Cookies folder (CSIDL 0x21).</summary>
-            Cookies = 0x21,
-            /// <summary>The History folder (CSIDL 0x22).</summary>
-            History = 0x22,
-            /// <summary>The Windows installation directory (CSIDL 0x24).</summary>
-            Windows = 0x24,
-            /// <summary>The System32 directory (CSIDL 0x25).</summary>
-            System = 0x25,
-            /// <summary>The Program Files directory (CSIDL 0x26).</summary>
-            Program_Files = 0x26,
-            /// <summary>The My Pictures folder (CSIDL 0x27).</summary>
-            MyPictures = 0x27,
-            /// <summary>The current user's profile directory (CSIDL 0x28).</summary>
-            Profile = 0x28,
-            /// <summary>The 32-bit System directory on a 64-bit OS (CSIDL 0x29).</summary>
-            Systemx86 = 0x29,
-            /// <summary>The Administrative Tools folder (CSIDL 0x30).</summary>
-            AdminTools = 0x30
-            // MyMusic = &HD
-            // MyVideo = &HE
-            // NETHOOD = &H13
-            // FONTS = &H14
-            // PRINTHOOD = &H1B
-        }
-
-        /// <summary>
-        /// Backing field for <see cref="StartUpDirectory"/>. Stores the currently active
-        /// <see cref="StartDir"/> value.
-        /// </summary>
-        private StartDir m_StartUpDirectory = StartDir.None;
-
-        /// <summary>
-        /// Sets the initial Root directory of ExpTree.
-        /// </summary>
-        /// <value>Must be one of the StartDir Enum values.</value>
-        /// <returns>Current StartDir value.</returns>
-        /// <remarks></remarks>
-        [Category("Options")]
-        [Description("Sets the Initial Directory of the Tree")]
-        [Browsable(true)]
-        [DefaultValue(StartDir.None)]
-        public StartDir StartUpDirectory
-        {
-            get
-            {
-                return m_StartUpDirectory;
-            }
-            set
-            {
-                if (Array.IndexOf(Enum.GetValues(value.GetType()), value) >= 0)
-                {
-                    m_StartUpDirectory = value;
-                    OnStartUpDirectoryChanged(value);
-                    StartUpDirectoryChanged?.Invoke(value);
-                }
-                else
-                {
-                    throw new ApplicationException("Invalid Initial StartUpDirectory");
-                }
-            }
-        }
-
-        #endregion
 
         #region Public Methods
 
@@ -1375,6 +1230,36 @@ namespace ExpControlsLib
 
         #region Event Handling
 
+
+        /// <summary>
+        /// Handles the TreeView's <c>HandleCreated</c> event. Initialises the drag source wrapper,
+        /// optionally creates the drop target wrapper, and applies the Explorer visual theme.
+        /// </summary>
+        /// <param name="sender">The TreeView whose handle was created.</param>
+        /// <param name="e">Event data (unused).</param>
+        private void Tv1_HandleCreated(object sender, EventArgs e)
+        {
+            if (IsInDesignMode)
+                return;
+
+            //should this stuff be moved to load?
+            DragHandler = new ExpControlsLib.CDragWrapper(_TreeView); 
+            if (m_AllowDrop)
+                DropHandler = new CtvDropWrapper(_TreeView);
+            SetWindowTheme(_TreeView.Handle, "explorer", null);
+        }
+
+        /// <summary>
+        /// Handles the TreeView's <c>HandleDestroyed</c> event.
+        /// Reserved for any cleanup that must occur when the underlying window handle is destroyed.
+        /// </summary>
+        /// <param name="sender">The TreeView whose handle was destroyed.</param>
+        /// <param name="e">Event data (unused).</param>
+        private void Tv1_HandleDestroyed(object sender, EventArgs e)
+        {
+        }
+
+
         /// <summary>
         /// Handles the TreeView <c>BeforeExpand</c> event. If the node being expanded contains
         /// only a dummy placeholder node, its real children are loaded asynchronously before
@@ -1404,6 +1289,8 @@ namespace ExpControlsLib
 
         private void Tv1_BeforeSelect(object sender, TreeViewCancelEventArgs e)
         {
+            if (e?.Node?.Tag is null) return;
+
             CShellItem csi = (CShellItem)e.Node.Tag;
             if (csi is null) return;
 
@@ -1419,6 +1306,8 @@ namespace ExpControlsLib
         /// <param name="e">A <see cref="TreeViewEventArgs"/> containing the newly selected node.</param>
         private void Tv1_AfterSelect(object sender, TreeViewEventArgs e)
         {
+            if (e?.Node?.Tag is null) return;
+
             CShellItem csi = (CShellItem)e.Node.Tag;
             if (csi is null) return;
 
@@ -1467,7 +1356,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="sender">The control raising the event.</param>
         /// <param name="e">A <see cref="MouseEventArgs"/> describing the mouse action.</param>
-        private async void ExpTree_MouseUp(object sender, MouseEventArgs e)
+        private async void Tv1_MouseUp(object sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Right)
             {
@@ -1738,33 +1627,6 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Backing field for <see cref="AllowFolderRename"/>. When <c>true</c>, the TreeView's
-        /// <c>LabelEdit</c> is enabled and the Shell rename verb is permitted via the context menu.
-        /// </summary>
-        private bool m_allowFolderRename;
-
-        /// <summary>
-        /// Allow renaming of folders using LabelEdit
-        /// </summary>
-        /// <value></value>
-        /// <returns></returns>
-        /// <remarks></remarks>
-        [Category("Behavior")]
-        [Description("Allow renaming of folders using LabelEdit")]
-        public bool AllowFolderRename
-        {
-            get
-            {
-                return m_allowFolderRename;
-            }
-            set
-            {
-                m_allowFolderRename = value;
-                _TreeView.LabelEdit = value;
-            }
-        }
-
-        /// <summary>
         /// Handles the TreeView <c>BeforeLabelEdit</c> event. Cancels the edit for dummy nodes,
         /// disk roots, non-renameable items, and the My Documents folder. When editing is allowed,
         /// pre-selects only the filename portion (without extension) in the edit control.
@@ -1775,12 +1637,16 @@ namespace ExpControlsLib
         /// </param>
         private void Tv1_BeforeLabelEdit(object sender, NodeLabelEditEventArgs e)
         {
+            if (e?.Node?.Tag is null) return;
+
             if (e.Node.Text == " : ")
             {
                 e.CancelEdit = true;
                 return;
             }
+
             CShellItem item = (CShellItem)e.Node.Tag;
+            
             if (item.FullPath.StartsWith("::") || item.IsDisk || !m_allowFolderRename
                 || (item.FullPath ?? "") == (CShellItemFactory.MyDocuments.FullPath ?? "")
                 || !item.CanRename)
@@ -1807,6 +1673,8 @@ namespace ExpControlsLib
         /// </param>
         private void Tv1_AfterLabelEdit(object sender, NodeLabelEditEventArgs e)
         {
+            if (e?.Node?.Tag is null) return;
+
             CShellItem item = (CShellItem)e.Node.Tag;
             if (string.IsNullOrWhiteSpace(e.Label)) return;
             var NewName = default(string);
@@ -1842,7 +1710,7 @@ namespace ExpControlsLib
         /// The TreeNode most recently dragged over or dropped onto. Used to track highlight
         /// state and drive the auto-expand timer.
         /// </summary>
-        private TreeNode dropNode;
+        private TreeNode? dropNode;
 
         /// <summary>
         /// The client-coordinate position of the most recent drag-over event, used by the
@@ -1854,7 +1722,7 @@ namespace ExpControlsLib
         /// Timer that fires after a short hover delay to auto-expand the node currently being
         /// dragged over, improving drag-and-drop usability.
         /// </summary>
-        private System.Windows.Forms.Timer expandNodeTimer;
+        private System.Windows.Forms.Timer? expandNodeTimer;
 
         /// <summary>
         /// Handles the <see cref="expandNodeTimer"/> <c>Tick</c> event. Expands the node
@@ -2068,6 +1936,217 @@ namespace ExpControlsLib
         #region Private methods
 
         /// <summary>
+        /// Asynchronously invokes a Shell context menu verb (delete, cut, copy, or paste) for
+        /// the specified <see cref="CShellItem"/> on a background STA thread, keeping the UI
+        /// thread unblocked while the Shell operation (which may show its own dialog) completes.
+        /// </summary>
+        /// <param name="csi">
+        /// The <see cref="CShellItem"/> on which the Shell verb should be invoked.
+        /// If <c>null</c>, the method returns immediately without doing anything.
+        /// </param>
+        /// <param name="cmd">
+        /// The ANSI Shell verb string to invoke (e.g. <c>"delete"</c>, <c>"cut"</c>,
+        /// <c>"copy"</c>, or <c>"paste"</c>).
+        /// </param>
+        private void WinMenuCmd(CShellItem csi, string cmd)
+        {
+            if (csi is not null)
+            {
+                IntPtr parentPidl = ReferenceEquals(csi, ShellController.DesktopCSI)
+                    ? csi.PIDL
+                    : csi.Parent.PIDL;
+
+                IntPtr relPidl = csi.LastPIDL;
+                if (relPidl == IntPtr.Zero) return;
+
+                var capturedRelPidl = CPidl.Copy(relPidl);
+                var capturedParentPidl = parentPidl; //not sure if we need to copy this
+
+                // Offload shell interaction to background STA thread to make dialog non-blocking (non-modal to UI thread)
+                Task task = _staRunner.EnqueueWork(_ =>
+                {
+                    IShellFolder desktop = null;
+                    IShellFolder parentFolder = null;
+                    IntPtr iUnknownOut = IntPtr.Zero;
+                    IContextMenu? contextMenu = null;
+                    IntPtr lpVerbAnsi = IntPtr.Zero;
+                    IntPtr lpVerbUni = IntPtr.Zero;
+
+                    // Create a hidden dummy window on this thread to act as the owner.
+                    using (Control dummy = new Control())
+                    {
+                        IntPtr dummyHandle = dummy.Handle;
+
+                        try
+                        {
+                            // 1. Get Desktop Folder on THIS thread
+                            int hr = SHGetDesktopFolder(ref desktop);
+                            if (hr != S_OK || desktop == null)
+                            {
+                                Debug.WriteLine($"InvokeCommand failed with HRESULT: {hr:X}");
+                                return hr;
+                            }
+
+                            // 2. Bind to Parent Folder on THIS thread
+                            if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
+                            {
+                                parentFolder = desktop;
+                            }
+                            else
+                            {
+                                IntPtr folderPtr = IntPtr.Zero;
+                                hr = desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr);
+                                if (hr != S_OK || folderPtr == IntPtr.Zero) return hr;
+                                parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
+                                Marshal.Release(folderPtr);
+                            }
+
+                            // 3. Get UI Object (IContextMenu) on THIS thread
+                            IntPtr rgfReserved = IntPtr.Zero;
+                            var relPidls = new IntPtr[] { capturedRelPidl };
+                            hr = parentFolder.GetUIObjectOf(IntPtr.Zero, 1, relPidls, IID_IContextMenu, rgfReserved, out iUnknownOut);
+
+                            if (hr != S_OK || iUnknownOut == IntPtr.Zero)
+                            {
+                                Debug.WriteLine($"InvokeCommand failed with HRESULT: {hr:X}");
+                                return hr;
+                            }
+                            contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
+
+                            // 4. Invoke Command
+                            lpVerbAnsi = Marshal.StringToHGlobalAnsi(cmd);
+                            lpVerbUni = Marshal.StringToHGlobalUni(cmd);
+
+                            var cmi = new CMInvokeCommandInfoEx
+                            {
+                                cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                                hwnd = dummyHandle,
+                                nShow = (int)SW.SHOWNORMAL,
+                                fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE | CMIC.ASYNCOK),
+                                ptInvoke = new Point(0, 0),
+                                lpVerb = lpVerbAnsi,
+                                lpVerbW = lpVerbUni
+                            };
+
+                            hr = contextMenu.InvokeCommand(cmi);
+                            if (hr != S_OK) Debug.WriteLine($"InvokeCommand failed with HRESULT: {hr:X}");
+                            return hr;
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Error in background WinMenuCmd: {ex.Message}");
+                            return -1;
+                        }
+                        finally
+                        {
+                            if (lpVerbAnsi != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbAnsi);
+                            if (lpVerbUni != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbUni);
+                            if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
+                            if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
+                            if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
+                            if (desktop != null) Marshal.ReleaseComObject(desktop);
+                            Marshal.FreeCoTaskMem(capturedRelPidl);
+                        }
+                    }
+                });
+            }
+        }
+
+        /// <summary>
+        /// Asynchronously loads and displays the tree rooted at the specified <see cref="CShellItem"/>
+        /// or <see cref="StartDir"/> value. Any in-progress load is cancelled before the new one begins.
+        /// Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
+        /// </summary>
+        /// <param name="item">
+        /// The <see cref="CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
+        /// should be used to resolve the root instead.
+        /// </param>
+        /// <param name="dir">
+        /// A <see cref="StartDir"/> value used to resolve the root when <paramref name="item"/> is <c>null</c>.
+        /// Defaults to <see cref="StartDir.None"/>.
+        /// </param>
+        private async Task SetRootItemAsync(CShellItem? item, StartDir dir = StartDir.None)
+        {
+            _rootLoadCts?.Cancel();
+            _rootLoadCts = new CancellationTokenSource();
+            var token = _rootLoadCts.Token;
+
+            try
+            {
+                var result = await _staRunner.EnqueueWork(t =>
+                {
+                    CShellItem? value = item;
+                    if (value == null && dir != StartDir.None)
+                    {
+                        value = CShellItemFactory.Create((CSIDL)dir);
+                    }
+
+                    if (value == null || !value.IsFolder) return null;
+
+                    var flags = SHCONTF.FOLDERS;
+                    if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
+                    var target = ShellController.Instance.LoadFolderContents(value, flags);
+                    if (target != null) value = target;
+
+                    var children = value.Directories;
+                    // Warming up
+                    foreach (var child in children)
+                    {
+                        if (t.IsCancellationRequested) return null;
+                        _ = child.HasSubFolders; // Populates cache
+                        _ = child.IconIndexNormal;
+                        _ = child.IconIndexOpen;
+                    }
+
+                    return new
+                    {
+                        Children = children,
+                        RootItem = value,
+                        DisplayName = value.DisplayName,
+                        IconIndex = GetIconIndex(value, false)
+                    };
+                }, token);
+
+                if (token.IsCancellationRequested || result == null) return;
+
+                _TreeView.BeginUpdate();
+                try
+                {
+                    ClearTree();
+                    _Root = new TreeNode(result.DisplayName);
+                    BuildTree(result.Children);
+                    _Root.ImageIndex = result.IconIndex;
+                    _Root.SelectedImageIndex = result.IconIndex;
+                    _Root.Tag = result.RootItem;
+
+                    _TreeView.Nodes.Add(_Root);
+                    _Root.Expand();
+
+                    if (_pendingExpansionItem != null)
+                    {
+                        var itemToExpand = _pendingExpansionItem;
+                        var select = _pendingSelectExpandedNode;
+                        _pendingExpansionItem = null;
+                        _ = ExpandANodeAsync(itemToExpand, select);
+                    }
+                    else
+                    {
+                        _TreeView.SelectedNode = _Root;
+                    }
+                }
+                finally
+                {
+                    _TreeView.EndUpdate();
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error in SetRootItemAsync: " + ex.ToString());
+            }
+        }
+
+        /// <summary>
         /// Determines whether the specified <see cref="CShellItem"/> should be excluded from
         /// the tree display based on the <see cref="ExcludedItems"/> collection.
         /// </summary>
@@ -2086,20 +2165,19 @@ namespace ExpControlsLib
 
         /// <summary>RefreshTree Method thanks to Calum McLellan</summary>
         [Description("Refresh the Tree and all nodes through the currently selected item")]
-        private void RefreshTree(CShellItem rootCSI = null)
+        private void RefreshTree(CShellItem? rootCSI = null)
         {
+            if (_TreeView is null) return;
+
             // Modified to use ExpandANode(CShellItem) rather than ExpandANode(path)
             // Set refresh variable for BeforeExpand method
             EnableEventPost = false;
             TreeNode selnode;
             if (_TreeView.SelectedNode == null)
-            {
                 selnode = _Root;
-            }
             else
-            {
                 selnode = _TreeView.SelectedNode;
-            }
+
             try
             {
                 _TreeView.BeginUpdate();
@@ -2409,120 +2487,104 @@ namespace ExpControlsLib
         #endregion
 
         /// <summary>
-        /// Asynchronously invokes a Shell context menu verb (delete, cut, copy, or paste) for
-        /// the specified <see cref="CShellItem"/> on a background STA thread, keeping the UI
-        /// thread unblocked while the Shell operation (which may show its own dialog) completes.
+        /// Cancels and disposes any active root-load cancellation token source,
+        /// releasing associated resources.
         /// </summary>
-        /// <param name="csi">
-        /// The <see cref="CShellItem"/> on which the Shell verb should be invoked.
-        /// If <c>null</c>, the method returns immediately without doing anything.
-        /// </param>
-        /// <param name="cmd">
-        /// The ANSI Shell verb string to invoke (e.g. <c>"delete"</c>, <c>"cut"</c>,
-        /// <c>"copy"</c>, or <c>"paste"</c>).
-        /// </param>
-        private void WinMenuCmd(CShellItem csi, string cmd)
+        private void Cleanup()
         {
-            if (csi is not null)
+            _rootLoadCts?.Cancel();
+            _rootLoadCts?.Dispose();
+            _rootLoadCts = null;
+            if (ShellController.Instance?.ShellUpdater != null)
+                ShellController.Instance.ShellUpdater.UpdateEvent -= OnItemUpdate;
+        }
+
+        /// <summary> 
+        /// Clean up any resources being used.
+        /// </summary>
+        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        protected override void Dispose(bool disposing)
+        {
+            try
             {
-                IntPtr parentPidl = ReferenceEquals(csi, ShellController.DesktopCSI)
-                    ? csi.PIDL
-                    : csi.Parent.PIDL;
-
-                IntPtr relPidl = csi.LastPIDL;
-                if (relPidl == IntPtr.Zero) return;
-
-                var capturedRelPidl = CPidl.Copy(relPidl);
-                var capturedParentPidl = parentPidl; //not sure if we need to copy this
-
-                // Offload shell interaction to background STA thread to make dialog non-blocking (non-modal to UI thread)
-                Task task = _staRunner.EnqueueWork(_ =>
+                if (disposing && components != null)
                 {
-                    IShellFolder desktop = null;
-                    IShellFolder parentFolder = null;
-                    IntPtr iUnknownOut = IntPtr.Zero;
-                    IContextMenu? contextMenu = null;
-                    IntPtr lpVerbAnsi = IntPtr.Zero;
-                    IntPtr lpVerbUni = IntPtr.Zero;
-
-                    // Create a hidden dummy window on this thread to act as the owner.
-                    using (Control dummy = new Control())
-                    {
-                        IntPtr dummyHandle = dummy.Handle;
-
-                        try
-                        {
-                            // 1. Get Desktop Folder on THIS thread
-                            int hr = SHGetDesktopFolder(ref desktop);
-                            if (hr != S_OK || desktop == null) 
-                            {
-                                Debug.WriteLine($"InvokeCommand failed with HRESULT: {hr:X}"); 
-                                return hr;
-                            }
-
-                            // 2. Bind to Parent Folder on THIS thread
-                            if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
-                            {
-                                parentFolder = desktop;
-                            }
-                            else
-                            {
-                                IntPtr folderPtr = IntPtr.Zero;
-                                hr = desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr);
-                                if (hr != S_OK || folderPtr == IntPtr.Zero) return hr;
-                                parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
-                                Marshal.Release(folderPtr);
-                            }
-
-                            // 3. Get UI Object (IContextMenu) on THIS thread
-                            IntPtr rgfReserved = IntPtr.Zero;
-                            var relPidls = new IntPtr[] { capturedRelPidl };
-                            hr = parentFolder.GetUIObjectOf(IntPtr.Zero, 1, relPidls, IID_IContextMenu, rgfReserved, out iUnknownOut);
-
-                            if (hr != S_OK || iUnknownOut == IntPtr.Zero)
-                            {
-                                Debug.WriteLine($"InvokeCommand failed with HRESULT: {hr:X}");
-                                return hr;
-                            }
-                            contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
-
-                            // 4. Invoke Command
-                            lpVerbAnsi = Marshal.StringToHGlobalAnsi(cmd);
-                            lpVerbUni = Marshal.StringToHGlobalUni(cmd);
-
-                            var cmi = new CMInvokeCommandInfoEx
-                            {
-                                cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                                hwnd = dummyHandle,
-                                nShow = (int)SW.SHOWNORMAL,
-                                fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE | CMIC.ASYNCOK),
-                                ptInvoke = new Point(0, 0),
-                                lpVerb = lpVerbAnsi,
-                                lpVerbW = lpVerbUni
-                            };
-
-                            hr = contextMenu.InvokeCommand(cmi);
-                            if (hr != S_OK) Debug.WriteLine($"InvokeCommand failed with HRESULT: {hr:X}");
-                            return hr;
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.WriteLine($"Error in background WinMenuCmd: {ex.Message}");
-                            return -1;
-                        }
-                        finally
-                        {
-                            if (lpVerbAnsi != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbAnsi);
-                            if (lpVerbUni != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbUni);
-                            if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
-                            if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
-                            if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
-                            if (desktop != null) Marshal.ReleaseComObject(desktop);
-                            Marshal.FreeCoTaskMem(capturedRelPidl);
-                        }
-                    }
-                });
+                    components.Dispose();
+                }
+                Cleanup();
+            }
+            finally
+            {
+                base.Dispose(disposing);
             }
         }
+
+        /// <summary>
+        /// The values representing the System's Special Folders.
+        /// </summary>
+        /// <remarks>Certain Special Folders are disallowed since they may not exist, or may cause program failure
+        /// on certain versions of Windows (primarily the older, unsupported versions).</remarks>
+        public enum StartDir : int
+        {
+            /// <summary>No startup directory specified; the tree will be empty.</summary>
+            None = -1,
+            /// <summary>The Desktop virtual folder (CSIDL 0x00).</summary>
+            Desktop = 0x0,
+            /// <summary>The Programs folder in the Start Menu (CSIDL 0x02).</summary>
+            Programs = 0x2,
+            /// <summary>The Control Panel virtual folder (CSIDL 0x03).</summary>
+            Controls = 0x3,
+            /// <summary>The Printers virtual folder (CSIDL 0x04).</summary>
+            Printers = 0x4,
+            /// <summary>The current user's Documents folder (CSIDL 0x05).</summary>
+            Personal = 0x5,
+            /// <summary>The current user's Favorites folder (CSIDL 0x06).</summary>
+            Favorites = 0x6,
+            /// <summary>The Startup folder in the Start Menu (CSIDL 0x07).</summary>
+            Startup = 0x7,
+            /// <summary>The Recent Documents folder (CSIDL 0x08).</summary>
+            Recent = 0x8,
+            /// <summary>The Send To folder (CSIDL 0x09).</summary>
+            SendTo = 0x9,
+            /// <summary>The Start Menu folder (CSIDL 0x0B).</summary>
+            StartMenu = 0xB,
+            /// <summary>The My Documents virtual folder (CSIDL 0x0C).</summary>
+            MyDocuments = 0xC,
+            /// <summary>The Desktop directory in the file system (CSIDL 0x10).</summary>
+            DesktopDirectory = 0x10,
+            /// <summary>The My Computer virtual folder (CSIDL 0x11).</summary>
+            MyComputer = 0x11,
+            /// <summary>The My Network Places virtual folder (CSIDL 0x12).</summary>
+            My_Network_Places = 0x12,
+            /// <summary>The Application Data roaming folder (CSIDL 0x1A).</summary>
+            ApplicatationData = 0x1A,
+            /// <summary>The Temporary Internet Files (cache) folder (CSIDL 0x20).</summary>
+            Internet_Cache = 0x20,
+            /// <summary>The Cookies folder (CSIDL 0x21).</summary>
+            Cookies = 0x21,
+            /// <summary>The History folder (CSIDL 0x22).</summary>
+            History = 0x22,
+            /// <summary>The Windows installation directory (CSIDL 0x24).</summary>
+            Windows = 0x24,
+            /// <summary>The System32 directory (CSIDL 0x25).</summary>
+            System = 0x25,
+            /// <summary>The Program Files directory (CSIDL 0x26).</summary>
+            Program_Files = 0x26,
+            /// <summary>The My Pictures folder (CSIDL 0x27).</summary>
+            MyPictures = 0x27,
+            /// <summary>The current user's profile directory (CSIDL 0x28).</summary>
+            Profile = 0x28,
+            /// <summary>The 32-bit System directory on a 64-bit OS (CSIDL 0x29).</summary>
+            Systemx86 = 0x29,
+            /// <summary>The Administrative Tools folder (CSIDL 0x30).</summary>
+            AdminTools = 0x30
+            // MyMusic = &HD
+            // MyVideo = &HE
+            // NETHOOD = &H13
+            // FONTS = &H14
+            // PRINTHOOD = &H1B
+        }
     }
+
+
 }

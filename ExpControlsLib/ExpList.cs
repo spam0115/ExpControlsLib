@@ -121,6 +121,8 @@ namespace ExpControlsLib
             _displayFilesCts?.Cancel();
             _displayFilesCts?.Dispose();
             _displayFilesCts = null;
+                                if (_shellController?.ShellUpdater != null)
+                        _shellController.ShellUpdater.UpdateEvent -= UpdateInvoke;
         }
 
         #endregion
@@ -3813,7 +3815,7 @@ namespace ExpControlsLib
                 if (disposing)
                 {
                     Cleanup();
-                    _shellController.ShellUpdater.UpdateEvent -= UpdateInvoke;
+
                     if (components != null)
                     {
                         components.Dispose();
