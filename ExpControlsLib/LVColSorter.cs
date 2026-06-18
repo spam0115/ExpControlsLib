@@ -52,7 +52,7 @@ namespace ExpControlsLib
 
         #region    Private Fields
         private readonly ListView m_View;
-        private readonly int[] m_ColOrder;
+        private int[] m_ColOrder;
         private int m_Col;
 
         #endregion
@@ -143,9 +143,11 @@ namespace ExpControlsLib
                     CompareRet = StringLogicalComparer.CompareStrings(LVX.SubItems[0].Text, LVY.SubItems[0].Text);
                 }
             }
-            if (m_ColOrder.Length == 0) return CompareRet;
-            if (m_ColOrder[m_Col] != 0)
+            
+            if (m_Col < m_ColOrder.Length && m_ColOrder[m_Col] != 0)
+            {
                 CompareRet *= m_ColOrder[m_Col];
+            }
             return CompareRet;
         }
 
@@ -266,6 +268,15 @@ namespace ExpControlsLib
             }
         }
 
+        private void EnsureColOrderSize(int column)
+        {
+            if (column >= m_ColOrder.Length)
+            {
+                int newSize = Math.Max(column + 1, m_View.Columns.Count);
+                Array.Resize(ref m_ColOrder, newSize);
+            }
+        }
+
         /// <summary>
         /// Sets the sort column and order and the UI glyph without triggering an actual sort.
         /// </summary>
@@ -273,7 +284,8 @@ namespace ExpControlsLib
         /// <param name="order">The sort order.</param>
         public void SetSortState(int column, SortOrder order)
         {
-            if (column < 0 || column >= m_View.Columns.Count) return;
+            if (column < 0) return;
+            EnsureColOrderSize(column);
 
             m_Col = column;
             if (order == SortOrder.None)
@@ -300,7 +312,8 @@ namespace ExpControlsLib
         /// <param name="order">The sort order.</param>
         public void SetSort(int column, SortOrder order)
         {
-            if (column < 0 || column >= m_View.Columns.Count) return;
+            if (column < 0) return;
+            EnsureColOrderSize(column);
 
             m_Col = column;
             if (order == SortOrder.None)
@@ -338,7 +351,7 @@ namespace ExpControlsLib
             }
             m_Col = e.Column;
 
-            if (m_ColOrder.Length == 0) return;
+            EnsureColOrderSize(m_Col);
             
             if (m_ColOrder[m_Col] == 0)
             {
