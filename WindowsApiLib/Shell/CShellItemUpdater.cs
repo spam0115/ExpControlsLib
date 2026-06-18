@@ -34,6 +34,10 @@ namespace WindowsApiLib.Shell
 
         public delegate void CShItemUpdateEventHandler(object sender, ShellItemUpdateEventArgs e);
 
+        /// <summary>
+        /// This is a very important property that turns on actions in response to any updates.
+        /// Unless this is set to true, CShellItemUpdater will be completely inert and useless.
+        /// </summary>
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool AllowUpdates { get; set; }
 
