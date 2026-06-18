@@ -1,15 +1,11 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Diagnostics.Eventing.Reader;
-using System.Drawing;
 using System.Linq;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 using TreeLib;
-using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
 

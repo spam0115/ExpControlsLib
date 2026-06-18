@@ -11,7 +11,7 @@ namespace WindowsApiLib
 {
     /// <summary>cPidl class contains a Byte() representation of a PIDL and
     /// certain Methods and Properties for comparing one cPidl to another</summary>
-    public class CPidl : IEnumerable
+    public class CPidl : IEnumerable, ICPidl
     {
         #region        Private Fields
         private readonly byte[] m_bytes;   // The local copy of the PIDL
@@ -49,7 +49,7 @@ namespace WindowsApiLib
             IntPtr pidl = ShellAPI.ILCreateFromPathW(path);
 
             if (pidl == IntPtr.Zero) throw new ArgumentException("Invalid path provided to CPidl.");
-                
+
             int cb = ItemIDListSize(pidl);
             if (cb > 0)
             {
@@ -81,9 +81,9 @@ namespace WindowsApiLib
         }
 
         /// <summary>
-    /// Returns the number of Bytes in this cPidl
-    /// </summary>
-    /// <returns>The number of Bytes in this cPidl</returns>
+        /// Returns the number of Bytes in this cPidl
+        /// </summary>
+        /// <returns>The number of Bytes in this cPidl</returns>
         public int Length
         {
             get
@@ -93,9 +93,9 @@ namespace WindowsApiLib
         }
 
         /// <summary>
-    /// Returns the number of Item IDs in this instance
-    /// </summary>
-    /// <returns>The number of Item IDs in this cPidl</returns>
+        /// Returns the number of Item IDs in this instance
+        /// </summary>
+        /// <returns>The number of Item IDs in this cPidl</returns>
         public int ItemCount
         {
             get
@@ -437,7 +437,7 @@ namespace WindowsApiLib
             // 2) Shell canonical parsing name (works for non-filesystem too)
             if (TryGetCanonicalParsingName(pidl1, out var nameA))
             {
-                    return nameA;
+                return nameA;
             }
 
             return null;
@@ -858,7 +858,7 @@ namespace WindowsApiLib
         public static string? GetFileSystemPath(IntPtr pidl)
         {
             if (pidl == IntPtr.Zero) throw new ArgumentNullException(nameof(pidl));
-            
+
             // Preferred modern call — works for long paths too.
             IntPtr psz = IntPtr.Zero;
             try
@@ -914,7 +914,7 @@ namespace WindowsApiLib
             if (pidl == IntPtr.Zero) throw new ArgumentException("Invalid path provided to CPidl.Clone");
             IntPtr pidlCopy = ILClone(pidl);
 
-            return pidlCopy;    
+            return pidlCopy;
         }
 
         public static nint Copy(nint pidl)
@@ -1522,10 +1522,10 @@ namespace WindowsApiLib
             }
 
             /// <summary>
-        /// Moves the Current pointer to the Next Item ID in this cPidl
-        /// </summary>
-        /// <returns>True if successful, False if there is no Next Item ID</returns>
-        /// <remarks></remarks>
+            /// Moves the Current pointer to the Next Item ID in this cPidl
+            /// </summary>
+            /// <returns>True if successful, False if there is no Next Item ID</returns>
+            /// <remarks></remarks>
             public bool MoveNext()
             {
                 if (m_NotEmpty)
@@ -1561,9 +1561,9 @@ namespace WindowsApiLib
             }
 
             /// <summary>
-        /// Resets the Current pointer to the beginning of this cPidl
-        /// </summary>
-        /// <remarks></remarks>
+            /// Resets the Current pointer to the beginning of this cPidl
+            /// </summary>
+            /// <remarks></remarks>
             public void Reset()
             {
                 m_sPos = -1;

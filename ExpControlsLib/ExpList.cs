@@ -2038,7 +2038,9 @@ namespace ExpControlsLib
         public async Task LoadDirectoryBaseAsync(CShellItem? csi, bool includeFolder = true)
         {
             Debug.WriteLine("LoadDirectoryAsync: " + csi?.FullPath);
-            
+
+            if (csi is null) return;
+
             _displayFilesCts?.Cancel();
             _displayFilesCts = new CancellationTokenSource();
             var token = _displayFilesCts.Token;
