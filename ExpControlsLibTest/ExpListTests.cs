@@ -41,7 +41,7 @@ namespace ExpControlsLibTest
             form.Show();
 
             // Set root
-            var csi = CShellItemFactory.CreateCShItem((CSIDL)startDir);
+            var csi = CShellItemFactory.Create((CSIDL)startDir);
             await expList.LoadDirectory(csi);
 
             // Wait for items to load. 
@@ -74,7 +74,7 @@ namespace ExpControlsLibTest
             form.Show();
 
             // 1. Load first folder
-            var windowsCsi = CShellItemFactory.CreateCShItem(CSIDL.WINDOWS);
+            var windowsCsi = CShellItemFactory.Create(CSIDL.WINDOWS);
             await expList.LoadDirectory(windowsCsi);
             
             Assert.That(expList.CurrentPath, Is.EqualTo(windowsCsi.FullPath), "First folder should be loaded.");
@@ -82,7 +82,7 @@ namespace ExpControlsLibTest
             Assert.IsFalse(expList.CanGoForward, "CanGoForward should be false after first load.");
 
             // 2. Load second folder
-            var systemCsi = CShellItemFactory.CreateCShItem(CSIDL.SYSTEM);
+            var systemCsi = CShellItemFactory.Create(CSIDL.SYSTEM);
             await expList.LoadDirectory(systemCsi);
 
             Assert.That(expList.CurrentPath, Is.EqualTo(systemCsi.FullPath), "Second folder should be loaded.");

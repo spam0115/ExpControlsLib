@@ -37,7 +37,7 @@ namespace ExpControlsLib
         #region    Constructor
         public ControlDropWrapper(Control Ctl, string FullPath)
         {
-            m_DirCSI = CShellItemFactory.CreateCShItem(FullPath);
+            m_DirCSI = CShellItemFactory.Create(FullPath);
             if (m_DirCSI is null)
             {
                 throw new ArgumentException(FullPath + " Is not Valid or Reachable");
@@ -125,7 +125,7 @@ namespace ExpControlsLib
                     return;
                 m_DirCSI.ClearItems(true, false);
                 Marshal.ReleaseComObject(m_Target);
-                m_DirCSI = CShellItemFactory.CreateCShItem(value);
+                m_DirCSI = CShellItemFactory.Create(value);
                 m_Target = m_DirCSI.GetDropTargetOf(m_Owner);
                 m_FullPath = value;
 

@@ -90,12 +90,12 @@ namespace WindowsApiLib.Shell
             SystemName = Environment.MachineName;
 
             (CShellItemFactory.DesktopShellFolder, CShellItemFactory.DesktopCSI) = GetDesktopRoot();
-            DeskTopDirectory = CreateCShItem(CSIDL.DESKTOPDIRECTORY);
+            DeskTopDirectory = Create(CSIDL.DESKTOPDIRECTORY);
 
-            RecycleBin = CreateCShItem(CSIDL.BITBUCKET);
+            RecycleBin = Create(CSIDL.BITBUCKET);
             StrRecycleBin = RecycleBin.Name;
 
-            MyDocuments = CreateCShItem(CSIDL.MYDOCUMENTS);
+            MyDocuments = Create(CSIDL.MYDOCUMENTS);
 
             StrMyDocuments = MyDocuments.m_DisplayName;
             StrSystemFolder = DesktopCSI.m_TypeName;
@@ -163,14 +163,13 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <param name="path">The Full Path of the desired CShellItem</param>
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem CreateCShItem(string path)
+        public static CShellItem Create(string path)
         {
             IntPtr pidl = ShellAPI.ILCreateFromPathW(path);
             if (pidl == IntPtr.Zero) return null;
 
-            return GetOrCreateCShItem(pidl);
+            return FindOrAdd(pidl);
         }
-
 
         /// <summary>Given a CSIDL,
         /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.
@@ -181,7 +180,7 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <param name="ID"></param>
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem? CreateCShItem(CSIDL ID)
+        public static CShellItem? Create(CSIDL ID)
         {
             CShellItem? csi = null;
             if (ID == CSIDL.DESKTOP) return DesktopCSI;
@@ -216,7 +215,7 @@ namespace WindowsApiLib.Shell
 
             if (HR == NOERROR)
             {
-                csi = CreateCShItem(tmpPidl, DesktopCSI);
+                csi = Create(tmpPidl, DesktopCSI);
             }
 
             if (csi is null && tmpPidl != IntPtr.Zero)
@@ -237,7 +236,7 @@ namespace WindowsApiLib.Shell
         /// <param name="pidlFolder"></param>
         /// <param name="pidlItem"></param>
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem CreateCShItem(byte[] pidlFolder, byte[] pidlItem)
+        public static CShellItem Create(byte[] pidlFolder, byte[] pidlItem)
         {
             CShellItem csi = null;    // assume failure
 
@@ -258,7 +257,7 @@ namespace WindowsApiLib.Shell
                 handle2.Free();
             }
 
-            csi = GetOrCreateCShItem(fullPidl);
+            csi = FindOrAdd(fullPidl);
 
             if (csi is null && fullPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(fullPidl);
             if (csi is not null && csi.PIDL == IntPtr.Zero)
@@ -290,8 +289,7 @@ namespace WindowsApiLib.Shell
             return csi;
         }
 
-
-        public static CShellItem CreateCShItem(IntPtr pidl, CShellItem parent = null)
+        public static CShellItem Create(IntPtr pidl, CShellItem parent = null)
         {
             var csi = new CShellItem();
 
@@ -386,10 +384,10 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <param name="pidl">Absolute (Full) Pidl of item to be Found or Created</param>
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem GetOrCreateCShItem(IntPtr pidl)
+        public static CShellItem? FindOrAdd(IntPtr pidl)
         {
-            CShellItem csi = default;
-            CShellItem Parent = null;
+            CShellItem? csi = default;
+            CShellItem? Parent = null;
 
             if (HierachyManager is null)
             {
@@ -402,9 +400,9 @@ namespace WindowsApiLib.Shell
                 if (csi == null)
                 {
                     if (!(Parent == null))
-                        csi = CreateCShItem(pidl, Parent);
+                        csi = Create(pidl, Parent);
                     else
-                        csi = CreateCShItem(pidl);
+                        csi = Create(pidl);
                 }
             }
 
@@ -637,7 +635,7 @@ namespace WindowsApiLib.Shell
 
                 try
                 {
-                    itm = CreateCShItem(pidl, csi);
+                    itm = Create(pidl, csi);
                     rVal.Add(itm);
                 }
                 finally

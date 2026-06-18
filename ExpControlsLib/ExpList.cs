@@ -2013,7 +2013,7 @@ namespace ExpControlsLib
             if (pathName == null) 
                 csi = null;
             else
-                csi = CShellItemFactory.CreateCShItem(pathName);
+                csi = CShellItemFactory.Create(pathName);
 
             await LoadDirectoryBaseAsync(csi, includeFolder);
 

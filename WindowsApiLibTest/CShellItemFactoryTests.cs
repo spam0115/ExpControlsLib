@@ -45,11 +45,11 @@ namespace WindowsApiLibTest
             await Runner.EnqueueWork(() =>
             {
                 // Test creation from CSIDL
-                var myComputer = CShellItemFactory.CreateCShItem(CSIDL.DRIVES);
+                var myComputer = CShellItemFactory.Create(CSIDL.DRIVES);
                 Assert.IsNotNull(myComputer, "Should be able to create CShellItem for My Computer (DRIVES).");
                 Assert.AreNotEqual(IntPtr.Zero, myComputer.PIDL, "PIDL should not be zero.");
 
-                var windows = CShellItemFactory.CreateCShItem(CSIDL.WINDOWS);
+                var windows = CShellItemFactory.Create(CSIDL.WINDOWS);
                 Assert.IsNotNull(windows, "Should be able to create CShellItem for Windows folder.");
                 Assert.IsTrue(windows.IsFolder, "Windows item should be a folder.");
             });
@@ -62,7 +62,7 @@ namespace WindowsApiLibTest
             {
                 // Test creation from a common path
                 string windir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-                var csi = CShellItemFactory.CreateCShItem(windir);
+                var csi = CShellItemFactory.Create(windir);
 
                 Assert.IsNotNull(csi, $"Should be able to create CShellItem for {windir}.");
                 Assert.AreEqual(windir, csi.FullPath, true, "FullPath should match the input path.");
@@ -76,7 +76,7 @@ namespace WindowsApiLibTest
             await Runner.EnqueueWork(() =>
             {
                 // Test creation of Desktop item
-                var desktop = CShellItemFactory.CreateCShItem(CSIDL.DESKTOP);
+                var desktop = CShellItemFactory.Create(CSIDL.DESKTOP);
                 Assert.IsNotNull(desktop, "Desktop CShellItem should not be null.");
                 Assert.IsTrue(desktop.IsFolder, "Desktop should be a folder.");
                 Assert.IsNull(desktop.Parent, "Desktop should not have a parent.");

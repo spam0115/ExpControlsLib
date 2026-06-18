@@ -831,7 +831,7 @@
             Handles the <see cref="E:System.Windows.Forms.Control.HandleCreated"/> event of the <see cref="F:ExpControlsLib.ExpList._listView"/> ListView.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.ExpList_VisibleChanged(System.Object,System.EventArgs)">
+        <member name="M:ExpControlsLib.ExpList.ExpFileList_VisibleChanged(System.Object,System.EventArgs)">
             <summary>
             Handles the <see cref="E:System.Windows.Forms.Control.VisibleChanged"/> event of the <see cref="T:ExpControlsLib.ExpList"/> control.
             Re-configures image lists for the current display mode when the control becomes visible.
@@ -931,6 +931,11 @@
             in one shot, which is more efficient than firing GetColumnData for each individual column.
             </summary>
             <param name="item"></param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.RefreshContents">
+            <summary>
+            Refreshes all items in the current folder, clearing all caches and re-reading from disk.
+            </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.LoadDirectory(System.String,System.Boolean,System.Boolean)">
             <summary>

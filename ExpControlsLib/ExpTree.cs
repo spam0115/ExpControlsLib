@@ -170,7 +170,7 @@ namespace ExpControlsLib
                     CShellItem? value = item;
                     if (value == null && dir != StartDir.None)
                     {
-                        value = CShellItemFactory.CreateCShItem((CSIDL)dir);
+                        value = CShellItemFactory.Create((CSIDL)dir);
                     }
 
                     if (value == null || !value.IsFolder) return null;

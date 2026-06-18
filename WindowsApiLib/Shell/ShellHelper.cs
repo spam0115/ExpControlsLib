@@ -470,7 +470,7 @@ namespace WindowsApiLib.Shell
                 bool isOK = true;
                 try   // if GetCShitem returns Nothing(it's failure marker) then catch it
                 {
-                    MakeDragListFromPtrRet.Add(CShellItemFactory.CreateCShItem(bArrays[0], bArrays[i]));
+                    MakeDragListFromPtrRet.Add(CShellItemFactory.Create(bArrays[0], bArrays[i]));
                 }
                 catch (Exception ex)
                 {

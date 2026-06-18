@@ -1883,7 +1883,7 @@ namespace WindowsApiLib.Shell
                 }
                 else
                 {
-                    itm = CShellItemFactory.CreateCShItem(pidl, this);
+                    itm = CShellItemFactory.Create(pidl, this);
                     items.Add(itm);                    
                 }
             }

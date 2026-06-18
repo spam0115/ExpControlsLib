@@ -173,7 +173,7 @@ namespace WindowsApiLib.Shell
                                             Debug.WriteLine("  [CREATE] Parent files initialized and item NOT in list. Adding.");
                                             if (SHGetRealIDL(parentItem.IShlFolder, splitPidl.ChildPidl, out realRel) == S_OK)
                                             {
-                                                var newItem = CShellItemFactory.CreateCShItem(realRel, parentItem);
+                                                var newItem = CShellItemFactory.Create(realRel, parentItem);
                                                 if (newItem is not null)
                                                 {
                                                     Debug.WriteLine("  [CREATE] Created newItem: " + newItem.ItemPath);
@@ -394,7 +394,7 @@ namespace WindowsApiLib.Shell
                                             IntPtr realRel;
                                             if (SHGetRealIDL(parentItem.IShlFolder, splitPidls.ChildPidl, out realRel) == S_OK)
                                             {
-                                                var newItem = CShellItemFactory.CreateCShItem(realRel, parentItem);
+                                                var newItem = CShellItemFactory.Create(realRel, parentItem);
                                                 if (newItem is not null)
                                                 {
                                                     Debug.WriteLine("  [MKDIR] Created newItem: " + newItem.ItemPath);
@@ -1043,7 +1043,7 @@ namespace WindowsApiLib.Shell
                             }
                             else //new item
                             {
-                                var newItem = CShellItemFactory.CreateCShItem(newPidl, csi);
+                                var newItem = CShellItemFactory.Create(newPidl, csi);
                                 var result = HierachyManager.Add(newItem);
                                 if (result is null) //this can happen for files that are deleted from outside this app
                                 {
