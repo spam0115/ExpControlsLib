@@ -1660,7 +1660,7 @@ namespace ExpControlsLib
 
                         case CShItemUpdateType.UpdateDir:
                             Debug.WriteLine("\tUpdateDir");
-                            await LoadDirectory(_currentFolderCsi, true, reload: true);
+                            await LoadDirectoryAsync(_currentFolderCsi, true, reload: true);
                             break;
 
                         case CShItemUpdateType.IconChange:
@@ -1968,7 +1968,7 @@ namespace ExpControlsLib
             _currentFolderCsi.ResetChildren();
 
             // Force reload from disk
-            await LoadDirectory(_currentFolderCsi, reload: true);
+            await LoadDirectoryAsync(_currentFolderCsi, reload: true);
 
             // Re-sort
             _listViewWrapper.Sort();
@@ -2010,7 +2010,7 @@ namespace ExpControlsLib
             CurrentFolderCsi = csi;
         }
 
-        public async Task LoadDirectory(CShellItem? csi, bool includeFolder = true, bool reload = false)
+        public async Task LoadDirectoryAsync(CShellItem? csi, bool includeFolder = true, bool reload = false)
         {
             if (csi is null) return;
             if (!reload && (_currentFolderCsi is not null && csi.FullPath == CurrentPath)) return;
@@ -2592,7 +2592,7 @@ namespace ExpControlsLib
                     _isNavigatingHistory = true;
                     try
                     {
-                        await LoadDirectory(prev, true);
+                        await LoadDirectoryAsync(prev, true);
                     }
                     finally
                     {
@@ -2621,7 +2621,7 @@ namespace ExpControlsLib
                     _isNavigatingHistory = true;
                     try
                     {
-                        await LoadDirectory(next, true);
+                        await LoadDirectoryAsync(next, true);
                     }
                     finally
                     {
@@ -2646,7 +2646,7 @@ namespace ExpControlsLib
                 if (_currentFolderCsi?.Parent != null)
                 {
                     var parent = _currentFolderCsi.Parent;
-                    await LoadDirectory(parent, true);
+                    await LoadDirectoryAsync(parent, true);
                 }
             }
             finally
@@ -2730,7 +2730,7 @@ namespace ExpControlsLib
                     try
                     {
                         // Navigate into the folder
-                        await LoadDirectory(csi, true);
+                        await LoadDirectoryAsync(csi, true);
                     }
                     catch (Exception ex)
                     {

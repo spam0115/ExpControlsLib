@@ -100,12 +100,12 @@ namespace WindowsApiLib.Shell
 
             if (rootItem.DirectoryList is not null) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
             {
-                foreach (CShellItem childFolders in rootItem.DirectoryList)
+                foreach (CShellItem childDir in rootItem.DirectoryList)
                 {
-                    if (childFolders.FullPath == pidlAndName.Name)
-                        return childFolders;
-                    if (CPidl.IsAncestorOf(childFolders.PIDL, pidlAndName.Pidl, false)) //note that items are considered to be ancestors of themselves which is kinda weird
-                        return Find(childFolders, pidlAndName);
+                    if (childDir.FullPath == pidlAndName.Name)
+                        return childDir;
+                    if (CPidl.IsAncestorOf(childDir.PIDL, pidlAndName.Pidl, false)) //note that items are considered to be ancestors of themselves which is kinda weird
+                        return Find(childDir, pidlAndName);
                 }
             }
 

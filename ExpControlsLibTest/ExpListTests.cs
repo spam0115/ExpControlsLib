@@ -45,7 +45,7 @@ namespace ExpControlsLibTest
 
             // Set root
             var csi = CShellItemFactory.Create((CSIDL)startDir);
-            await expList.LoadDirectory(csi);
+            await expList.LoadDirectoryAsync(csi);
 
             // Wait for items to load. 
             // Although DisplayFilesAsync is awaited, some updates might be async.
@@ -78,7 +78,7 @@ namespace ExpControlsLibTest
 
             // 1. Load first folder
             var windowsCsi = CShellItemFactory.Create(CSIDL.WINDOWS);
-            await expList.LoadDirectory(windowsCsi);
+            await expList.LoadDirectoryAsync(windowsCsi);
             
             Assert.That(expList.CurrentPath, Is.EqualTo(windowsCsi.FullPath), "First folder should be loaded.");
             Assert.IsFalse(expList.CanGoBack, "CanGoBack should be false after first load.");
@@ -86,7 +86,7 @@ namespace ExpControlsLibTest
 
             // 2. Load second folder
             var systemCsi = CShellItemFactory.Create(CSIDL.SYSTEM);
-            await expList.LoadDirectory(systemCsi);
+            await expList.LoadDirectoryAsync(systemCsi);
 
             Assert.That(expList.CurrentPath, Is.EqualTo(systemCsi.FullPath), "Second folder should be loaded.");
             Assert.IsTrue(expList.CanGoBack, "CanGoBack should be true after second load.");
@@ -139,7 +139,7 @@ namespace ExpControlsLibTest
             form.Show();
 
             var windowsCsi = CShellItemFactory.Create(CSIDL.WINDOWS);
-            await expList.LoadDirectory(windowsCsi);
+            await expList.LoadDirectoryAsync(windowsCsi);
 
             // Wait for load
             for (int i = 0; i < 200; i++)
@@ -159,7 +159,7 @@ namespace ExpControlsLibTest
             expList.ExcludedItems.Add(pathToExclude.Trim(':', '{', '}'));
             
             // Reload
-            await expList.LoadDirectory(windowsCsi, reload: true);
+            await expList.LoadDirectoryAsync(windowsCsi, reload: true);
             
             // Wait for load
             for (int i = 0; i < 100; i++)
@@ -252,7 +252,7 @@ namespace ExpControlsLibTest
             };
 
             var windowsCsi = CShellItemFactory.Create(CSIDL.WINDOWS);
-            await expList.LoadDirectory(windowsCsi);
+            await expList.LoadDirectoryAsync(windowsCsi);
 
             // Wait for load
             for (int i = 0; i < 200; i++)
@@ -282,7 +282,7 @@ namespace ExpControlsLibTest
             form.Show();
 
             var systemDir = CShellItemFactory.Create(CSIDL.SYSTEM);
-            await expList.LoadDirectory(systemDir);
+            await expList.LoadDirectoryAsync(systemDir);
 
             Assert.IsTrue(expList.CanGoUp, "Should be able to go up from System folder.");
             
@@ -375,7 +375,7 @@ namespace ExpControlsLibTest
 
             expList.VirtualMode = true;
             var windowsCsi = CShellItemFactory.Create(CSIDL.WINDOWS);
-            await expList.LoadDirectory(windowsCsi);
+            await expList.LoadDirectoryAsync(windowsCsi);
 
             // Wait for load
             for (int i = 0; i < 200; i++)
