@@ -20,7 +20,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Gets the dictionary of column data, keyed by column name.
         /// </summary>
-        public Dictionary<string, ListViewSubitemData> ColumnData { get; } = new Dictionary<string, ListViewSubitemData>();
+        //public Dictionary<string, ListViewSubitemData> ColumnData { get; } = new Dictionary<string, ListViewSubitemData>();
 
         public ExpListGetColumnDataEventArgs(CShellItem item)
         {

@@ -1294,7 +1294,7 @@ namespace ExpControlsLib
             CShellItem csi = (CShellItem)e.Node.Tag;
             if (csi is null) return;
 
-            Debug.WriteLine("Tv1_BeforeSelect: item selected: " + csi.Name + " " + sender?.ToString());
+            Debug.WriteLine("Tv1_BeforeSelect: item selected: " + csi.DisplayName + " " + sender?.ToString());
         }
 
         /// <summary>

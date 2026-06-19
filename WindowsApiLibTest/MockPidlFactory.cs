@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Text;
 using static WindowsApiLib.Shell.ShellAPI;
 
 namespace WindowsApiLibTest
 {
-
+    /// <summary>
+    /// The purpose of this class is to provide utilities to facilitate unit testing needing PIDLs.
+    /// </summary>
     public static class MockPidlFactory
     {
         // -------------------------------------------------------------------------
@@ -62,6 +65,13 @@ namespace WindowsApiLibTest
                     return BuildPidl(
                         MakeVirtualFolderItem(0x1F, 0x50,
                             new Guid("33E28130-4E1E-4676-835A-98395C3BC3BB")));
+
+                // ------------------------------------------------------------------
+                // C_DRIVE (C:\)
+                // ------------------------------------------------------------------
+                case CSIDL.C_DRIVE:
+                    return BuildPidl(
+                        MakeDriveItem("C:\\"));
 
                 // ------------------------------------------------------------------
                 // PROFILE (C:\Users\MockUser)
@@ -127,6 +137,7 @@ namespace WindowsApiLibTest
                     return BuildPidl(
                         MakeDriveItem("C:\\"),
                         MakeFolderItem("PROGRA~2", "Program Files (x86)", 0x10));
+
 
                 default:
                     throw new ArgumentOutOfRangeException(nameof(csidl),
@@ -264,6 +275,367 @@ namespace WindowsApiLibTest
             }
 
             return BuildPidl(items.ToArray());
+        }
+
+        /// <summary>
+        /// Returns a human-readable dump of a PIDL's structure, one line per SHITEMID.
+        /// Useful for Assert failure messages and debug output.
+        /// </summary>
+        public static string DumpPidl(byte[] pidl)
+        {
+            var sb = new StringBuilder();
+            var items = ExtractItems(pidl);
+
+            if (items.Count == 0)
+            {
+                sb.AppendLine("[PIDL: Desktop/Root — empty, terminator only]");
+                return sb.ToString();
+            }
+
+            sb.AppendLine($"[PIDL: {items.Count} item(s), total {pidl.Length} bytes]");
+            for (int i = 0; i < items.Count; i++)
+            {
+                byte[] item = items[i];
+                ushort cb = (ushort)(item[0] | (item[1] << 8));
+                byte type = item[2];
+                string typeDesc = DescribeItemType(type);
+
+                sb.AppendLine($"  [{i}] cb={cb,3}  type=0x{type:X2} ({typeDesc})  hex={ToHexString(item)}");
+
+                // Try to extract a display name for known types
+                string name = TryExtractName(item);
+                if (name != null)
+                    sb.AppendLine($"       name=\"{name}\"");
+            }
+            sb.AppendLine($"  [terminator: 00 00]");
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Returns true if two PIDLs are byte-for-byte identical.
+        /// </summary>
+        public static bool ArePidlsEqual(byte[] a, byte[] b)
+        {
+            if (a == null && b == null) return true;
+            if (a == null || b == null) return false;
+            if (a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++)
+                if (a[i] != b[i]) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// Returns true if 'child' starts with the same SHITEMIDs as 'ancestor'.
+        /// Equivalent to ILIsParent() in the Shell API.
+        /// </summary>
+        public static bool IsAncestor(byte[] ancestor, byte[] child)
+        {
+            if (ancestor == null || child == null) return false;
+
+            var ancestorItems = ExtractItems(ancestor);
+            var childItems = ExtractItems(child);
+
+            if (ancestorItems.Count > childItems.Count) return false;
+
+            for (int i = 0; i < ancestorItems.Count; i++)
+            {
+                if (!ArePidlsEqual(ancestorItems[i], childItems[i]))
+                    return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Returns the relative PIDL of 'child' with respect to 'ancestor'.
+        /// Equivalent to ILFindChild() in the Shell API.
+        /// Returns null if ancestor is not actually an ancestor of child.
+        /// </summary>
+        public static byte[] GetRelativePidl(byte[] ancestor, byte[] child)
+        {
+            if (!IsAncestor(ancestor, child)) return null;
+
+            var ancestorItems = ExtractItems(ancestor);
+            var childItems = ExtractItems(child);
+
+            var relativeItems = childItems.Skip(ancestorItems.Count).ToList();
+            return BuildPidl(relativeItems.ToArray());
+        }
+
+        /// <summary>
+        /// Returns the number of SHITEMIDs in the PIDL (excluding the terminator).
+        /// Equivalent to ILGetSize / walking the list.
+        /// </summary>
+        public static int GetItemCount(byte[] pidl)
+            => ExtractItems(pidl).Count;
+
+        /// <summary>
+        /// Returns the last SHITEMID as a single-item PIDL.
+        /// Equivalent to ILFindLastID().
+        /// </summary>
+        public static byte[] GetLastItem(byte[] pidl)
+        {
+            var items = ExtractItems(pidl);
+            if (items.Count == 0) return BuildPidl();
+            return BuildPidl(items[items.Count - 1]);
+        }
+
+        /// <summary>
+        /// Returns a new PIDL with the last SHITEMID removed.
+        /// Equivalent to ILRemoveLastID() — i.e. navigate to parent.
+        /// </summary>
+        public static byte[] RemoveLastItem(byte[] pidl)
+        {
+            var items = ExtractItems(pidl);
+            if (items.Count == 0) return BuildPidl();
+            return BuildPidl(items.Take(items.Count - 1).ToArray());
+        }
+
+        /// <summary>
+        /// Concatenates two PIDLs.
+        /// Equivalent to ILCombine() in the Shell API.
+        /// </summary>
+        public static byte[] Combine(byte[] parent, byte[] child)
+        {
+            var items = ExtractItems(parent);
+            items.AddRange(ExtractItems(child));
+            return BuildPidl(items.ToArray());
+        }
+
+        /// <summary>
+        /// Returns the PIDL for the Nth item (0-based), as a single-item PIDL.
+        /// </summary>
+        public static byte[] GetItemAt(byte[] pidl, int index)
+        {
+            var items = ExtractItems(pidl);
+            if (index < 0 || index >= items.Count)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            return BuildPidl(items[index]);
+        }
+
+        /// <summary>
+        /// Returns true if the PIDL is structurally valid:
+        ///   - Not null or empty
+        ///   - All cb values are consistent with the buffer length
+        ///   - Ends with a null terminator
+        /// </summary>
+        public static bool IsValidPidl(byte[] pidl)
+        {
+            if (pidl == null || pidl.Length < 2) return false;
+
+            int offset = 0;
+            while (offset + 2 <= pidl.Length)
+            {
+                ushort cb = (ushort)(pidl[offset] | (pidl[offset + 1] << 8));
+                if (cb == 0)
+                    return offset + 2 == pidl.Length; // terminator must be the last 2 bytes
+                if (offset + cb > pidl.Length)
+                    return false; // cb points past end of buffer
+                offset += cb;
+            }
+            return false; // never found a terminator
+        }
+
+        /// <summary>
+        /// Returns true if the PIDL represents the desktop (empty PIDL).
+        /// </summary>
+        public static bool IsDesktopPidl(byte[] pidl)
+            => pidl != null && pidl.Length == 2 && pidl[0] == 0 && pidl[1] == 0;
+
+        /// <summary>
+        /// Returns true if the PIDL is DWORD-aligned at every SHITEMID boundary.
+        /// The real Shell requires this for performance.
+        /// </summary>
+        public static bool IsDwordAligned(byte[] pidl)
+        {
+            foreach (byte[] item in ExtractItems(pidl))
+                if (item.Length % 4 != 0) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// Get's the display name for a given pidl.  The display name is simply the name of the last
+        /// segment of the pidl - ie, the pidl without the preceding path.
+        /// </summary>
+        /// <param name="pidl"></param>
+        /// <returns></returns>
+        public static string GetDisplayName(byte[] pidl)
+        {
+            var last = GetLastItem(pidl);
+            return GetDisplayPathFromPidl(last);
+        }
+
+        public static string GetDisplayName(IntPtr pidl)
+        {
+            var bytes = PidlToBytes(pidl);
+            return GetDisplayName(bytes);
+        }
+
+        /// <summary>
+        /// Attempts to reconstruct a display path string from a mock PIDL.
+        /// Useful for round-trip assertions in tests.
+        /// </summary>
+        public static string GetDisplayPathFromPidl(byte[] pidl)
+        {
+            var items = ExtractItems(pidl);
+            var parts = new List<string>();
+
+            foreach (byte[] item in items)
+            {
+                string name = TryExtractName(item);
+                if (name != null)
+                    parts.Add(name);
+            }
+
+            if (parts.Count == 0) return "Desktop";
+
+            // If first item is a GUID it's a virtual folder — use a friendly name
+            if (parts[0].StartsWith("{"))
+                parts[0] = GuidToFriendlyName(parts[0]);
+
+            return string.Join("\\", parts);
+        }
+
+        public static string GetDisplayPathFromPidl(IntPtr pidl)
+        { 
+            var bytes = PidlToBytes(pidl);
+            return GetDisplayPathFromPidl(bytes);
+        }
+
+        /// <summary>
+        /// Reads a PIDL from an unmanaged memory pointer and returns it as a managed byte array.
+        /// The pointer must point to a valid PIDL structure (one or more SHITEMIDs followed
+        /// by a two-byte null terminator).
+        /// </summary>
+        /// <param name="pidlPtr">An IntPtr pointing to an unmanaged PIDL.</param>
+        /// <returns>A byte array containing the full PIDL including the null terminator.</returns>
+        /// <exception cref="ArgumentException">Thrown if the pointer is null/zero.</exception>
+        public static byte[] PidlToBytes(IntPtr pidlPtr)
+        {
+            if (pidlPtr == IntPtr.Zero)
+                throw new ArgumentException("PIDL pointer is null.", nameof(pidlPtr));
+
+            // ------------------------------------------------------------------
+            // Pass 1: Walk the PIDL to calculate the total byte length.
+            // We read cb from each SHITEMID header (2 bytes) and advance until
+            // we hit a zero cb (the null terminator).
+            // ------------------------------------------------------------------
+            int totalLength = 0;
+            IntPtr current = pidlPtr;
+
+            while (true)
+            {
+                // Read the cb field (USHORT, little-endian) from unmanaged memory
+                ushort cb = (ushort)Marshal.ReadInt16(current);
+
+                if (cb == 0)
+                {
+                    // This is the null terminator — include its 2 bytes then stop
+                    totalLength += 2;
+                    break;
+                }
+
+                // Guard against obviously corrupt PIDLs (cb should be at least 3:
+                // 2 bytes for cb itself + at least 1 byte of abID data)
+                if (cb < 3)
+                    throw new InvalidOperationException(
+                        $"Corrupt PIDL: SHITEMID at offset {totalLength} has cb={cb}, " +
+                        $"which is too small to be valid.");
+
+                totalLength += cb;
+
+                // Advance pointer by cb bytes to the next SHITEMID
+                current = IntPtr.Add(current, cb);
+            }
+
+            // ------------------------------------------------------------------
+            // Pass 2: Now that we know the exact size, copy the whole buffer
+            // from unmanaged memory into a managed byte array in one shot.
+            // ------------------------------------------------------------------
+            byte[] result = new byte[totalLength];
+            Marshal.Copy(pidlPtr, result, 0, totalLength);
+            return result;
+        }
+
+        private static string GuidToFriendlyName(string guidStr)
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "{20D04FE0-3AEA-1069-A2D7-08002B30309D}", "My Computer" },
+                { "{450D8FBA-AD25-11D0-98A8-0800361B1103}", "My Documents" },
+                { "{33E28130-4E1E-4676-835A-98395C3BC3BB}", "My Pictures" },
+                { "{59031A47-3F72-44A7-89C5-5595FE6B30EE}", "User Profile" },
+                { "{00021400-0000-0000-C000-000000000046}", "Desktop" },
+            };
+            return map.TryGetValue(guidStr, out string name) ? name : guidStr;
+        }
+
+        private static string DescribeItemType(byte type) => type switch
+        {
+            0x1F => "Virtual Folder (CLSID)",
+            0x2F => "Drive Root",
+            0x31 => "Folder",
+            0x32 => "File",
+            0x41 => "Network Share",
+            0x42 => "Network Server",
+            0x46 => "Network Location",
+            _ => "Unknown"
+        };
+
+        private static string TryExtractName(byte[] item)
+        {
+            if (item.Length < 3) return null;
+            byte type = item[2];
+
+            try
+            {
+                switch (type)
+                {
+                    case 0x2F: // Drive — ASCII string at offset 3
+                        return Encoding.ASCII.GetString(item, 3, Math.Min(4, item.Length - 3))
+                                             .TrimEnd('\0');
+
+                    case 0x31: // Folder — short name at offset 16, long name at offset 32
+                    case 0x32: // File
+                        if (item.Length > 32)
+                        {
+                            // Try long Unicode name first (offset 32)
+                            int maxLen = item.Length - 32;
+                            // Find null terminator in UTF-16
+                            int nameLen = 0;
+                            while (nameLen + 1 < maxLen &&
+                                   !(item[32 + nameLen] == 0 && item[33 + nameLen] == 0))
+                                nameLen += 2;
+                            if (nameLen > 0)
+                                return Encoding.Unicode.GetString(item, 32, nameLen);
+                        }
+                        // Fall back to short name at offset 16
+                        if (item.Length > 16)
+                            return Encoding.ASCII.GetString(item, 16, Math.Min(14, item.Length - 16))
+                                                 .TrimEnd('\0');
+                        return null;
+
+                    case 0x1F: // Virtual folder — extract GUID
+                        if (item.Length >= 20)
+                        {
+                            byte[] guidBytes = new byte[16];
+                            Buffer.BlockCopy(item, 4, guidBytes, 0, 16);
+                            return new Guid(guidBytes).ToString("B").ToUpperInvariant();
+                        }
+                        return null;
+
+                    default:
+                        return null;
+                }
+            }
+            catch { return null; }
+        }
+
+        private static string ToHexString(byte[] data)
+        {
+            var sb = new StringBuilder(data.Length * 3);
+            foreach (byte b in data)
+                sb.Append($"{b:X2} ");
+            return sb.ToString().TrimEnd();
         }
 
         // =========================================================================

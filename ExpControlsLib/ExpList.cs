@@ -1544,7 +1544,7 @@ namespace ExpControlsLib
             {
                 if (sender is null || _currentFolderCsi == null || e?.Item is null) return;
 
-                Debug.WriteLine($"ExpList: DoItemUpdate Begin - {e.UpdateType.ToString()}, {e.Item.Name}");
+                Debug.WriteLine($"ExpList: DoItemUpdate Begin - {e.UpdateType.ToString()}, {e.Item.DisplayName}");
 
                 // If an enumeration is in progress, defer this update to prevent reentrant
                 // mutation of _listView.Items (which causes null items during foreach).
@@ -1888,7 +1888,7 @@ namespace ExpControlsLib
                 else
                 {
                     // 2. Try bulk fetch if still not found
-                    EnsureCustomColumnDataFetched(item, colText);
+                    EnsureCustomColumnDataFetched(item);
                     if (item.ColumnDic.TryGetValue(colText, out ListViewSubitemData propInfo))
                         return propInfo;
                 }
@@ -1912,27 +1912,15 @@ namespace ExpControlsLib
         /// in one shot, which is more efficient than firing GetColumnData for each individual column.
         /// </summary>
         /// <param name="item"></param>
-        private void EnsureCustomColumnDataFetched(CShellItem item, string? requiredColumn = null)
+        private void EnsureCustomColumnDataFetched(CShellItem item)
         {
-            if (ExpListGetColumnData == null) return;
+            if (ExpListGetColumnData == null) return; //we have no way to get the data
 
-            if (requiredColumn is null) { 
-                if (item.ColumnDic.ContainsKey("DbId")) return;
-            }
-            else if (item.ColumnDic.ContainsKey(requiredColumn)) 
-                return; // If the required column is already in the dictionary, we're good.
+            if (item.ColumnDic.ContainsKey("DbId")) return; //this indicates it has all the items already
 
             // Otherwise, fire the event to fetch ALL custom columns at once.
             var args = new ExpListGetColumnDataEventArgs(item);
             ExpListGetColumnData(this, args);
-
-            foreach (ColumnHeader col in _listView.Columns)
-            {
-                if (args.ColumnData.TryGetValue(col.Text, out var value))
-                {
-                    item.ColumnDic[col.Text] = value;
-                }
-            }
         }
 
         /// <summary>
@@ -2037,7 +2025,7 @@ namespace ExpControlsLib
         /// </summary>
         public async Task LoadDirectoryBaseAsync(CShellItem? csi, bool includeFolder = true)
         {
-            Debug.WriteLine("LoadDirectoryAsync: " + csi?.FullPath);
+            Debug.WriteLine("LoadDirectoryBaseAsync: " + csi?.FullPath);
 
             if (csi is null) return;
 
@@ -2089,6 +2077,8 @@ namespace ExpControlsLib
                     }
                 }
 
+                int x = 2;
+
                 var result = await _staRunner.EnqueueWork(t =>
                 {
                     var hierarchyCsi = _shellController.LoadFolderContents(csi, SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
@@ -2113,8 +2103,8 @@ namespace ExpControlsLib
                         }
                     }
 
-                    fileList.Sort();
-                    if (includeFolder) dirList.Sort();
+                    //fileList.Sort(); can't sort yet - we don't have all the column data yet
+                    //if (includeFolder) dirList.Sort();
 
                     var combined = new List<CShellItem>(dirList.Count + fileList.Count);
                     if (includeFolder) combined.AddRange(dirList);
@@ -2151,10 +2141,10 @@ namespace ExpControlsLib
 
                 if (token.IsCancellationRequested) return;
 
-                _listView.BeginUpdate();
-                try
+                if (result != null)
                 {
-                    if (result != null)
+                    _listView.BeginUpdate();
+                    try
                     {
                         _listViewWrapper.Clear();
                         _listViewWrapper.AddRange(result.Items);
@@ -2162,22 +2152,22 @@ namespace ExpControlsLib
 
                         OnScroll();
                     }
-                    else
+                    finally
                     {
-                        throw new Exception("ERROR: LoadDirectoryAsync - Failed to load directory contents.");
+                        _listView.EndUpdate();
                     }
                 }
-                finally
+                else
                 {
-                    _listView.EndUpdate();
+                    throw new Exception("ERROR: LoadDirectoryBaseAsync - Failed to load directory contents.");
                 }
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                Debug.WriteLine("Error in DisplayFilesAsync: " + ex.ToString());
+                Debug.WriteLine("Error in LoadDirectoryBaseAsync: " + ex.ToString());
             }
-            Debug.WriteLine("DisplayFilesAsync: done.");
+            Debug.WriteLine("LoadDirectoryBaseAsync: done.");
         }
 
 

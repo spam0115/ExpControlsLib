@@ -288,6 +288,7 @@ namespace WindowsApiLib.Shell
             COMMON_OEM_LINKS = 0x3A,
             CDBURN_AREA = 0x3B,
             COMPUTERSNEARME = 0x3D,
+            C_DRIVE = 0x70000000, //this isn't one of the standard csidl locations.  I added it to facilitate unit testing.
             FLAG_PER_USER_INIT = 0x800,
             FLAG_NO_ALIAS = 0x1000,
             FLAG_DONT_VERIFY = 0x4000,

@@ -77,7 +77,7 @@ namespace WindowsApiLibTest
         [TestMethod]
         public async Task TestFindOrAddNestedNonProtected()
         {
-            await Runner.EnqueueWork(() =>
+            await Runner.EnqueueWork((Action)(() =>
             {
                 var desktop = CShellItemFactory.Create(CSIDL.DESKTOP);
                 var manager = new CShellItemHierachyManager(desktop);
@@ -99,18 +99,18 @@ namespace WindowsApiLibTest
                     // Verify tree structure
                     var csiL2 = csiNested.Parent;
                     Assert.IsNotNull(csiL2, "Level2 should be parent of file");
-                    Assert.AreEqual("Level2", csiL2.DisplayName, true);
+                    Assert.AreEqual("Level2", (string)csiL2.DisplayName, true);
 
                     var csiL1 = csiL2.Parent;
                     Assert.IsNotNull(csiL1, "Level1 should be parent of Level2");
-                    Assert.AreEqual("Level1", csiL1.DisplayName, true);
+                    Assert.AreEqual("Level1", (string)csiL1.DisplayName, true);
                 }
                 finally
                 {
                     if (Directory.Exists(tempBase))
                         Directory.Delete(tempBase, true);
                 }
-            });
+            }));
         }
 
         [TestMethod]
@@ -195,6 +195,30 @@ namespace WindowsApiLibTest
                 var result = manager.FindOrAdd(invalidPath);
 
                 Assert.IsNull(result, "Should return null for non-existent path");
+            });
+        }
+
+        [TestMethod]
+        public async Task TestMockHierarchy()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                var manager = MockShellItemFactory.CreateMockHierarchyManager();
+
+                Assert.IsNotNull(manager, "MockHierarchyManager should be created");
+                Assert.IsNotNull(manager.Root, "Root (Desktop) should exist");
+                Assert.AreEqual("Desktop", manager.Root.DisplayName, "Root should be Desktop");
+
+                var drives = manager.Root.Directories;
+                Assert.IsNotNull(drives, "Desktop should have child directories");
+                Assert.IsTrue(drives.Length > 0, "Desktop should have at least one child (DRIVES)");
+
+                var myComputer = drives.FirstOrDefault(d => d.DisplayName.Contains("My Computer"));
+                Assert.IsNotNull(myComputer, "My Computer (DRIVES) should exist under Desktop");
+
+                var cDrive = myComputer?.Directories?.FirstOrDefault(d => d.DisplayName == "C:\\");
+                Assert.IsNotNull(cDrive, "C: drive should exist under My Computer");
+                Assert.IsTrue(cDrive?.IsDisk ?? false, "C: should be marked as a disk");
             });
         }
     }

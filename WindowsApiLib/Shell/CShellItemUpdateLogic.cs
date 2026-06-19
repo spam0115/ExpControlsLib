@@ -5,11 +5,12 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using WindowsApiLib.Util;
+using WindowsApiLib;
 using static WindowsApiLib.Shell.ShellAPI;
 
 namespace WindowsApiLib.Shell
 {
-    public class CShellItemUpdateLogic
+    public class CShellItemUpdateLogic<TPidl> where TPidl : ICPidl
     {
         private readonly CShellItemHierachyManager _hierarchyManager;
         private readonly IShellApiWrapper _shellApi;
@@ -536,7 +537,7 @@ namespace WindowsApiLib.Shell
         private bool DoRenameOrMove(CShellItem csi, IntPtr changedPidl, CShItemUpdateType changeType)
         {
             IntPtr pidlRel = IntPtr.Zero, newIShellFolderPtr = IntPtr.Zero;
-            var splitPidl = CPidl.Split(changedPidl);
+            var splitPidl = TPidl.Split(changedPidl);
             var oldParentCsi = csi.Parent;
             var allegedParentCsi = _hierarchyManager.Find(splitPidl.ParentPidl);
 
@@ -552,7 +553,7 @@ namespace WindowsApiLib.Shell
                 else if (_shellApi.SHGetRealIDL(allegedParentCsi.IShlFolder, splitPidl.ChildPidl, out pidlRel) == S_OK)
                 {
                     Marshal.FreeCoTaskMem(csi.m_Pidl);
-                    csi.m_Pidl = CPidl.Concatenate(splitPidl.ParentPidl, pidlRel);
+                    csi.m_Pidl = TPidl.Concatenate(splitPidl.ParentPidl, pidlRel);
 
                     if (ReferenceEquals(allegedParentCsi, csi.Parent))
                     {
@@ -686,13 +687,13 @@ namespace WindowsApiLib.Shell
                     if (csi.m_Directories is not null && UpdateFolders)
                     {
                         foreach (var item in csi.m_Directories.Items)
-                            oldCsiDic.TryAdd(CPidl.ToString(item.LastPIDL, false) ?? string.Empty, item);
+                            oldCsiDic.TryAdd(TPidl.ToString(item.LastPIDL, false) ?? string.Empty, item);
                     }
                     if (csi.m_Files is not null && UpdateFiles)
                     {
                         foreach (var item in csi.m_Files.Items)
                         {
-                            oldCsiDic.TryAdd(CPidl.ToString(item.LastPIDL, false) ?? string.Empty, item);
+                            oldCsiDic.TryAdd(TPidl.ToString(item.LastPIDL, false) ?? string.Empty, item);
                         }
                     }
 
@@ -707,10 +708,10 @@ namespace WindowsApiLib.Shell
                         IntPtr newPidl = newPidls[i];
                         if (newPidl == IntPtr.Zero) continue;
 
-                        string newFileName = CPidl.ToString(newPidl, false) ?? string.Empty;
+                        string newFileName = TPidl.ToString(newPidl, false) ?? string.Empty;
                         if (oldCsiDic.TryGetValue(newFileName, out CShellItem? oldCsi))
                         {
-                            if (oldCsi != null && CPidl.ResolvesToSamePathOrName(oldCsi.LastPIDL, newPidl))
+                            if (oldCsi != null && TPidl.ResolvesToSamePathOrName(oldCsi.LastPIDL, newPidl))
                             {
                                 if (!ReferenceEquals(csi, CShellItemFactory.RecycleBin))
                                 {
@@ -805,7 +806,7 @@ namespace WindowsApiLib.Shell
         {
             if (pidl == IntPtr.Zero) return false;
 
-            var name = CPidl.ToString(pidl);
+            var name = TPidl.ToString(pidl);
             if (name.ToUpper().Contains("$RECYCLE.BIN")) return true;
 
             var recycleBinPidl = CShellItemFactory.RecycleBin.PIDL;

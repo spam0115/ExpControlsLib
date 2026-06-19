@@ -93,7 +93,7 @@ namespace WindowsApiLib.Shell
             DeskTopDirectory = Create(CSIDL.DESKTOPDIRECTORY);
 
             RecycleBin = Create(CSIDL.BITBUCKET);
-            StrRecycleBin = RecycleBin.Name;
+            StrRecycleBin = RecycleBin.DisplayName;
 
             MyDocuments = Create(CSIDL.MYDOCUMENTS);
 

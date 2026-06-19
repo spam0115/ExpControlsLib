@@ -363,8 +363,6 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                //if (!m_HasDispType)
-                //    SetDispType();
                 return m_DisplayName;
             }
         }
@@ -379,24 +377,6 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                //if (!m_HasDispType)
-                //    SetDispType();
-                return m_DisplayName;
-            }
-        }
-
-        /// <summary>
-        /// Name is another way of obtaining the DisplayName
-        /// </summary>
-        /// <returns>The DisplayName of the Item</returns>
-        /// <remarks>For a link file (xxx.txt.lnk for example) the
-        /// DisplayName property will return xxx.txt</remarks>
-        public string Name
-        {
-            get
-            {
-                //if (!m_HasDispType)
-                //    SetDispType();
                 return m_DisplayName;
             }
         }
@@ -409,8 +389,6 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                //if (!m_HasDispType)
-                //    SetDispType();
                 return m_TypeName;
             }
             set;

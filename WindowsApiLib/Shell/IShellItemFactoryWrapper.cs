@@ -19,7 +19,7 @@ namespace WindowsApiLib.Shell
             return CShellItemFactory.GetPidlsOfFolder(csi, flags);
         }
 
-        public CShellItem Create(IntPtr pidl, CShellItem parent = null)
+        public CShellItem Create(IntPtr pidl, CShellItem? parent = null)
         {
             return CShellItemFactory.Create(pidl, parent);
         }

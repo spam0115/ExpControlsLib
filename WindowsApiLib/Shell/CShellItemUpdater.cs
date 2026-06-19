@@ -24,7 +24,7 @@ namespace WindowsApiLib.Shell
     public class CShellItemUpdater : NativeWindow, IDisposable
     {
         private readonly CShellItemHierachyManager HierachyManager;
-        private readonly CShellItemUpdateLogic UpdateLogic;
+        private readonly CShellItemUpdateLogic<CPidl> UpdateLogic;
         private int m_notifyId;
         private uint _eventFlags = 0;
         private Thread _backgroundThread;
@@ -55,7 +55,7 @@ namespace WindowsApiLib.Shell
         {
             HierachyManager = hierachyManager;
             _eventFlags = SHCNE_flags;
-            UpdateLogic = new CShellItemUpdateLogic(HierachyManager);
+            UpdateLogic = new CShellItemUpdateLogic<CPidl>(HierachyManager);
             UpdateLogic.UpdateEvent += (s, e) => RaiseUpdateEvent(s, e);
 
             _backgroundThread = new Thread(RunBackgroundMessageLoop)

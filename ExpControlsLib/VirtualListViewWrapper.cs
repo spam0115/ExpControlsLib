@@ -629,33 +629,45 @@ namespace ExpControlsLib
         {
             if (VirtualMode)
             {
-                _itemCache.Remove(index); //it is assumed that there must be new data to require a redraw
-                _ListView.RedrawItems(index, index, false);
+                if (index >= 0 && index < _ListView.VirtualListSize)
+                {
+                    _ListView.RedrawItems(index, index, false);
+                }
             }
             else
             {
                 if (index >= 0 && index < _ListView.Items.Count)
                 {
                     var lvi = _ListView.Items[index];
-                    UpdateListviewItemCallback?.Invoke(lvi, lvi.Tag as CShellItem);
                 }
             }
         }
 
-        public void RefreshItem(CShellItem? item)
+        public void RefreshItem(CShellItem? csi)
         {
-            if (item is null) return;
+            if (csi is null) return;
 
             Debug.WriteLine("ExpList: RefreshItem Begin");
             try
             {
-                int index = GetIndexFromFullPath(item.FullPath);
-                if (index >= 0)
+                int index = GetIndexFromFullPath(csi.FullPath);
+                if (VirtualMode)
                 {
-                    item.ColumnDic.Clear();
-                    
-                    RedrawItem(index);
+                    if (index >= 0 && index < _ListView.VirtualListSize)
+                    {
+                        _itemIndex.Remove(csi.FullPath);
+                    }
                 }
+                else
+                {
+                    if (index >= 0 && index < _ListView.Items.Count)
+                    {
+                        var lvi = _ListView.Items[index];
+                        UpdateListviewItemCallback?.Invoke(lvi, csi);
+                    }
+                }
+
+                RedrawItem(index);
             }
             finally
             {
