@@ -90,7 +90,7 @@ namespace WindowsApiLib.Shell
                                     Debug.WriteLine("  [CREATE] Parent found: " + parentItem.ItemPath);
                                     if (parentItem.FilesInitialized)
                                     {
-                                        if (!parentItem.FileList.Contains(shNotify.dwItem1))
+                                        if (!parentItem.m_files.Contains(shNotify.dwItem1))
                                         {
                                             Debug.WriteLine("  [CREATE] Parent files initialized and item NOT in list. Adding.");
                                             if (_shellApi.SHGetRealIDL(parentItem.IShlFolder, splitPidl.ChildPidl, out realRel) == S_OK)
@@ -162,8 +162,8 @@ namespace WindowsApiLib.Shell
                                     Debug.WriteLine("  [DELETE] Parent found: " + parentItem.ItemPath);
                                     CShellItem childItem = null;
 
-                                    if (parentItem.FileList != null)
-                                        childItem = parentItem.FileList[relPidl];
+                                    if (parentItem.m_files != null)
+                                        childItem = parentItem.m_files[relPidl];
 
                                     if (childItem == null && parentItem.DirectoryList != null)
                                         childItem = parentItem.DirectoryList[relPidl];
@@ -459,15 +459,15 @@ namespace WindowsApiLib.Shell
                 {
                     lock (_hierarchyManager.Lock)
                     {
-                        if (parent.FoldersInitialized && parent.m_Directories.Contains(item))
+                        if (parent.FoldersInitialized && parent.m_directories.Contains(item))
                         {
-                            parent.m_Directories.Remove(item);
+                            parent.m_directories.Remove(item);
                             changed = true;
                         }
 
-                        if (parent.FilesInitialized && parent.m_Files.Contains(item))
+                        if (parent.FilesInitialized && parent.m_files.Contains(item))
                         {
-                            parent.m_Files.Remove(item);
+                            parent.m_files.Remove(item);
                             changed = true;
                         }
                     }
@@ -582,14 +582,14 @@ namespace WindowsApiLib.Shell
                             csi.m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newIShellFolderPtr, typeof(IShellFolder));
                             Marshal.Release(newIShellFolderPtr);
 
-                            if (csi.m_Files is not null)
+                            if (csi.m_files is not null)
                             {
-                                foreach (CShellItem item in csi.m_Files)
+                                foreach (CShellItem item in csi.m_files)
                                     item.UpdateFolderPidlAndPath();
                             }
-                            if (csi.m_Directories is not null)
+                            if (csi.m_directories is not null)
                             {
-                                foreach (CShellItem item in csi.m_Directories)
+                                foreach (CShellItem item in csi.m_directories)
                                     item.UpdateFolderPidlAndPath();
                             }
                         }
@@ -620,9 +620,9 @@ namespace WindowsApiLib.Shell
             Debug.WriteLine("SelectiveFolderUpdate begin - " + csi.Text + " - " + DateTime.Now.ToString("HH:mm:ss.fff"));
 
             var attrFlag = SHCONTF.INCLUDEHIDDEN;
-            if (csi.m_Files is not null && updateFiles)
+            if (csi.m_files is not null && updateFiles)
                 attrFlag = attrFlag | SHCONTF.NONFOLDERS;
-            if (csi.m_Directories is not null && updateFolders)
+            if (csi.m_directories is not null && updateFolders)
                 attrFlag = attrFlag | SHCONTF.FOLDERS;
             if (attrFlag == SHCONTF.INCLUDEHIDDEN)
                 return 0;
@@ -667,10 +667,10 @@ namespace WindowsApiLib.Shell
                 {
                     var invalidItems = new List<CShellItem>();
 
-                    if (csi.m_Files is not null && UpdateFiles)
-                        invalidItems.AddRange(csi.m_Files.ToArray());
-                    if (csi.m_Directories is not null && UpdateFolders)
-                        invalidItems.AddRange(csi.m_Directories.ToArray());
+                    if (csi.m_files is not null && UpdateFiles)
+                        invalidItems.AddRange(csi.m_files.ToArray());
+                    if (csi.m_directories is not null && UpdateFolders)
+                        invalidItems.AddRange(csi.m_directories.ToArray());
 
                     if (invalidItems.Count > 0)
                     {
@@ -684,14 +684,14 @@ namespace WindowsApiLib.Shell
                 else
                 {
                     var oldCsiDic = new Dictionary<string, CShellItem>();
-                    if (csi.m_Directories is not null && UpdateFolders)
+                    if (csi.m_directories is not null && UpdateFolders)
                     {
-                        foreach (var item in csi.m_Directories.Items)
+                        foreach (var item in csi.m_directories.Items)
                             oldCsiDic.TryAdd(TPidl.ToString(item.LastPIDL, false) ?? string.Empty, item);
                     }
-                    if (csi.m_Files is not null && UpdateFiles)
+                    if (csi.m_files is not null && UpdateFiles)
                     {
-                        foreach (var item in csi.m_Files.Items)
+                        foreach (var item in csi.m_files.Items)
                         {
                             oldCsiDic.TryAdd(TPidl.ToString(item.LastPIDL, false) ?? string.Empty, item);
                         }
@@ -776,12 +776,12 @@ namespace WindowsApiLib.Shell
                     {
                         if (!parent.DirectoryList.Contains(item.PIDL))
                         {
-                            parent.m_Directories.Append(item);
+                            parent.m_directories.Append(item);
                             changed = true;
                         }
-                        if (!parent.FileList.Contains(item.PIDL))
+                        if (!parent.m_files.Contains(item.PIDL))
                         {
-                            parent.m_Files.Add(item);
+                            parent.m_files.Add(item);
                             changed = true;
                         }
                     }

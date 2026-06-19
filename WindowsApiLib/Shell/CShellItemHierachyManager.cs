@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
+using System.Xml.Linq;
 using WindowsApiLib;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 
@@ -51,10 +52,20 @@ namespace WindowsApiLib.Shell
             return result;
         }
 
+        /// <summary>
+        /// Find by full filename with path
+        /// </summary>
+        /// <param name="fullFileName">full filename with path</param>
+        /// <returns></returns>
         public CShellItem? Find(string fullFileName)
         {
+            if (string.IsNullOrEmpty(fullFileName)) return null;
+
             IntPtr pidl = ShellAPI.ILCreateFromPathW(fullFileName);
-            return Find(Root, pidl);
+
+            var pidlAndName = new PidlAndCanonicalParsingName(pidl, fullFileName);
+
+            return Find(Root, pidlAndName);
         }
 
         /// <summary>
@@ -98,7 +109,7 @@ namespace WindowsApiLib.Shell
                 }
             }
 
-            if (rootItem.FileList is not null && CPidl.IsAncestorOf(rootItem.PIDL, pidlAndName.Pidl, true))
+            if (rootItem.m_files is not null && CPidl.IsAncestorOf(rootItem.PIDL, pidlAndName.Pidl, true))
             {
                 var displayName = CPidl.GetDisplayName(pidlAndName.Pidl);
                 if (rootItem.FilesDic.TryGetValue(displayName, out CShellItem? fileItem))
@@ -137,7 +148,7 @@ namespace WindowsApiLib.Shell
         public CShellItem Add(CShellItem csi)
         {
             if (csi == null) throw new ArgumentNullException(nameof(csi));
-            var result = FindOrAdd(csi.PIDL, out CShellItem parent);
+            var result = FindAndExpand(csi.PIDL, out CShellItem parent);
             return result;
         }
 
@@ -153,12 +164,20 @@ namespace WindowsApiLib.Shell
             }
             try
             {
-                return FindOrAdd(pidl, out _);
+                return FindAndExpand(pidl, out _);
             }
             finally
             {
                 Marshal.FreeCoTaskMem(pidl);
             }
+        }
+
+        public CShellItem? FindOrAdd(CShellItem? csi)
+        {
+            if (csi == null) throw new ArgumentNullException(nameof(csi));
+
+            var result = FindAndExpand(csi.PIDL, out CShellItem parent);
+            return result;
         }
 
         /// <summary>
@@ -187,7 +206,7 @@ namespace WindowsApiLib.Shell
         /// For Example: GetCShItem(Path) may be given a string specifying a non-existant directory.
         /// (eg -- C:\Test\NonExistant\junk.txt). 
         /// In that case, and that case only, Parent may be returned as Nothing.</remarks>
-        public CShellItem? FindOrAdd(IntPtr absPidl, out CShellItem? Parent)
+        public CShellItem? FindAndExpand(IntPtr absPidl, out CShellItem? Parent)
         {
             Parent = null;
 
@@ -204,50 +223,55 @@ namespace WindowsApiLib.Shell
 
             bool foundFinalExtantParentDirectory = false;
             while (!foundFinalExtantParentDirectory)
-            { 
-                foreach (var currentCSI in currentFolder.Directories) 
+            {
+                CShellItem nextFolder = null;
+                lock (currentFolder)
                 {
-                    if (IsAncestorOf(currentCSI.PIDL, absPidl))
+                    foreach (var currentCSI in currentFolder.Directories) 
                     {
-                        if (CPidl.ResolvesToSamePathOrName(currentCSI.PIDL, absPidl))  // we found the desired item
+                        if (IsAncestorOf(currentCSI.PIDL, absPidl))
                         {
-                            Parent = currentFolder;
-                            return currentCSI;
-                        }
-                        else // Found an ancestor and must delve into it
-                        {
-                            currentFolder = currentCSI;
-                            goto NEXTWHILE;
+                            if (CPidl.ResolvesToSamePathOrName(currentCSI.PIDL, absPidl))  // we found the desired item
+                            {
+                                Parent = currentFolder;
+                                return currentCSI;
+                            }
+                            else // Found an ancestor and must delve into it
+                            {
+                                nextFolder = currentCSI;
+                                goto NEXTWHILE;
+                            }
                         }
                     }
                 }
 
                 foundFinalExtantParentDirectory = true; //can't delve any deeper.  currentFolder is the parent folder
             NEXTWHILE:;
+                currentFolder = nextFolder == null ? currentFolder : nextFolder;
             }
 
-            //Test for invalid paths and mismatched path lengths
-            if (CPidl.SegmentCount(currentFolder.PIDL) + 1 != CPidl.SegmentCount(absPidl)) 
-            {
-                // Debug.WriteLine("Invalid pidl provided to FindOrAdd(): '" + CPidl.ToString(absPidl) + "'");
+            //Test for invalid paths and mismatched path lengths.
+            //Basically, we will only try to create new items if their parent folders exist.  
+            //This can happen for fake paths or for paths that require additional subfolders to be created.
+            //This code has chosen not to try to created additoinal subfolders so we will return an error results for this case.
+            if (CPidl.SegmentCount(currentFolder.PIDL) + 1 != CPidl.SegmentCount(absPidl)) {
+                Debug.WriteLine("Invalid pidl provided to FindOrAdd(): '" + CPidl.ToString(absPidl) + "'");
                 return null;
             }
 
             var name = CPidl.GetDisplayName(absPidl);
-            
+
             // Check for files in the current folder
-            if (currentFolder.FilesDic.TryGetValue(name, out CShellItem fileItem))
+            lock (currentFolder)
             {
-                Parent = currentFolder;
-                return fileItem;
+                if (currentFolder.FilesDic.TryGetValue(name, out CShellItem fileItem))
+                {
+                    Parent = currentFolder;
+                    return fileItem;
+                }
             }
 
             return null;
-        }
-
-        public CShellItem? FindOrAdd(CShellItem? value)
-        {
-            throw new NotImplementedException();
         }
 
         /// <summary>True if parameter "ancestor" is an ancestor of parameter "current" 
@@ -336,15 +360,15 @@ namespace WindowsApiLib.Shell
                                 {
                                     if (target.FilesInitialized)
                                     {
-                                        foreach (var child in target.m_Files)
+                                        foreach (var child in target.m_files)
                                             child.m_Parent = null;
-                                        target.m_Files.Clear();
+                                        target.m_files.Clear();
                                     }
                                     if (target.FoldersInitialized)
                                     {
-                                        foreach (var child in target.m_Directories)
+                                        foreach (var child in target.m_directories)
                                             child.m_Parent = null;
-                                        target.m_Directories.Clear();
+                                        target.m_directories.Clear();
                                     }
                                 }
                                 dirsToRemove.Add(target);
@@ -357,11 +381,11 @@ namespace WindowsApiLib.Shell
 
                         if (filesToRemove.Count > 0)
                         {
-                            parent.m_Files.RemoveRange(filesToRemove);
+                            parent.m_files.RemoveRange(filesToRemove);
                         }
                         if (dirsToRemove.Count > 0)
                         {
-                            parent.m_Directories.RemoveRange(dirsToRemove);
+                            parent.m_directories.RemoveRange(dirsToRemove);
                         }
                         
                         parent.ClearCaches();

@@ -396,7 +396,7 @@ namespace WindowsApiLib.Shell
             }
             else
             {
-                csi = HierachyManager.FindOrAdd(pidl, out Parent);
+                csi = HierachyManager.FindAndExpand(pidl, out Parent);
                 if (csi == null)
                 {
                     if (!(Parent == null))

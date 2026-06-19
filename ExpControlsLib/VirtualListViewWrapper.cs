@@ -22,7 +22,11 @@ namespace ExpControlsLib
         private readonly ExpList _expList;
         private readonly Dictionary<int, ListViewItem> _itemCache = new();
         private readonly Dictionary<string, int> _pathToIndex = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, ListViewItem> _itemIndex = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
+        /// Provides a mapping from file name to ListViewItems in the listview.  
+        /// Note: This can only be used in non-virtual mode beucase in virtual mode ListViewItems do not persist.
+        /// </summary>
+        private readonly Dictionary<string, ListViewItem> _indexPathToLvi = new(StringComparer.OrdinalIgnoreCase);
         private SortOrder _sortOrder = SortOrder.None;
         private int _sortColumn = 0;
         private SortOrder _prevSortOrder = SortOrder.None;
@@ -86,7 +90,7 @@ namespace ExpControlsLib
                     _ListView.RetrieveVirtualItem -= OnRetrieveVirtualItem; //just in case
                     _ListView.RetrieveVirtualItem += OnRetrieveVirtualItem;
                     _ListView.Items.Clear();
-                    _itemIndex.Clear();
+                    _indexPathToLvi.Clear();
                 }
                 else
                 {
@@ -190,7 +194,7 @@ namespace ExpControlsLib
             VirtualItems.Clear();
             _itemCache.Clear();
             _pathToIndex.Clear();
-            _itemIndex.Clear();
+            _indexPathToLvi.Clear();
         }
 
         /// <summary>
@@ -216,7 +220,7 @@ namespace ExpControlsLib
                 {
                     var lvi = CreateListviewItemCallback?.Invoke(item) ?? new ListViewItem(item.DisplayName) { Tag = item };
                     _ListView.Items.Add(lvi);
-                    _itemIndex[item.FullPath] = lvi;
+                    _indexPathToLvi[item.FullPath] = lvi;
                 }
                 _ListView.EndUpdate();
             }
@@ -236,7 +240,7 @@ namespace ExpControlsLib
             {
                 var lvi = CreateListviewItemCallback?.Invoke(item) ?? new ListViewItem(item.DisplayName) { Tag = item };
                 _ListView.Items.Add(lvi);
-                _itemIndex[item.FullPath] = lvi;
+                _indexPathToLvi[item.FullPath] = lvi;
             }
         }
 
@@ -299,7 +303,7 @@ namespace ExpControlsLib
             {
                 var lvi = CreateListviewItemCallback?.Invoke(item) ?? new ListViewItem(item.DisplayName) { Tag = item };
                 _ListView.Items.Insert(index, lvi);
-                _itemIndex[item.FullPath] = lvi;
+                _indexPathToLvi[item.FullPath] = lvi;
                 lvi.EnsureVisible();
             }
         }
@@ -369,7 +373,7 @@ namespace ExpControlsLib
             {
                 var lvi = _ListView.Items[index];
                 if (lvi.Tag is CShellItem csi)
-                    _itemIndex.Remove(csi.FullPath);
+                    _indexPathToLvi.Remove(csi.FullPath);
                 _ListView.Items.RemoveAt(index);
             }
         }
@@ -454,7 +458,7 @@ namespace ExpControlsLib
                     {
                         if (_ListView.Items[i].Tag is CShellItem csi && toRemove.Contains(csi))
                         {
-                            _itemIndex.Remove(csi.FullPath);
+                            _indexPathToLvi.Remove(csi.FullPath);
                             _ListView.Items.RemoveAt(i);
                         }
                     }
@@ -520,18 +524,24 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="item">The <see cref="CShellItem"/> to search for.</param>
         /// <returns>The matching <see cref="ListViewItem"/>, or null if not found.</returns>
+        /// <remarks>Only usable in non-virtual mode.</remarks>
         private ListViewItem? FindLVItem(CShellItem item)
         {
-            Debug.WriteLine("ExpList: FindLVItem Begin");
+            //Debug.WriteLine("ExpList: FindLVItem Begin");
+            if (VirtualMode)
+            {
+                return null;
+            }
+
             try
             {
-                if (_itemIndex.TryGetValue(item.FullPath, out var lvi))
+                if (_indexPathToLvi.TryGetValue(item.FullPath, out var lvi))
                     return lvi;
                 return null;
             }
             finally
             {
-                Debug.WriteLine("ExpList: FindLVItem End");
+                //Debug.WriteLine("ExpList: FindLVItem End");
             }
         }
 
@@ -560,7 +570,7 @@ namespace ExpControlsLib
             }
             else
             {
-                if (_itemIndex.TryGetValue(fullPath, out var lvi))
+                if (_indexPathToLvi.TryGetValue(fullPath, out var lvi))
                     return lvi.Index;
             }
             return -1;
@@ -648,15 +658,14 @@ namespace ExpControlsLib
             if (csi is null) return;
 
             Debug.WriteLine("ExpList: RefreshItem Begin");
+
+            csi.NeedsRefresh = true;
+
             try
             {
                 int index = GetIndexFromFullPath(csi.FullPath);
                 if (VirtualMode)
                 {
-                    if (index >= 0 && index < _ListView.VirtualListSize)
-                    {
-                        _itemIndex.Remove(csi.FullPath);
-                    }
                 }
                 else
                 {

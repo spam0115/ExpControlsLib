@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 using static WindowsApiLib.Shell.ShellAPI;
 
 namespace WindowsApiLib.Shell
@@ -43,7 +44,7 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-        /// Loads folder contents for the given CShellItem.  IE, it populated the directories and files
+        /// Loads folder contents for the given CShellItem.  IE, it populates the directories and files
         /// members.
         /// </summary>
         /// <remarks>
@@ -51,33 +52,47 @@ namespace WindowsApiLib.Shell
         /// one that already exists in the hierarchy.  In that case, the original hierarchy version will be returned.
         /// </remarks>
         /// <param name="csi"></param>
-        /// <returns></returns>
+        /// <returns>A CShellItem from the hierarchy manager.  It may or may not be the original CShellItem passed in.</returns>
         public CShellItem? LoadFolderContents(CShellItem csi, SHCONTF flags)
         {
             if (csi == null) return null;
 
-            CShellItem target = HierachyManager.Add(csi); //ensure the item exists in the hierarchy
+            //CShellItem target = HierachyManager.Add(csi); //ensure the item exists in the hierarchy
 
-            if (target is null)
+            //if (target is null)
+            //{
+            //    Debug.WriteLine("Failed to find or add item to the shell item hierarchy: '" + csi.FullPath + "'");
+
+            //    return null;
+            //}
+
+            var target = csi;
+
+            lock (target)
             {
-                Debug.WriteLine("Failed to find or add item to the shell item hierarchy: '" + csi.FullPath + "'");
+                var contents = target.GetContents(flags);
 
-                return null;
-            }
+                if ((flags & SHCONTF.FOLDERS) > 0)
+                {
+                    if (target.m_directories is null)
+                        target.m_directories = new CShellItemCollection(target);
+                    else target.m_directories.Clear();
+                }
 
-            var contents = target.GetContents(flags);
+                if ((flags & SHCONTF.NONFOLDERS) > 0)
+                {
+                    if (target.m_files is null)
+                        target.m_files = new CShellItemCollection(target);
+                    else target.m_files.Clear();
+                }
 
-            if (target.m_Directories is null) target.m_Directories = new CShellItemCollection(target);
-            else target.m_Directories.Clear();
-            if (target.m_Files is null) target.m_Files = new CShellItemCollection(target);
-            else target.m_Files.Clear();
-
-            foreach (var item in contents.Items)
-            {
-                if (item.IsFolder)
-                    target.m_Directories.Add(item);
-                else
-                    target.m_Files.Add(item);
+                foreach (var item in contents.Items)
+                {
+                    if (item.IsFolder && target.m_directories != null)
+                        target.m_directories.Add(item);
+                    else if (!item.IsFolder && target.m_files != null)
+                        target.m_files.Add(item);
+                }
             }
 
             return target;

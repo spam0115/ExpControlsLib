@@ -197,7 +197,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expList);
                 form.Show();
 
-                await expList.LoadDirectory(tempDir);
+                await expList.LoadDirectoryAsync(tempDir);
 
                 // Wait for load
                 for (int i = 0; i < 100; i++)
@@ -248,7 +248,7 @@ namespace ExpControlsLibTest
             expList.Columns.Add("Score", "Score");
             expList.ExpListGetColumnData += (s, e) =>
             {
-                e.ColumnData["Score"] = new ListViewSubitemData("99.5", 99.5f);
+                e.Item.ColumnDic["Score"] = new ListViewSubitemData("99.5", 99.5f);
             };
 
             var windowsCsi = CShellItemFactory.Create(CSIDL.WINDOWS);
@@ -320,7 +320,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expList);
                 form.Show();
 
-                await expList.LoadDirectory(tempDir);
+                await expList.LoadDirectoryAsync(tempDir);
 
                 // Wait for load
                 for (int i = 0; i < 100; i++)

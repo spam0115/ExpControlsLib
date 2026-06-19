@@ -11,21 +11,25 @@ namespace WindowsApiLib.Shell
     /// <remarks></remarks>
     public class CShellItemCollection : IEnumerable<CShellItem>, ICollection
     {
+        private readonly CShellItem m_parent; //needed to set parent values
         private readonly List<CShellItem> m_items;
-        private readonly CShellItem m_item;
         private readonly object m_syncRoot = new object();
 
-        public CShellItemCollection(CShellItem item)
+        /// <summary>
+        /// A collection of CShellItems releted to a given parent
+        /// </summary>
+        /// <param name="parent">The parent item for all items that will eventually be added to this collection.</param>
+        public CShellItemCollection(CShellItem parent)
         {
-            m_item = item;
+            m_parent = parent;
             m_items = new List<CShellItem>();
         }
 
-        public CShellItem CShellItem
+        public CShellItem Owner
         {
             get
             {
-                return m_item;
+                return m_parent;
             }
         }
 
@@ -59,7 +63,7 @@ namespace WindowsApiLib.Shell
         {
             if (value.Parent is null)
             {
-                value.SetParent(m_item);
+                value.SetParent(m_parent);
             }
             lock (m_syncRoot)
             {
@@ -162,7 +166,7 @@ namespace WindowsApiLib.Shell
             }
 
             // Fallback to shell-based comparison
-            IShellFolder folder = m_item.IShlFolder;
+            IShellFolder folder = m_parent.IShlFolder;
             if (folder != null)
             {
                 for (int i = 0; i < m_items.Count; i++)

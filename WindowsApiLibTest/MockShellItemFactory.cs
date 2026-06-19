@@ -93,42 +93,42 @@ namespace WindowsApiLibTest
             desktop.m_Parent = null;
 
             var drives = CreateMockShellItem(CSIDL.DRIVES, desktop);
-            desktop.m_Directories = new CShellItemCollection(desktop);
-            desktop.m_Directories.Append(drives);
+            desktop.m_directories = new CShellItemCollection(desktop);
+            desktop.m_directories.Append(drives);
 
             var cDrive = CreateMockShellItem(CSIDL.C_DRIVE, drives);
-            drives.m_Directories = new CShellItemCollection(drives);
-            drives.m_Directories.Append(cDrive);
+            drives.m_directories = new CShellItemCollection(drives);
+            drives.m_directories.Append(cDrive);
 
             var windows = CreateMockShellItem(CSIDL.WINDOWS, cDrive);
-            cDrive.m_Directories = new CShellItemCollection(cDrive);
-            cDrive.m_Directories.Append(windows);
+            cDrive.m_directories = new CShellItemCollection(cDrive);
+            cDrive.m_directories.Append(windows);
 
             var system = CreateMockShellItem(CSIDL.SYSTEM, windows);
-            windows.m_Directories = new CShellItemCollection(windows);
-            windows.m_Directories.Append(system);
+            windows.m_directories = new CShellItemCollection(windows);
+            windows.m_directories.Append(system);
 
             var programFiles = CreateMockShellItem(CSIDL.PROGRAM_FILES, cDrive);
-            cDrive.m_Directories.Append(programFiles);
+            cDrive.m_directories.Append(programFiles);
 
             var programFilesX86 = CreateMockShellItem(CSIDL.PROGRAM_FILESX86, cDrive);
-            cDrive.m_Directories.Append(programFilesX86);
+            cDrive.m_directories.Append(programFilesX86);
 
             var profile = CreateMockShellItem(CSIDL.PROFILE, cDrive);
-            cDrive.m_Directories.Append(profile);
+            cDrive.m_directories.Append(profile);
 
             var desktopDirectory = CreateMockShellItem(CSIDL.DESKTOPDIRECTORY, profile);
-            profile.m_Directories = new CShellItemCollection(profile);
-            profile.m_Directories.Append(desktopDirectory);
+            profile.m_directories = new CShellItemCollection(profile);
+            profile.m_directories.Append(desktopDirectory);
 
             var localAppData = CreateMockShellItem(CSIDL.LOCAL_APPDATA, profile);
-            profile.m_Directories.Append(localAppData);
+            profile.m_directories.Append(localAppData);
 
             var myDocuments = CreateMockShellItem(CSIDL.MYDOCUMENTS, profile);
-            profile.m_Directories.Append(myDocuments);
+            profile.m_directories.Append(myDocuments);
 
             var myPictures = CreateMockShellItem(CSIDL.MYPICTURES, profile);
-            profile.m_Directories.Append(myPictures);
+            profile.m_directories.Append(myPictures);
 
             return new CShellItemHierachyManager(desktop);
         }

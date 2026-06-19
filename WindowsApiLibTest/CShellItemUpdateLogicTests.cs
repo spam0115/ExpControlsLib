@@ -129,7 +129,7 @@ namespace WindowsApiLibTest
                 logic.HandleNotification(documents.PIDL, IntPtr.Zero);
 
                 Assert.IsTrue(eventRaised, "Created event should be raised");
-                Assert.AreEqual(1, userfolder.m_Files.Count, "Parent should have 1 child in FileList");
+                Assert.AreEqual(1, userfolder.m_files.Count, "Parent should have 1 child in FileList");
                 
                 Marshal.FreeCoTaskMem(pNotifyStruct);
                 Marshal.FreeCoTaskMem(documents.PIDL);
@@ -148,20 +148,20 @@ namespace WindowsApiLibTest
 
                 var parent = new CShellItem();
                 parent.m_IsFolder = true;
-                parent.m_Directories = new CShellItemCollection(parent);
-                parent.m_Files = new CShellItemCollection(parent);
+                parent.m_directories = new CShellItemCollection(parent);
+                parent.m_files = new CShellItemCollection(parent);
                 //parent.FoldersInitialized = true; //uneeded - FoldersInitialized has no backing field and just test m_Directories for non-null values
                 //parent.FilesInitialized = true; //uneeded - FilesInitialized has no backing field and just test m_Files for non-null values
 
                 var child = new CShellItem();
                 child.m_Parent = parent;
-                parent.m_Files.Add(child);
+                parent.m_files.Add(child);
 
                 var logic = new CShellItemUpdateLogic<MockPidl>(manager);
                 bool removed = logic.RemoveItem(parent, child);
 
                 Assert.IsTrue(removed, "RemoveItem should return true");
-                Assert.IsFalse(parent.m_Files.Contains(child), "Child should be removed from parent's file list");
+                Assert.IsFalse(parent.m_files.Contains(child), "Child should be removed from parent's file list");
             });
         }
 
@@ -178,7 +178,7 @@ namespace WindowsApiLibTest
                 var parent = new CShellItem();
                 parent.m_Pidl = parentPidl;
                 parent.m_IsFolder = true;
-                parent.m_Files = new CShellItemCollection(parent);
+                parent.m_files = new CShellItemCollection(parent);
                 manager.Add(parent);
 
                 var relativeChildPidl = CreateValidPidl();
@@ -186,7 +186,7 @@ namespace WindowsApiLibTest
                 var child = new CShellItem();
                 child.m_Pidl = childPidl;
                 child.m_Parent = parent;
-                parent.m_Files.Add(child);
+                parent.m_files.Add(child);
 
                 var mockApi = new MockShellApi();
                 var logic = new CShellItemUpdateLogic<MockPidl>(manager, mockApi);
@@ -211,7 +211,7 @@ namespace WindowsApiLibTest
                 logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
 
                 Assert.IsTrue(eventRaised, "Deleted event should be raised");
-                Assert.AreEqual(0, parent.m_Files.Count, "Child should be removed from parent's FileList");
+                Assert.AreEqual(0, parent.m_files.Count, "Child should be removed from parent's FileList");
                 
                 Marshal.FreeCoTaskMem(pNotifyStruct);
                 Marshal.FreeCoTaskMem(childPidl);
@@ -347,7 +347,7 @@ namespace WindowsApiLibTest
                 var folder = new CShellItem();
                 folder.m_Pidl = parentPidl;
                 folder.m_IsFolder = true;
-                folder.m_Files = new CShellItemCollection(folder);
+                folder.m_files = new CShellItemCollection(folder);
                 manager.Add(folder);
                 
                 var relativeChildPidl = CreateValidPidl();
@@ -355,7 +355,7 @@ namespace WindowsApiLibTest
                 var child = new CShellItem();
                 child.m_Pidl = childPidl;
                 child.m_Parent = folder;
-                folder.m_Files.Add(child);
+                folder.m_files.Add(child);
 
                 var mockFactory = new MockShellItemFactory();
                 mockFactory.Pidls.Add(relativeChildPidl); // Same PIDL exists in folder

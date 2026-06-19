@@ -117,8 +117,10 @@ namespace WindowsApiLib.Shell
         internal bool m_CanLink;
         internal bool m_CanRename;
 
-        internal CShellItemCollection? m_Directories;
-        internal CShellItemCollection? m_Files;
+        internal CShellItemCollection? m_directories;
+        private readonly object m_directoriesLock = new object();
+        internal CShellItemCollection? m_files;
+        private readonly object m_filesLock = new object();
 
         internal FileAttributes m_Attributes;  // True FileAttributes from FileInfo
         internal SFGAO m_SFGAO_Attributes;
@@ -168,12 +170,6 @@ namespace WindowsApiLib.Shell
             get => m_UpdateFolder;
             set => m_UpdateFolder = value;
         }
-
-        /// <summary>
-        /// For internal use only
-        /// </summary>
-        internal CShellItemCollection FileList => m_Files;
-
 
         private int SortFlag
         {
@@ -481,19 +477,23 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-        /// For internal use only
+        /// Whether or not the child folders collection is populated.
         /// </summary>
-        public bool FoldersInitialized => (m_Directories is not null);
+        public bool FoldersInitialized => (m_directories is not null);
+
+        /// <summary>
+        /// Returns the number of Folders currently known to this instance. If not
+        /// initialized, return 0
+        /// </summary>
+        /// <returns>The number of Folders currently known to this instance. If not
+        /// initialized, return 0</returns>
+        /// <remarks>Property added 02/10/2014 to avoid UpdateRefresh</remarks>
+        public int DirCount => FoldersInitialized ? m_directories.Count : 0;
 
         /// <summary>
         /// For internal use only
         /// </summary>
-        public bool FilesInitialized => (m_Files is not null);
-
-        /// <summary>
-        /// For internal use only
-        /// </summary>
-        public CShellItemCollection DirectoryList => m_Directories; //todo: get rid of this
+        public CShellItemCollection DirectoryList => m_directories; //todo: get rid of this
 
         /// <summary>
         /// Returns an Array of CShItems containing the sub Directories of this instance.
@@ -507,27 +507,32 @@ namespace WindowsApiLib.Shell
                 {
                     return (CShellItem[])Array.CreateInstance(typeof(CShellItem), 0);
                 }
-                else if (m_Directories == null)
+                
+                if (m_directories == null)
                 {
-                    m_Directories = GetContents(SHCONTF.FOLDERS | SHCONTF.INCLUDEHIDDEN);
+                    lock (m_directoriesLock)
+                    {
+                        if (m_directories == null)
+                        {
+                            m_directories = GetContents(SHCONTF.FOLDERS | SHCONTF.INCLUDEHIDDEN);
+                        }
+                    }
                 }
                 else
                 {
                     // **********Comment by Lukai-2021.12.02, otherwise the rename function doesn't work, but after comment, it will affects tree updating, however performance is better
                     // Me.UpdateRefresh(False, True)   '6/30/2012 - Note that it is also true that in some circumstances Windows does not post a RMDIR when Folders are removed.
                 }        // 6/30/2012 - Under some circumstances, Windows does not post MKDIR msgs when Folders are created!!! Do a refresh to ensure we are up to date
-                return m_Directories.ToArray();
+                
+                return m_directories.ToArray();
             }
         }
+
         /// <summary>
-        /// Returns the number of Folders currently known to this instance. If not
-        /// initialized, return 0
+        /// Whether or not the child files collection is populated.
         /// </summary>
-        /// <returns>The number of Folders currently known to this instance. If not
-        /// initialized, return 0</returns>
-        /// <remarks>Property added 02/10/2014 to avoid UpdateRefresh</remarks>
-        public int DirCount => FoldersInitialized ? m_Directories.Count : 0;
-       
+        public bool FilesInitialized => (m_files is not null);
+
         /// <summary>
         /// Returns the number of Files currently known to this instance. If not
         /// initialized, return 0
@@ -535,59 +540,68 @@ namespace WindowsApiLib.Shell
         /// <returns>The number of Files currently known to this instance. If not
         /// initialized, return 0</returns>
         /// <remarks>Property added 02/10/2014 to avoid UpdateRefresh</remarks>
-        public int FileCount => FilesInitialized ? m_Files.Count : 0;
+        public int FileCount => FilesInitialized ? m_files.Count : 0;
 
         /// <summary>
         /// Returns an Array of CShItems containing the Files contained in this instance.
         /// </summary>
         /// <returns>Array of CShItems containing the Files contained in this instance.</returns>
-        public CShellItem[] Files
+        public CShellItem[] Files //todo: change this to a list or hugelist
         {
             get
             {
                 if (!m_IsFolder) //only folders have child elements
                 {
-                    return (CShellItem[])Array.CreateInstance(typeof(CShellItem), 0);    // mod 6/27/09
+                    return (CShellItem[])Array.CreateInstance(typeof(CShellItem), 0);
                 }
-                else if (m_Files == null)
+
+                if (m_files == null)
                 {
-                    m_Files = GetContents(SHCONTF.NONFOLDERS | SHCONTF.INCLUDEHIDDEN);
+                    lock (m_filesLock) 
+                    {
+                        if (m_files == null)
+                        {
+                            m_files = GetContents(SHCONTF.NONFOLDERS | SHCONTF.INCLUDEHIDDEN);
+                        }
+                    }
                 }
+
+                return m_files.ToArray();
+
                 //else        // 6/30/2012 - Under some circumstances, Windows does not post CREATE msgs when Files are created!!! Do a refresh to ensure we are up to date
                 //{
                 //    UpdateRefresh(true, false); //infinite loop
                 //}   // 6/30/2012 - Note that it is also true that in some circumstances Windows does not post a DELETE when Files are removed.
-                return m_Files.ToArray();
             }
         }
 
-        private Dictionary<string, CShellItem>? m_FileDic = null;
+        private Dictionary<string, CShellItem>? m_filesDic = null;
         public Dictionary<string, CShellItem> FilesDic
         {
             get
             {
-                if (!m_IsFolder) //only folders have child elements
+                if (!m_IsFolder) //only folders have child files
                 {
                     return new Dictionary<string, CShellItem>();
                 }
                 
-                var filesArray = Files; // Ensures m_Files is initialized
-                lock (m_Files.SyncRoot)
+                if (m_filesDic == null)
                 {
-                    if (m_FileDic == null)
+                    var filesArray = Files; // Ensures m_Files is initialized
+                    lock (m_filesLock)
                     {
-                        m_FileDic = new Dictionary<string, CShellItem>();
-                        foreach (var file in filesArray)
+                        if (m_filesDic == null)
                         {
-                            m_FileDic[file.DisplayName] = file;
+                            m_filesDic = filesArray.ToDictionary(o => o.DisplayName, o => o);
                         }
                     }
-                    return m_FileDic;
                 }
+
+                return m_filesDic;
             }
         }
 
-        private Dictionary<string, CShellItem>? m_DirectoriesDic = null;
+        private Dictionary<string, CShellItem>? m_directoriesDic = null;
         public Dictionary<string, CShellItem> DirectoriesDic
         {
             get
@@ -597,26 +611,26 @@ namespace WindowsApiLib.Shell
                     return new Dictionary<string, CShellItem>();
                 }
 
-                var dirsArray = Directories; // Ensures m_Directories is initialized
-                lock (m_Directories.SyncRoot)
+                if (m_directoriesDic is null)
                 {
-                    if (m_DirectoriesDic == null)
+                    var dirsArray = Directories; // Ensures m_Directories is initialized
+                    lock (m_directoriesLock)
                     {
-                        m_DirectoriesDic = new Dictionary<string, CShellItem>();
-                        foreach (var dir in dirsArray)
+                        if (m_directoriesDic == null)
                         {
-                            m_DirectoriesDic[dir.DisplayName] = dir;
+                            m_directoriesDic = dirsArray.ToDictionary(o => o.DisplayName, o => o);
                         }
                     }
-                    return m_DirectoriesDic;
                 }
+
+                return m_directoriesDic;
             }
         }
 
         internal void ClearCaches()
         {
-            m_FileDic = null;
-            m_DirectoriesDic = null;
+            m_filesDic = null;
+            m_directoriesDic = null;
             m_ChildrenDic = null;
         }
 
@@ -1262,7 +1276,7 @@ namespace WindowsApiLib.Shell
             {
                 CShellItem cItem;
                 // first processes all files in this directory
-                foreach (CShellItem currentCItem in cStart.FileList)
+                foreach (CShellItem currentCItem in cStart.m_files)
                 {
                     cItem = currentCItem;       // 7/2/2012 used Files
                     if (!cback(cItem, UserLevel, Tag))
@@ -1324,18 +1338,18 @@ namespace WindowsApiLib.Shell
                     ClearCaches();
                     if (item.IsFolder && !DirectoryList.Contains(item.PIDL))
                     { 
-                        lock (m_Directories)
+                        lock (m_directories)
                         {
-                            m_Directories.Append(item);
+                            m_directories.Append(item);
                             return;
                         }
                     }
 
-                    lock (m_Files)
+                    lock (m_files)
                     {
-                        if (!FileList.Contains(item.PIDL))
+                        if (!m_files.Contains(item.PIDL))
                         {
-                            m_Files.Add(item);
+                            m_files.Add(item);
                             return;
                         }
                     }
@@ -1361,21 +1375,21 @@ namespace WindowsApiLib.Shell
                 if (IsFolder)
                 {
                     ClearCaches();
-                    if (FoldersInitialized && m_Directories.Contains(item))
+                    if (FoldersInitialized && m_directories.Contains(item))
                     {
-                        lock (m_Directories)
+                        lock (m_directories)
                         {
                             // Debug.WriteLine("Removing " & item.Path & " From " & Me.Path)
-                            m_Directories.Remove(item);
+                            m_directories.Remove(item);
                             return true;
                         }
                     }
 
-                    if (FilesInitialized && m_Files.Contains(item))
+                    if (FilesInitialized && m_files.Contains(item))
                     {
-                        lock (m_Files)
+                        lock (m_files)
                         {
-                            m_Files.Remove(item);
+                            m_files.Remove(item);
                             return true;
                         }
                     }
@@ -1398,21 +1412,21 @@ namespace WindowsApiLib.Shell
         /// the GUI.</remarks>
         public void ClearItems(bool ClearFiles, bool ClearDirectories = false)
         {
-            lock (m_Files)
+            lock (m_files)
             {
-                if (ClearFiles && m_Files is not null)
+                if (ClearFiles && m_files is not null)
                 {
-                    m_Files.Clear();
-                    m_Files = null;
+                    m_files.Clear();
+                    m_files = null;
                 }
             }
 
-            lock (m_Directories)
+            lock (m_directories)
             {
-                if (ClearDirectories && m_Directories is not null)
+                if (ClearDirectories && m_directories is not null)
                 {
-                    m_Directories.Clear();
-                    m_Directories = null;
+                    m_directories.Clear();
+                    m_directories = null;
                 }
             }
         }
@@ -1591,9 +1605,9 @@ namespace WindowsApiLib.Shell
             Debug.WriteLine("\tCanDelete = " + CanDelete);
             if (m_IsFolder)
             {
-                if (!(m_Directories == null))
+                if (!(m_directories == null))
                 {
-                    Debug.WriteLine("\tDirectory Count = " + m_Directories.Count);
+                    Debug.WriteLine("\tDirectory Count = " + m_directories.Count);
                 }
                 else
                 {
@@ -1744,14 +1758,14 @@ namespace WindowsApiLib.Shell
             if (IsFolder)
             {
                 UpdateFolder = true;                // 05/22/2015 Where it should have always been done
-                if (m_Files is not null)
+                if (m_files is not null)
                 {
-                    foreach (CShellItem item in m_Files)
+                    foreach (CShellItem item in m_files)
                         item.UpdateFolderPidlAndPath();
                 }
-                if (m_Directories is not null)
+                if (m_directories is not null)
                 {
-                    foreach (CShellItem item in m_Directories)
+                    foreach (CShellItem item in m_directories)
                         // item.UpdateFolder = True       '05/22/2015 Relocated this
                         item.UpdateFolderPidlAndPath();
                 }
@@ -1782,14 +1796,14 @@ namespace WindowsApiLib.Shell
         public void ResetChildren()
         {
             // propogate changes to the known children
-            if (m_Files is not null)
+            if (m_files is not null)
             {
-                foreach (CShellItem item in m_Files)
+                foreach (CShellItem item in m_files)
                     item.ResetInfo();
             }
-            if (m_Directories is not null)
+            if (m_directories is not null)
             {
-                foreach (CShellItem item in m_Directories)
+                foreach (CShellItem item in m_directories)
                     item.ResetInfo();
             }
         }

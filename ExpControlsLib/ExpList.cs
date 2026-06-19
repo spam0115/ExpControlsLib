@@ -1995,7 +1995,7 @@ namespace ExpControlsLib
         /// <param name="csi">The <see cref="CShellItem"/> representing the folder to display.</param>
         /// <param name="includeFolder">True to include subdirectories in the list.</param>
         /// <param name="reload">True to force a reload even if the same item was previously selected.</param>
-        public async Task LoadDirectory(string pathName, bool includeFolder = true, bool reload = false)
+        public async Task LoadDirectoryAsync(string pathName, bool includeFolder = true, bool reload = false)
         {
             if (!reload && (_currentFolderCsi is not null && pathName == CurrentPath)) return;
 
@@ -2003,7 +2003,7 @@ namespace ExpControlsLib
             if (pathName == null) 
                 csi = null;
             else
-                csi = CShellItemFactory.Create(pathName);
+                csi = _shellController.HierachyManager.FindOrAdd(pathName);
 
             await LoadDirectoryBaseAsync(csi, includeFolder);
 
@@ -2015,9 +2015,11 @@ namespace ExpControlsLib
             if (csi is null) return;
             if (!reload && (_currentFolderCsi is not null && csi.FullPath == CurrentPath)) return;
 
-            await LoadDirectoryBaseAsync(csi, includeFolder);
+            var hierarchyCsi = _shellController.HierachyManager.FindOrAdd(csi);
 
-            CurrentFolderCsi = csi;
+            await LoadDirectoryBaseAsync(hierarchyCsi, includeFolder);
+
+            CurrentFolderCsi = hierarchyCsi;
         }
 
         /// <summary>
@@ -2027,8 +2029,11 @@ namespace ExpControlsLib
         {
             Debug.WriteLine("LoadDirectoryBaseAsync: " + csi?.FullPath);
 
-            if (csi is null) return;
-
+            if (csi is null)
+            {
+                ClearListView();
+                return;
+            }
             _displayFilesCts?.Cancel();
             _displayFilesCts = new CancellationTokenSource();
             var token = _displayFilesCts.Token;
@@ -2064,40 +2069,30 @@ namespace ExpControlsLib
 
                 if (csi == null)
                 {
-                    _listView.BeginUpdate();
-                    try
-                    {
-                        CurrentFolderCsi = null;
-                        _listViewWrapper.Clear();
-                        _listView.Tag = null;
-                    }
-                    finally
-                    {
-                        _listView.EndUpdate();
-                    }
+                    ClearListView();
+                    return;
                 }
 
                 int x = 2;
 
                 var result = await _staRunner.EnqueueWork(t =>
                 {
-                    var hierarchyCsi = _shellController.LoadFolderContents(csi, SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
-                    if (hierarchyCsi == null) return null;
+                    _shellController.LoadFolderContents(csi, SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
 
                     var dirList = new List<CShellItem>();
                     var fileList = new List<CShellItem>();
 
                     if (includeFolder)
                     {
-                        foreach (var dir in hierarchyCsi.Directories)
+                        foreach (var dir in csi.Directories)
                         {
                             if (!IsExcluded(dir)) dirList.Add(dir);
                         }
                     }
 
-                    if (!hierarchyCsi.DisplayName.Equals(CShellItemFactory.StrMyComputer))
+                    if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer))
                     {
-                        foreach (var file in hierarchyCsi.Files)
+                        foreach (var file in csi.Files)
                         {
                             if (!IsExcluded(file)) fileList.Add(file);
                         }
@@ -2134,7 +2129,7 @@ namespace ExpControlsLib
                     return new
                     {
                         Items = combined,
-                        FolderCsi = hierarchyCsi,
+                        FolderCsi = csi,
                         IsSamePath = samePath
                     };
                 }, token);
@@ -2148,7 +2143,7 @@ namespace ExpControlsLib
                     {
                         _listViewWrapper.Clear();
                         _listViewWrapper.AddRange(result.Items);
-                        _listView.Tag = _currentFolderCsi;
+                        _listView.Tag = csi;
 
                         OnScroll();
                     }
@@ -2168,6 +2163,21 @@ namespace ExpControlsLib
                 Debug.WriteLine("Error in LoadDirectoryBaseAsync: " + ex.ToString());
             }
             Debug.WriteLine("LoadDirectoryBaseAsync: done.");
+        }
+
+        private void ClearListView()
+        {
+            _listView.BeginUpdate();
+            try
+            {
+                CurrentFolderCsi = null;
+                _listViewWrapper.Clear();
+                _listView.Tag = null;
+            }
+            finally
+            {
+                _listView.EndUpdate();
+            }
         }
 
 
