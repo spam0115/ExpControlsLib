@@ -1,5 +1,6 @@
 using ExpControlsLib;
 using NUnit.Framework;
+using System.Security.Policy;
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
 
@@ -26,7 +27,7 @@ namespace ExpControlsLibTest
             TestContext.Progress.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Test Finished: {TestContext.CurrentContext.Test.Name}");
         }
 
-        private async Task WaitForCondition(Func<bool> condition, string message, int timeoutMs = 150000)
+        private async Task WaitForCondition(Func<bool> condition, string message, int timeoutMs = 15000)
         {
             var start = DateTime.Now;
             while (!condition())
@@ -63,6 +64,8 @@ namespace ExpControlsLibTest
                 Assert.Ignore($"Test path {TestPath} does not exist. Skipping test.");
                 return;
             }
+
+            bool done = false;
 
             await Runner.EnqueueWork(async () =>
             {
@@ -111,6 +114,9 @@ namespace ExpControlsLibTest
                 Assert.That(foundItem?.FullPath, Is.EqualTo(expList.CurrentFolderCsi?.FullPath).IgnoreCase,
                     "CShellItemHierachyManager.Find should return an item with the same path as ExpList.CurrentFolderCsi");
             });
+
+            await WaitForCondition(() => done == true, "test did not finish within the time limit", 30000);
+
         }
 
         /// <summary>
@@ -134,6 +140,7 @@ namespace ExpControlsLibTest
             }
 
             //var name = CShellItemFactory.GetFullPath(ShellController.Instance.HierachyManager.DesktopCSI);
+            bool done = false;
 
             await Runner.EnqueueWork(async () =>
             {
@@ -180,8 +187,13 @@ namespace ExpControlsLibTest
 
                     Assert.That(foundItem, Is.SameAs(expList.CurrentFolderCsi),
                         "CShellItemHierachyManager.Find should return the same reference as ExpList.CurrentFolderCsi");
+
+                    done = true;
                 }
             });
+
+            await WaitForCondition(() => done == true, "test did not finish within the time limit", 30000);
+
             //
         }
 
@@ -208,6 +220,8 @@ namespace ExpControlsLibTest
                 Assert.Ignore($"Test path {TestPath} does not exist. Skipping test.");
                 return;
             }
+
+            bool done = false;
 
             await Runner.EnqueueWork(async () =>
             {
@@ -245,6 +259,9 @@ namespace ExpControlsLibTest
                 Assert.That(treeItem, Is.SameAs(foundByPath),
                     "ExpTree.SelectedItem should be the same reference as HierachyManager.Find result");
             });
+
+            await WaitForCondition(() => done == true, "test did not finish within the time limit", 30000);
+
         }
     }
 }

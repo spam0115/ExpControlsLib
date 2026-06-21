@@ -769,6 +769,36 @@
             Gets or sets a collection of items (by their full path or GUID) to exclude from the list display.
             </summary>
         </member>
+        <member name="P:ExpControlsLib.ExpList.Filter">
+            <summary>
+            Gets or sets a predicate used to filter items in the list view.
+            When set, this predicate is applied automatically during directory loading (pre-load filtering)
+            and during shell notification insertions. Use <see cref="M:ExpControlsLib.ExpList.ApplyFilter"/> to re-apply the filter
+            to already-loaded items (post-load filtering).
+            Set to null to disable filtering.
+            </summary>
+            <remarks>
+            The predicate is evaluated for each item after custom column data has been fetched,
+            so column-based criteria (e.g., classification) are available for filtering.
+            </remarks>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ApplyFilter">
+            <summary>
+            Applies the current <see cref="P:ExpControlsLib.ExpList.Filter"/> predicate to the already-loaded items.
+            This is post-load filtering: it re-evaluates the filter against all items in the master list
+            and rebuilds the filtered view. Call this after filter criteria change or after new data
+            (e.g., classification scores) has been populated into the items.
+            If <see cref="P:ExpControlsLib.ExpList.Filter"/> is null, clears any active filter.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ApplyFilter(System.Func{WindowsApiLib.Shell.CShellItem,System.Boolean})">
+            <summary>
+            Applies the specified filter predicate to the already-loaded items and stores it
+            as the current <see cref="P:ExpControlsLib.ExpList.Filter"/>. This is a convenience method equivalent to
+            setting <see cref="P:ExpControlsLib.ExpList.Filter"/> and then calling <see cref="M:ExpControlsLib.ExpList.ApplyFilter"/>.
+            </summary>
+            <param name="predicate">The filter predicate to apply, or null to clear the filter.</param>
+        </member>
         <member name="P:ExpControlsLib.ExpList.VirtualMode">
             <summary>
             Gets or sets a value indicating whether the list view is in virtual mode.

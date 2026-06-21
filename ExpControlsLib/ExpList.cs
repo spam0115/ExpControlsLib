@@ -77,6 +77,7 @@ namespace ExpControlsLib
 
         private ShellController? _shellController = null;
         private HashSet<string> _excludedItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private Func<CShellItem, bool>? _filter;
         private ThumbnailImageListManager _thumbnailManager; // Manager for thumbnail display modes
         private VirtualListViewWrapper _listViewWrapper;
         private bool _initialized = false;
@@ -438,6 +439,55 @@ namespace ExpControlsLib
         {
             get => _excludedItems;
             set => _excludedItems = value ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Gets or sets a predicate used to filter items in the list view.
+        /// When set, this predicate is applied automatically during directory loading (pre-load filtering)
+        /// and during shell notification insertions. Use <see cref="ApplyFilter"/> to re-apply the filter
+        /// to already-loaded items (post-load filtering).
+        /// Set to null to disable filtering.
+        /// </summary>
+        /// <remarks>
+        /// The predicate is evaluated for each item after custom column data has been fetched,
+        /// so column-based criteria (e.g., classification) are available for filtering.
+        /// </remarks>
+        [Browsable(false)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Func<CShellItem, bool>? Filter
+        {
+            get => _filter;
+            set => _filter = value;
+        }
+
+        /// <summary>
+        /// Applies the current <see cref="Filter"/> predicate to the already-loaded items.
+        /// This is post-load filtering: it re-evaluates the filter against all items in the master list
+        /// and rebuilds the filtered view. Call this after filter criteria change or after new data
+        /// (e.g., classification scores) has been populated into the items.
+        /// If <see cref="Filter"/> is null, clears any active filter.
+        /// </summary>
+        public void ApplyFilter()
+        {
+            if (_filter == null)
+            {
+                _listViewWrapper.ClearFilter();
+                return;
+            }
+
+            _listViewWrapper.SetFilter(_filter);
+        }
+
+        /// <summary>
+        /// Applies the specified filter predicate to the already-loaded items and stores it
+        /// as the current <see cref="Filter"/>. This is a convenience method equivalent to
+        /// setting <see cref="Filter"/> and then calling <see cref="ApplyFilter()"/>.
+        /// </summary>
+        /// <param name="predicate">The filter predicate to apply, or null to clear the filter.</param>
+        public void ApplyFilter(Func<CShellItem, bool>? predicate)
+        {
+            _filter = predicate;
+            ApplyFilter();
         }
 
         /// <summary>
@@ -1673,6 +1723,7 @@ namespace ExpControlsLib
                             {
                                 if (!isTargetFolder) return;
                                 if (IsExcluded(e.Item)) return;
+                                if (_filter != null && !_filter(e.Item)) return; // pre-filter new items
 
                                 _listViewWrapper.InsertSorted(e.Item);
                                 m_CreateNew = false; //I don't think this is even used?
@@ -1741,7 +1792,7 @@ namespace ExpControlsLib
                                 if (index >= 0)
                                 {
                                     _listViewWrapper.RemoveAt(index);
-                                    if (!IsExcluded(csi))
+                                    if (!IsExcluded(csi) && (_filter == null || _filter(csi)))
                                     {
                                         _listViewWrapper.InsertSorted(csi);
                                     }
@@ -2245,6 +2296,14 @@ namespace ExpControlsLib
                     {
                         _listViewWrapper.Clear();
                         _listViewWrapper.AddRange(result.Items);
+
+                        // Apply pre-load filter if set. All items are in the master list;
+                        // the filter creates the filtered view that the ListView displays.
+                        if (_filter != null)
+                        {
+                            _listViewWrapper.SetFilter(_filter);
+                        }
+
                         _listView.Tag = csi;
 
                         OnScroll();
