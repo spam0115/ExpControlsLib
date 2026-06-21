@@ -318,11 +318,14 @@ namespace ExpControlsLib
             }
             catch (Exception ex)
             {
-#if DEBUG
-                Console.WriteLine("Error adding thumbnail: " + ex.Message);
-#endif
+                Debug.WriteLine("Error adding thumbnail: " + ex.Message);
+      
                 if (imageList != null)
+                {
+                    Debug.WriteLine("Adding imagelist to the corrupt list.");
                     _corruptImageLists.Add(imageList);
+                }
+
                 return -1;
             }
         }

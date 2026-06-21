@@ -256,6 +256,8 @@ namespace ExpControlsLib
             }
             catch (Exception ex)
             {
+                thumbnail?.Dispose();
+                thumbnail = null;
                 System.Diagnostics.Debug.WriteLine($"Error generating thumbnail for {request.Item.FullPath}: {ex}");
             }
         }
@@ -323,6 +325,38 @@ namespace ExpControlsLib
             }
         }
 
+        private MagickImage? GetMagickThumbnailFromOsCore(string? fileName, int size, Func<(int hr, IntPtr factoryPtr)> createFactory)
+        {
+            IntPtr factoryPtr = IntPtr.Zero;
+            IShellItemImageFactory? factory = null;
+
+            try
+            {
+#if DEBUG
+                Console.WriteLine("\tRequesting thumbnail from OS: " + fileName);
+#endif
+
+                var (hr, ptr) = createFactory();
+                factoryPtr = ptr;
+                if (hr != 0 || factoryPtr == IntPtr.Zero)
+                    return null;
+
+                factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(factoryPtr);
+
+                var result = GetThumbnailFromOsBaseMagick(factory, size);
+                if (result == null)
+                    Console.WriteLine("Failed to get thumbnail from OS for " + fileName);
+                else
+                    Console.WriteLine("\tSuccessfully obtained thumbnail from OS for " + fileName);
+                return result;
+            }
+            finally
+            {
+                if (factoryPtr != IntPtr.Zero) Marshal.Release(factoryPtr);
+                if (factory != null) Marshal.ReleaseComObject(factory);
+            }
+        }
+
         private MagickImage? GetMagickThumbnailFromOS(string fileName, int size)
         {
             if (string.IsNullOrWhiteSpace(fileName))
@@ -333,80 +367,30 @@ namespace ExpControlsLib
 
             if (!isFile && !isDir)
             {
-#if DEBUG
-                Console.WriteLine($"ERROR: filesystem object does not exist: '{fileName}");
-#endif
+                Debug.WriteLine($"ERROR: filesystem object does not exist: '{fileName}");
                 return null;
             }
 
-            IntPtr factoryPtr = IntPtr.Zero;
-            IShellItemImageFactory factory = null;
-            try
+            return GetMagickThumbnailFromOsCore(fileName, size, () =>
             {
-#if DEBUG
-                Console.WriteLine("\tRequesting thumbnail from OS: " + fileName);
-#endif
-
-                // Ask directly for IShellItemImageFactory
-                Guid iid = ShellAPI.IID_IShellItemImageFactory; // must be BCC18B79-BA16-442F-80C4-8A59C30C463B
-                int hr = ShellAPI.SHCreateItemFromParsingName(fileName, IntPtr.Zero, ref iid, out factoryPtr);
-                if (hr != 0 || factoryPtr == IntPtr.Zero)
-                    return null;
-
-                factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(factoryPtr);
-
-                var result = GetThumbnailFromOsBaseMagick(factory, size);
-                if (result == null)
-                {
-                    Console.WriteLine("Failed to get thumbnail from OS for " + fileName);
-                }
-                else
-                {
-                    Console.WriteLine("\tSuccessfully obtained thumbnail from OS for " + fileName);
-                }
-                return result;
-            }
-            finally
-            {
-                if (factoryPtr != IntPtr.Zero) Marshal.Release(factoryPtr);
-                if (factory != null) Marshal.ReleaseComObject(factory);
-            }
+                Guid iid = ShellAPI.IID_IShellItemImageFactory;
+                int hr = ShellAPI.SHCreateItemFromParsingName(fileName, IntPtr.Zero, ref iid, out IntPtr factoryPtr);
+                return (hr, factoryPtr);
+            });
         }
 
         private MagickImage? GetMagickThumbnailFromOS(IntPtr pidl, int size)
         {
             if (pidl == IntPtr.Zero) return null;
 
-            IntPtr shellItemImageFactory = IntPtr.Zero;
+            string? fileName = CPidl.ToString(pidl);
 
-            try
+            return GetMagickThumbnailFromOsCore(fileName, size, () =>
             {
-                string? fileName = CPidl.ToString(pidl);
-#if DEBUG
-                var length = CPidl.SegmentCount(pidl);
-                Console.WriteLine("\tRequesting thumbnail from OS: " + fileName);
-#endif
                 Guid iid = ShellAPI.IID_IShellItemImageFactory;
-                int hr = ShellAPI.SHCreateItemFromIDList(pidl, ref iid, out shellItemImageFactory);
-                if (hr != 0 || shellItemImageFactory == IntPtr.Zero) return null;
-
-                var factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(shellItemImageFactory);
-
-                var result = GetThumbnailFromOsBaseMagick(factory, size);
-                if (result == null)
-                {
-                    Console.WriteLine("Failed to get thumbnail from OS for " + fileName);
-                }
-                else
-                {
-                    Console.WriteLine("\tSuccessfully obtained thumbnail from OS for " + fileName);
-                }
-                return result;
-            }
-            finally
-            {
-                if (shellItemImageFactory != IntPtr.Zero) Marshal.Release(shellItemImageFactory);
-            }
+                int hr = ShellAPI.SHCreateItemFromIDList(pidl, ref iid, out IntPtr factoryPtr);
+                return (hr, factoryPtr);
+            });
         }
 
         private static MagickImage? GetThumbnailFromOsBaseMagick(IShellItemImageFactory factory, int size)
