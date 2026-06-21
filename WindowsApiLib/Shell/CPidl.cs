@@ -396,7 +396,17 @@ namespace WindowsApiLib
         public static bool ResolvesToSamePathOrName(IntPtr pidl1, IntPtr pidl2)
         {
             if (pidl1 == IntPtr.Zero || pidl2 == IntPtr.Zero) return false;
-            if (ILIsEqual(pidl1, pidl2)) return true;
+
+            try
+            {
+                if (ILIsEqual(pidl1, pidl2)) return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("ERROR: Exception - " + ex.ToString());
+                bool isUIThread = System.Threading.SynchronizationContext.Current is System.Windows.Forms.WindowsFormsSynchronizationContext;
+                Debug.WriteLine("\tCurrent thread is UI thread == " + isUIThread.ToString());
+            }
 
             // 1) Filesystem path compare (preferred when available)
             if (TryGetFileSystemPathFromPidl(pidl1, out var pathA) &&

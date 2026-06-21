@@ -33,9 +33,120 @@ namespace ExpControlsLib
         private int _prevSortColumn = -1;
         private bool _inSort = false;
 
+        /// <summary>
+        /// The filtered view of items. When non-null, this is what the ListView displays.
+        /// When null, the ListView displays all items from <see cref="MasterItems"/>.
+        /// </summary>
+        private List<CShellItem>? _filteredView;
+
         public readonly ListView _ListView;
-        public readonly HugeList<CShellItem> VirtualItems = new();
+        public readonly HugeList<CShellItem> MasterItems = new();
         public bool IsShuttingDown;
+
+        /// <summary>
+        /// The filtered view of items. When non-null, this is what the ListView displays.
+        /// When null, the ListView displays all items from <see cref="MasterItems"/>.
+        /// </summary>
+        public List<CShellItem>? FilteredView => _filteredView;
+
+        /// <summary>
+        /// Gets a value indicating whether a filter is currently active.
+        /// </summary>
+        public bool IsFilterActive => _filteredView != null;
+
+        /// <summary>
+        /// Gets the collection that the ListView should read from.
+        /// Returns the filtered view if active, otherwise the master list.
+        /// </summary>
+        private IEnumerable<CShellItem> ActiveView => _filteredView ?? (IEnumerable<CShellItem>)MasterItems;
+
+        /// <summary>
+        /// Gets the number of items in the active view (filtered or master).
+        /// </summary>
+        private int ActiveViewCount => _filteredView?.Count ?? MasterItems.Count;
+
+        /// <summary>
+        /// Gets the item at the specified index from the active view.
+        /// </summary>
+        private CShellItem GetItemFromActiveView(int index)
+        {
+            if (_filteredView != null)
+                return _filteredView[index];
+            return MasterItems[index];
+        }
+
+        /// <summary>
+        /// Gets the master list index for an item at the given active view index.
+        /// When no filter is active, the view index equals the master index.
+        /// </summary>
+        public int GetMasterIndexFromViewIndex(int viewIndex)
+        {
+            if (_filteredView == null) return viewIndex;
+            var item = _filteredView[viewIndex];
+            return MasterItems.IndexOf(item);
+        }
+
+        /// <summary>
+        /// Sets or replaces the active filter. Pass null to clear the filter.
+        /// Rebuilds the filtered view from the master list and updates the ListView.
+        /// </summary>
+        /// <param name="predicate">The filter predicate, or null to show all items.</param>
+        public void SetFilter(Func<CShellItem, bool>? predicate)
+        {
+            if (predicate == null)
+            {
+                ClearFilter();
+                return;
+            }
+
+            _filteredView = new List<CShellItem>();
+            foreach (var item in MasterItems)
+            {
+                if (predicate(item))
+                    _filteredView.Add(item);
+            }
+
+            ApplyViewToListView();
+        }
+
+        /// <summary>
+        /// Clears the active filter, showing all items from the master list.
+        /// </summary>
+        public void ClearFilter()
+        {
+            if (_filteredView == null) return;
+            _filteredView = null;
+            ApplyViewToListView();
+        }
+
+        /// <summary>
+        /// Rebuilds the filtered view from the master list using the current filter predicate.
+        /// Call this after modifying the master list (e.g., after column data is populated)
+        /// so the filter can re-evaluate items with the new data.
+        /// </summary>
+        /// <param name="predicate">The filter predicate to re-apply.</param>
+        public void RebuildFilter(Func<CShellItem, bool> predicate)
+        {
+            if (_filteredView == null) return; // no filter active, nothing to rebuild
+            SetFilter(predicate);
+        }
+
+        /// <summary>
+        /// Updates the ListView to reflect the current active view (filtered or master).
+        /// </summary>
+        private void ApplyViewToListView()
+        {
+            LastTopIndex = -1;
+            _itemCache.Clear();
+            RecreateIndexMapping();
+
+            if (VirtualMode)
+            {
+                _ListView.VirtualListSize = ActiveViewCount;
+            }
+
+            _ListView.Invalidate();
+        }
 
         /// <summary>
         /// Callback to create a new ListViewItem for a given CShellItem.
@@ -95,14 +206,15 @@ namespace ExpControlsLib
                 else
                 {
                     _ListView.RetrieveVirtualItem -= OnRetrieveVirtualItem;
-                    VirtualItems.Clear();
+                    MasterItems.Clear();
+                    _filteredView = null;
                     _itemCache.Clear();
                     _pathToIndex.Clear();
                 }
             }
         }
 
-        public int Count => VirtualMode ? VirtualItems.Count : _ListView.Items.Count;
+        public int Count => VirtualMode ? ActiveViewCount : _ListView.Items.Count;
 
         public int SelectedCount => _ListView.SelectedIndices.Count;
 
@@ -191,7 +303,8 @@ namespace ExpControlsLib
             {
                 _ListView.Items.Clear();
             }
-            VirtualItems.Clear();
+            MasterItems.Clear();
+            _filteredView = null;
             _itemCache.Clear();
             _pathToIndex.Clear();
             _indexPathToLvi.Clear();
@@ -209,9 +322,8 @@ namespace ExpControlsLib
             LastTopIndex = -1;
             if (VirtualMode)
             {
-                VirtualItems.AddRange(items);
-                UpdateVirtualListSize();
-                RecreateIndexMapping();
+                MasterItems.AddRange(items);
+                ApplyViewToListView();
             }
             else
             {
@@ -232,9 +344,8 @@ namespace ExpControlsLib
             LastTopIndex = -1;
             if (VirtualMode)
             {
-                VirtualItems.Add(item);
-                UpdateVirtualListSize();
-                _pathToIndex[item.FullPath] = VirtualItems.Count - 1;
+                MasterItems.Add(item);
+                ApplyViewToListView();
             }
             else
             {
@@ -270,29 +381,36 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                lock (VirtualItems)
+                int masterIndex;
+                lock (MasterItems)
                 {
-                    VirtualItems.Insert(index, item);
-                    UpdateVirtualListSize();
-
-                    // Efficiently update index mapping for the new item and shifted items
-                    for (int i = index; i < VirtualItems.Count; i++)
+                    if (_filteredView != null)
                     {
-                        _pathToIndex[VirtualItems[i].FullPath] = i;
+                        // When filtered, find the correct position in the master list
+                        // by locating where the adjacent filtered items sit in the master.
+                        masterIndex = FindMasterInsertionPointForFiltered(item, index);
+                        MasterItems.Insert(masterIndex, item);
+                    }
+                    else
+                    {
+                        masterIndex = index;
+                        MasterItems.Insert(index, item);
                     }
 
-                    // Shift cache to reuse existing ListViewItem objects
-                    ShiftCacheAfterInsertion(index);
+                    ShiftCacheAfterInsertion(masterIndex);
                 }
 
+                ApplyViewToListView();
+
                 // Determine if we need to redraw visible items
+                int viewIndex = index; // For filtered view, this is the position in the rebuilt view
                 int top = GetTopIndex();
                 int visibleCount = GetApproxVisibleCount();
                 int lastVisible = top + visibleCount;
 
                 // Only redraw if the insertion affects currently visible items or items that shift into view
-                int startRedraw = Math.Max(index, Math.Max(0, top));
-                int endRedraw = Math.Min(lastVisible, (int)VirtualItems.Count - 1);
+                int startRedraw = Math.Max(viewIndex, Math.Max(0, top));
+                int endRedraw = Math.Min(lastVisible, ActiveViewCount - 1);
 
                 if (startRedraw <= endRedraw)
                 {
@@ -337,32 +455,29 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                lock (VirtualItems)
+                int masterIndex;
+                CShellItem item;
+                lock (MasterItems)
                 {
-                    var item = VirtualItems[index];
-                    VirtualItems.RemoveAt(index);
-                    UpdateVirtualListSize();
+                    item = GetItemFromActiveView(index);
+                    masterIndex = MasterItems.IndexOf(item);
+                    if (masterIndex < 0) return;
 
-                    // Efficiently update index mapping for shifted items
-                    _pathToIndex.Remove(item.FullPath);
-                    for (int i = index; i < VirtualItems.Count; i++)
-                    {
-                        _pathToIndex[VirtualItems[i].FullPath] = i;
-                    }
+                    MasterItems.RemoveAt(masterIndex);
 
-                    // Shift cache to reuse existing ListViewItem objects
-                    ShiftCacheAfterRemoval(index);
+                    ShiftCacheAfterRemoval(masterIndex);
                 }
 
+                ApplyViewToListView();
+
                 // Reset viewport cache and determine if we need to redraw
-                LastTopIndex = -1;
                 int top = GetTopIndex();
                 int visibleCount = GetApproxVisibleCount();
                 int lastVisible = top + visibleCount;
 
                 // Only redraw if the removal affects currently visible items or items that shift into view
                 int startRedraw = Math.Max(index, top);
-                int endRedraw = Math.Min(lastVisible, (int)VirtualItems.Count - 1);
+                int endRedraw = Math.Min(lastVisible, ActiveViewCount - 1);
 
                 if (startRedraw <= endRedraw)
                 {
@@ -414,11 +529,11 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                lock (VirtualItems)
+                lock (MasterItems)
                 {
-                    // Rebuild virtual items list in one pass
-                    var remaining = new List<CShellItem>(VirtualItems.Count);
-                    foreach (var item in VirtualItems)
+                    // Rebuild master list in one pass, removing matched items
+                    var remaining = new List<CShellItem>(MasterItems.Count);
+                    foreach (var item in MasterItems)
                     {
                         if (!toRemove.Contains(item))
                         {
@@ -430,22 +545,14 @@ namespace ExpControlsLib
                         }
                     }
 
-                    VirtualItems.Clear();
-                    VirtualItems.AddRange(remaining);
-                    UpdateVirtualListSize();
-
-                    // Rebuild path index
-                    _pathToIndex.Clear();
-                    for (int i = 0; i < VirtualItems.Count; i++)
-                    {
-                        _pathToIndex[VirtualItems[i].FullPath] = i;
-                    }
+                    MasterItems.Clear();
+                    MasterItems.AddRange(remaining);
 
                     // For large batches, it's safer and often faster to just clear the cache
                     _itemCache.Clear();
                 }
 
-                LastTopIndex = -1;
+                ApplyViewToListView();
                 _ListView.Invalidate();
             }
             else
@@ -476,8 +583,8 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                if (index >= 0 && index < VirtualItems.Count)
-                    return VirtualItems[index];
+                if (index >= 0 && index < ActiveViewCount)
+                    return GetItemFromActiveView(index);
             }
             else
             {
@@ -740,7 +847,7 @@ namespace ExpControlsLib
             {
                 if (!VirtualMode) return;
 
-                foreach (var item in VirtualItems)
+                foreach (var item in ActiveView)
                 {
                     if (item != null) item.ImageIndex = -1;
                 }
@@ -799,9 +906,9 @@ namespace ExpControlsLib
 
         public ListViewItem GetLviFromVirtual(int index)
         {
-            if (index < 0 || index >= VirtualItems.Count) return null;
+            if (index < 0 || index >= ActiveViewCount) return null;
 
-            var item = VirtualItems[index];
+            var item = GetItemFromActiveView(index);
 
             if (item.NeedsRefresh) //item has been updated in the background and needs to be recreated as a new ListViewItem to reflect changes
             {
@@ -860,15 +967,17 @@ namespace ExpControlsLib
 
         private void UpdateVirtualListSize()
         {
-            _ListView.VirtualListSize = VirtualItems.Count;
+            _ListView.VirtualListSize = ActiveViewCount;
         }
 
         private void RecreateIndexMapping()
         {
             _pathToIndex.Clear();
-            for (int i = 0; i < VirtualItems.Count; i++)
+            int i = 0;
+            foreach (var item in ActiveView)
             {
-                _pathToIndex[VirtualItems[i].FullPath] = i;
+                _pathToIndex[item.FullPath] = i;
+                i++;
             }
         }
 
@@ -932,42 +1041,51 @@ namespace ExpControlsLib
 
         private void SortVirtualItems(int column, SortOrder order)
         {
-            if (order == SortOrder.None || VirtualItems.Count == 0) return;
+            if (order == SortOrder.None || ActiveViewCount == 0) return;
 
             if (column < 0 || column >= _ListView.Columns.Count) return;
             var colHeader = _ListView.Columns[column];
             var secondaryComparer = GetSecondaryComparer(column);
             var comparer = new CShellItemComparer(_expList, column, order, colHeader, secondaryComparer);
 
-            // Copy to a List for sorting because HugeList (B-Tree) sort is impractical in-place
-            var list = new List<CShellItem>((int)VirtualItems.Count);
-            foreach (var item in VirtualItems)
+            if (_filteredView != null)
             {
-                list.Add(item);
+                // Sort the filtered view directly
+                _filteredView.Sort(comparer);
             }
+            else
+            {
+                // Sort the master list: copy to List for sorting because HugeList (B-Tree) sort is impractical in-place
+                var list = new List<CShellItem>((int)MasterItems.Count);
+                foreach (var item in MasterItems)
+                {
+                    list.Add(item);
+                }
 
-            list.Sort(comparer);
+                list.Sort(comparer);
 
-            _ListView.BeginUpdate();
-            VirtualItems.Clear();
-            VirtualItems.AddRange(list);
+                _ListView.BeginUpdate();
+                MasterItems.Clear();
+                MasterItems.AddRange(list);
+                _ListView.EndUpdate();
+            }
 
             RecreateIndexMapping();
             _itemCache.Clear();
-            _ListView.EndUpdate();
             _ListView.Refresh();
         }
 
         /// <summary>
         /// Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
         /// Returns the index where the item should be inserted to maintain sorted order.
+        /// When a filter is active, returns the index within the filtered view.
         /// </summary>
         /// <param name="item">The item to find an insertion point for</param>
-        /// <returns>The index where the item should be inserted</returns>
+        /// <returns>The index where the item should be inserted in the active view</returns>
         public int FindInsertionPoint(CShellItem item)
         {
             if (_sortOrder == SortOrder.None || _sortColumn < 0 || _sortColumn >= _ListView.Columns.Count)
-                return Count;
+                return ActiveViewCount;
 
             var colHeader = _ListView.Columns[_sortColumn];
             var secondaryComparer = GetSecondaryComparer(_sortColumn);
@@ -975,8 +1093,31 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                long result = VirtualItems.BinarySearch(0, VirtualItems.Count, item, comparer);
-                return (int)(result < 0 ? ~result : result);
+                if (_filteredView != null)
+                {
+                    // Binary search on the filtered list (it's a regular List<CShellItem>)
+                    int low = 0;
+                    int high = _filteredView.Count - 1;
+
+                    while (low <= high)
+                    {
+                        int mid = low + ((high - low) / 2);
+                        int compareResult = comparer.Compare(item, _filteredView[mid]);
+
+                        if (compareResult == 0)
+                            return mid;
+                        else if (compareResult < 0)
+                            high = mid - 1;
+                        else
+                            low = mid + 1;
+                    }
+                    return low;
+                }
+                else
+                {
+                    long result = MasterItems.BinarySearch(0, MasterItems.Count, item, comparer);
+                    return (int)(result < 0 ? ~result : result);
+                }
             }
             else
             {
@@ -998,6 +1139,40 @@ namespace ExpControlsLib
                         low = mid + 1;
                 }
                 return low;
+            }
+        }
+
+        /// <summary>
+        /// Finds the correct insertion index in the master list for a new item, given its
+        /// position within the filtered view. Uses the filtered view's sorted order to determine
+        /// where the item belongs relative to the master list's existing items.
+        /// </summary>
+        /// <param name="item">The item to insert.</param>
+        /// <param name="filteredInsertIndex">The index in the filtered view where the item would be inserted.</param>
+        /// <returns>The index in the master list where the item should be inserted.</returns>
+        private int FindMasterInsertionPointForFiltered(CShellItem item, int filteredInsertIndex)
+        {
+            // If inserting at the start of the filtered view, find the master index of the first filtered item
+            // and insert before it. If inserting at the end, find the master index of the last filtered item
+            // and insert after it. Otherwise, insert at the master index of the adjacent filtered item.
+            if (_filteredView == null || _filteredView.Count == 0)
+            {
+                return MasterItems.Count;
+            }
+
+            if (filteredInsertIndex >= _filteredView.Count)
+            {
+                // Inserting after the last filtered item
+                var lastFiltered = _filteredView[_filteredView.Count - 1];
+                int masterIdx = MasterItems.IndexOf(lastFiltered);
+                return masterIdx >= 0 ? masterIdx + 1 : MasterItems.Count;
+            }
+            else
+            {
+                // Inserting before the item at filteredInsertIndex
+                var nextFiltered = _filteredView[filteredInsertIndex];
+                int masterIdx = MasterItems.IndexOf(nextFiltered);
+                return masterIdx >= 0 ? masterIdx : MasterItems.Count;
             }
         }
 

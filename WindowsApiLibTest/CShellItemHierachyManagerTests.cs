@@ -220,7 +220,7 @@ namespace WindowsApiLibTest
 
                 var drives = manager.Root.Directories;
                 Assert.IsNotNull(drives, "Desktop should have child directories");
-                Assert.IsTrue(drives.Length > 0, "Desktop should have at least one child (DRIVES)");
+                Assert.IsTrue(drives.Count > 0, "Desktop should have at least one child (DRIVES)");
 
                 var myComputer = drives.FirstOrDefault(d => d.DisplayName.Contains("My Computer"));
                 Assert.IsNotNull(myComputer, "My Computer (DRIVES) should exist under Desktop");

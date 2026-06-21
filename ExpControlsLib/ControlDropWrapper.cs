@@ -52,11 +52,9 @@ namespace ExpControlsLib
                 throw new ArgumentException("Not for use on " + Ctl.GetType().Name);
             }
 
-            // Ensure FolderList and FileList is initialized 
-            if (!m_DirCSI.FoldersInitialized)
-                m_DirCSI.GetDirectories();
-            if (!m_DirCSI.FilesInitialized)
-                m_DirCSI.GetFiles();
+            // Ensure FolderList and FileList is initialized //does doing this even matter?
+            //_ = m_DirCSI.Directories; 
+            //_ = m_DirCSI.Files;
 
             m_FullPath = FullPath;
             m_Owner = Ctl;
@@ -110,11 +108,11 @@ namespace ExpControlsLib
 
         #region    Public Properties
         /// <summary>
-    /// Contains the Full Path of the Folder associated with this Control
-    /// </summary>
-    /// <returns>The Full Path of the Folder associated with this Control</returns>
-    /// <remarks>Setting this Property to another valid Path will release all references to the previous Folder (if any) and
-    ///          associate this instance with the new Folder.</remarks>
+        /// Contains the Full Path of the Folder associated with this Control
+        /// </summary>
+        /// <returns>The Full Path of the Folder associated with this Control</returns>
+        /// <remarks>Setting this Property to another valid Path will release all references to the previous Folder (if any) and
+        ///          associate this instance with the new Folder.</remarks>
         public string FullPath
         {
             get
@@ -135,11 +133,9 @@ namespace ExpControlsLib
                 m_Target = m_DirCSI.GetDropTargetOf(m_Owner);
                 m_FullPath = value;
 
-                // Ensure FolderList and FileList is initialized 
-                if (!m_DirCSI.FoldersInitialized)
-                    m_DirCSI.GetDirectories();
-                if (!m_DirCSI.FilesInitialized)
-                    m_DirCSI.GetFiles();
+                // Ensure FolderList and FileList is initialized //seems unneccessary
+                //_ = m_DirCSI.Directories;
+                //_ = m_DirCSI.Files;
             }
         }
 

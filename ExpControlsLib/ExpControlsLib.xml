@@ -875,11 +875,18 @@
             </summary>
             <param name="m">The Windows <see cref="T:System.Windows.Forms.Message"/> to process.</param>
         </member>
+        <member name="M:ExpControlsLib.ExpList.DeleteSelectedItems">
+            <summary>
+            Deletes the currently selected items via the shell and updates the UI.
+            This is the shared implementation used by both keyboard Delete and context menu Delete.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ExpList.ExecuteShellCommand(System.String)">
             <summary>
-            Invokes a standard shell action (cut, copy, paste, delete) on the selected items.
+            Invokes a standard shell action (cut, copy, paste) on the selected items.
+            For delete operations, use <see cref="M:ExpControlsLib.ExpList.DeleteSelectedItems"/> instead.
             </summary>
-            <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
+            <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste").</param>
         </member>
         <member name="M:ExpControlsLib.ExpList.InvokeMenuCommand(System.String,System.IntPtr,System.Collections.Generic.List{System.IntPtr})">
             <summary>
@@ -1693,7 +1700,7 @@
             </summary>
             <param name="newVal">The new <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value that was applied.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.BuildTree(WindowsApiLib.Shell.CShellItem[])">
+        <member name="M:ExpControlsLib.ExpTree.BuildTree(System.Collections.Generic.IEnumerable{WindowsApiLib.Shell.CShellItem})">
             <summary>
             Populates the root TreeNode's <see cref="P:System.Windows.Forms.TreeNode.Nodes"/> collection from the
             sorted array of first-level child <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders.
@@ -2661,6 +2668,70 @@
             Note: This can only be used in non-virtual mode beucase in virtual mode ListViewItems do not persist.
             </summary>
         </member>
+        <member name="F:ExpControlsLib.VirtualListViewWrapper._filteredView">
+            <summary>
+            The filtered view of items. When non-null, this is what the ListView displays.
+            When null, the ListView displays all items from <see cref="F:ExpControlsLib.VirtualListViewWrapper.MasterItems"/>.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.FilteredView">
+            <summary>
+            The filtered view of items. When non-null, this is what the ListView displays.
+            When null, the ListView displays all items from <see cref="F:ExpControlsLib.VirtualListViewWrapper.MasterItems"/>.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.IsFilterActive">
+            <summary>
+            Gets a value indicating whether a filter is currently active.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.ActiveView">
+            <summary>
+            Gets the collection that the ListView should read from.
+            Returns the filtered view if active, otherwise the master list.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.ActiveViewCount">
+            <summary>
+            Gets the number of items in the active view (filtered or master).
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.GetItemFromActiveView(System.Int32)">
+            <summary>
+            Gets the item at the specified index from the active view.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.GetMasterIndexFromViewIndex(System.Int32)">
+            <summary>
+            Gets the master list index for an item at the given active view index.
+            When no filter is active, the view index equals the master index.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.SetFilter(System.Func{WindowsApiLib.Shell.CShellItem,System.Boolean})">
+            <summary>
+            Sets or replaces the active filter. Pass null to clear the filter.
+            Rebuilds the filtered view from the master list and updates the ListView.
+            </summary>
+            <param name="predicate">The filter predicate, or null to show all items.</param>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.ClearFilter">
+            <summary>
+            Clears the active filter, showing all items from the master list.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.RebuildFilter(System.Func{WindowsApiLib.Shell.CShellItem,System.Boolean})">
+            <summary>
+            Rebuilds the filtered view from the master list using the current filter predicate.
+            Call this after modifying the master list (e.g., after column data is populated)
+            so the filter can re-evaluate items with the new data.
+            </summary>
+            <param name="predicate">The filter predicate to re-apply.</param>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.ApplyViewToListView">
+            <summary>
+            Updates the ListView to reflect the current active view (filtered or master).
+            </summary>
+        </member>
         <member name="P:ExpControlsLib.VirtualListViewWrapper.CreateListviewItemCallback">
             <summary>
             Callback to create a new ListViewItem for a given CShellItem.
@@ -2746,9 +2817,20 @@
             <summary>
             Finds the insertion point for a new item in a sorted HugeList using the built-in BinarySearch method.
             Returns the index where the item should be inserted to maintain sorted order.
+            When a filter is active, returns the index within the filtered view.
             </summary>
             <param name="item">The item to find an insertion point for</param>
-            <returns>The index where the item should be inserted</returns>
+            <returns>The index where the item should be inserted in the active view</returns>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.FindMasterInsertionPointForFiltered(WindowsApiLib.Shell.CShellItem,System.Int32)">
+            <summary>
+            Finds the correct insertion index in the master list for a new item, given its
+            position within the filtered view. Uses the filtered view's sorted order to determine
+            where the item belongs relative to the master list's existing items.
+            </summary>
+            <param name="item">The item to insert.</param>
+            <param name="filteredInsertIndex">The index in the filtered view where the item would be inserted.</param>
+            <returns>The index in the master list where the item should be inserted.</returns>
         </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.IsThumbnailViewMode">
             <summary>

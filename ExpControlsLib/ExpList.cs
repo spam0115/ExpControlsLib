@@ -818,14 +818,163 @@ namespace ExpControlsLib
 
 
         /// <summary>
-        /// Invokes a standard shell action (cut, copy, paste, delete) on the selected items.
+        /// Deletes the currently selected items via the shell and updates the UI.
+        /// This is the shared implementation used by both keyboard Delete and context menu Delete.
         /// </summary>
-        /// <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste", "delete").</param>
+        public void DeleteSelectedItems()
+        {
+            Debug.WriteLine("ExpList: DeleteSelectedItems Begin");
+            try
+            {
+                if (_currentFolderCsi == null || !_currentFolderCsi.IsFolder)
+                    return;
+
+                if (SelectedCount <= 0) return;
+
+                CShellItem[] selectedItems;
+                IShellFolder? folder;
+                List<IntPtr> pidls;
+
+                try
+                {
+                    folder = _currentFolderCsi.GetIShellFolder();
+                    if (folder == null)
+                    {
+                        Debug.WriteLine("Failed to get folder interface for delete operation");
+                        MessageBox.Show("Cannot delete: folder interface is unavailable.", "Error",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    if (VirtualMode)
+                        selectedItems = SelectedCShellItems.ToArray();
+                    else
+                        selectedItems = _listView?.SelectedItems?.Cast<ListViewItem>()?.Select(item => item.Tag as CShellItem)?.ToArray() ?? new CShellItem[0];
+
+                    pidls = new List<IntPtr>(selectedItems.Length);
+
+                    for (int i = 0; i < selectedItems.Length; i++)
+                    {
+                        var sel = selectedItems[i];
+                        if (sel == null)
+                        {
+                            Debug.WriteLine($"Selected item {i} is null");
+                            continue;
+                        }
+
+                        if (!sel.CanDelete)
+                        {
+                            MessageBox.Show($"Cannot delete: {sel.DisplayName}", "Cannot Delete",
+                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            continue;
+                        }
+
+                        IntPtr pidl = sel.LastPIDL;
+                        if (pidl == IntPtr.Zero)
+                        {
+                            Debug.WriteLine($"Failed to get PIDL for item: {sel.DisplayName}");
+                            MessageBox.Show($"Failed to get ID for item: {sel.DisplayName}", "Error",
+                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            continue;
+                        }
+
+                        pidls.Add(CPidl.Copy(pidl));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error preparing delete operation: {ex.Message}");
+                    MessageBox.Show($"Error preparing delete: {ex.Message}", "Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                if (pidls.Count == 0)
+                {
+                    Debug.WriteLine("No items to delete");
+                    return;
+                }
+
+                int topItemIndex = -1;
+                int[] deletedIndices = Array.Empty<int>();
+                bool hasItems = VirtualMode ? _listView.VirtualListSize > 0 : _listView.Items.Count > 0;
+                if (hasItems)
+                {
+                    topItemIndex = _listViewWrapper.GetTopIndex();
+                    deletedIndices = _listView.SelectedIndices.Cast<int>().ToArray();
+                    _listView.SelectedIndices.Clear();
+                    if (!VirtualMode)
+                        _listView.SelectedItems.Clear();
+                }
+
+                var capturedParentPidl = _currentFolderCsi.PIDL;
+                _staRunner.EnqueueWork(InvokeMenuCommand("delete", capturedParentPidl, pidls));
+
+                if (hasItems)
+                {
+                    try
+                    {
+                        _shellController.HierachyManager.RemoveRange(selectedItems, raiseEvents: false);
+                        _listViewWrapper.RemoveItems(selectedItems);
+
+                        if (selectedItems.Length > _listViewWrapper.GetApproxVisibleCount())
+                            OnScroll();
+
+                        if (_currentFolderCsi != null)
+                        {
+                            string path = _currentFolderCsi.FullPath.StartsWith(":")
+                                ? _currentFolderCsi.DisplayName
+                                : _currentFolderCsi.FullPath;
+                            ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
+                        }
+
+                        ExpListDeleted?.Invoke(this, new ExpListDeletedEventArgs(selectedItems, deletedIndices));
+                    }
+                    finally
+                    {
+                    }
+                }
+
+                if (topItemIndex >= 0)
+                {
+                    int count = VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+                    if (topItemIndex < count)
+                    {
+                        if (VirtualMode)
+                            _listView.EnsureVisible(topItemIndex);
+                        else
+                            _listView.Items[topItemIndex].EnsureVisible();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Unexpected error in DeleteSelectedItems: {ex.Message}");
+                MessageBox.Show($"Unexpected error: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: DeleteSelectedItems End");
+            }
+        }
+
+        /// <summary>
+        /// Invokes a standard shell action (cut, copy, paste) on the selected items.
+        /// For delete operations, use <see cref="DeleteSelectedItems"/> instead.
+        /// </summary>
+        /// <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste").</param>
         public void ExecuteShellCommand(string cmd)
         {
             Debug.WriteLine("ExpList: ExecuteShellCommand Begin");
             try
             {
+                if (cmd == "delete")
+                {
+                    DeleteSelectedItems();
+                    return;
+                }
+
                 // Validate preconditions
                 if (_currentFolderCsi == null || !_currentFolderCsi.IsFolder)
                 {
@@ -870,7 +1019,7 @@ namespace ExpControlsLib
                         return;
                     }
                 }
-                else // Handle cut, copy, delete operations
+                else // Handle cut, copy operations
                 {
                     if (SelectedCount <= 0) return;
 
@@ -887,7 +1036,7 @@ namespace ExpControlsLib
 
                         if (VirtualMode)
                         {
-                            selectedItems = SelectedCShellItems.ToArray(); //materialize selection to array for consistent processing
+                            selectedItems = SelectedCShellItems.ToArray();
                         }
                         else
                         {
@@ -902,14 +1051,6 @@ namespace ExpControlsLib
                             if (sel == null)
                             {
                                 Debug.WriteLine($"Selected item {i} is null");
-                                continue;
-                            }
-
-                            // For delete operations, validate that item can be deleted
-                            if (cmd == "delete" && !sel.CanDelete)
-                            {
-                                MessageBox.Show($"Cannot delete: {sel.DisplayName}", "Cannot Delete",
-                                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
                                 continue;
                             }
 
@@ -941,74 +1082,13 @@ namespace ExpControlsLib
                     return;
                 }
 
-                int topItemIndex = -1;
-                int[] deletedIndices = Array.Empty<int>();
-                bool hasItems = VirtualMode ? _listView.VirtualListSize > 0 : _listView.Items.Count > 0;
-                if (cmd == "delete" && hasItems)
-                { //prevent null references from invalid selections that are about to be deleted
-                    topItemIndex = _listViewWrapper.GetTopIndex();
-                    deletedIndices = _listView.SelectedIndices.Cast<int>().ToArray();
-                    _listView.SelectedIndices.Clear();
-                    if (!VirtualMode)
-                    {
-                        _listView.SelectedItems.Clear();
-                    }
-                }
-
                 // Capture for background thread
                 var capturedParentPidl = _currentFolderCsi.PIDL;
                 var capturedRelPidls = pidls;
 
                 // Offload shell interaction to background STA thread. 
                 // Binding MUST happen on this thread to avoid marshaling back to UI thread.
-                var task = _staRunner.EnqueueWork(InvokeMenuCommand(cmd, capturedParentPidl, capturedRelPidls));
-
-                if (cmd == "delete" && hasItems)
-                {
-                    try
-                    {
-                        // Batch remove from hierarchy (suppress individual events)
-                        _shellController.HierachyManager.RemoveRange(selectedItems, raiseEvents: false);
-
-                        // Batch remove from list view wrapper
-                        _listViewWrapper.RemoveItems(selectedItems);
-
-                        if (selectedItems.Length > this._listViewWrapper.GetApproxVisibleCount())
-                            OnScroll(); //to fetch thumbnails for new items that have come into view after the batch removal
-
-                        // Fire single update event for the folder
-                        if (_currentFolderCsi != null)
-                        {
-                            string path = _currentFolderCsi.FullPath.StartsWith(":")
-                                ? _currentFolderCsi.DisplayName
-                                : _currentFolderCsi.FullPath;
-                            ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
-                        }
-
-                        ExpListDeleted?.Invoke(this, new ExpListDeletedEventArgs(selectedItems, deletedIndices));
-                    }
-                    finally
-                    {
-                    }
-                }
-
-                if (topItemIndex >= 0)
-                {
-                    int count = VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
-                    if (topItemIndex < count)
-                    {
-                        if (VirtualMode)
-                            _listView.EnsureVisible(topItemIndex);
-                        else
-                            _listView.Items[topItemIndex].EnsureVisible();
-                    }
-                }
-
-                //var invokeHR = await task;
-                //if (invokeHR != S_OK && invokeHR != -1)
-                //{
-                //    Debug.WriteLine($"InvokeCommand failed: HRESULT=0x{invokeHR:X8}, cmd='{cmd}'");
-                //}
+                _staRunner.EnqueueWork(InvokeMenuCommand(cmd, capturedParentPidl, capturedRelPidls));
             }
             catch (Exception ex)
             {
@@ -1959,7 +2039,7 @@ namespace ExpControlsLib
             // Invalidate cached data in shell items
             if (VirtualMode)
             {
-                foreach (var item in _listViewWrapper.VirtualItems)
+                foreach (var item in _listViewWrapper.MasterItems)
                 {
                     item.ColumnDic.Clear();
                     item.ResetInfo();
@@ -3027,7 +3107,7 @@ namespace ExpControlsLib
 
                 if (VirtualMode)
                 {
-                    lock (_listViewWrapper.VirtualItems)
+                    lock (_listViewWrapper.MasterItems)
                     {
                         int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
                         if (index == -1)
@@ -3150,6 +3230,10 @@ namespace ExpControlsLib
                                 {
                                     _listView.LabelEdit = true;
                                     tn.BeginEdit();
+                                }
+                                else if (cmdName.Equals("delete"))
+                                {
+                                    DeleteSelectedItems();
                                 }
                                 else
                                 {
@@ -3395,7 +3479,7 @@ namespace ExpControlsLib
                 }
                 else if (e.KeyCode == Keys.Delete)
                 {
-                    ExecuteShellCommand("delete");
+                    DeleteSelectedItems();
                 }
 
                 OnKeyUp(e);

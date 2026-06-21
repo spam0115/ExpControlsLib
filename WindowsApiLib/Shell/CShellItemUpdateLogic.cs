@@ -157,8 +157,8 @@ namespace WindowsApiLib.Shell
                                     if (parentItem.m_files != null)
                                         childItem = parentItem.m_files[relPidl];
 
-                                    if (childItem == null && parentItem.DirectoryList != null)
-                                        childItem = parentItem.DirectoryList[relPidl];
+                                    if (childItem == null && parentItem.DirectoriesCollection != null)
+                                        childItem = parentItem.DirectoriesCollection[relPidl];
 
                                     if (childItem != null)
                                     {
@@ -269,7 +269,7 @@ namespace WindowsApiLib.Shell
                                     Debug.WriteLine("  [MKDIR] Parent found: " + parentItem.ItemPath);
                                     if (parentItem.FoldersInitialized)
                                     {
-                                        if (!parentItem.DirectoryList.Contains(shNotify.dwItem1))
+                                        if (!parentItem.DirectoriesCollection.Contains(shNotify.dwItem1))
                                         {
                                             Debug.WriteLine("  [MKDIR] Parent folders initialized and NOT in list. Adding.");
                                             var newItem = _shellItemFactory.Create(shNotify.dwItem1, parentItem);
@@ -337,9 +337,9 @@ namespace WindowsApiLib.Shell
                                 if (parentItem is not null)
                                 {
                                     Debug.WriteLine("  [RMDIR] Parent found: " + parentItem.ItemPath);
-                                    if (parentItem.DirectoryList is not null)
+                                    if (parentItem.DirectoriesCollection is not null)
                                     {
-                                        CShellItem? itemToRemove = parentItem.DirectoryList[shNotify.dwItem1];
+                                        CShellItem? itemToRemove = parentItem.DirectoriesCollection[shNotify.dwItem1];
                                         if (itemToRemove != null)
                                         {
                                             Debug.WriteLine("  [RMDIR] Found item in DirectoryList. Removing: " + itemToRemove.ItemPath);
@@ -769,7 +769,7 @@ namespace WindowsApiLib.Shell
                 {
                     lock (parent)
                     {
-                        if (!parent.DirectoryList.Contains(item.PIDL))
+                        if (!parent.DirectoriesCollection.Contains(item.PIDL))
                         {
                             parent.m_directories.Append(item);
                             changed = true;

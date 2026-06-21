@@ -108,9 +108,9 @@ namespace WindowsApiLib.Shell
             if (rootItem.FullPath == pidlAndName.Name)
                 return rootItem;
 
-            if (rootItem.DirectoryList is not null) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
+            if (rootItem.DirectoriesCollection is not null) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
             {
-                foreach (CShellItem childDir in rootItem.DirectoryList)
+                foreach (CShellItem childDir in rootItem.DirectoriesCollection)
                 {
                     if (childDir.FullPath == pidlAndName.Name)
                         return childDir;

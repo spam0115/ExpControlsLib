@@ -117,9 +117,9 @@ namespace WindowsApiLibTest
 
                 controller.LoadFolderContents(myComputer, SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
 
-                if (myComputer.DirectoryList != null)
+                if (myComputer.DirectoriesCollection != null)
                 {
-                    foreach (CShellItem item in myComputer.DirectoryList)
+                    foreach (CShellItem item in myComputer.DirectoriesCollection)
                     {
                         Assert.IsTrue(item.IsFolder, "All items in DirectoryList should be folders.");
                     }

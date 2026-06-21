@@ -1192,9 +1192,8 @@ namespace ExpControlsLib
         /// <param name="L1">
         /// The array of first-level child <see cref="CShellItem"/> folders to add as root children.
         /// </param>
-        private void BuildTree(CShellItem[] L1)
+        private void BuildTree(IEnumerable<CShellItem> L1)
         {
-            Array.Sort(L1); //todo: move further up the call stack
             foreach (var CSI in L1)
             {
                 if (!(CSI.IsHidden & !m_showHiddenFolders) && !IsExcluded(CSI))
@@ -2119,15 +2118,8 @@ namespace ExpControlsLib
                 csi = target;
             }
 
-            List<CShellItem> D;
-            if (csi.DirectoryList is null)
-            {
-                D = new List<CShellItem>(csi.Directories);
-            }
-            else
-            {
-                D = new List<CShellItem>(csi.DirectoryList);
-            }
+            var D = csi.Directories;
+
             if (D.Count > 0)
             {
                 D.Sort();
@@ -2212,6 +2204,7 @@ namespace ExpControlsLib
                 {
                     ClearTree();
                     _Root = new TreeNode(result.DisplayName);
+                    result.Children.Sort();
                     BuildTree(result.Children);
                     _Root.ImageIndex = result.IconIndex;
                     _Root.SelectedImageIndex = result.IconIndex;
@@ -2284,14 +2277,14 @@ namespace ExpControlsLib
 
                 if (result == null) return;
 
+                var children = result.Children;
+                children.Sort();
+
                 _TreeView.BeginUpdate();
                 try
                 {
                     if (result.Target != null) NodeToFill.Tag = result.Target;
                     NodeToFill.Nodes.Clear();
-
-                    var children = result.Children;
-                    Array.Sort(children);
 
                     foreach (CShellItem child in children)
                     {

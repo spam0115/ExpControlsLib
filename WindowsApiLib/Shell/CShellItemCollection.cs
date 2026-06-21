@@ -12,8 +12,7 @@ namespace WindowsApiLib.Shell
     public class CShellItemCollection : IEnumerable<CShellItem>, ICollection
     {
         private readonly CShellItem m_parent; //needed to set parent values
-        private readonly List<CShellItem> m_items;
-        private readonly object m_syncRoot = new object();
+        private readonly List<CShellItem> m_items; //todo: maybe change this to HugeList ?
 
         /// <summary>
         /// A collection of CShellItems releted to a given parent
@@ -37,7 +36,7 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                return m_syncRoot;
+                return m_items;
             }
         }
 
@@ -55,7 +54,7 @@ namespace WindowsApiLib.Shell
 
         public void Sort()
         {
-            lock (m_syncRoot)
+            lock (m_items)
                 m_items.Sort();
         }
 
@@ -65,7 +64,7 @@ namespace WindowsApiLib.Shell
             {
                 value.SetParent(m_parent);
             }
-            lock (m_syncRoot)
+            lock (m_items)
             {
                 m_items.Add(value);
                 return m_items.Count - 1;
@@ -74,13 +73,13 @@ namespace WindowsApiLib.Shell
 
         internal void AddRange(IEnumerable<CShellItem> value)
         {
-            lock (m_syncRoot)
+            lock (m_items)
                 m_items.AddRange(value);
         }
 
         internal void Clear()
         {
-            lock (m_syncRoot)
+            lock (m_items)
                 m_items.Clear();
         }
 
@@ -190,13 +189,13 @@ namespace WindowsApiLib.Shell
 
         internal void Insert(int index, CShellItem value)
         {
-            lock (m_syncRoot)
+            lock (m_items)
                 m_items.Insert(index, value);
         }
 
         internal void Remove(CShellItem value)
         {
-            lock (m_syncRoot)
+            lock (m_items)
                 m_items.Remove(value);
         }
 
@@ -204,7 +203,7 @@ namespace WindowsApiLib.Shell
         {
             if (items == null) return;
             var toRemove = new HashSet<CShellItem>(items);
-            lock (m_syncRoot)
+            lock (m_items)
             {
                 m_items.RemoveAll(i => toRemove.Contains(i));
             }
@@ -212,7 +211,7 @@ namespace WindowsApiLib.Shell
 
         internal void Remove(string name)
         {
-            lock (m_syncRoot)
+            lock (m_items)
             {
                 int index = IndexOf(name);
                 if (index > -1)
@@ -224,7 +223,7 @@ namespace WindowsApiLib.Shell
 
         internal void RemoveAt(int index)
         {
-            lock (m_syncRoot)
+            lock (m_items)
                 m_items.RemoveAt(index);
         }
 
@@ -277,7 +276,7 @@ namespace WindowsApiLib.Shell
 
         public IEnumerator<CShellItem> GetEnumerator()
         {
-            lock (m_syncRoot)
+            lock (m_items)
                 return new List<CShellItem>(m_items).GetEnumerator();
         }
 
@@ -288,13 +287,13 @@ namespace WindowsApiLib.Shell
 
         public void CopyTo(Array array, int index)
         {
-            lock (m_syncRoot)
+            lock (m_items)
                 ((ICollection)m_items).CopyTo(array, index);
         }
 
         public CShellItem[] ToArray()
         {
-            lock (m_syncRoot)
+            lock (m_items)
                 return m_items.ToArray();
         }
     }

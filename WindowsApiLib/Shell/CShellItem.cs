@@ -118,9 +118,9 @@ namespace WindowsApiLib.Shell
         internal bool m_CanRename;
 
         internal CShellItemCollection? m_directories;
-        private readonly object m_directoriesLock = new object();
+        private readonly object m_directoriesLock = new object(); //need this because m_directories is sometimes null
         internal CShellItemCollection? m_files;
-        private readonly object m_filesLock = new object();
+        private readonly object m_filesLock = new object(); //need this because m_directories is sometimes null
 
         internal FileAttributes m_Attributes;  // True FileAttributes from FileInfo
         internal SFGAO m_SFGAO_Attributes;
@@ -493,19 +493,19 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// For internal use only
         /// </summary>
-        public CShellItemCollection DirectoryList => m_directories; //todo: get rid of this
+        public CShellItemCollection DirectoriesCollection => m_directories; //todo: get rid of this
 
         /// <summary>
         /// Returns an Array of CShItems containing the sub Directories of this instance.
         /// </summary>
         /// <returns>Array of CShItems containing the sub Directories of this instance.</returns>
-        public CShellItem[] Directories //todo: why is this an array and not a list?  change this to a hugelist
+        public List<CShellItem>? Directories
         {
             get
             {
                 if (!m_IsFolder)
                 {
-                    return (CShellItem[])Array.CreateInstance(typeof(CShellItem), 0);
+                    return null;
                 }
 
                 if (m_directories == null)
@@ -524,7 +524,7 @@ namespace WindowsApiLib.Shell
                     // Me.UpdateRefresh(False, True)   '6/30/2012 - Note that it is also true that in some circumstances Windows does not post a RMDIR when Folders are removed.
                 }        // 6/30/2012 - Under some circumstances, Windows does not post MKDIR msgs when Folders are created!!! Do a refresh to ensure we are up to date
 
-                return m_directories.ToArray();
+                return m_directories.Items;
             }
         }
 
@@ -546,13 +546,13 @@ namespace WindowsApiLib.Shell
         /// Returns an Array of CShItems containing the Files contained in this instance.
         /// </summary>
         /// <returns>Array of CShItems containing the Files contained in this instance.</returns>
-        public CShellItem[] Files //todo: change this to a list or hugelist
+        public List<CShellItem>? Files
         {
             get
             {
                 if (!m_IsFolder) //only folders have child elements
                 {
-                    return (CShellItem[])Array.CreateInstance(typeof(CShellItem), 0);
+                    return null;
                 }
 
                 if (m_files == null)
@@ -566,7 +566,7 @@ namespace WindowsApiLib.Shell
                     }
                 }
 
-                return m_files.ToArray();
+                return m_files.Items;
 
                 //else        // 6/30/2012 - Under some circumstances, Windows does not post CREATE msgs when Files are created!!! Do a refresh to ensure we are up to date
                 //{
@@ -1274,7 +1274,7 @@ namespace WindowsApiLib.Shell
                     }
                 }
                 // then process all dirs in this directory, recursively
-                foreach (CShellItem currentCItem1 in cStart.DirectoryList)
+                foreach (CShellItem currentCItem1 in cStart.DirectoriesCollection)
                 {
                     cItem = currentCItem1;          // 7/2/2012 used Directories
                     if (!cback(cItem, UserLevel + 1, Tag))
@@ -1325,7 +1325,7 @@ namespace WindowsApiLib.Shell
                 if (IsFolder)
                 {
                     ClearCaches();
-                    if (item.IsFolder && !DirectoryList.Contains(item.PIDL))
+                    if (item.IsFolder && !DirectoriesCollection.Contains(item.PIDL))
                     {
                         lock (m_directories)
                         {
@@ -1421,46 +1421,13 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-        /// Returns the sub-directories of the current instance, if the current instance is a
-        /// Folder. Similar to to Property Directories except that it returns the Directories
-        /// as a List of CShellItem.
-        /// </summary>
-        /// <returns>If the current instance is a Folder, returns its sub-directories as a 
-        /// List containing the CShItems of its sub-directories. Returns an empty list if
-        /// there are no sub-directories. Returns Nothing if the current instance is not a Folder.</returns>
-        /// <remarks></remarks>
-        public List<CShellItem> GetDirectories()
-        {
-            CShellItem[] D = Directories;         // 7/2/2012 OK to use Directories in this case
-            if (D is null)
-                return null;
-            return new List<CShellItem>(D);
-        }
-
-        /// <summary>
-        /// If the current instance is a Folder then returns a List of the CShItems of Files 
-        /// contained in the current instance. Otherwise returns Nothing.
-        /// </summary>
-        /// <returns>A List of the CShItems of the Files in the current instance. If the 
-        /// current instance is not a Folder, returns Nothing. If there are no Files in the 
-        /// current instance, returns an empty List.</returns>
-        /// <remarks></remarks>
-        public List<CShellItem> GetFiles()
-        {
-            CShellItem[] F = Files;
-            if (F is null)
-                return null;
-            return new List<CShellItem>(F);
-        }
-
-        /// <summary>
         /// Returns the Files of this sub-folder, filtered by a filtering string, as a
         ///   List of CShitems
         /// </summary>
         /// <param name="Filter">A filter string (for example: *.Doc)</param>
         /// <returns>A List of CShItems. May return an empty List if there are none.</returns>
         /// <remarks>Added 8/22/2012</remarks>
-        public List<CShellItem> GetFiles(string Filter)
+        public List<CShellItem> GetFiles(string Filter) //todo: mave this into CShellItemCollection
         {
             var GetFilesRet = new List<CShellItem>();
             if (m_IsFolder)
