@@ -12,3 +12,5 @@
 
   So, the async isn't for scaling or parallelizing the tests themselves, but simply because the mechanism we need for
   STA compatibility happens to be asynchronous.
+
+  If you try running the tests without the STA threadrunner, you can get errors like HR == -2147417848 RPC_E_DISCONNECTED.

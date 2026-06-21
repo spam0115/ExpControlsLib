@@ -16,7 +16,7 @@ namespace WindowsApiLib.Shell
     {
         public List<IntPtr> GetPidlsOfFolder(CShellItem csi, SHCONTF flags)
         {
-            return CShellItemFactory.GetPidlsOfFolder(csi, flags);
+            return CShellItemFactory.GetChildPidls(csi, flags);
         }
 
         public CShellItem Create(IntPtr pidl, CShellItem? parent = null)
@@ -26,7 +26,7 @@ namespace WindowsApiLib.Shell
 
         public CShellItem FindOrAdd(IntPtr pidl)
         {
-            return CShellItemFactory.FindOrAdd(pidl);
+            return CShellItemFactory.FindAndAllowExpansion(pidl);
         }
 
         public string GetFullPath(CShellItem csi)

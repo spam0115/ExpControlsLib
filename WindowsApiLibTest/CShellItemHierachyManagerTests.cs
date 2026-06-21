@@ -19,7 +19,16 @@ namespace WindowsApiLibTest
     {
         private StaThreadRunner Runner => AssemblyInitializer.Runner;
 
+
         [TestMethod]
+        public void TestRootEqualsDesktop()
+        {
+            Assert.IsTrue(object.ReferenceEquals(ShellController.Instance.HierachyManager.Root, ShellController.Instance.HierachyManager.DesktopCSI),
+                "ExpTree.SelectedItem path should match the test path");
+
+        }
+
+            [TestMethod]
         public async Task TestIsAncestorOf()
         {
             await Runner.EnqueueWork(() =>
@@ -50,14 +59,14 @@ namespace WindowsApiLibTest
                 var manager = new CShellItemHierachyManager(desktop);
 
                 string windir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-                var csiWin = manager.FindOrAdd(windir);
+                var csiWin = manager.FindAndAllowExpansion(windir);
                 
                 // Note: In some restricted environments, finding C:\Windows from Desktop might fail.
                 // If it fails, we try a more robust path like Temp.
                 if (csiWin == null)
                 {
                     windir = Path.GetTempPath();
-                    csiWin = manager.FindOrAdd(windir);
+                    csiWin = manager.FindAndAllowExpansion(windir);
                 }
 
                 Assert.IsNotNull(csiWin, "Should be able to find or add a known folder (Windows or Temp)");
@@ -92,7 +101,7 @@ namespace WindowsApiLibTest
                     File.WriteAllText(nestedFile, "hello");
 
                     // Add deep path directly
-                    var csiNested = manager.FindOrAdd(nestedFile);
+                    var csiNested = manager.FindAndAllowExpansion(nestedFile);
                     Assert.IsNotNull(csiNested, "Should find or add nested file in temp");
                     Assert.AreEqual(nestedFile, csiNested.FullPath, true);
 
@@ -125,7 +134,7 @@ namespace WindowsApiLibTest
                 try
                 {
                     Directory.CreateDirectory(tempBase);
-                    var csiTemp = manager.FindOrAdd(tempBase);
+                    var csiTemp = manager.FindAndAllowExpansion(tempBase);
                     Assert.IsNotNull(csiTemp);
 
                     // Verify it exists
@@ -163,8 +172,8 @@ namespace WindowsApiLibTest
                     File.WriteAllText(file1, "1");
                     File.WriteAllText(file2, "2");
 
-                    var csi1 = manager.FindOrAdd(file1);
-                    var csi2 = manager.FindOrAdd(file2);
+                    var csi1 = manager.FindAndAllowExpansion(file1);
+                    var csi2 = manager.FindAndAllowExpansion(file2);
 
                     Assert.IsNotNull(manager.Find(file1));
                     Assert.IsNotNull(manager.Find(file2));
@@ -192,7 +201,7 @@ namespace WindowsApiLibTest
                 var manager = new CShellItemHierachyManager(desktop);
 
                 string invalidPath = @"C:\ThisPathDoesNotExist_123456789";
-                var result = manager.FindOrAdd(invalidPath);
+                var result = manager.FindAndAllowExpansion(invalidPath);
 
                 Assert.IsNull(result, "Should return null for non-existent path");
             });

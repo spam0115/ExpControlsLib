@@ -179,3 +179,338 @@ So are you saying that if I had a dictionary which indexed the nodes of the huge
    * Multithreading: Handled correctly via BeginInvoke, but GetImageList and AddThumbnail must remain strictly UI-bound.
    * Re-entrancy: The _enumerationDepth guard in ExpList protects against Items collection mutation, but there is no
      equivalent guard for ImageList mutations during OS drawing cycles.
+
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+
+
+Common COM Programming Problems in Windows
+
+COM is powerful, but most bugs come from a relatively small set of lifetime, threading, and marshaling issues. 
+Since you're working with Shell COM interfaces (IShellFolder, IEnumIDList, PIDLs, etc.), you're already in one
+of the areas where these issues show up most often.
+1. Apartment Threading (The #1 Source of Bugs)
+
+COM objects are often tied to a specific apartment.
+STA (Single Threaded Apartment)
+
+Most Shell, Office, and UI COM objects are STA.
+Thread A (STA)
+    |
+    +-- IShellFolder
+
+
+If Thread B calls that object:
+Thread B
+    |
+    +-- COM Proxy --> Thread A --> IShellFolder
+
+
+COM secretly creates a proxy and marshals the call.
+Problems:
+•	RPC_E_DISCONNECTED
+•	RPC_E_WRONG_THREAD
+•	Random hangs
+•	Deadlocks
+
+Especially dangerous:
+await SomeOperation();
+shellFolder.GetAttributesOf(...);
+
+
+After await, you may be on a different thread.
+2. Message Pump Dependencies
+
+Many STA COM objects require a message loop.
+Good:
+Application.Run();
+
+
+Bad:
+Thread t = new Thread(() =>
+{
+    // COM work
+});
+t.SetApartmentState(ApartmentState.STA);
+t.Start();
+
+
+Without a message pump:
+•	marshaled calls may never arrive
+•	RPC timeouts occur
+•	objects appear disconnected
+
+This is why COM errors often mention RPC even when nothing is remote.
+3. Reference Counting Problems
+
+COM uses:
+AddRef()
+Release()
+
+
+.NET wraps this with RCWs.
+Common mistake:
+Marshal.ReleaseComObject(obj);
+
+
+while another part of the program still uses:
+obj.SomeMethod();
+
+
+Result:
+COM object that has been separated from its underlying RCW
+
+
+4. Overusing FinalReleaseComObject
+
+This is one of the most dangerous APIs in .NET COM interop.
+Marshal.FinalReleaseComObject(obj);
+
+
+This forces COM refcount to zero.
+If another RCW still exists:
+obj2.SomeMethod();
+
+
+Boom.
+Many Office automation bugs come from this.
+5. Hidden COM Objects from Chained Calls
+
+This is extremely common.
+Bad:
+app.Workbooks.Open(file).Sheets[1].Cells[1,1].Value = "Hello";
+
+
+You just created multiple COM objects:
+Workbooks
+Workbook
+Sheets
+Sheet
+Cells
+Cell
+
+
+Most are invisible and never released.
+Safer:
+var workbooks = app.Workbooks;
+var workbook = workbooks.Open(file);
+var sheet = workbook.Sheets[1];
+
+
+6. PIDL Ownership Errors
+
+Shell programming has its own special class of bugs.
+Example:
+IntPtr pidl;
+folder.EnumObjects(...);
+
+
+Who frees it?
+Depends on who allocated it.
+Most shell PIDLs must be freed using:
+Marshal.FreeCoTaskMem(pidl);
+
+
+Problems:
+•	leaks
+•	double frees
+•	invalid PIDLs
+
+7. Interface Lifetime Dependencies
+
+Some COM objects depend on their parents remaining alive.
+Example:
+IShellFolder
+    |
+    +-- IEnumIDList
+
+
+Enumerator may internally reference folder.
+If folder dies:
+RPC_E_DISCONNECTED
+
+
+can appear during enumeration.
+This sounds suspiciously close to what you experienced.
+8. Shell Extension Instability
+
+The Shell loads third-party code.
+Examples:
+•	Dropbox
+•	OneDrive
+•	SharePoint
+•	TortoiseGit
+•	WinZip
+•	Antivirus products
+
+When you call:
+GetAttributesOf()
+BindToObject()
+GetUIObjectOf()
+
+
+you may actually be running somebody else's DLL.
+Symptoms:
+•	access violations
+•	hangs
+•	random HRESULTs
+•	crashes only on certain machines
+
+9. Incorrect Interface Marshaling
+
+Never pass raw interface pointers across threads:
+IShellFolder folder;
+
+
+created on thread A
+used on thread B
+unless COM marshaling was performed.
+Correct native COM solution:
+CoMarshalInterThreadInterfaceInStream
+
+
+Most .NET code avoids this by recreating the object on the destination thread.
+10. Reentrancy
+
+A particularly nasty COM problem.
+Imagine:
+Thread A
+  calls COM object
+      |
+      +--> COM pumps messages
+              |
+              +--> callback into your code
+
+
+Your code can be entered again while already running.
+Result:
+•	corrupted state
+•	deadlocks
+•	collection modification exceptions
+
+Office automation and Shell extensions encounter this often.
+11. Incorrect HRESULT Handling
+
+Many COM interfaces return:
+S_OK
+
+
+and
+S_FALSE
+
+
+Both are success.
+Example:
+IEnumIDList::Next
+
+
+returns:
+S_OK     = item returned
+S_FALSE  = end of enumeration
+
+
+Treating S_FALSE as an exception is a common bug.
+12. RCW Identity Confusion
+
+Two .NET objects may represent the same COM object.
+Example:
+var a = folder1;
+var b = folder2;
+
+
+They may actually point to the same underlying COM object.
+Checking:
+a == b
+
+
+is not always meaningful.
+COM identity is determined by the IUnknown pointer.
+13. Garbage Collection Interactions
+
+COM uses deterministic lifetime.
+.NET uses garbage collection.
+These worlds don't always cooperate.
+Example:
+DoWork(folder);
+
+
+If the JIT decides folder is no longer needed:
+GC collects RCW
+Release() occurs
+
+
+while native code is still using it.
+Rare, but real.
+Sometimes you'll see:
+GC.KeepAlive(folder);
+
+
+used to prevent this.
+14. Shell Namespace Virtualization
+
+Not everything is a filesystem folder.
+Examples:
+•	Desktop
+•	Control Panel
+•	Recycle Bin
+•	Libraries
+•	Network
+•	This PC
+
+Code like:
+IShellFolder folder
+
+
+does not imply:
+C:\SomePath
+
+
+Assumptions about filesystem semantics often break.
+Practical Advice for Shell COM
+
+For Shell programming specifically, the safest model is:
+13.	Use a dedicated STA thread.
+14.	Create COM interfaces as late as possible.
+15.	Release them as soon as possible.
+16.	Store PIDLs, parsing names, or paths rather than storing IShellFolder objects long-term.
+17.	Avoid FinalReleaseComObject.
+18.	Treat third-party shell extensions as potentially unreliable.
+19.	Keep enumeration and attribute queries on the same thread that created the interfaces.
+
+
+
+
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀

@@ -95,7 +95,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
-                var rootItem = ShellController.Instance.HierachyManager.FindOrAdd(tempPath);
+                var rootItem = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempPath);
                 expTree.Root = rootItem;
 
                 await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
@@ -149,7 +149,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
-                expTree.Root = ShellController.Instance.HierachyManager.FindOrAdd(tempPath);
+                expTree.Root = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempPath);
                 await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
 
                 // 1. Visit Root (already done by default selection)
@@ -265,8 +265,8 @@ namespace ExpControlsLibTest
                 string newFolderPath = Path.Combine(tempPath, "NewFolder");
                 Directory.CreateDirectory(newFolderPath);
 
-                await WaitForCondition(() => ShellController.Instance.HierachyManager.FindOrAdd(newFolderPath) != null, "New folder to be added to the hierarchy manager");
-                var newItem = ShellController.Instance.HierachyManager.FindOrAdd(newFolderPath);
+                await WaitForCondition(() => ShellController.Instance.HierachyManager.FindAndAllowExpansion(newFolderPath) != null, "New folder to be added to the hierarchy manager");
+                var newItem = ShellController.Instance.HierachyManager.FindAndAllowExpansion(newFolderPath);
 
                 Assert.IsNotNull(newItem, $"ShellController failed to find or add '{newFolderPath}'.");
 
@@ -305,12 +305,12 @@ namespace ExpControlsLibTest
                 await Task.Delay(50); 
 
                 // Request expansion while loading
-                var targetItem = ShellController.Instance.HierachyManager.FindOrAdd(pathA);
+                var targetItem = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathA);
                 bool queued = expTree.ExpandANode(targetItem);
                 Assert.IsTrue(queued, "Expansion should be queued when loading");
 
                 // Now set the root that actually contains pathA so expansion can succeed
-                expTree.Root = ShellController.Instance.HierachyManager.FindOrAdd(tempPath);
+                expTree.Root = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempPath);
 
                 await WaitForCondition(() => expTree.SelectedItem != null && expTree.SelectedItem.FullPath.Equals(pathA, StringComparison.OrdinalIgnoreCase), "Pending expansion to complete");
             }

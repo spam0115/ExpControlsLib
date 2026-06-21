@@ -90,27 +90,19 @@ namespace WindowsApiLib.Shell
                                     Debug.WriteLine("  [CREATE] Parent found: " + parentItem.ItemPath);
                                     if (parentItem.FilesInitialized)
                                     {
-                                        if (!parentItem.m_files.Contains(shNotify.dwItem1))
+                                        if (!parentItem.m_files.ContainsEquivalentAbsolutePidl(shNotify.dwItem1))
                                         {
                                             Debug.WriteLine("  [CREATE] Parent files initialized and item NOT in list. Adding.");
-                                            if (_shellApi.SHGetRealIDL(parentItem.IShlFolder, splitPidl.ChildPidl, out realRel) == S_OK)
+                                            var newItem = _shellItemFactory.Create(shNotify.dwItem1, parentItem);
+                                            if (newItem is not null)
                                             {
-                                                var newItem = _shellItemFactory.Create(realRel, parentItem);
-                                                if (newItem is not null)
-                                                {
-                                                    Debug.WriteLine("  [CREATE] Created newItem: " + newItem.ItemPath);
-                                                    AddItem(parentItem, newItem);
-                                                }
-                                                else
-                                                {
-                                                    Debug.WriteLine("  [CREATE] CShellItemFactory.Create returned null");
-                                                }
+                                                Debug.WriteLine("  [CREATE] Created newItem: " + newItem.ItemPath);
+                                                AddItem(parentItem, newItem);
                                             }
                                             else
                                             {
-                                                Debug.WriteLine("  [CREATE] SHGetRealIDL failed");
+                                                Debug.WriteLine("  [CREATE] CShellItemFactory.Create returned null");
                                             }
-                                            Marshal.FreeCoTaskMem(realRel);
                                         }
                                         else
                                         {
@@ -279,25 +271,16 @@ namespace WindowsApiLib.Shell
                                         if (!parentItem.DirectoryList.Contains(shNotify.dwItem1))
                                         {
                                             Debug.WriteLine("  [MKDIR] Parent folders initialized and NOT in list. Adding.");
-                                            IntPtr realRel;
-                                            if (_shellApi.SHGetRealIDL(parentItem.IShlFolder, splitPidls.ChildPidl, out realRel) == S_OK)
+                                            var newItem = _shellItemFactory.Create(shNotify.dwItem1, parentItem);
+                                            if (newItem is not null)
                                             {
-                                                var newItem = _shellItemFactory.Create(realRel, parentItem);
-                                                if (newItem is not null)
-                                                {
-                                                    Debug.WriteLine("  [MKDIR] Created newItem: " + newItem.ItemPath);
-                                                    AddItem(parentItem, newItem);
-                                                }
-                                                else
-                                                {
-                                                    Debug.WriteLine("  [MKDIR] CShellItemFactory.Create returned null");
-                                                }
+                                                Debug.WriteLine("  [MKDIR] Created newItem: " + newItem.ItemPath);
+                                                AddItem(parentItem, newItem);
                                             }
                                             else
                                             {
-                                                Debug.WriteLine("  ***MKDIR - Failed on SHGetRealIDL " + parentItem.DisplayName);
+                                                Debug.WriteLine("  [MKDIR] CShellItemFactory.Create returned null");
                                             }
-                                            Marshal.FreeCoTaskMem(realRel);
                                         }
                                         else
                                         {
@@ -536,51 +519,60 @@ namespace WindowsApiLib.Shell
 
         private bool DoRenameOrMove(CShellItem csi, IntPtr changedPidl, CShItemUpdateType changeType)
         {
-            IntPtr pidlRel = IntPtr.Zero, newIShellFolderPtr = IntPtr.Zero;
             var splitPidl = TPidl.Split(changedPidl);
-            var oldParentCsi = csi.Parent;
             var allegedParentCsi = _hierarchyManager.Find(splitPidl.ParentPidl);
 
             try
             {
-                if (allegedParentCsi is null)
+                if (!CShellItemFactory.Exists(changedPidl))
+                {
+                    Debug.WriteLine("CShellItemUpdateLogic.DoRenameOrMove: The given pidl could not be proven to exist on this computer.");
+                    return false;
+                }
+
+                if (allegedParentCsi is null) //moved to somewhere not in the hierarchy
                 {
                     RemoveItem(csi.Parent, csi);
                     csi.m_Parent = null;
                     csi.m_Pidl = changedPidl;
                     return false;
                 }
-                else if (_shellApi.SHGetRealIDL(allegedParentCsi.IShlFolder, splitPidl.ChildPidl, out pidlRel) == S_OK)
+                else
                 {
-                    Marshal.FreeCoTaskMem(csi.m_Pidl);
-                    csi.m_Pidl = TPidl.Concatenate(splitPidl.ParentPidl, pidlRel);
+                    IntPtr newIShellFolderPtr = IntPtr.Zero;
+                    var oldParentCsi = csi.Parent;
 
-                    if (ReferenceEquals(allegedParentCsi, csi.Parent))
+                    //Marshal.FreeCoTaskMem(csi.m_Pidl);
+                    //csi.m_Pidl = TPidl.Concatenate(splitPidl.ParentPidl, pidlRel);
+
+                    if (CPidl.ResolvesToSamePathOrName(allegedParentCsi.PIDL, csi.Parent.PIDL)) //rename
                     {
-                        csi.ResetInfo();
-                        csi.m_Path = _shellItemFactory.GetFullPath(csi);
+                        csi.ReloadInfo();
                         RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Renamed));
                         return true;
                     }
-                    else
+                    else //move
                     {
                         RemoveItem(csi.Parent, csi);
+
                         AddItem(allegedParentCsi, csi);
 
                         csi.m_Parent = allegedParentCsi;
 
-                        csi.ResetInfo();
-                        csi.m_Path = _shellItemFactory.GetFullPath(csi);
+                        csi.ReloadInfo();
 
                         if (csi.IsFolder)
                         {
-                            if (allegedParentCsi.IShlFolder.BindToObject(pidlRel, IntPtr.Zero, IID_IShellFolder, ref newIShellFolderPtr) != S_OK)
-                            {
-                                Marshal.Release(newIShellFolderPtr);
-                                return false;
-                            }
-                            csi.m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newIShellFolderPtr, typeof(IShellFolder));
-                            Marshal.Release(newIShellFolderPtr);
+                            //var ishellFolder = allegedParentCsi.GetIShellFolder();
+
+                            //if (ishellFolder.BindToObject(splitPidl.ChildPidl, IntPtr.Zero, IID_IShellFolder, ref newIShellFolderPtr) != S_OK)
+                            //{
+                            //    Marshal.Release(newIShellFolderPtr);
+                            //    return false;
+                            //}
+
+                            //csi.m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newIShellFolderPtr, typeof(IShellFolder));
+                            //Marshal.Release(newIShellFolderPtr);
 
                             if (csi.m_files is not null)
                             {
@@ -599,14 +591,9 @@ namespace WindowsApiLib.Shell
                         return false;
                     }
                 }
-                else
-                {
-                    throw new Exception("Unhandaled condition in DoRenameOrMove");
-                }
             }
             finally
             {
-                if (pidlRel != IntPtr.Zero) Marshal.FreeCoTaskMem(pidlRel);
                 Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
                 Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
             }
@@ -767,12 +754,12 @@ namespace WindowsApiLib.Shell
         internal void AddItem(CShellItem parent, CShellItem item)
         {
             bool changed = false;
-            lock (_hierarchyManager.Lock)
+            try
             {
-                try
+                item.m_Parent = parent;
+                if (parent.IsFolder)
                 {
-                    item.m_Parent = parent;
-                    if (parent.IsFolder)
+                    lock (parent)
                     {
                         if (!parent.DirectoryList.Contains(item.PIDL))
                         {
@@ -786,11 +773,12 @@ namespace WindowsApiLib.Shell
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine("Error in CShellItemUpdateLogic.AddItem -- " + ex.ToString());
-                }
             }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error in CShellItemUpdateLogic.AddItem -- " + ex.ToString());
+            }
+
             if (changed)
             {
                 RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Created));

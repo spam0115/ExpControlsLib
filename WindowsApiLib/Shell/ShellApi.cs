@@ -91,47 +91,51 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #region    Shell GUIDs
-        public static readonly Guid IID_IMalloc = new Guid("{00000002-0000-0000-C000-000000000046}");
-        public static readonly Guid IID_IShellFolder = new Guid("{000214E6-0000-0000-C000-000000000046}");
-        public static readonly Guid IID_IFolderFilterSite = new Guid("{C0A651F5-B48B-11d2-B5ED-006097C686F6}");
-        public static readonly Guid IID_IFolderFilter = new Guid("{9CC22886-DC8E-11d2-B1D0-00C04F8EEB3E}");
-        public static readonly Guid DesktopGUID = new Guid("{00021400-0000-0000-C000-000000000046}");
+        /// <summary>
+        /// all of these should be read only but the problem is you can't use readonly instances with COM so they must not be readonly.
+        /// </summary>
+        public static Guid IID_IMalloc = new Guid("{00000002-0000-0000-C000-000000000046}");
+        public static Guid IID_IShellFolder = new Guid("{000214E6-0000-0000-C000-000000000046}");
+        public static Guid IID_IFolderFilterSite = new Guid("{C0A651F5-B48B-11d2-B5ED-006097C686F6}");
+        public static Guid IID_IFolderFilter = new Guid("{9CC22886-DC8E-11d2-B1D0-00C04F8EEB3E}");
+        public static Guid DesktopGUID = new Guid("{00021400-0000-0000-C000-000000000046}");
 
-        public static readonly Guid IID_IDropTarget = new Guid("{00000122-0000-0000-C000-000000000046}");
-        public static readonly Guid IID_IDataObject = new Guid("{0000010e-0000-0000-C000-000000000046}");
+        public static Guid IID_IDropTarget = new Guid("{00000122-0000-0000-C000-000000000046}");
+        public static Guid IID_IDataObject = new Guid("{0000010e-0000-0000-C000-000000000046}");
 
-        public static readonly Guid IID_IContextMenu = new Guid("{000214e4-0000-0000-c000-000000000046}");
-        public static readonly Guid IID_IContextMenu2 = new Guid("{000214f4-0000-0000-c000-000000000046}");
-        public static readonly Guid IID_IContextMenu3 = new Guid("{bcfce0a0-ec17-11d0-8d10-00a0c90f2719}");
+        public static Guid IID_IContextMenu = new Guid("{000214e4-0000-0000-c000-000000000046}");
+        public static Guid IID_IContextMenu2 = new Guid("{000214f4-0000-0000-c000-000000000046}");
+        public static Guid IID_IContextMenu3 = new Guid("{bcfce0a0-ec17-11d0-8d10-00a0c90f2719}");
 
-        public static readonly Guid IID_IExtractImage = new Guid("{BB2E617C-0920-11d1-9A0B-00C04FC2D6C1}");
+        public static Guid IID_IExtractImage = new Guid("{BB2E617C-0920-11d1-9A0B-00C04FC2D6C1}");
 
-        public static readonly Guid IID_IQueryInfo = new Guid("{00021500-0000-0000-C000-000000000046}");
-        public static readonly Guid IID_IPersistFile = new Guid("{0000010b-0000-0000-C000-000000000046}");
+        public static Guid IID_IQueryInfo = new Guid("{00021500-0000-0000-C000-000000000046}");
+        public static Guid IID_IPersistFile = new Guid("{0000010b-0000-0000-C000-000000000046}");
 
-        public static readonly Guid CLSID_DragDropHelper = new Guid("{4657278A-411B-11d2-839A-00C04FD918D0}");
-        public static readonly Guid CLSID_NewMenu = new Guid("{D969A300-E7FF-11d0-A93B-00A0C90F2719}");
-        public static readonly Guid IID_IDragSourceHelper = new Guid("{DE5BF786-477A-11d2-839D-00C04FD918D0}");
-        public static readonly Guid IID_IDropTargetHelper = new Guid("{4657278B-411B-11d2-839A-00C04FD918D0}");
+        public static Guid CLSID_DragDropHelper = new Guid("{4657278A-411B-11d2-839A-00C04FD918D0}");
+        public static Guid CLSID_NewMenu = new Guid("{D969A300-E7FF-11d0-A93B-00A0C90F2719}");
+        public static Guid IID_IDragSourceHelper = new Guid("{DE5BF786-477A-11d2-839D-00C04FD918D0}");
+        public static Guid IID_IDropTargetHelper = new Guid("{4657278B-411B-11d2-839A-00C04FD918D0}");
 
-        public static readonly Guid IID_IShellExtInit = new Guid("{000214e8-0000-0000-c000-000000000046}");
-        public static readonly Guid IID_IStream = new Guid("{0000000c-0000-0000-c000-000000000046}");
-        public static readonly Guid IID_IStorage = new Guid("{0000000B-0000-0000-C000-000000000046}");
+        public static Guid IID_IShellExtInit = new Guid("{000214e8-0000-0000-c000-000000000046}");
+        public static Guid IID_IStream = new Guid("{0000000c-0000-0000-c000-000000000046}");
+        public static Guid IID_IStorage = new Guid("{0000000B-0000-0000-C000-000000000046}");
 
-        public static readonly Guid CLSID_ShellLink = new Guid("{00021401-0000-0000-C000-000000000046}");
-        public static readonly Guid CLSID_InternetShortcut = new Guid("{FBF23B40-E3F0-101B-8488-00AA003E56F8}");
+        public static Guid CLSID_ShellLink = new Guid("{00021401-0000-0000-C000-000000000046}");
+        public static Guid CLSID_InternetShortcut = new Guid("{FBF23B40-E3F0-101B-8488-00AA003E56F8}");
 
-        public static readonly Guid IID_IShellItem = new Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE");
-        public static readonly Guid IID_IShellItemImageFactory = new Guid("BCC18B79-BA16-442F-80C4-8A59C30C463B");
+        public static Guid IID_IShellItem = new Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE");
+        public static Guid IID_IShellItemImageFactory = new Guid("BCC18B79-BA16-442F-80C4-8A59C30C463B");
 
         #endregion
 
         #region    Shell Structures
 
         #region        SHFILEINFO
-        // ///<summary>
-        // SHFILEINFO structure for VB.Net
-        // ///</summary>
+        /// <summary>
+        /// Contains information about a file object retrieved by <see cref="SHGetFileInfo"/>.
+        /// Includes the icon handle, display name, type name, and attributes.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
         public struct SHFILEINFO
         {
@@ -147,12 +151,10 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #region        STRRET Structures
-        // both of these formats work in main thread, neither in worker thread
-        // <StructLayout(LayoutKind.Sequential)> _
-        // Public Structure STRRET
-        // Public uType As Integer
-        // Public pOle As IntPtr
-        // End Structure
+        /// <summary>
+        /// Represents a string returned by an IShellFolder method. The union layout supports
+        /// multiple storage strategies (OLE string pointer, offset into an item ID, or inline buffer).
+        /// </summary>
         [StructLayout(LayoutKind.Explicit)]
         public struct STRRET
         {
@@ -390,7 +392,9 @@ namespace WindowsApiLib.Shell
         }
         #endregion
 
-        // Contains the information needed to create a drag image
+        /// <summary>
+        /// Contains the information needed to create a drag image during a drag-and-drop operation.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct SHDRAGIMAGE
         {
@@ -400,7 +404,9 @@ namespace WindowsApiLib.Shell
             public Color crColorKey;
         }
 
-        // Represents the number of 100-nanosecond intervals since January 1, 1601
+        /// <summary>
+        /// Represents a 64-bit file time as two 32-bit parts, counting 100-nanosecond intervals since January 1, 1601.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct FILETIME
         {
@@ -409,7 +415,9 @@ namespace WindowsApiLib.Shell
         }
 
 
-        // Contains statistical data about an open storage, stream, or byte-array object
+        /// <summary>
+        /// Contains statistical data about an open storage, stream, or byte-array object.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct STATSTG
         {
@@ -449,6 +457,10 @@ namespace WindowsApiLib.Shell
             public int y;
         }
 
+        /// <summary>
+        /// Contains information about a ListView background image, including source URL and tiling options.
+        /// Used with <c>LVM_SETBKIMAGE</c>.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct LVBKIMAGE
         {
@@ -460,6 +472,10 @@ namespace WindowsApiLib.Shell
             public int yOffsetPercent;
         }
 
+        /// <summary>
+        /// Contains information about a ListView item (row) such as state, text, image, and indent.
+        /// Used with <c>LVM_SETITEM</c> and related messages.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct LVITEM
         {
@@ -479,6 +495,10 @@ namespace WindowsApiLib.Shell
             public int puColumns;
         }
 
+        /// <summary>
+        /// Contains information about a ListView column such as format, width, text, and image.
+        /// Used with <c>LVM_SETCOLUMN</c> and related messages.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential, Pack = 8, CharSet = CharSet.Auto)]
         public struct LVCOLUMN
         {
@@ -498,6 +518,17 @@ namespace WindowsApiLib.Shell
         #region        shell32 Dll Declarations
 
         #region        DragQueryFiles
+        /// <summary>
+        /// Retrieves the names of dropped files that result from a successful drag-and-drop operation.
+        /// </summary>
+        /// <param name="hDrop">Handle to the internal drop structure (from <c>WM_DROPFILES</c>).</param>
+        /// <param name="iFile">Index of the file to query, or <c>0xFFFFFFFF</c> to get the count of files.</param>
+        /// <param name="lpszFile">Buffer that receives the file name. May be <c>null</c> when requesting the count.</param>
+        /// <param name="cch">Size of the <paramref name="lpszFile"/> buffer, in characters.</param>
+        /// <returns>
+        /// When <paramref name="iFile"/> is <c>0xFFFFFFFF</c>, returns the number of dropped files.
+        /// Otherwise returns a nonzero value on success, or zero on failure.
+        /// </returns>
         [DllImport("shell32.dll", CharSet = CharSet.Auto)]
         public static extern int DragQueryFile(IntPtr hDrop, int iFile, [MarshalAs(UnmanagedType.LPTStr)] StringBuilder lpszFile, int cch);
 
@@ -507,36 +538,85 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #region        IL functions
+        /// <summary>
+        /// Tests whether two PIDLs refer to the same object using a binary comparison.
+        /// </summary>
+        /// <param name="pidl1">First PIDL to compare.</param>
+        /// <param name="pidl2">Second PIDL to compare.</param>
+        /// <returns><c>true</c> if the PIDLs are equal; otherwise <c>false</c>.</returns>
         [DllImport("shell32.dll", ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool ILIsEqual(IntPtr pidl1, IntPtr pidl2);
 
+        /// <summary>
+        /// Tests whether one PIDL is the parent of another.
+        /// </summary>
+        /// <param name="pidlParent">The potential parent PIDL.</param>
+        /// <param name="pidlBelow">The potential child PIDL.</param>
+        /// <param name="fImmediate">If <c>true</c>, tests for an immediate parent-child relationship only.</param>
+        /// <returns><c>true</c> if <paramref name="pidlParent"/> is a parent of <paramref name="pidlBelow"/>; otherwise <c>false</c>.</returns>
         [DllImport("shell32", EntryPoint = "#23", CharSet = CharSet.Auto)]
         public static extern bool ILIsParent(IntPtr pidlParent, IntPtr pidlBelow, bool fImmediate);
 
 
+        /// <summary>
+        /// Combines two PIDLs by appending the second to the first, allocating a new PIDL with <c>CoTaskMemAlloc</c>.
+        /// </summary>
+        /// <param name="pidl1">The first (typically absolute) PIDL.</param>
+        /// <param name="pidl2">The second (typically relative) PIDL.</param>
+        /// <returns>A newly allocated PIDL containing the concatenation. The caller must free this with <c>CoTaskMemFree</c>.</returns>
         [DllImport("shell32", EntryPoint = "#25", CharSet = CharSet.Auto)]
         public static extern IntPtr ILCombine(IntPtr pidl1, IntPtr pidl2);
 
+        /// <summary>
+        /// Returns a pointer to the last item ID in a PIDL. The returned pointer points within the original PIDL
+        /// and must not be freed separately.
+        /// </summary>
+        /// <param name="pidl">The PIDL to inspect.</param>
+        /// <returns>A pointer to the last <c>SHITEMID</c> in the PIDL.</returns>
         [DllImport("shell32", EntryPoint = "#16", CharSet = CharSet.Auto)]
         public static extern IntPtr ILFindLastID(IntPtr pidl);
 
         //[DllImport("shell32", EntryPoint = "#17", CharSet = CharSet.Auto)]
         //public static extern bool ILRemoveLastID([In()] ref IntPtr pidl);
 
+        /// <summary>
+        /// Removes the last item ID from a PIDL, shortening the list by one segment.
+        /// </summary>
+        /// <param name="pidl">The PIDL to modify in place.</param>
+        /// <returns><c>true</c> if the last item was successfully removed; <c>false</c> if the PIDL has only one item or is invalid.</returns>
         [DllImport("shell32.dll", ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool ILRemoveLastID(IntPtr pidl);
 
+        /// <summary>
+        /// Advances to the next item ID in a PIDL.
+        /// </summary>
+        /// <param name="pidl">Pointer to the current item ID.</param>
+        /// <returns>A pointer to the next item ID, or <see cref="IntPtr.Zero"/> if at the end.</returns>
         [DllImport("shell32", CharSet = CharSet.Auto)]
         public static extern IntPtr ILGetNext(IntPtr pidl);
 
+        /// <summary>
+        /// Returns the size, in bytes, of a PIDL including the terminating null.
+        /// </summary>
+        /// <param name="pidl">The PIDL to measure.</param>
+        /// <returns>The size in bytes.</returns>
         [DllImport("shell32.dll", ExactSpelling = true)]
         public static extern uint ILGetSize(IntPtr pidl);
 
+        /// <summary>
+        /// Clones a PIDL by allocating a copy with <c>CoTaskMemAlloc</c> and duplicating the item IDs.
+        /// </summary>
+        /// <param name="pidl">The PIDL to clone.</param>
+        /// <returns>A newly allocated copy. The caller must free this with <c>CoTaskMemFree</c>.</returns>
         [DllImport("shell32.dll", ExactSpelling = true)]
         internal static extern IntPtr ILClone(IntPtr pidl);
 
+        /// <summary>
+        /// Frees a PIDL that was allocated by a Shell function. Prefer <c>CoTaskMemFree</c> for most use cases.
+        /// </summary>
+        /// <param name="pidl">The PIDL to free.</param>
         [DllImport("shell32.dll", ExactSpelling = true)]
         internal static extern void ILFree(IntPtr pidl); //don't recommend you use this.  Use CoTaskMemFree instead
 
@@ -559,6 +639,10 @@ namespace WindowsApiLib.Shell
 
         #region        Notification Declarations
 
+        /// <summary>
+        /// Specifies a Shell item to watch for changes, identified by PIDL, and whether to watch recursively.
+        /// Used as an entry in the array passed to <see cref="SHChangeNotifyRegister(IntPtr, SHCNRF, SHCNE, WM, int, SHChangeNotifyEntry[])"/>.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
         public struct SHChangeNotifyEntry
         {
@@ -566,7 +650,9 @@ namespace WindowsApiLib.Shell
             public bool Recursively;
         }
 
-        // Contains two PIDLs concerning the notify message
+        /// <summary>
+        /// Contains the two PIDLs associated with a Shell change notification message.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct SHNOTIFYSTRUCT
         {
@@ -588,29 +674,37 @@ namespace WindowsApiLib.Shell
         [DllImport("shell32", CharSet = CharSet.Auto)]
         public static extern int SHChangeNotification_Unlock(IntPtr hLock);
 
+        /// <summary>
+        /// Notifies the system of an event that an application has performed. Shell change notifications
+        /// cause registered clients to receive update messages.
+        /// </summary>
+        /// <param name="wEventId">The event type (see <see cref="SHCNE"/>).</param>
+        /// <param name="uFlags">Flags indicating the meaning of <paramref name="dwItem1"/> and <paramref name="dwItem2"/>.</param>
+        /// <param name="dwItem1">First PIDL or pointer whose meaning depends on <paramref name="uFlags"/>.</param>
+        /// <param name="dwItem2">Second PIDL or pointer whose meaning depends on <paramref name="uFlags"/>.</param>
         [DllImport("shell32", CharSet = CharSet.Auto)]
         public static extern void SHChangeNotify(int wEventId, int uFlags, IntPtr dwItem1, IntPtr dwItem2);
 
         #endregion
 
         #region        SHGetDesktopFolder
-        // <summary>
-        // Retrieves the IShellFolder interface for the desktop folder, 
-        // which is the root of the Shell's namespace. 
-        // <param>
-        // ppshf -- Recieves the IShellFolder interface for the desktop folder
-        // </param>
+        /// <summary>
+        /// Retrieves the <see cref="IShellFolder"/> interface for the desktop folder,
+        /// which is the root of the Shell's namespace.
+        /// </summary>
+        /// <param name="ppshf">Receives the <see cref="IShellFolder"/> interface for the desktop folder.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("shell32", CharSet = CharSet.Auto)]
         public static extern int SHGetDesktopFolder(ref IShellFolder ppshf);
 
         /// <summary>
-        /// Get's the pidl of special shell namespace locations
+        /// Retrieves the PIDL of a known folder identified by its <see cref="Guid"/>.
         /// </summary>
-        /// <param name="rfid"></param>
-        /// <param name="dwFlags"></param>
-        /// <param name="hToken"></param>
-        /// <param name="ppidl"></param>
-        /// <returns></returns>
+        /// <param name="rfid">The known folder identifier (e.g., <c>FOLDERID_Documents</c>).</param>
+        /// <param name="dwFlags">Flags controlling the retrieval (typically <c>0</c>).</param>
+        /// <param name="hToken">An access token, or <see cref="IntPtr.Zero"/> for the current user.</param>
+        /// <param name="ppidl">Receives the PIDL of the known folder. The caller must free this with <c>CoTaskMemFree</c>.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("shell32.dll")]
         public static extern int SHGetKnownFolderIDList(
         [MarshalAs(UnmanagedType.LPStruct)] Guid rfid,
@@ -621,13 +715,16 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #region        SHGetFileInfo
-        // SHGetFileInfo
-        // Retrieves information about an object in the file system,
-        // such as a file, a folder, a directory, or a drive root.
-
-        // <summary>
-        // SHGetFileInfo  - for a given Path as a string
-        // </summary>
+        /// <summary>
+        /// Retrieves information about an object in the file system, such as a file, folder, directory, or drive root.
+        /// This overload accepts the path as a string.
+        /// </summary>
+        /// <param name="pszPath">The path to the file or folder to query.</param>
+        /// <param name="dwFileAttributes">File attribute flags used when <c>SHGFI_USEFILEATTRIBUTES</c> is set.</param>
+        /// <param name="sfi">Receives the file information.</param>
+        /// <param name="cbsfi">The size, in bytes, of the <paramref name="sfi"/> structure.</param>
+        /// <param name="uFlags">Flags specifying which information to retrieve (e.g., <c>SHGFI_ICON</c>).</param>
+        /// <returns>A value whose meaning depends on <paramref name="uFlags"/>.</returns>
         [DllImport("shell32", CharSet = CharSet.Auto)]
         public static extern IntPtr SHGetFileInfo(string pszPath, int dwFileAttributes, ref SHFILEINFO sfi, int cbsfi, int uFlags);
 
@@ -683,22 +780,25 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #region        ShGetImageListHandle
-        // UPDATE: Add SHGetImageListHandle
         /// <summary>
-        /// SHGetImageList is not exported correctly in XP.  See KB316931
-        /// http://support.microsoft.com/default.aspx?scid=kb;EN-US;Q316931
-        /// Apparently (and hopefully) ordinal 727 isn't going to change.
+        /// Retrieves a handle to a system image list (small, large, extra-large, etc.).
+        /// Not exported correctly in XP; see KB316931. Accessed by ordinal 727.
         /// </summary>
+        /// <param name="iImageList">The image list to retrieve (e.g., <c>SHIL_SMALL</c> = 0, <c>SHIL_LARGE</c> = 1).</param>
+        /// <param name="riid">Reference to the IID of the desired image list interface.</param>
+        /// <param name="handle">Receives the image list handle.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("shell32.dll", EntryPoint = "#727")]
-
         public static extern int SHGetImageListHandle(int iImageList, ref Guid riid, ref IntPtr handle);
         #endregion
 
         #region        SHGetMalloc
-        // <summary>
-        // Get an Imalloc Interface
-        // Not required for .Net apps, use Marshal class
-        // </summary>
+        /// <summary>
+        /// Retrieves a pointer to the Shell's <see cref="IMalloc"/> interface.
+        /// Not typically needed in .NET applications; prefer <see cref="System.Runtime.InteropServices.Marshal"/> methods.
+        /// </summary>
+        /// <param name="pMalloc">Receives the <see cref="IMalloc"/> interface.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("shell32", CharSet = CharSet.Auto)]
         public static extern int SHGetMalloc(ref IMalloc pMalloc);
         #endregion
@@ -722,12 +822,35 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #region PathIDLists
+        /// <summary>
+        /// Converts a display name (file path, URL, or shell namespace path) to a PIDL.
+        /// </summary>
+        /// <param name="name">The display name to parse.</param>
+        /// <param name="bindingContext">Optional bind context, or <see cref="IntPtr.Zero"/>.</param>
+        /// <param name="pidl">Receives the resulting PIDL. The caller must free this with <c>CoTaskMemFree</c>.</param>
+        /// <param name="sfgaoIn">Requested <see cref="SFGAO"/> attributes to query.</param>
+        /// <param name="sfgaoOut">Receives the actual attributes of the object.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
         public static extern int SHParseDisplayName(string name, IntPtr bindingContext, out IntPtr pidl, uint sfgaoIn, out uint sfgaoOut);
 
+        /// <summary>
+        /// Converts a PIDL to a file system path.
+        /// </summary>
+        /// <param name="pidl">The PIDL to convert.</param>
+        /// <param name="Path">Buffer to receive the path.</param>
+        /// <returns><c>true</c> on success; <c>false</c> if the PIDL does not refer to a file system object.</returns>
         [DllImport("shell32", CharSet = CharSet.Unicode)]
         public static extern bool SHGetPathFromIDList(IntPtr pidl, StringBuilder Path);
 
+        /// <summary>
+        /// Converts a PIDL to a file system path, supporting long paths (beyond MAX_PATH).
+        /// </summary>
+        /// <param name="pidl">The PIDL to convert.</param>
+        /// <param name="pszPath">Buffer to receive the path.</param>
+        /// <param name="cchPath">Size of the buffer in characters.</param>
+        /// <param name="uOpts">Flags (typically <c>0</c>).</param>
+        /// <returns><c>true</c> on success; <c>false</c> if the PIDL does not refer to a file system object.</returns>
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
         public static extern bool SHGetPathFromIDListEx(
             IntPtr pidl,
@@ -735,13 +858,28 @@ namespace WindowsApiLib.Shell
             uint cchPath,
             uint uOpts);
 
+        /// <summary>
+        /// Creates an <see cref="IShellItem"/> from an existing PIDL, using the <c>IntPtr</c> overload.
+        /// </summary>
+        /// <param name="pidl">The absolute PIDL.</param>
+        /// <param name="riid">The interface ID to retrieve (typically <see cref="IID_IShellItem"/>).</param>
+        /// <param name="ppv">Receives the <see cref="IShellItem"/> interface.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("shell32.dll", ExactSpelling = true)]
         public static extern int SHCreateItemFromIDList(IntPtr pidl, ref Guid riid, out IntPtr ppv);
 
-        public const uint SICHINT_CANONICAL = 0x10000000;
-        public const uint SICHINT_TEST_FILESYSPATH_IF_NOT_EQUAL = 0x20000000;
+        //[DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+        //static extern void SHCreateItemFromIDList(
+        //    [In] IntPtr pidl,
+        //    [In, MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+        //    [Out, MarshalAs(UnmanagedType.Interface, IidParameterIndex = 1)] out object ppv
+        //);
+
+        /// <summary>
+        /// Creates an <see cref="IShellItem"/> from an existing PIDL, returning the strongly-typed interface.
+        /// </summary>
         [DllImport("shell32.dll", PreserveSig = false)]
-        public static extern void SHCreateItemFromIDList(
+        public static extern int SHCreateItemFromIDList(
             IntPtr pidl,
             ref Guid riid,
             [MarshalAs(UnmanagedType.Interface)] out IShellItem ppv);
@@ -757,9 +895,19 @@ namespace WindowsApiLib.Shell
             [Out] out IntPtr ppv
         );
 
+        /// <summary>
+        /// Retrieves the display name of a Shell item identified by its PIDL.
+        /// </summary>
+        /// <param name="pidl">The PIDL of the item.</param>
+        /// <param name="sigdnName">The name format to retrieve (see <see cref="SIGDN"/>).</param>
+        /// <param name="ppszName">Receives the name string. The caller must free this with <c>CoTaskMemFree</c>.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         public static extern int SHGetNameFromIDList(IntPtr pidl, SIGDN sigdnName, out IntPtr ppszName);
 
+        /// <summary>
+        /// Retrieves the display name of a Shell item identified by its PIDL (strongly-typed overload).
+        /// </summary>
         [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
         public static extern void SHGetNameFromIDList(
             IntPtr pidl,
@@ -767,10 +915,22 @@ namespace WindowsApiLib.Shell
             [MarshalAs(UnmanagedType.LPWStr)] out string ppszName
         );
 
+        /// <summary>
+        /// Converts a PIDL to a file system path using a character array buffer.
+        /// </summary>
+        /// <param name="pidl">The PIDL to convert.</param>
+        /// <param name="pszPath">Character array buffer to receive the path.</param>
+        /// <returns><c>true</c> on success; <c>false</c> if the PIDL does not refer to a file system object.</returns>
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SHGetPathFromIDListW(IntPtr pidl, [Out] char[] pszPath);
 
+        public const uint SICHINT_CANONICAL = 0x10000000;
+        public const uint SICHINT_TEST_FILESYSPATH_IF_NOT_EQUAL = 0x20000000;
+
+        /// <summary>
+        /// Creates an <see cref="IShellItem"/> from a file system path or shell namespace parsing name.
+        /// </summary>
         [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
         public static extern void SHCreateItemFromParsingName(
             string pszPath,
@@ -783,6 +943,15 @@ namespace WindowsApiLib.Shell
         internal const int SHGDFIL_NETRESOURCE = 2; //pv should point to a NETRESOURCE
         internal const int SHGDFIL_DESCRIPTIONID = 3; //pv should point to a SHDESCRIPTIONID
 
+        /// <summary>
+        /// Retrieves item data stored in the Shell's internal format for a given PIDL.
+        /// </summary>
+        /// <param name="psf">The parent <see cref="IShellFolder"/> that owns the PIDL.</param>
+        /// <param name="pidl">The relative child PIDL.</param>
+        /// <param name="nFormat">The data format to retrieve (e.g., <c>SHGDFIL_FINDDATA</c>).</param>
+        /// <param name="pv">Receives the requested data.</param>
+        /// <param name="cb">The size of the output structure in bytes.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("shell32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
         internal static extern int SHGetDataFromIDListW(
             [MarshalAs(UnmanagedType.Interface)] IShellFolder psf,
@@ -794,7 +963,7 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #region        SHGetRealIDL
-        // SHGetRealIDL converts a simple PIDL to a full PIDL
+        // SHGetRealIDL converts a relative PIDL to a full PIDL
         // Note that Win2K and before do not export SHGetRealIDL, though support it at Ordinal 98
         [DllImport("shell32", EntryPoint = "#98", CharSet = CharSet.Auto)]
         public static extern int SHGetRealIDL(IShellFolder psf, IntPtr pidlSimple, out IntPtr ppidlReal);
@@ -925,6 +1094,9 @@ namespace WindowsApiLib.Shell
         #region            SendMessage
         public const int SB_HORZ = 0;
         public const int SB_VERT = 1;
+        /// <summary>
+        /// Contains information about a hit test in a ListView control, including the point, flags, and item/group index.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct LVHITTESTINFO
         {
@@ -935,41 +1107,73 @@ namespace WindowsApiLib.Shell
             public int iGroup; // safe for modern comctl; ignored if unused
         }
 
-        // <summary>
-        // Sends a message to some Window
-        // </summary>
+        /// <summary>
+        /// Sends the specified message to a window or windows and waits for the message to be processed.
+        /// Multiple overloads are provided for different parameter type combinations.
+        /// </summary>
+        /// <param name="hWnd">Handle of the window to receive the message. Use <see cref="HWND_BROADCAST"/> for all top-level windows.</param>
+        /// <param name="Msg">The message to send.</param>
+        /// <param name="wParam">Additional message-specific information.</param>
+        /// <param name="lParam">Additional message-specific information.</param>
+        /// <returns>The result of the message processing; meaning depends on the message.</returns>
         [DllImport("User32.dll", CharSet = CharSet.Auto)]
         public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, int wParam, int lParam);
 
+        /// <inheritdoc cref="SendMessage(IntPtr, uint, int, int)" />
         [DllImport("User32.dll", CharSet = CharSet.Auto)]
         public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, int wParam, IntPtr lParam);
 
+        /// <inheritdoc cref="SendMessage(IntPtr, uint, int, int)" />
         [DllImport("user32", CharSet = CharSet.Auto)]
         public static extern IntPtr SendMessage(IntPtr hWnd, uint wMsg, IntPtr wParam, IntPtr lParam);
 
+        /// <inheritdoc cref="SendMessage(IntPtr, uint, int, int)" />
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, ref RECT lParam);
-        
+
+        /// <inheritdoc cref="SendMessage(IntPtr, uint, int, int)" />
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref LVHITTESTINFO lParam);
 
+        /// <summary>
+        /// Retrieves the current position of a scrollbar thumb in the specified window.
+        /// </summary>
+        /// <param name="hWnd">Handle to the window with the scrollbar.</param>
+        /// <param name="nBar">The scrollbar to query (<see cref="SB_HORZ"/> or <see cref="SB_VERT"/>).</param>
+        /// <returns>The current position of the scrollbar thumb.</returns>
         [DllImport("user32.dll")]
         public static extern int GetScrollPos(IntPtr hWnd, int nBar);
 
+        /// <inheritdoc cref="SendMessage(IntPtr, uint, int, int)" />
         [DllImport("user32", CharSet = CharSet.Auto)]
         public static extern int SendMessage(IntPtr hWnd, WM wMsg, int wParam, IntPtr lParam);
 
+        /// <inheritdoc cref="SendMessage(IntPtr, uint, int, int)" />
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern bool SendMessage(IntPtr hWnd, uint wMsg, int wParam, ref LVBKIMAGE lParam);
 
+        /// <inheritdoc cref="SendMessage(IntPtr, uint, int, int)" />
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern bool SendMessage(IntPtr hWnd, uint wMsg, int wParam, ref LVITEM lParam);
 
+        /// <summary>
+        /// Places a message in the message queue of the specified window and returns immediately.
+        /// </summary>
+        /// <param name="hWnd">Handle of the window whose message queue is to receive the message.</param>
+        /// <param name="Msg">The message to post.</param>
+        /// <param name="wParam">Additional message-specific information.</param>
+        /// <param name="lParam">Additional message-specific information.</param>
+        /// <returns><c>true</c> if the message was successfully posted; otherwise <c>false</c>.</returns>
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
         #endregion
 
+        /// <summary>
+        /// Destroys an icon and frees any memory the icon occupied.
+        /// </summary>
+        /// <param name="hIcon">Handle to the icon to be destroyed.</param>
+        /// <returns><c>true</c> if the icon was successfully destroyed; otherwise <c>false</c>.</returns>
         [DllImport("user32.dll")]
         public static extern bool DestroyIcon(IntPtr hIcon);
 
@@ -980,25 +1184,68 @@ namespace WindowsApiLib.Shell
         //public static extern bool AppendMenu(IntPtr hMenu, UInt32 uFlags, UIntPtr uIDNewItem, [MarshalAs(UnmanagedType.LPTStr)] string lpNewItem);
         public static extern bool AppendMenu(IntPtr hMenu, UInt32 uFlags, UInt32 uIDNewItem, [MarshalAs(UnmanagedType.LPTStr)] string lpNewItem);
 
+        /// <summary>
+        /// Creates a new popup menu.
+        /// </summary>
+        /// <returns>Handle to the newly created popup menu, or <see cref="IntPtr.Zero"/> on failure.</returns>
         [DllImport("user32.dll")]
         public static extern IntPtr CreatePopupMenu();
 
+        /// <summary>
+        /// Returns the number of items in the specified menu.
+        /// </summary>
+        /// <param name="hMenu">Handle to the menu.</param>
+        /// <returns>The number of items, or <c>-1</c> on failure.</returns>
         [DllImport("user32.dll")]
         public static extern int GetMenuItemCount(int hMenu);
 
+        /// <summary>
+        /// Retrieves the handle to the submenu at the specified position in a menu.
+        /// </summary>
+        /// <param name="hMenu">Handle to the menu.</param>
+        /// <param name="nPos">Zero-based position of the submenu.</param>
+        /// <returns>Handle to the submenu, or <see cref="IntPtr.Zero"/> if none exists.</returns>
         [DllImport("user32")]
         public static extern IntPtr GetSubMenu(IntPtr hMenu, int nPos);
 
+        /// <summary>
+        /// Inserts a new menu item at the specified position in a menu.
+        /// </summary>
+        /// <param name="hMenu">Handle to the menu.</param>
+        /// <param name="uItem">Identifier or position, depending on <paramref name="fByPosition"/>.</param>
+        /// <param name="fByPosition">If <c>true</c>, <paramref name="uItem"/> is a zero-based position; otherwise it is a command identifier.</param>
+        /// <param name="lpmii">A <see cref="MENUITEMINFO"/> structure specifying the menu item.</param>
+        /// <returns><c>true</c> on success; otherwise <c>false</c>.</returns>
         [DllImport("user32", CharSet = CharSet.Auto)]
         public static extern bool InsertMenuItem(IntPtr hMenu, int uItem, bool fByPosition, ref MENUITEMINFO lpmii);
 
+        /// <summary>
+        /// Displays a shortcut menu at the specified location and tracks the selection.
+        /// </summary>
+        /// <param name="hMenu">Handle to the shortcut menu.</param>
+        /// <param name="uFlags">Flags controlling function behavior.</param>
+        /// <param name="x">Horizontal position in screen coordinates.</param>
+        /// <param name="y">Vertical position in screen coordinates.</param>
+        /// <param name="hWnd">Handle to the window that owns the popup menu.</param>
+        /// <param name="lptpm">Pointer to a <c>TPMPARAMS</c> structure, or <see cref="IntPtr.Zero"/>.</param>
+        /// <returns>The menu item identifier of the item the user selected, or <c>0</c> if cancelled.</returns>
         [DllImport("user32.dll")]
         public static extern int TrackPopupMenuEx(IntPtr hMenu, int uFlags, int x, int y, IntPtr hWnd, IntPtr lptpm);
 
+        /// <summary>
+        /// Destroys the specified menu and frees any memory that the menu occupies.
+        /// </summary>
+        /// <param name="hMenu">Handle to the menu to destroy.</param>
+        /// <returns><c>true</c> on success; otherwise <c>false</c>.</returns>
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool DestroyMenu(IntPtr hMenu);
         #endregion
 
+        /// <summary>
+        /// Registers a new clipboard format or retrieves the identifier of an existing format.
+        /// </summary>
+        /// <param name="lpszFormat">The name of the clipboard format to register or look up.</param>
+        /// <returns>The clipboard format identifier, or <c>0</c> on failure.</returns>
         [DllImport("User32", CharSet = CharSet.Auto)]
         public static extern int RegisterClipboardFormat(string lpszFormat);
 
@@ -1007,9 +1254,13 @@ namespace WindowsApiLib.Shell
         #region        comctl32 Dll Declarations
 
         #region        ImageList_GetIconSize
-        // <summary>
-        // Gets an IconSize from a ImagelistHandle
-        // </summary>
+        /// <summary>
+        /// Retrieves the dimensions of images in an image list.
+        /// </summary>
+        /// <param name="himl">Handle to the image list.</param>
+        /// <param name="cx">Receives the width, in pixels, of each image.</param>
+        /// <param name="cy">Receives the height, in pixels, of each image.</param>
+        /// <returns>Nonzero on success; zero on failure.</returns>
         [DllImport("comctl32")]
         public static extern int ImageList_GetIconSize(IntPtr himl, ref int cx, ref int cy);
 
@@ -1017,16 +1268,35 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #region        ImageList_ReplaceIcon
+        /// <summary>
+        /// Replaces an image in an image list with an icon.
+        /// </summary>
+        /// <param name="hImageList">Handle to the image list.</param>
+        /// <param name="IconIndex">Index of the image to replace.</param>
+        /// <param name="hIcon">Handle to the icon to set.</param>
+        /// <returns>The index of the replaced image, or <c>-1</c> on failure.</returns>
         [DllImport("comctl32", CharSet = CharSet.Auto)]
         public static extern int ImageList_ReplaceIcon(IntPtr hImageList, int IconIndex, IntPtr hIcon);
 
 
 
+        /// <summary>
+        /// Returns the number of images in an image list.
+        /// </summary>
+        /// <param name="hImageList">Handle to the image list.</param>
+        /// <returns>The number of images, or <c>0</c> if the list is empty.</returns>
         [DllImport("comctl32", CharSet = CharSet.Auto)]
         public static extern int ImageList_GetImageCount(IntPtr hImageList);
         #endregion
 
         #region        ImageList_GetIcon
+        /// <summary>
+        /// Creates an icon from an image in an image list.
+        /// </summary>
+        /// <param name="himl">Handle to the image list.</param>
+        /// <param name="i">Index of the image.</param>
+        /// <param name="flags">Drawing flags (see <see cref="ILD"/>).</param>
+        /// <returns>Handle to the newly created icon, or <see cref="IntPtr.Zero"/> on failure. The caller must destroy this icon.</returns>
         [DllImport("comctl32")]
         public static extern IntPtr ImageList_GetIcon(IntPtr himl, int i, ILD flags);
 
@@ -1034,6 +1304,16 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #region        ImageList_Draw
+        /// <summary>
+        /// Draws an image list image onto a device context at the specified position.
+        /// </summary>
+        /// <param name="hIml">Handle to the image list.</param>
+        /// <param name="indx">Index of the image to draw.</param>
+        /// <param name="hdcDst">Handle to the destination device context.</param>
+        /// <param name="x">X-coordinate in the device context.</param>
+        /// <param name="y">Y-coordinate in the device context.</param>
+        /// <param name="fStyle">Drawing style flags (see <see cref="ILD"/>).</param>
+        /// <returns>Nonzero on success; zero on failure.</returns>
         [DllImport("comctl32")]
         public static extern int ImageList_Draw(IntPtr hIml, int indx, IntPtr hdcDst, int x, int y, int fStyle);
 
@@ -1044,7 +1324,20 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #region        ImageList_DrawEx
-        // Used for hidden folders in ExpCombo
+        /// <summary>
+        /// Draws an image list image onto a device context with extended options for background and foreground colors.
+        /// </summary>
+        /// <param name="hIml">Handle to the image list.</param>
+        /// <param name="i">Index of the image to draw.</param>
+        /// <param name="hdcDst">Handle to the destination device context.</param>
+        /// <param name="x">X-coordinate in the device context.</param>
+        /// <param name="y">Y-coordinate in the device context.</param>
+        /// <param name="dx">Width of the image to draw.</param>
+        /// <param name="dy">Height of the image to draw.</param>
+        /// <param name="rgbBk">Background color, or <c>CLR_NONE</c> for transparent.</param>
+        /// <param name="rgbFg">Foreground (blend) color, or <c>CLR_NONE</c>.</param>
+        /// <param name="fStyle">Drawing style flags (see <see cref="ILD"/>).</param>
+        /// <returns>Nonzero on success; zero on failure.</returns>
         [DllImport("comctl32")]
         public static extern int ImageList_DrawEx(IntPtr hIml, int i, IntPtr hdcDst, int x, int y, int dx, int dy, int rgbBk, int rgbFg, int fStyle);
 
@@ -1054,27 +1347,59 @@ namespace WindowsApiLib.Shell
 
         #region        Ole32 Dll Declarations
 
+        /// <summary>
+        /// Registers the specified application window as a potential target for OLE drag-and-drop operations.
+        /// </summary>
+        /// <param name="hWnd">Handle to the window to register as a drop target.</param>
+        /// <param name="IdropTgt">The <see cref="IDropTarget"/> implementation that receives drop notifications.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("ole32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         public static extern int RegisterDragDrop(IntPtr hWnd, IDropTarget IdropTgt);
 
-        // Revokes the registration of the specified application window as a potential target for 
-        // OLE drag-and-drop operations
+        /// <summary>
+        /// Revokes the registration of the specified application window as an OLE drag-and-drop drop target.
+        /// </summary>
+        /// <param name="hWnd">Handle to the window previously registered with <see cref="RegisterDragDrop"/>.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("ole32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         public static extern int RevokeDragDrop(IntPtr hWnd);
 
-        // This function frees the specified storage medium
+        /// <summary>
+        /// Frees the specified storage medium and its associated resources.
+        /// </summary>
+        /// <param name="pmedium">The <see cref="STGMEDIUM"/> to release.</param>
         [DllImport("ole32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         public static extern void ReleaseStgMedium(ref STGMEDIUM pmedium);
 
-        // Carries out an OLE drag and drop operation
+        /// <summary>
+        /// Carries out an OLE drag-and-drop operation, registering the data object and drop source
+        /// and entering a modal loop until the operation completes.
+        /// </summary>
+        /// <param name="pDataObject">The data object being dragged.</param>
+        /// <param name="pDropSource">The drop source that provides visual feedback and drop semantics.</param>
+        /// <param name="dwOKEffect">Allowed effects (combination of <see cref="DragDropEffects"/>).</param>
+        /// <param name="pdwEffect">Receives the effect that was performed.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("ole32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         public static extern int DoDragDrop(IntPtr pDataObject, [MarshalAs(UnmanagedType.Interface)] IDropSource pDropSource, DragDropEffects dwOKEffect, out DragDropEffects pdwEffect);
 
-        // Retrieves a drag/drop helper interface for drawing the drag/drop images
+        /// <summary>
+        /// Creates a COM object instance identified by its CLSID.
+        /// </summary>
+        /// <param name="rclsid">The CLSID of the object to create.</param>
+        /// <param name="pUnkOuter">Aggregate controlling <c>IUnknown</c>, or <see cref="IntPtr.Zero"/>.</param>
+        /// <param name="dwClsContext">Context in which the code will run (see <see cref="CLSCTX"/>).</param>
+        /// <param name="riid">The IID of the interface to retrieve.</param>
+        /// <param name="ppv">Receives the requested interface pointer.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("ole32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         public static extern int CoCreateInstance(ref Guid rclsid, IntPtr pUnkOuter, CLSCTX dwClsContext, ref Guid riid, out IntPtr ppv);
 
-        // Retrieves a data object that you can use to access the contents of the clipboard
+        /// <summary>
+        /// Retrieves a data object that provides access to the contents of the clipboard.
+        /// </summary>
+        /// <param name="ppDataObj">Receives the clipboard data object implementing <c>IDataObject</c>.</param>
+        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
         [DllImport("ole32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         public static extern int OleGetClipboard(out IntPtr ppDataObj);
 
@@ -1104,6 +1429,11 @@ namespace WindowsApiLib.Shell
 
         #region        gdi32 Dll Declarations
 
+        /// <summary>
+        /// Deletes a logical pen, brush, font, bitmap, region, or palette, freeing all system resources associated with the object.
+        /// </summary>
+        /// <param name="hObject">Handle to the GDI object to delete.</param>
+        /// <returns>Nonzero on success; zero if the handle is invalid or the object is currently selected.</returns>
         [DllImport("gdi32", CharSet = CharSet.Auto)]
         public static extern int DeleteObject(IntPtr hObject);
 
@@ -1113,6 +1443,10 @@ namespace WindowsApiLib.Shell
 
         #region  Structures 
 
+        /// <summary>
+        /// Contains information about a menu item such as type, state, identifier, submenu handle, and text.
+        /// Used with <c>InsertMenuItem</c>, <c>GetMenuItemInfo</c>, and related functions.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
         public struct MENUITEMINFO
         {
@@ -1148,6 +1482,9 @@ namespace WindowsApiLib.Shell
             public IntPtr hbmpItem;
         }
 
+        /// <summary>
+        /// Extended version of <c>CMINVOKECOMMANDINFO</c> used by context menu handlers for ANSI and Unicode verb strings.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct CMInvokeCommandInfoEx
         {

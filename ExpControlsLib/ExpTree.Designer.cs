@@ -56,6 +56,7 @@ namespace ExpControlsLib
             Controls.Add(_TreeView);
             Name = "ExpTree";
             Size = new Size(200, 264);
+            Load += ExpTree_Load;
             ResumeLayout(false);
         }
 

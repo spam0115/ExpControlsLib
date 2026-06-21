@@ -67,7 +67,7 @@ namespace WindowsApiLib.Shell
 
         // Keep the local System Name for IsRemote testing
         // private static string SystemName;                              // 4/14/2012
-        
+
         /// Keep list of Drives and their DriveType for IsRemote testing
         private static readonly Dictionary<string, bool> DriveDict = new Dictionary<string, bool>();   // 4/16/2012
 
@@ -90,7 +90,7 @@ namespace WindowsApiLib.Shell
         #region    Instance Private Fields
         // m_Folder and m_Pidl must be released/freed at Dispose time
         internal IntPtr m_Pidl;            // The Absolute PIDL for this item (not retained for files)
-        internal IShellFolder? m_IShellFolder = null;    // if item is a folder, contains the Folder interface for this instance
+        //internal IShellFolder? m_IShellFolder = null;    // if item is a folder, contains the Folder interface for this instance.  Had to remove this because it has sta thread affinity and would throw exceptions when used in a multithreaded sta environment
         internal CShellItem? m_Parent = null;
         internal string m_DisplayName = "";
         internal string? m_Path = null;
@@ -146,7 +146,7 @@ namespace WindowsApiLib.Shell
         // Indicates whether IsReadOnly has been set up
         internal bool m_IsReadOnlySetup;
 
-        // m_UpdateFolder is True is the IShellFolder (m_Folder) must be refetched
+        // m_UpdateFolder is True if the IShellFolder (m_Folder) must be refetched
         internal bool m_UpdateFolder;
 
         // Holds a byte() representation of m_PIDL -- filled when needed
@@ -321,7 +321,7 @@ namespace WindowsApiLib.Shell
             }
             set //this is never called
             {
-                m_W32Data = value; 
+                m_W32Data = value;
             }
         }
 
@@ -417,23 +417,23 @@ namespace WindowsApiLib.Shell
         /// Contains the IShellFolder Interface of the instance if it is a Folder.
         /// </summary>
         /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
-        public IShellFolder IShlFolder
-        {
-            get
-            {
-#if DEBUG
-                var name = ShellHelper.GetShellFolderDisplayName(m_IShellFolder);
-#endif
-                if (m_UpdateFolder)
-                {
-                    if (m_IShellFolder is not null)
-                        Marshal.ReleaseComObject(m_IShellFolder);
-                    m_IShellFolder = ShellHelper.GetIShellFolder(Parent, ILFindLastID(m_Pidl));
-                    m_UpdateFolder = false;
-                }
-                return m_IShellFolder;
-            }
-        }
+        //        public IShellFolder IShlFolder
+        //        {
+        //            get
+        //            {
+        //#if DEBUG
+        //                var name = ShellHelper.GetShellFolderDisplayName(m_IShellFolder);
+        //#endif
+        //                if (m_IsFolder && m_UpdateFolder)
+        //                {
+        //                    if (m_IShellFolder is not null)
+        //                        Marshal.ReleaseComObject(m_IShellFolder);
+        //                    m_IShellFolder = ShellHelper.GetIShellFolder(Parent, ILFindLastID(m_Pidl));
+        //                    m_UpdateFolder = false;
+        //                }
+        //                return m_IShellFolder;
+        //            }
+        //        }
 
         /// <summary>
         /// Contains the Full Path and file name of the instance as obtained from Folder.GetDisplayNameOf
@@ -507,14 +507,14 @@ namespace WindowsApiLib.Shell
                 {
                     return (CShellItem[])Array.CreateInstance(typeof(CShellItem), 0);
                 }
-                
+
                 if (m_directories == null)
                 {
                     lock (m_directoriesLock)
                     {
                         if (m_directories == null)
                         {
-                            m_directories = GetContents(SHCONTF.FOLDERS | SHCONTF.INCLUDEHIDDEN);
+                            m_directories = CShellItemFactory.GetContents(this, SHCONTF.FOLDERS | SHCONTF.INCLUDEHIDDEN);
                         }
                     }
                 }
@@ -523,7 +523,7 @@ namespace WindowsApiLib.Shell
                     // **********Comment by Lukai-2021.12.02, otherwise the rename function doesn't work, but after comment, it will affects tree updating, however performance is better
                     // Me.UpdateRefresh(False, True)   '6/30/2012 - Note that it is also true that in some circumstances Windows does not post a RMDIR when Folders are removed.
                 }        // 6/30/2012 - Under some circumstances, Windows does not post MKDIR msgs when Folders are created!!! Do a refresh to ensure we are up to date
-                
+
                 return m_directories.ToArray();
             }
         }
@@ -557,11 +557,11 @@ namespace WindowsApiLib.Shell
 
                 if (m_files == null)
                 {
-                    lock (m_filesLock) 
+                    lock (m_filesLock)
                     {
                         if (m_files == null)
                         {
-                            m_files = GetContents(SHCONTF.NONFOLDERS | SHCONTF.INCLUDEHIDDEN);
+                            m_files = CShellItemFactory.GetContents(this, SHCONTF.NONFOLDERS | SHCONTF.INCLUDEHIDDEN);
                         }
                     }
                 }
@@ -584,7 +584,7 @@ namespace WindowsApiLib.Shell
                 {
                     return new Dictionary<string, CShellItem>();
                 }
-                
+
                 if (m_filesDic == null)
                 {
                     var filesArray = Files; // Ensures m_Files is initialized
@@ -640,7 +640,7 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <returns>CShellItem of this instance's Parent Folder</returns>
         /// <remarks>Returns Nothing for the Desktop which has no Parent</remarks>
-        public CShellItem Parent
+        public CShellItem? Parent
         {
             get
             {
@@ -846,7 +846,7 @@ namespace WindowsApiLib.Shell
 
         #region Shared public functions
 
-        
+
         #region FileInfo derived Properties
 
         /// <summary>
@@ -1032,7 +1032,7 @@ namespace WindowsApiLib.Shell
         }
 
         private Dictionary<string, ListViewSubitemData>? m_columnDic = null;
-        
+
         public Dictionary<string, ListViewSubitemData> ColumnDic
         {
             get
@@ -1132,11 +1132,11 @@ namespace WindowsApiLib.Shell
                 }
                 // Release unmanaged resources. If disposing is false,
                 // only the following code is executed. 
-                if (!(m_IShellFolder == null))
-                {
-                    Marshal.ReleaseComObject(m_IShellFolder);
-                    m_IShellFolder = null;
-                }
+                //if (!(m_IShellFolder == null))
+                //{
+                //    Marshal.ReleaseComObject(m_IShellFolder);
+                //    m_IShellFolder = null;
+                //}
                 if (!m_Pidl.Equals(IntPtr.Zero))
                 {
                     Marshal.FreeCoTaskMem(m_Pidl);
@@ -1337,7 +1337,7 @@ namespace WindowsApiLib.Shell
                 {
                     ClearCaches();
                     if (item.IsFolder && !DirectoryList.Contains(item.PIDL))
-                    { 
+                    {
                         lock (m_directories)
                         {
                             m_directories.Append(item);
@@ -1573,6 +1573,11 @@ namespace WindowsApiLib.Shell
             return "";
         }
 
+        public IShellFolder? GetIShellFolder()
+        {
+            var shellfolder = ShellHelper.GetIShellFolder(PIDL);
+            return shellfolder;
+        }
         /// <summary>
         /// Returns the DisplayName as the normal ToString value
         /// </summary>
@@ -1626,7 +1631,7 @@ namespace WindowsApiLib.Shell
         /// <remarks>A similar function exists in the ShellHelper class. GetDropTargetOf is more efficient.</remarks>
         public Shell.IDropTarget GetDropTargetOf(Control tn)
         {
-            if (IShlFolder == null)
+            if (!IsFolder)
                 return null;
 
             // Standard way: GetUIObjectOf on the parent
@@ -1638,7 +1643,9 @@ namespace WindowsApiLib.Shell
             // Fallback: CreateViewObject (might be needed for some virtual folders or background drops)
             IntPtr pInterface = IntPtr.Zero;
             var tnH = tn.Handle;
-            if (IShlFolder.CreateViewObject(tnH, ShellAPI.IID_IDropTarget, ref pInterface) == S_OK)
+
+            var shellFolder = this.GetIShellFolder();
+            if (shellFolder.CreateViewObject(tnH, ShellAPI.IID_IDropTarget, ref pInterface) == S_OK)
             {
                 return (Shell.IDropTarget)Marshal.GetTypedObjectForIUnknown(pInterface, typeof(Shell.IDropTarget));
             }
@@ -1668,11 +1675,12 @@ namespace WindowsApiLib.Shell
             IntPtr[] pidlSub = new IntPtr[1];
             uint fetched = 0;
 
-            if (IShlFolder == null) return false;
+            if (!IsFolder) return false;
 
             // SHCONTF_FOLDERS: Only look for folders
             // SHCONTF_INCLUDEHIDDEN: Optional, if you want to be certain about hidden ones
-            int hr = IShlFolder.EnumObjects(IntPtr.Zero, SHCONTF.FOLDERS, out enumList);
+            var shellFolder = this.GetIShellFolder();
+            int hr = shellFolder.EnumObjects(IntPtr.Zero, SHCONTF.FOLDERS, out enumList);
 
             if (hr == S_OK && enumList != null)
             {
@@ -1698,20 +1706,19 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <param name="b">Byte() containing a valid PIDL of a Folder</param>
         /// <returns>The IShellFolder for the requested PIDL. If Byte() does not contain a valid PIDL of a Folder, return Nothing</returns>
-        public static IShellFolder MakeFolderFromBytes(byte[] b)
+        public static IShellFolder GetIShellFolder(byte[] b)
         {
             IShellFolder MakeFolderFromBytesRet = default;
             //GetDeskTop();                        // ensure we are initialized
             // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
             if (!CPidl.IsValid(b))
                 return null;
-            if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
+
+            if ((b.Length == 2 && b[0] == 0 & b[1] == 0)
+                || b.Length == 0) // this is the desktop
             {
-                return ShellController.DesktopCSI.IShlFolder;
-            }
-            else if (b.Length == 0)   // Also indicates the desktop
-            {
-                return ShellController.DesktopCSI.IShlFolder;
+                //return ShellController.DesktopCSI.IShlFolder;
+                return ShellHelper.GetIShellFolder(ShellController.DesktopCSI.PIDL);
             }
             else
             {
@@ -1720,7 +1727,7 @@ namespace WindowsApiLib.Shell
                     return null;
                 Marshal.Copy(b, 0, ptr, b.Length);
                 // the next statement assigns a IshellFolder object to the function return, or has an error
-                MakeFolderFromBytesRet = ShellHelper.GetIShellFolder(ShellController.DesktopCSI, ptr);
+                MakeFolderFromBytesRet = ShellHelper.GetIShellFolder(ptr);
                 Marshal.FreeCoTaskMem(ptr);
             }
 
@@ -1731,7 +1738,6 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #endregion
-
 
         #region        Update Methods
 
@@ -1777,9 +1783,14 @@ namespace WindowsApiLib.Shell
         #endregion
 
 
-
-
         #region    Private Methods
+
+        public void ReloadInfo()
+        {
+            ResetInfo();
+            CShellItemFactory.PopulateBasicFields(this);
+            ResetIconIndex();
+        }
 
         public void ResetInfo()
         {
@@ -1789,7 +1800,7 @@ namespace WindowsApiLib.Shell
             m_HasSubFolders = null;
             if (m_W32Data is not null && m_W32Data is W32Find_Data)
                 m_W32Data = null;
-            ResetIconIndex();
+            ResetIconIndex(); //todo: remove this from here
             m_columnDic?.Clear();
         }
         
@@ -1866,42 +1877,6 @@ namespace WindowsApiLib.Shell
                 }
             }
             m_XtrInfo = true;
-        }
-
-        /// <summary>
-        /// Returns the requested Items of this Folder as a CShitemCollection
-        /// </summary>
-        /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
-        internal CShellItemCollection GetContents(SHCONTF flags) //move: to shellcontroller
-        {
-            var items = new CShellItemCollection(this);
-            if (IShlFolder is null)
-                return items; // when does this ever occur?
-
-            Debug.WriteLine($"Getting contents for folder '{this.FullPath}'.");
-
-            CShellItem itm;
-            var pidls = CShellItemFactory.GetPidlsOfFolder(this, flags);
-
-            Debug.WriteLine("\tCreating " + pidls.Count() + " cshellitems...");
-            foreach (IntPtr pidl in pidls)
-            {
-                if (pidl == IntPtr.Zero)
-                {
-                    Debug.WriteLine("Content=IntPtr.Zero while filling " + FullPath);
-                    Marshal.FreeCoTaskMem(pidl);
-                    continue;
-                }
-                else
-                {
-                    itm = CShellItemFactory.Create(pidl, this);
-                    items.Add(itm);                    
-                }
-            }
-
-            Debug.WriteLine("\tFinished creating cshellitems");
-
-            return items;
         }
 
         private void GetSize()

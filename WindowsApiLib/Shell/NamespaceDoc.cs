@@ -29,7 +29,7 @@ namespace WindowsApiLib.Shell
         public static readonly Guid ControlPanel_Category = new("26EE0668-A00A-44D7-9371-BEB064C98683");
         public static readonly Guid Network = new("208D2C60-3AEA-1069-A2D7-08002B30309D");
         public static readonly Guid Libraries = new("031E4825-7B94-4DC3-B131-E946B44C8DD5");
-        public static readonly Guid Documents = new("450D8FBA-AD25-11D0-98A8-0800361B1103");
+        public static readonly Guid MyDocuments = new("450D8FBA-AD25-11D0-98A8-0800361B1103");
         public static readonly Guid Printers = new("2227A280-3AEA-1069-A2DE-08002B30309D");
         public static readonly Guid AdministrativeTools = new("D20EA4E1-3957-11D2-A40B-0C5020524153");
         public static readonly Guid Fonts = new("D20EA4E1-3957-11D2-A40B-0C5020524152");
@@ -54,7 +54,7 @@ namespace WindowsApiLib.Shell
             ["ControlPanel_Category"] = ControlPanel_Category,
             ["Network"] = Network,
             ["Libraries"] = Libraries,
-            ["Documents"] = Documents,
+            ["Documents"] = MyDocuments,
             ["Printers"] = Printers,
             ["AdministrativeTools"] = AdministrativeTools,
             ["Fonts"] = Fonts,
@@ -77,7 +77,7 @@ namespace WindowsApiLib.Shell
             ["26EE0668-A00A-44D7-9371-BEB064C98683"] = ControlPanel_Category,
             ["208D2C60-3AEA-1069-A2D7-08002B30309D"] = Network,
             ["031E4825-7B94-4DC3-B131-E946B44C8DD5"] = Libraries,
-            ["450D8FBA-AD25-11D0-98A8-0800361B1103"] = Documents,
+            ["450D8FBA-AD25-11D0-98A8-0800361B1103"] = MyDocuments,
             ["2227A280-3AEA-1069-A2DE-08002B30309D"] = Printers,
             ["D20EA4E1-3957-11D2-A40B-0C5020524153"] = AdministrativeTools,
             ["D20EA4E1-3957-11D2-A40B-0C5020524152"] = Fonts,

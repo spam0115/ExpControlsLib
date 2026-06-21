@@ -8,6 +8,7 @@ using System.Text;
 using System.Xml.Linq;
 using WindowsApiLib;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
+using static WindowsApiLib.Shell.ShellAPI;
 
 
 namespace WindowsApiLib.Shell
@@ -29,6 +30,8 @@ namespace WindowsApiLib.Shell
                 if (CurrentFolder?.PIDL == null) return string.Empty;
                 return CPidl.ToString(CurrentFolder.PIDL);
             } }
+
+        public CShellItem DesktopCSI { get; internal set; }
 
         public CShellItemHierachyManager(CShellItem? root = null) {
             this.Root = root;
@@ -76,7 +79,7 @@ namespace WindowsApiLib.Shell
         /// <param name="absPidl">An Absolute PIDL referencing the item to be Found.</param>
         /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
         /// <remarks> 5/31/2012 -Function added to replace algorithm used in FindCShItem(ptr as IntPtr) which now only calls this routine.</remarks>
-        public CShellItem? Find(CShellItem rootItem, IntPtr absPidl)
+        public static CShellItem? Find(CShellItem rootItem, IntPtr absPidl)
         {
             if (rootItem is null || absPidl == IntPtr.Zero) return null;
             if (rootItem.PIDL == absPidl) return rootItem;
@@ -93,7 +96,7 @@ namespace WindowsApiLib.Shell
             return Find(rootItem, pidlAndName);
         }
 
-        private CShellItem? Find(CShellItem rootItem, PidlAndCanonicalParsingName pidlAndName)
+        private static CShellItem? Find(CShellItem rootItem, PidlAndCanonicalParsingName pidlAndName)
         {
             if (rootItem.FullPath == pidlAndName.Name)
                 return rootItem;
@@ -148,11 +151,11 @@ namespace WindowsApiLib.Shell
         public CShellItem Add(CShellItem csi)
         {
             if (csi == null) throw new ArgumentNullException(nameof(csi));
-            var result = FindAndExpand(csi.PIDL, out CShellItem parent);
+            var result = FindAndAllowExpansion(csi.PIDL, out CShellItem parent);
             return result;
         }
 
-        public CShellItem? FindOrAdd(string path)
+        public CShellItem? FindAndAllowExpansion(string path)
         {
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException(nameof(path));
 
@@ -164,7 +167,7 @@ namespace WindowsApiLib.Shell
             }
             try
             {
-                return FindAndExpand(pidl, out _);
+                return FindAndAllowExpansion(pidl, out _);
             }
             finally
             {
@@ -172,11 +175,11 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        public CShellItem? FindOrAdd(CShellItem? csi)
+        public CShellItem? FindAndAllowExpansion(CShellItem? csi)
         {
             if (csi == null) throw new ArgumentNullException(nameof(csi));
 
-            var result = FindAndExpand(csi.PIDL, out CShellItem parent);
+            var result = FindAndAllowExpansion(csi.PIDL, out CShellItem parent);
             return result;
         }
 
@@ -206,7 +209,7 @@ namespace WindowsApiLib.Shell
         /// For Example: GetCShItem(Path) may be given a string specifying a non-existant directory.
         /// (eg -- C:\Test\NonExistant\junk.txt). 
         /// In that case, and that case only, Parent may be returned as Nothing.</remarks>
-        public CShellItem? FindAndExpand(IntPtr absPidl, out CShellItem? Parent)
+        public CShellItem? FindAndAllowExpansion(IntPtr absPidl, out CShellItem? Parent)
         {
             Parent = null;
 
@@ -217,7 +220,7 @@ namespace WindowsApiLib.Shell
 
             if (CPidl.ResolvesToSamePathOrName(currentFolder.PIDL, absPidl))  // we found the desired item
             {
-                Parent = null;
+                Parent = currentFolder.Parent;
                 return currentFolder;
             }
 
@@ -409,6 +412,65 @@ namespace WindowsApiLib.Shell
             return removedAny;
         }
 
+
+        /// <summary>
+        /// Clears all items from the hierarchy by recursively disposing of children,
+        /// resets the <see cref="CurrentFolder"/> to null, and sets <see cref="Root"/>
+        /// to a fresh Desktop <see cref="CShellItem"/>.
+        /// </summary>
+        /// <remarks>
+        /// This is useful for resetting the hierarchy to a clean state, for example
+        /// during application startup to avoid race conditions between controls that
+        /// are loading concurrently. All child references (files and directories) are
+        /// detached from their parents before being cleared.
+        /// </remarks>
+        public void Clear()
+        {
+            lock (this.Lock)
+            {
+                if (Root is not null)
+                {
+                    ClearRecursive(Root);
+                }
+
+                CurrentFolder = null;
+
+                CShellItemFactory.ResetDesktopCache();
+                var desktopCsi = CShellItemFactory.Create(CSIDL.DESKTOP);
+                this.DesktopCSI = desktopCsi;
+                Root = desktopCsi;
+            }
+        }
+
+        /// <summary>
+        /// Recursively clears all children (files and directories) from the given
+        /// <see cref="CShellItem"/> and its descendants, detaching parent references.
+        /// </summary>
+        private void ClearRecursive(CShellItem item)
+        {
+            if (item is null) return;
+
+            if (item.FoldersInitialized)
+            {
+                foreach (var child in item.m_directories)
+                {
+                    child.m_Parent = null;
+                    ClearRecursive(child);
+                }
+                item.m_directories.Clear();
+            }
+
+            if (item.FilesInitialized)
+            {
+                foreach (var child in item.m_files)
+                {
+                    child.m_Parent = null;
+                }
+                item.m_files.Clear();
+            }
+
+            item.ClearCaches();
+        }
 
     }
 

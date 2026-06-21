@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.DirectoryServices;
 using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
 using System.Runtime.InteropServices;
 using System.Text;
 using static System.Runtime.InteropServices.JavaScript.JSType;
@@ -17,12 +18,6 @@ namespace WindowsApiLib.Shell
     public class CShellItemFactory
     {
         private static readonly object _lock = new();
-
-        /// <summary>
-        /// Contains the IShellFolder Interface of the instance if it is a Folder.
-        /// </summary>
-        /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
-        private static IShellFolder DesktopShellFolder { get; set; }
 
         /// <summary>
         /// Keep list of Drives and their DriveType for IsRemote testing
@@ -89,7 +84,7 @@ namespace WindowsApiLib.Shell
             // Get the SystemName for Remote item testing
             SystemName = Environment.MachineName;
 
-            (CShellItemFactory.DesktopShellFolder, CShellItemFactory.DesktopCSI) = GetDesktopRoot();
+            CShellItemFactory.DesktopCSI = GetDesktopRoot();
             DeskTopDirectory = Create(CSIDL.DESKTOPDIRECTORY);
 
             RecycleBin = Create(CSIDL.BITBUCKET);
@@ -113,45 +108,27 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        public static (IShellFolder, CShellItem) GetDesktopRoot()
+        /// <summary>
+        /// Gets the existing Desktop item if it exists otherwise creates a new one.
+        /// </summary>
+        /// <returns></returns>
+        public static CShellItem GetDesktopRoot()
         {
-            if (DesktopCSI != null) return (DesktopShellFolder, DesktopCSI);
+            if (DesktopCSI != null) return DesktopCSI;
 
             var csi = new CShellItem();
 
             return PopulateDesktopCShellItem(csi);
         }
 
-        private static (IShellFolder, CShellItem) PopulateDesktopCShellItem(CShellItem csi)
+        /// <summary>
+        /// Clears the cached Desktop root so that the next call to <see cref="GetDesktopRoot"/>
+        /// will create a fresh instance. Used by <see cref="CShellItemHierachyManager.Clear"/>
+        /// to reset the hierarchy to a clean state.
+        /// </summary>
+        internal static void ResetDesktopCache()
         {
-            int HR;
-            //IntPtr tmpPidl = IntPtr.Zero;
-            //HR = SHGetSpecialFolderLocation(0, (int)CSIDL.DESKTOP, ref tmpPidl);
-            var shfi = new SHFILEINFO();
-            var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
-            int dwAttr = 0;
-            SHGetFileInfo(DesktopPidl, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
-
-            IShellFolder iShellFolder = null;
-            HR = SHGetDesktopFolder(ref iShellFolder);
-            csi.m_Pidl = DesktopPidl;
-            csi.m_IShellFolder = iShellFolder;
-            csi.m_DisplayName = shfi.szDisplayName;
-            csi.m_Path = "::{" + DesktopGUID.ToString() + "}";
-            csi.m_IsFolder = true;
-            csi.m_HasSubFolders = true;
-            csi.m_IsBrowsable = true;
-            csi.m_TypeName = shfi.szTypeName;   // not returned correctly by SHGetFileInfo
-            csi.m_IconIndexNormal = shfi.iIcon;
-            csi.m_IconIndexOpen = shfi.iIcon;
-            csi.m_HasDispType = true;
-            csi.IsDropTarget = true;
-            csi.m_IsReadOnly = false;
-            csi.m_IsReadOnlySetup = true;
-            PopulateBasicAttributes(csi);
-            SetDisplayNameAndType(csi);
-
-            return (iShellFolder, csi);
+            DesktopCSI = null;
         }
 
         /// <summary>Given a Full Path in a String,
@@ -168,7 +145,7 @@ namespace WindowsApiLib.Shell
             IntPtr pidl = ShellAPI.ILCreateFromPathW(path);
             if (pidl == IntPtr.Zero) return null;
 
-            return FindOrAdd(pidl);
+            return FindAndAllowExpansion(pidl);
         }
 
         /// <summary>Given a CSIDL,
@@ -183,35 +160,19 @@ namespace WindowsApiLib.Shell
         public static CShellItem? Create(CSIDL ID)
         {
             CShellItem? csi = null;
-            if (ID == CSIDL.DESKTOP) return DesktopCSI;
+            if (ID == CSIDL.DESKTOP)
+            {
+                csi = new CShellItem();
 
-            /* MYDOCUMENTS - the saga continues
-             * In Vista and above, My Documents does not live immediately under the Desktop
-             * (is not a member of DesktopBase.Directories)
-             * Therefore, without special handling, this rtn will return Nothing as the 
-             * CShellItem when CSIDL.MYDOCUMENTS is requested.
-             * MS Documentation states that in Shell32.dll version 6.0 and above CSIDL_MYDOCUMENTS is 
-             * Equivalent to CSIDL_PERSONAL. (6.0 = XP, 6.01 = Vista, 6.1 = Win7)
-             * In XP, the PIDLs of PERSONAL and MYDOCUMENTS are Identical. In Vista and Win7, they are not.
-             * In all OSes, the PIDL for MYDOCUMENTS has 1 item. In Vista and Win7, the PIDL for PERSONAL is a 
-             * two item PIDL, which correctly reflects the location of the corresponding Folder in the directory tree.
-             * Because of this, in Vista and above, I must use PERSONAL as the lookup CSIDL to obtain MYDOCUMENTS.
-             */
+                csi = PopulateDesktopCShellItem(csi);
+
+                return csi;
+            }
+
             int HR;
-            IntPtr tmpPidl = IntPtr.Zero;  // original code - retain
-                                           
-            if (ID == CSIDL.MYDOCUMENTS)
-                ID = CSIDL.PERSONAL; // added 11/28/2010
-            if (ID == CSIDL.MYDOCUMENTS)  // original code - retain
-            {
-                var pchEaten = default(int);
-                int argpdwAttributes = default;
-                HR = DesktopCSI.IShlFolder.ParseDisplayName(default, default, $"::{ShellNamespaceGuids.Documents.ToString()}", ref pchEaten, ref tmpPidl, ref argpdwAttributes);
-            }
-            else
-            {
-                HR = SHGetSpecialFolderLocation(0, (int)ID, ref tmpPidl);
-            }
+            IntPtr tmpPidl = IntPtr.Zero;
+            
+            HR = SHGetSpecialFolderLocation(0, (int)ID, ref tmpPidl);
 
             if (HR == NOERROR)
             {
@@ -257,7 +218,7 @@ namespace WindowsApiLib.Shell
                 handle2.Free();
             }
 
-            csi = FindOrAdd(fullPidl);
+            csi = FindAndAllowExpansion(fullPidl);
 
             if (csi is null && fullPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(fullPidl);
             if (csi is not null && csi.PIDL == IntPtr.Zero)
@@ -266,37 +227,28 @@ namespace WindowsApiLib.Shell
                 csi = null;
             }
 
-            //byte[] fullPidl = CPidl.JoinPidlBytes(pidlFolder, pidlItem);
-
-            //if (fullPidl == null)
-            //    return csi; // can do no more with invalid pidls
-
-            //var thisPidl = Marshal.AllocCoTaskMem(fullPidl.Length);
-            //if (thisPidl.Equals(IntPtr.Zero))
-            //    return null;
-
-            //CPidl.PIDLClone(fullPidl);
-            //Marshal.Copy(fullPidl, 0, thisPidl, fullPidl.Length);
-
-            //csi = GetOrCreateCShItem(thisPidl);
-
-            //if (!thisPidl.Equals(IntPtr.Zero))
-            //    Marshal.FreeCoTaskMem(thisPidl);
-            //if (csi.PIDL.Equals(IntPtr.Zero))
-            //    csi = null; // last minute failsafe
-
-
             return csi;
         }
 
+        /// <summary>
+        /// Creates a cshellitem from a pidl.
+        /// </summary>
+        /// <param name="pidl">can be a relative or full pidl</param>
+        /// <param name="parent">required for relative pidls</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
         public static CShellItem Create(IntPtr pidl, CShellItem? parent = null)
         {
             var csi = new CShellItem();
 
             IntPtr fullPidl;
-
-            if (CPidl.SegmentCount(pidl) <= 1)
-            { //relative pidl or desktop root
+            var segments = CPidl.SegmentCount(pidl);
+            if (segments == 0)
+            {
+                throw new ArgumentException("CShellItemFactory.Create: Invalid zero segment pidl provided.");
+            }
+            else if (segments == 1) //relative pidl or desktop root
+            {   
                 if (CPidl.IsShellNamespaceRoot(pidl))
                 {
                     PopulateCsi(csi, pidl);
@@ -320,61 +272,6 @@ namespace WindowsApiLib.Shell
 
         }
 
-        /// <summary>
-        /// Note: batch calls of GetAttributesOf() doesn't work because it doesn't give open ended results - it only gives results based on the common denominator of flags.
-        /// The only way to make this work would be to use file system querying instead of shell querying but that only works on some items.
-        /// if HierachyManager is null, then batch get
-        /// else
-        ///   see if the parent exists in the hierachy
-        ///   if it has children, don't do batch generation, iterate and return all children
-        ///   else do batch generation
-        /// </summary>
-        /// <param name="pidls"></param>
-        /// <param name="parent"></param>
-        /// <returns></returns>
-        /// <exception cref="ArgumentException"></exception>
-
-        //internal static List<CShellItem> CreateCShItems(List<nint> pidls, CShellItem parent)
-        //{
-        //    if (parent is null) throw new ArgumentException("");
-
-        //    if (HierachyManager is null)
-        //    {
-        //        var results = BatchCreateCShItems(pidls, parent);
-        //        return results;
-        //    }
-        //    else
-        //    {
-        //        var parentCsi = HierachyManager.FindInShellHierarchy(parent.PIDL, out var grandParent);
-        //        if (parentCsi is not null && parentCsi.m_Files is not null)
-        //        {
-        //            var results = new List<CShellItem>(pidls.Count());
-
-        //            foreach (var pidl in pidls)
-        //            {
-        //                var newCsi = GetOrCreateCShItem(pidl);
-        //                results.Add(newCsi);
-        //            }
-        //            return results;
-        //        }
-        //        else
-        //        {
-        //            var results = BatchCreateCShItems(pidls, parentCsi);
-        //            return results;
-        //        }
-        //    }
-        //}
-
-        /// <summary>
-        /// batch calls of GetAttributesOf() doesn't work because 
-        /// </summary>
-        /// <param name="pidls"></param>
-        /// <param name="parent"></param>
-        /// <returns></returns>
-        //private static List<CShellItem> BatchCreateCShItems(List<nint> pidls, CShellItem parent)
-        //{
-        //}
-
         /// <summary>Given an IntPtr representation of a PIDL,
         /// GetCshItem finds or creates a CShellItem and places any new CShellItem into the internal tree.
         /// The tree is expanded (filled in) as necessary to locate the CShellItem or to locate the proper
@@ -384,7 +281,7 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <param name="pidl">Absolute (Full) Pidl of item to be Found or Created</param>
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem? FindOrAdd(IntPtr pidl)
+        public static CShellItem? FindAndAllowExpansion(IntPtr pidl)
         {
             CShellItem? csi = default;
             CShellItem? Parent = null;
@@ -396,7 +293,7 @@ namespace WindowsApiLib.Shell
             }
             else
             {
-                csi = HierachyManager.FindAndExpand(pidl, out Parent);
+                csi = HierachyManager.FindAndAllowExpansion(pidl, out Parent);
                 if (csi == null)
                 {
                     if (!(Parent == null))
@@ -422,7 +319,7 @@ namespace WindowsApiLib.Shell
 
             if (CPidl.IsShellNamespaceRoot(pidl))
             {
-                (_, _) = PopulateDesktopCShellItem(csi);
+                _ = PopulateDesktopCShellItem(csi);
                 return;
             }
             else
@@ -441,11 +338,13 @@ namespace WindowsApiLib.Shell
                 {
                     if (csi.m_Parent != null)
                     {
-                        var splitted = CPidl.Split(pidl);
-                        csi.m_IShellFolder = ShellHelper.GetIShellFolder(csi.m_Parent, splitted.ChildPidl); // get IShellFolder
+                        //var splitted = CPidl.Split(pidl);
+                        //csi.m_IShellFolder = ShellHelper.GetIShellFolder(csi.m_Parent, splitted.ChildPidl); // prevent possible cross sta thread com rpc problems when reusing ishellfolder
+                        //csi.m_IShellFolder = ShellHelper.GetIShellFolder(pidl);
                     }
-                    else
-                        csi.m_IShellFolder = ShellHelper.GetIShellFolder(pidl); // get IShellFolder from absolute PIDL
+                    else {
+                        //csi.m_IShellFolder = ShellHelper.GetIShellFolder(pidl); // get IShellFolder from absolute PIDL
+                    }
                 }
             }
         }
@@ -474,61 +373,13 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-        /// GetFolder returns the IShellFolder interface of the Folder designated by the input Parent and 
-        /// relative PIDL.
-        /// </summary>
-        /// <param name="parent">The CShellItem of the Folder containing the folder for which the 
-        /// IShellFolder interface is desired.</param>
-        /// <param name="relPidl">The relative Pidl of the folder for which the interface is desired.</param>
-        /// <returns>The desired interface or Nothing if error.</returns>
-        /// <remarks></remarks>
-        public static IShellFolder GetFolder(CShellItem parent, IntPtr relPidl)
-        {
-            IntPtr ptr = IntPtr.Zero;
-            IShellFolder rVal = null;
-            int HR = parent.IShlFolder.BindToObject(relPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref ptr);
-            if (HR >= S_OK && ptr != IntPtr.Zero)   // New code (12/12/09)
-            {
-                // The ASUS fix is slightly modified from its' original as per a suggestion from Calum 4/8/2010
-                try                                                     // ASUS Fix
-                {
-                    rVal = (IShellFolder)Marshal.GetTypedObjectForIUnknown(ptr, typeof(IShellFolder));
-                }
-                catch (Exception ex)                                   // ASUS Fix - modified 11/13/2013 - was InvalidCastException
-                {
-#if DEBUG
-                    Debug.WriteLine("GetFolder: " + ex.Message);         // ASUS Fix
-                    throw;                                            // ASUS Fix
-#endif
-                }
-                finally
-                {
-                    Marshal.Release(ptr); // Must do this in all cases
-                }                                                 // ASUS Fix
-            }
-            else
-            {
-                if (ptr != IntPtr.Zero)
-                    Marshal.Release(ptr); // Added Code (12/12/09)
-#if DEBUG
-                CPidl.Dump(relPidl);
-                var ex = Marshal.GetExceptionForHR(HR);
-                Debug.WriteLine($"{ex.Message}");
-
-#endif
-            }    // Removed 10/22/2011 - restored 11/13/2013
-            return rVal;
-        }
-
-
-        /// <summary>
         /// Returns the requested Items of this Folder as a List of relative PIDLs 
         /// (caller must free the pidls after use).
         /// </summary>
         /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
         /// <returns>On error, returns an empty (count=0) List. Otherwise, returns the relative PIDLs of
         /// the requested (via flags param) items in this Folder.</returns>
-        public static List<IntPtr> GetPidlsOfFolder(CShellItem csi, SHCONTF flags)
+        public static List<IntPtr> GetChildPidls(CShellItem csi, SHCONTF flags)
         {
             const uint BATCH_SIZE = 64; //this always only fetches 1 pidl at a time
             bool includeFolders = (flags & SHCONTF.FOLDERS) != 0;
@@ -540,9 +391,12 @@ namespace WindowsApiLib.Shell
 
             listPidls = new List<IntPtr>();
 
+            //IShellFolder iShellFolder = csi.IShlFolder;
+            IShellFolder iShellFolder = ShellHelper.GetIShellFolder(csi.PIDL);
+
             try
             {
-                HR = csi.IShlFolder.EnumObjects(0, flags, out IEnum);
+                HR = iShellFolder.EnumObjects(0, flags, out IEnum);
                 if (HR != S_OK)
                     return listPidls;
 
@@ -562,9 +416,9 @@ namespace WindowsApiLib.Shell
                         // Sharepoint folders return this at the end of the enum
                         if (HR == unchecked((int)0x80004005))
                             break;
-                        //else
-                        //    listPidls = new List<IntPtr>(); // sometimes it is a non-fatal error, ignored
-                        break;
+                        else if (HR == -2147417848) //RPC_E_DISCONNECTED
+                            break;
+                        else break;
                     }
 
                     // S_FALSE means end of enumeration (possibly with a short final batch already processed).
@@ -594,7 +448,7 @@ namespace WindowsApiLib.Shell
                         }
                         else // Only one category is allowed; now we need to know what this item is.
                         {
-                            bool itemIsFolder = IsFolderRel(csi, ptr); // only when needed
+                            bool itemIsFolder = IsFolderRel(iShellFolder, ptr); // only when needed
                             if ((itemIsFolder && !includeFolders) || (!itemIsFolder && !includeNonFolders))
                                 Marshal.FreeCoTaskMem(ptr);
                             else
@@ -612,19 +466,23 @@ namespace WindowsApiLib.Shell
 
         }
 
-
         /// <summary>
         /// Returns the requested Items of the given Folder as a CShitemCollection
         /// </summary>
         /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
-        public CShellItemCollection GetContents(CShellItem csi, SHCONTF flags)
+        public static CShellItemCollection? GetContents(CShellItem csi, SHCONTF flags) //todo: move to shellcontroller
         {
-            var rVal = new CShellItemCollection(csi);
-            if (csi.IShlFolder is null)
-                return rVal;
-            CShellItem itm;
+            if (!csi.IsFolder) return null;
 
-            foreach (IntPtr pidl in GetPidlsOfFolder(csi, flags))
+            var items = new CShellItemCollection(csi);
+
+            Debug.WriteLine($"Getting contents for folder '{csi.FullPath}'.");
+
+            CShellItem itm;
+            var pidls = CShellItemFactory.GetChildPidls(csi, flags);
+
+            Debug.WriteLine("\tCreating " + pidls.Count() + " cshellitems...");
+            foreach (IntPtr pidl in pidls)
             {
                 if (pidl == IntPtr.Zero)
                 {
@@ -632,26 +490,23 @@ namespace WindowsApiLib.Shell
                     Marshal.FreeCoTaskMem(pidl);
                     continue;
                 }
-
-                try
+                else
                 {
-                    itm = Create(pidl, csi);
-                    rVal.Add(itm);
-                }
-                finally
-                {
-                    Marshal.FreeCoTaskMem(pidl);
+                    itm = CShellItemFactory.Create(pidl, csi);
+                    items.Add(itm);
                 }
             }
 
-            return rVal;
+            Debug.WriteLine("\tFinished creating cshellitems");
+
+            return items;
         }
 
         public static IntPtr GetShellNamespacePidl(Guid shellLocationGuid)
         {
             int hr = SHGetKnownFolderIDList(shellLocationGuid, 0, IntPtr.Zero, out IntPtr pidl);
             if (hr < 0) Marshal.ThrowExceptionForHR(hr);
-            return pidl; // caller owns memory
+            return pidl;
         }
 
         /// <summary>
@@ -666,6 +521,42 @@ namespace WindowsApiLib.Shell
             return pidl;
         }
 
+        public static string? GetFullPath(CShellItem csi)
+        {
+            var pidl = csi.PIDL;
+            if (pidl == IntPtr.Zero) throw new ArgumentNullException(nameof(pidl));
+
+            if (csi.m_IsFileSystem)
+                return CPidl.GetFileSystemPath(pidl);
+            else return CPidl.GetParsingPath(pidl);
+        }
+
+        public static bool Exists(IntPtr pidl)
+        {
+            IShellItem shellItem;
+            int hr = SHCreateItemFromIDList(pidl, ref ShellAPI.IID_IShellItem, out shellItem);
+
+            if (hr >= 0)
+            {
+                return true;
+            }
+            else return false;
+        }
+
+
+        /// <summary>
+        /// Get the base attributes of the folder/file that this CShellItem represents, and set the 
+        /// DisplayName and TypeName fields.  The exact fields populated can be changed as desired.
+        /// </summary>
+        /// <param name="csiOutput"></param>
+        public static void PopulateBasicFields(CShellItem csiOutput)
+        {
+            PopulateBasicAttributes(csiOutput);
+            SetDisplayNameAndType(csiOutput);
+            ComputeSortFlag(csiOutput);
+        }
+
+
         #region Private methods
 
         /// <summary>
@@ -675,36 +566,56 @@ namespace WindowsApiLib.Shell
         /// <returns>True if item is a Folder, False is item is NOT a Folder.</returns>
         /// <remarks>Container files (such as .zip or .cab) are marked as a "Folder" in WinXP and above, so
         /// some further testing must be done on XP and above systems. We define such items as non-Folders.</remarks>
-        private static bool IsFolderRel(CShellItem csi, IntPtr ptr)
+        private static bool IsFolderRel(IShellFolder iShellFolder, IntPtr ptr)
         {
-            bool IsFolderRelRet = default;
-            IsFolderRelRet = false;         // assume it is not
+            bool isFolderRelRet = false;
+
             var attrFlag = SFGAO.FOLDER | SFGAO.STREAM;
-            // Note: for GetAttributesOf, we must provide an array, in all cases with 1 element
+            // Note: for GetAttributesOf, we must provide an array
             var aPidl = new IntPtr[1];
             aPidl[0] = ptr;
-            csi.IShlFolder.GetAttributesOf(1, aPidl, ref attrFlag);
+
+            //IntPtr pUnk = Marshal.GetIUnknownForObject(iShellFolder);
+
+            iShellFolder.GetAttributesOf(1, aPidl, ref attrFlag);
             if (((attrFlag & SFGAO.FOLDER) != 0) && !((attrFlag & SFGAO.STREAM) != 0))
             {
-                IsFolderRelRet = true;
+                isFolderRelRet = true;
             }
 
-            return IsFolderRelRet;
+            return isFolderRelRet;
         }
 
-
-        #endregion
-
-        /// <summary>
-        /// Get the base attributes of the folder/file that this CShellItem represents, and set the 
-        /// DisplayName and TypeName fields.  The exact fields populated can be changed as desired.
-        /// </summary>
-        /// <param name="csiOutput"></param>
-        private static void PopulateBasicFields(CShellItem csiOutput)
+        private static CShellItem PopulateDesktopCShellItem(CShellItem csi)
         {
-            PopulateBasicAttributes(csiOutput);
-            SetDisplayNameAndType(csiOutput);
-            ComputeSortFlag(csiOutput);
+            int HR;
+            //IntPtr tmpPidl = IntPtr.Zero;
+            //HR = SHGetSpecialFolderLocation(0, (int)CSIDL.DESKTOP, ref tmpPidl);
+            var shfi = new SHFILEINFO();
+            var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
+            int dwAttr = 0;
+            SHGetFileInfo(DesktopPidl, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
+
+            IShellFolder iShellFolder = null;
+            HR = SHGetDesktopFolder(ref iShellFolder);
+            csi.m_Pidl = DesktopPidl;
+            //csi.m_IShellFolder = iShellFolder;
+            csi.m_DisplayName = shfi.szDisplayName;
+            csi.m_Path = "::{" + DesktopGUID.ToString() + "}";
+            csi.m_IsFolder = true;
+            csi.m_HasSubFolders = true;
+            csi.m_IsBrowsable = true;
+            csi.m_TypeName = shfi.szTypeName;   // not returned correctly by SHGetFileInfo
+            csi.m_IconIndexNormal = shfi.iIcon;
+            csi.m_IconIndexOpen = shfi.iIcon;
+            csi.m_HasDispType = true;
+            csi.IsDropTarget = true;
+            csi.m_IsReadOnly = false;
+            csi.m_IsReadOnlySetup = true;
+            PopulateBasicAttributes(csi);
+            SetDisplayNameAndType(csi);
+
+            return csi;
         }
 
         /// <summary>Get the base attributes of the folder/file that this CShellItem represents</summary>
@@ -962,16 +873,6 @@ namespace WindowsApiLib.Shell
             return true;
         }
 
-        public static string? GetFullPath(CShellItem csi)
-        {
-            var pidl = csi.PIDL;
-            if (pidl == IntPtr.Zero) throw new ArgumentNullException(nameof(pidl));
-
-            if (csi.m_IsFileSystem)
-                return CPidl.GetFileSystemPath(pidl);
-            else return CPidl.GetParsingPath(pidl);
-        }
-
         /// <summary>Computes the Sort key of this CShellItem, based on its attributes</summary>
         private static int ComputeSortFlag(CShellItem csi)
         {
@@ -999,5 +900,6 @@ namespace WindowsApiLib.Shell
             return rVal;
         }
 
+#endregion Private methods
     }
 }

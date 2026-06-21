@@ -16,11 +16,6 @@ namespace WindowsApiLib.Shell
         public CShellItemUpdater ShellUpdater { get; private set; }
    
         /// <summary>
-        /// Contains the IShellFolder Interface of the instance if it is a Folder.
-        /// </summary>
-        /// <returns>The IShellFolder Interface of the instance if it is a Folder</returns>
-        public static IShellFolder Desktop { get; private set; }
-        /// <summary>
         /// the desktop cShellIitem
         /// </summary>
         public static CShellItem? DesktopCSI { get; private set; }
@@ -29,9 +24,10 @@ namespace WindowsApiLib.Shell
 
             HierachyManager = new CShellItemHierachyManager();
             CShellItemFactory.Initialize(HierachyManager); //force the constructor to run
-            (Desktop, DesktopCSI) = CShellItemFactory.GetDesktopRoot();
+            DesktopCSI = CShellItemFactory.GetDesktopRoot();
 
             HierachyManager.Root = DesktopCSI;
+            HierachyManager.DesktopCSI = DesktopCSI;
             ShellUpdater = new CShellItemUpdater(HierachyManager, (uint)SHCNE.DISKEVENTS);
         }
 
@@ -70,7 +66,7 @@ namespace WindowsApiLib.Shell
 
             lock (target)
             {
-                var contents = target.GetContents(flags);
+                var contents = CShellItemFactory.GetContents(target, flags);
 
                 if ((flags & SHCONTF.FOLDERS) > 0)
                 {

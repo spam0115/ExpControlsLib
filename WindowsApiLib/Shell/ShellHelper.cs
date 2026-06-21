@@ -13,6 +13,7 @@ namespace WindowsApiLib.Shell
     /// <summary>
     /// Contains a number of utility routines used by and with WindowsApiLib.
     /// </summary>
+    [SupportedOSPlatform("windows")]
     public class ShellHelper
     {
         #region        Low/High Word
@@ -103,10 +104,10 @@ namespace WindowsApiLib.Shell
         /// <returns>An IStream Interface for the input CShellItem</returns>
         /// <remarks>Not used by WindowsApiLib or its' Demo</remarks>
         /// 
-        [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static bool GetIStream(CShellItem item, IntPtr streamPtr, out IStream stream)
         {
-            if (item.Parent.IShlFolder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStream, streamPtr) == S_OK)
+            var ishellfolder = item.Parent.GetIShellFolder();
+            if (ishellfolder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStream, streamPtr) == S_OK)
             {
                 stream = (IStream)Marshal.GetTypedObjectForIUnknown(streamPtr, typeof(IStream));
                 return true;
@@ -126,10 +127,11 @@ namespace WindowsApiLib.Shell
         /// <param name="storage">Returned Interface</param>
         /// <returns>An IStorage Interface for the input CShellItem</returns>
         /// <remarks>Not used by WindowsApiLib or its' Demo</remarks>        
-        [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-o
         public static bool GetIStorage(CShellItem item, IntPtr storagePtr, out IStorage storage)
         {
-            if (item.Parent.IShlFolder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStorage, storagePtr) == S_OK)
+            var ishellfolder = item.Parent.GetIShellFolder();
+
+            if (ishellfolder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStorage, storagePtr) == S_OK)
             {
                 storage = (IStorage)Marshal.GetTypedObjectForIUnknown(storagePtr, typeof(IStorage));
                 return true;
@@ -157,25 +159,28 @@ namespace WindowsApiLib.Shell
         /// For all purposes, the CShellItem.GetDropTargetOf routine is more efficient and provides
         /// the same interface.</remarks>
         /// 
-        [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static bool GetIDropTarget(CShellItem item, out IDropTarget dropTarget)
         {
             IntPtr dropTargetPtr = IntPtr.Zero;
             var parent = item.Parent;
+
             if (parent == null)
                 parent = item;
+
             IShellFolder folder;
             if (ReferenceEquals(item, ShellController.DesktopCSI))
             {
-                folder = item.IShlFolder;
+                folder = item.GetIShellFolder();
             }
             else
             {
-                folder = item.Parent.IShlFolder;
+                folder = item.Parent.GetIShellFolder();
             }
-            var relpidl = CPidl.ILFindLastID(item.PIDL);
+            var relpidl = item.LastPIDL;
+
             IntPtr rgfReserved = IntPtr.Zero; //unused
-            if (parent.IShlFolder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { relpidl }, ShellAPI.IID_IDropTarget, rgfReserved, out dropTargetPtr) == 0)
+
+            if (folder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { relpidl }, ShellAPI.IID_IDropTarget, rgfReserved, out dropTargetPtr) == 0)
             {
                 dropTarget = (IDropTarget)Marshal.GetTypedObjectForIUnknown(dropTargetPtr, typeof(IDropTarget));
                 return true;
@@ -198,8 +203,6 @@ namespace WindowsApiLib.Shell
         /// <param name="items">An array of CShellItem for which to obtain the IDataObject</param>
         /// <returns>the IDataObject the ShellItem</returns>
         /// <remarks>All CShItems in the array are ASSUMED to have the same parent folder.</remarks>
-        /// 
-        [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static IntPtr GetIDataObject(CShellItem[] items)
         {
             CShellItem parent;
@@ -222,7 +225,8 @@ namespace WindowsApiLib.Shell
 
             IntPtr dataObjectPtr = IntPtr.Zero;
             IntPtr rgfReserved = IntPtr.Zero; //unused
-            var uiObject = parent.IShlFolder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Length, pidls, ShellAPI.IID_IDataObject, rgfReserved, out dataObjectPtr);
+            var ishellfolder = parent.GetIShellFolder();
+            var uiObject = ishellfolder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Length, pidls, ShellAPI.IID_IDataObject, rgfReserved, out dataObjectPtr);
             if (uiObject == S_OK)
             {
                 return dataObjectPtr;
@@ -346,7 +350,8 @@ namespace WindowsApiLib.Shell
             }
 
             IntPtr rgfReserved = IntPtr.Zero; //unused
-            var ret = parent.IShlFolder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { CPidl.ILFindLastID(item.PIDL) }, ShellAPI.IID_IQueryInfo, rgfReserved, out iQueryInfoPtr); 
+            var ishellfolder = parent.GetIShellFolder();
+            var ret = ishellfolder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { CPidl.ILFindLastID(item.PIDL) }, ShellAPI.IID_IQueryInfo, rgfReserved, out iQueryInfoPtr); 
 
             if (ret == S_OK)
             {
@@ -687,11 +692,11 @@ namespace WindowsApiLib.Shell
         /// <param name="relPidl">The relative Pidl of the folder for which the interface is desired.</param>
         /// <returns>The desired interface or Nothing if error.</returns>
         /// <remarks></remarks>
-        public static IShellFolder GetIShellFolder(CShellItem parent, IntPtr relPidl)
+        public static IShellFolder GetIShellFolder(IShellFolder parent, IntPtr relPidl)
         {
             IntPtr ptr = IntPtr.Zero;
             IShellFolder iShFolder = null;
-            int HR = parent.IShlFolder.BindToObject(relPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref ptr);
+            int HR = parent.BindToObject(relPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref ptr);
             if (HR >= S_OK && ptr != IntPtr.Zero)   // New code (12/12/09)
             {
                 // The ASUS fix is slightly modified from its' original as per a suggestion from Calum 4/8/2010
@@ -729,7 +734,7 @@ namespace WindowsApiLib.Shell
         {
             IShellFolder desktop = null;
             int hr = SHGetDesktopFolder(ref desktop);
-            if (hr < 0) return null;
+            if (hr < S_OK) return null;
 
             if (CPidl.IsShellNamespaceRoot(absPidl)) return desktop;
 
@@ -799,41 +804,6 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <example>Dim DWalk as New CShellItem.WalkAllCallBack(addressof yourroutine)</example>
         public delegate bool WalkAllCallBack(CShellItem info, int UserLevel, int Tag);
-
-        /// <summary>
-        /// Given a Byte() containing a valid PIDL of a Folder, return the IShellFolder of that Folder
-        /// </summary>
-        /// <param name="b">Byte() containing a valid PIDL of a Folder</param>
-        /// <returns>The IShellFolder for the requested PIDL. If Byte() does not contain a valid PIDL of a Folder, return Nothing</returns>
-        public static IShellFolder MakeFolderFromBytes(byte[] b)
-        {
-            IShellFolder MakeFolderFromBytesRet = default;
-            //CShellItemFactory.DesktopCSI;                        // ensure we are initialized
-                                                 // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
-            if (!CPidl.IsValid(b))
-                return null;
-            if (b.Length == 2 && b[0] == 0 & b[1] == 0) // this is the desktop
-            {
-                return ShellController.DesktopCSI.IShlFolder;
-            }
-            else if (b.Length == 0)   // Also indicates the desktop
-            {
-                return ShellController.DesktopCSI.IShlFolder;
-            }
-            else
-            {
-                var ptr = Marshal.AllocCoTaskMem(b.Length);
-                if (ptr.Equals(IntPtr.Zero))
-                    return null;
-                Marshal.Copy(b, 0, ptr, b.Length);
-                // the next statement assigns a IshellFolder object to the function return, or has an error
-                MakeFolderFromBytesRet = GetIShellFolder(ShellController.DesktopCSI, ptr);
-                Marshal.FreeCoTaskMem(ptr);
-            }
-
-            return MakeFolderFromBytesRet;
-        }
-
 
         /// <summary>
         /// Returns a List containing the CShItems of all Folders in the entire internal tree.

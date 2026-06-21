@@ -243,7 +243,7 @@ namespace WindowsApiLib.Shell
             SENDTO = 0x9,
             BITBUCKET = 0xA,
             STARTMENU = 0xB,
-            MYDOCUMENTS = 0xC,
+            MYDOCUMENTS = 0x5, //note that this is NOT 0xC
             MYMUSIC = 0xD,
             MYVIDEO = 0xE,
             DESKTOPDIRECTORY = 0x10,

@@ -104,6 +104,8 @@ namespace ExpControlsLib
         private int _imageListMutationDepth = 0;
         private readonly Queue<(object? sender, ThumbnailReadyEventArgs e)> _deferredThumbnailUpdates = new();
 
+        private bool IsInDesignMode => (DesignMode || LicenseManager.UsageMode == LicenseUsageMode.Designtime);
+
         public bool IsShuttingDown {
             get; 
             set {
@@ -114,15 +116,15 @@ namespace ExpControlsLib
 
 
         private CancellationTokenSource? _displayFilesCts;
-        private static readonly StaThreadRunner _staRunner = new StaThreadRunner(5, "ExpListStaRunner");
+        private static readonly StaThreadRunner _staRunner = new StaThreadRunner(5, "ExpListStaRunner"); //todo: i think we might be limited to one sta thread becuase com objects have thread affinity and COM tries to marshal com calls to different threads and post messages onto the other thread's message queue.
 
         private void Cleanup()
         {
             _displayFilesCts?.Cancel();
             _displayFilesCts?.Dispose();
             _displayFilesCts = null;
-                                if (_shellController?.ShellUpdater != null)
-                        _shellController.ShellUpdater.UpdateEvent -= UpdateInvoke;
+            if (_shellController?.ShellUpdater != null)
+                _shellController.ShellUpdater.UpdateEvent -= UpdateInvoke;
         }
 
         #endregion
@@ -603,16 +605,6 @@ namespace ExpControlsLib
             {
                 InitializeComponent();
 
-                // Initialize thumbnail timer for lazy loading
-                _scrollDebounceTimer = new System.Windows.Forms.Timer();
-                _scrollDebounceTimer.Interval = 100;
-                _scrollDebounceTimer.Tick += (s, e) =>
-                {
-                    _scrollDebounceTimer.Stop();
-                    _thumbnailManager.CancelPendingRequests();
-                    LoadImagesForVisibleItems();
-                };
-
                 VisibleChanged += ExpFileList_VisibleChanged;
 
                 _listView.HandleCreated += ExpFileList_HandleCreated;
@@ -635,6 +627,7 @@ namespace ExpControlsLib
                 _listViewWrapper = new VirtualListViewWrapper(this, _listView);
                 _listViewWrapper.CreateListviewItemCallback = CreateListviewItemCallback;
                 _listViewWrapper.UpdateListviewItemCallback = UpdateListviewItemCallback;
+
             }
             finally
             {
@@ -642,6 +635,10 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// This initializes some fields in this user control.  This should be called before the Load event.
+        /// </summary>
+        /// <param name="shellController"></param>
         public void Initialize(ShellController shellController)
         {
             _shellController = shellController;
@@ -654,6 +651,9 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpList_Load(object? sender, EventArgs e)
         {
+            if (IsInDesignMode)
+                return;
+
             Debug.WriteLine("ExpList: ExpList_Load Begin");
             try
             {
@@ -677,6 +677,17 @@ namespace ExpControlsLib
                     SortOrderChanged?.Invoke(this, EventArgs.Empty); //what does this do?
                     OnScroll();
                 };
+
+                // Initialize thumbnail timer for lazy loading
+                _scrollDebounceTimer = new System.Windows.Forms.Timer();
+                _scrollDebounceTimer.Interval = 100;
+                _scrollDebounceTimer.Tick += (s, e) =>
+                {
+                    _scrollDebounceTimer.Stop();
+                    _thumbnailManager.CancelPendingRequests();
+                    LoadImagesForVisibleItems();
+                };
+
 
                 // Setup Change Notification
                 ShellController.Instance.ShellUpdater.UpdateEvent += UpdateInvoke;
@@ -825,8 +836,8 @@ namespace ExpControlsLib
                     try
                     {
                         folder = _currentFolderCsi == ShellController.DesktopCSI
-                            ? _currentFolderCsi.IShlFolder
-                            : _currentFolderCsi.Parent?.IShlFolder;
+                            ? _currentFolderCsi.GetIShellFolder()
+                            : _currentFolderCsi.Parent?.GetIShellFolder();
 
                         if (folder == null)
                         {
@@ -859,7 +870,7 @@ namespace ExpControlsLib
 
                     try
                     {
-                        folder = _currentFolderCsi.IShlFolder;
+                        folder = _currentFolderCsi.GetIShellFolder();
                         if (folder == null)
                         {
                             Debug.WriteLine("Failed to get folder interface for selected items");
@@ -2003,7 +2014,7 @@ namespace ExpControlsLib
             if (pathName == null) 
                 csi = null;
             else
-                csi = _shellController.HierachyManager.FindOrAdd(pathName);
+                csi = _shellController.HierachyManager.FindAndAllowExpansion(pathName);
 
             await LoadDirectoryBaseAsync(csi, includeFolder);
 
@@ -2015,7 +2026,7 @@ namespace ExpControlsLib
             if (csi is null) return;
             if (!reload && (_currentFolderCsi is not null && csi.FullPath == CurrentPath)) return;
 
-            var hierarchyCsi = _shellController.HierachyManager.FindOrAdd(csi);
+            var hierarchyCsi = _shellController.HierachyManager.FindAndAllowExpansion(csi);
 
             await LoadDirectoryBaseAsync(hierarchyCsi, includeFolder);
 
@@ -2927,7 +2938,7 @@ namespace ExpControlsLib
                     }
 
                     IntPtr newPidl = IntPtr.Zero;
-                    if (item.Parent.IShlFolder.SetNameOf(
+                    if (item.Parent.GetIShellFolder().SetNameOf(
                             _listView.Handle.ToInt32(),
                             CPidl.ILFindLastID(item.PIDL),
                             newName,

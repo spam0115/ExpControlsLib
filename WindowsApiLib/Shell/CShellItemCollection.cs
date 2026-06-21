@@ -113,6 +113,13 @@ namespace WindowsApiLib.Shell
             return false;
         }
 
+        public bool ContainsEquivalentAbsolutePidl(IntPtr pidl)
+        {
+            var result = CShellItemHierachyManager.Find(m_parent, pidl);
+
+            return result != null;
+        }
+
         public int IndexOf(CShellItem value)
         {
             return m_items.IndexOf(value);
@@ -166,7 +173,7 @@ namespace WindowsApiLib.Shell
             }
 
             // Fallback to shell-based comparison
-            IShellFolder folder = m_parent.IShlFolder;
+            IShellFolder folder = m_parent.GetIShellFolder();
             if (folder != null)
             {
                 for (int i = 0; i < m_items.Count; i++)

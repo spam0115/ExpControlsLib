@@ -924,7 +924,7 @@
             <param name="text"></param>
             <param name="tag"></param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.EnsureCustomColumnDataFetched(WindowsApiLib.Shell.CShellItem,System.String)">
+        <member name="M:ExpControlsLib.ExpList.EnsureCustomColumnDataFetched(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Loads all special custom column data that isn't part of CShellItem's default properties by firing
             the ExpListGetColumnData event.  This allows external handlers to provide bulk data for all columns 
@@ -937,7 +937,7 @@
             Refreshes all items in the current folder, clearing all caches and re-reading from disk.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.LoadDirectory(System.String,System.Boolean,System.Boolean)">
+        <member name="M:ExpControlsLib.ExpList.LoadDirectoryAsync(System.String,System.Boolean,System.Boolean)">
             <summary>
             Populates the list view with files and directories from the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
             </summary>
@@ -1205,7 +1205,7 @@
             Gets the <see cref="T:WindowsApiLib.Shell.CShellItem"/> being displayed.
             </summary>
         </member>
-        <member name="P:ExpControlsLib.ExpListGetColumnDataEventArgs.ColumnData">
+        <member name="M:ExpControlsLib.ExpListGetColumnDataEventArgs.#ctor(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Gets the dictionary of column data, keyed by column name.
             </summary>
@@ -1469,6 +1469,7 @@
         <member name="P:ExpControlsLib.ExpTree.StartUpDirectory">
             <summary>
             Sets the initial Root directory of ExpTree.
+            This should only be set once before the tree is shown.
             </summary>
             <value>Must be one of the StartDir Enum values.</value>
             <returns>Current StartDir value.</returns>
@@ -1551,10 +1552,10 @@
         <member name="M:ExpControlsLib.ExpTree.ExpandANodeAsync(WindowsApiLib.Shell.CShellItem,System.Boolean)">
             <summary>
             Asynchronously expands TreeNodes from the tree root through the node represented by
-            <paramref name="newItem"/>, populating lazy-loaded (dummy) nodes on demand.
+            <paramref name="target"/>, populating lazy-loaded (dummy) nodes on demand.
             This is the preferred async counterpart of <see cref="M:ExpControlsLib.ExpTree.ExpandANode(WindowsApiLib.Shell.CShellItem,System.Boolean)"/>.
             </summary>
-            <param name="newItem">
+            <param name="target">
             The <see cref="T:WindowsApiLib.Shell.CShellItem"/> whose corresponding TreeNode should be expanded and
             optionally selected.
             </param>
@@ -1926,18 +1927,18 @@
             <c>"copy"</c>, or <c>"paste"</c>).
             </param>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.SetRootItemAsync(WindowsApiLib.Shell.CShellItem,ExpControlsLib.ExpTree.StartDir)">
+        <member name="M:ExpControlsLib.ExpTree.SetRootItemAsync(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Asynchronously loads and displays the tree rooted at the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>
             or <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value. Any in-progress load is cancelled before the new one begins.
             Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
             </summary>
-            <param name="item">
+            <param name="csi">
             The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
             should be used to resolve the root instead.
             </param>
             <param name="dir">
-            A <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value used to resolve the root when <paramref name="item"/> is <c>null</c>.
+            A <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value used to resolve the root when <paramref name="csi"/> is <c>null</c>.
             Defaults to <see cref="F:ExpControlsLib.ExpTree.StartDir.None"/>.
             </param>
         </member>
@@ -2590,6 +2591,12 @@
             Virtual and Regular modes. Provides a unified interface for data manipulation.
             </summary>
         </member>
+        <member name="F:ExpControlsLib.VirtualListViewWrapper._indexPathToLvi">
+            <summary>
+            Provides a mapping from file name to ListViewItems in the listview.  
+            Note: This can only be used in non-virtual mode beucase in virtual mode ListViewItems do not persist.
+            </summary>
+        </member>
         <member name="P:ExpControlsLib.VirtualListViewWrapper.CreateListviewItemCallback">
             <summary>
             Callback to create a new ListViewItem for a given CShellItem.
@@ -2644,6 +2651,7 @@
             </summary>
             <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to search for.</param>
             <returns>The matching <see cref="T:System.Windows.Forms.ListViewItem"/>, or null if not found.</returns>
+            <remarks>Only usable in non-virtual mode.</remarks>
         </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.SetSortState(System.Int32,System.Windows.Forms.SortOrder)">
             <summary>
