@@ -176,6 +176,7 @@ namespace WindowsApiLib.Shell
                                 }
 
                                 Marshal.FreeCoTaskMem(parentPidl);
+                                Marshal.FreeCoTaskMem(relPidl);
                             }
                             finally
                             {
@@ -496,6 +497,7 @@ namespace WindowsApiLib.Shell
                         break;
                     }
                 case CShItemUpdateType.Renamed:
+                case CShItemUpdateType.Moved:
                     {
                         DoRenameOrMove(csi, changedPidl, changeType);
                         break;
@@ -730,6 +732,12 @@ namespace WindowsApiLib.Shell
                         }
                         
                         var newItem = _shellItemFactory.Create(newPidl, csi);
+                        if (newItem is null)
+                        {
+                            Marshal.FreeCoTaskMem(newPidl);
+                            newPidls[i] = IntPtr.Zero;
+                            continue;
+                        }
                         var result = _hierarchyManager.Add(newItem);
                         if (result != null)
                         {

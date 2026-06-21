@@ -238,9 +238,33 @@
             Release the IDropTarget and free's the allocated memory
             </summary>
         </member>
+        <member name="T:ExpControlsLib.ContextMenuResult">
+            <summary>
+            Result of a <see cref="M:ExpControlsLib.ContextMenu.ShowMenu(System.IntPtr,WindowsApiLib.Shell.CShellItem[],System.Drawing.Point,System.Boolean,System.Boolean)"/> call.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ContextMenuResult.Success">
+            <summary>True if the user selected a command; false if the menu was cancelled.</summary>
+        </member>
+        <member name="P:ExpControlsLib.ContextMenuResult.Verb">
+            <summary>The verb string (e.g. "open", "rename") from GetCommandString, or null for custom commands.</summary>
+        </member>
+        <member name="P:ExpControlsLib.ContextMenuResult.CommandInfo">
+            <summary>The raw command information from the shell context menu.</summary>
+        </member>
+        <member name="T:ExpControlsLib.NewMenuScope">
+            <summary>
+            A disposable scope that manages the lifetime of a "New" submenu created by
+            <see cref="M:ExpControlsLib.ContextMenu.SetUpNewMenu(WindowsApiLib.Shell.CShellItem,System.IntPtr,System.Int32)"/>. Disposing this scope releases all
+            associated COM objects and clears the menu handle.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.NewMenuScope.MenuHandle">
+            <summary>The HMENU of the "New" submenu within the parent context menu.</summary>
+        </member>
         <member name="T:ExpControlsLib.ContextMenu">
             <summary>
-            WindowsContextMenu provides the infrastucture for displaying a Windows Context Menu on a Control
+            WindowsContextMenu provides the infrastructure for displaying a Windows Context Menu on a Control
             and for Invoking a Command selected by the user from that Context Menu. Cascaded sub-menus are created,
             displayed, and responded to as required.
             The Context Menu applies to all CShItems
@@ -248,9 +272,6 @@
             </summary>
             <remarks>Though specifically designed for ListView and TreeView Controls, this Class will work for any Control which
                      is associated with a single Folder and can provide CShItems from that Folder.</remarks>
-        </member>
-        <member name="F:ExpControlsLib.ContextMenu.cntxMenuBase">
-            <summary>Base interface for basic context menu commands (Open, Copy, etc.).</summary>
         </member>
         <member name="F:ExpControlsLib.ContextMenu.cntxMenuExtended">
             <summary>Extends IContextMenu to support owner-drawn items and submenus (HandleMenuMsg).</summary>
@@ -267,37 +288,38 @@
         <member name="F:ExpControlsLib.ContextMenu.newMenuCascading">
             <summary>Extends newMenu2 to support advanced cascading features in the 'New' menu.</summary>
         </member>
-        <member name="M:ExpControlsLib.ContextMenu.ShowMenu(System.IntPtr,WindowsApiLib.Shell.CShellItem[],System.Drawing.Point,System.Boolean,WindowsApiLib.Shell.ShellAPI.CMInvokeCommandInfoEx@,System.Boolean)">
+        <member name="M:ExpControlsLib.ContextMenu.ShowMenu(System.IntPtr,WindowsApiLib.Shell.CShellItem[],System.Drawing.Point,System.Boolean,System.Boolean)">
             <summary>
-            If this method returns true then the caller must call ReleaseMenu
+            Displays a shell context menu for the given items and returns the user's selection.
+            All COM resources are released before this method returns — callers do NOT need to
+            call <see cref="!:ReleaseMenu"/> afterward.
             </summary>
             <param name="hwnd">The handle to the control to host the ContextMenu</param>
             <param name="items">The items for which to show the ContextMenu. These items must be in the same folder.</param>
             <param name="pt">The point where the ContextMenu should appear</param>
-            <param name="allowrename">Set if the ContextMenu should contain the Rename command where appropriate</param>
-            <param name="cmi">The command information for the users selection</param>
+            <param name="allowRename">Set if the ContextMenu should contain the Rename command where appropriate</param>
             <param name="minimal">If true, uses CMF.VERBSONLY to filter out most 3rd party extensions</param>
-            <returns></returns>
-            <remarks></remarks>
+            <returns>A <see cref="T:ExpControlsLib.ContextMenuResult"/> indicating what the user selected.</returns>
         </member>
         <member name="M:ExpControlsLib.ContextMenu.InvokeCommand(WindowsApiLib.Shell.IContextMenu,System.UInt32,System.String,System.Drawing.Point)">
             <summary>
-            Invokes a specific command from an IContextMenu
+            Invokes a specific command from an IContextMenu.
             </summary>
             <param name="iContextMenu">the IContextMenu containing the item</param>
             <param name="cmd">the index of the command to invoke</param>
             <param name="parentDir">the parent directory from where to invoke</param>
-            <param name="ptInvoke">the point (in screen co�rdinates) from which to invoke</param>
+            <param name="ptInvoke">the point (in screen coordinates) from which to invoke</param>
         </member>
         <member name="M:ExpControlsLib.ContextMenu.SetUpNewMenu(WindowsApiLib.Shell.CShellItem,System.IntPtr,System.Int32)">
             <summary>
-            If this method returns true then the caller must call ReleaseNewMenu
+            Creates and initializes a "New" submenu for the given folder.
+            Returns a <see cref="T:ExpControlsLib.NewMenuScope"/> that must be disposed by the caller
+            (typically via a <c>using</c> statement) when the menu is no longer needed.
             </summary>
-            <param name="itm"></param>
-            <param name="contextMenu"></param>
-            <param name="index"></param>
-            <returns></returns>
-            <remarks></remarks>
+            <param name="itm">The folder for which to create the "New" submenu.</param>
+            <param name="contextMenu">The parent popup menu handle to attach the submenu to.</param>
+            <param name="index">The position index within the parent menu.</param>
+            <returns>A <see cref="T:ExpControlsLib.NewMenuScope"/> that manages the submenu lifetime.</returns>
         </member>
         <member name="T:ExpControlsLib.ControlDropWrapper">
             <summary>
@@ -624,15 +646,19 @@
             Occurs when Copy to Folder is selected from the context menu.
             </summary>
         </member>
-        <member name="T:ExpControlsLib.ExpList.ExpListSelectedIndexChangedEventHandler">
+        <member name="T:ExpControlsLib.ExpList.ExpListDeletedEventHandler">
             <summary>
-            Delegate for the <see cref="T:ExpControlsLib.ExpList.ExpListSelectedIndexChangedEventHandler"/> event.
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListDeleted"/> event.
             </summary>
-            <param name="items">The collection of selected list view items.</param>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.ExpListDeleted">
+            <summary>
+            Occurs when items are deleted from the list view.
+            </summary>
         </member>
         <member name="E:ExpControlsLib.ExpList.SelectedIndexChanged">
             <summary>
-            Occurs when the selection in the list view is requested.
+            Occurs when the selection in the list view changes.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ExpList.ExpListItemSelectionChangedEventHandler">
@@ -1201,6 +1227,21 @@
             Gets the items to be copied.
             </summary>
         </member>
+        <member name="T:ExpControlsLib.ExpListDeletedEventArgs">
+            <summary>
+            Event arguments for the <see cref="E:ExpControlsLib.ExpList.ExpListDeleted"/> event.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListDeletedEventArgs.Items">
+            <summary>
+            Gets the items that were deleted.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListDeletedEventArgs.Indices">
+            <summary>
+            Gets the indices the deleted items occupied before removal.
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.ExpListGetColumnDataEventArgs">
             <summary>
             Event arguments for the <see cref="E:ExpControlsLib.ExpList.ExpListGetColumnData"/> event.
@@ -1372,6 +1413,17 @@
             <param name="Item">The CShellItem represented by the TreeNode, and stored in the
             TreeNode's Tag.</param>
             <remarks></remarks>
+        </member>
+        <member name="T:ExpControlsLib.ExpTree.ExpTreeDeletedEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpTree.ExpTreeDeleted"/> event.
+            </summary>
+            <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> of the deleted folder.</param>
+        </member>
+        <member name="E:ExpControlsLib.ExpTree.ExpTreeDeleted">
+            <summary>
+            Occurs when a folder is deleted from the tree view.
+            </summary>
         </member>
         <member name="T:ExpControlsLib.ExpTree.ExpTreeNodeSelectedEventHandler">
             <summary>

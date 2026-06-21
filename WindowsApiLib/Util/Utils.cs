@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -25,9 +26,8 @@ namespace WindowsApiLib
         {
             try
             {
-                var deviceId = drivePath.Substring(0, 2);
-                var disk = new System.Management.ManagementObject("win32_logicaldisk.deviceid=\"" + deviceId + "\"");
-                return Convert.ToInt64(disk["Size"]);
+                var di = new DriveInfo(drivePath.Substring(0, 2));
+                return di.TotalSize;
             }
             catch
             {

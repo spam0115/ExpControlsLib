@@ -206,6 +206,18 @@ namespace ExpControlsLib
         public event ExpTreeNodeSelectedEventHandler ExpTreeNodeSelected;
 
         /// <summary>
+        /// Delegate for the <see cref="ExpTreeDeleted"/> event.
+        /// </summary>
+        /// <param name="item">The <see cref="CShellItem"/> of the deleted folder.</param>
+        public delegate void ExpTreeDeletedEventHandler(CShellItem item);
+        /// <summary>
+        /// Occurs when a folder is deleted from the tree view.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires when a folder is deleted")]
+        public event ExpTreeDeletedEventHandler ExpTreeDeleted;
+
+        /// <summary>
         /// Delegate for the <see cref="ExpTreeNodeSelected"/> event.
         /// </summary>
         /// <param name="SelPath">The file system path or display name of the selected Shell item.</param>
@@ -479,7 +491,11 @@ namespace ExpControlsLib
             }
             set
             {
-                if (_initialized) throw new Exception("You should not access StartUpDirectory after initialization.");
+                if (_initialized) 
+                {
+                    Debug.WriteLine("ExpTree.StartUpDirectory: cannot change startup directory after startup.");
+                    return;
+                }
                 m_StartUpDirectory = value;
 
                 //if (Array.IndexOf(Enum.GetValues(value.GetType()), value) >= 0)
@@ -1009,6 +1025,7 @@ namespace ExpControlsLib
 
                                     if (exitSelect)
                                     {
+                                        ExpTreeDeleted?.Invoke(e.Item);
                                         break;
                                     }
 
@@ -1401,17 +1418,12 @@ namespace ExpControlsLib
                 {
                     var itms = new CShellItem[1];
                     itms[0] = (CShellItem)tn.Tag;
-                    CMInvokeCommandInfoEx cmi = default;
-                    if (m_WindowsContextMenu.ShowMenu(Handle, itms, MousePosition, m_allowFolderRename, out cmi, m_minimalContextMenu))
+                    var result = m_WindowsContextMenu.ShowMenu(Handle, itms, MousePosition, m_allowFolderRename, m_minimalContextMenu);
+                    if (result.Success)
                     {
-                        int verbId = cmi.lpVerb.ToInt32();
+                        int verbId = result.CommandInfo.lpVerb.ToInt32();
 
-                        // Check for rename
-                        var cmdBytes = new byte[257];
-                        m_WindowsContextMenu.cntxMenuBase.GetCommandString(verbId, (int)GCS.VERBA, 0, cmdBytes, 256);
-
-                        string cmdName = SzToString(cmdBytes).ToLower();
-                        if (cmdName.Equals("rename"))
+                        if ("rename".Equals(result.Verb))
                         {
                             _TreeView.LabelEdit = true;
                             tn.BeginEdit();
@@ -1494,7 +1506,6 @@ namespace ExpControlsLib
                                 });
                             }
                         }
-                        m_WindowsContextMenu.ReleaseMenu();
                     }
                 }
             }

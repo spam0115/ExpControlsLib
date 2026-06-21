@@ -65,10 +65,17 @@ namespace WindowsApiLib.Shell
             if (string.IsNullOrEmpty(fullFileName)) return null;
 
             IntPtr pidl = ShellAPI.ILCreateFromPathW(fullFileName);
+            if (pidl == IntPtr.Zero) return null;
 
-            var pidlAndName = new PidlAndCanonicalParsingName(pidl, fullFileName);
-
-            return Find(Root, pidlAndName);
+            try
+            {
+                var pidlAndName = new PidlAndCanonicalParsingName(pidl, fullFileName);
+                return Find(Root, pidlAndName);
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(pidl);
+            }
         }
 
         /// <summary>

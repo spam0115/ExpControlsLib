@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.DirectoryServices;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
@@ -677,11 +678,11 @@ namespace WindowsApiLib.Shell
             if (csiOutput.m_IsFolder && csiOutput.m_Path.Length == 3 && csiOutput.m_Path.Substring(1).Equals(@":\"))
             {
                 csiOutput.m_IsDisk = true;
-                try // 04/16/2012 Entire Try Block
+                try
                 {
-                    var disk = new System.Management.ManagementObject("win32_logicaldisk.deviceid=\"" + csiOutput.FullPath.Substring(0, 2) + "\"");
-                    csiOutput.m_Length = Convert.ToInt64(disk["Size"]);
-                    if ((Convert.ToUInt32(disk["DriveType"]).ToString() ?? "") == (4.ToString() ?? ""))
+                    var di = new DriveInfo(csiOutput.FullPath.Substring(0, 2));
+                    csiOutput.m_Length = di.TotalSize;
+                    if (di.DriveType == DriveType.Network)
                     {
                         csiOutput.m_IsNetWorkDrive = true;
                         csiOutput.m_IsRemote = true;

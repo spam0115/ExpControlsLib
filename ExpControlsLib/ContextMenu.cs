@@ -11,7 +11,50 @@ using static WindowsApiLib.Shell.ShellAPI;
 namespace ExpControlsLib
 {
     /// <summary>
-    /// WindowsContextMenu provides the infrastucture for displaying a Windows Context Menu on a Control
+    /// Result of a <see cref="ContextMenu.ShowMenu"/> call.
+    /// </summary>
+    public readonly struct ContextMenuResult
+    {
+        /// <summary>True if the user selected a command; false if the menu was cancelled.</summary>
+        public bool Success { get; init; }
+
+        /// <summary>The verb string (e.g. "open", "rename") from GetCommandString, or null for custom commands.</summary>
+        public string? Verb { get; init; }
+
+        /// <summary>The raw command information from the shell context menu.</summary>
+        public CMInvokeCommandInfoEx CommandInfo { get; init; }
+    }
+
+    /// <summary>
+    /// A disposable scope that manages the lifetime of a "New" submenu created by
+    /// <see cref="ContextMenu.SetUpNewMenu"/>. Disposing this scope releases all
+    /// associated COM objects and clears the menu handle.
+    /// </summary>
+    public sealed class NewMenuScope : IDisposable
+    {
+        private readonly ContextMenu _owner;
+        private bool _disposed;
+
+        internal NewMenuScope(ContextMenu owner)
+        {
+            _owner = owner;
+        }
+
+        /// <summary>The HMENU of the "New" submenu within the parent context menu.</summary>
+        public IntPtr MenuHandle => _owner.newMenuPtr;
+
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                _disposed = true;
+                _owner.ReleaseNewMenu();
+            }
+        }
+    }
+
+    /// <summary>
+    /// WindowsContextMenu provides the infrastructure for displaying a Windows Context Menu on a Control
     /// and for Invoking a Command selected by the user from that Context Menu. Cascaded sub-menus are created,
     /// displayed, and responded to as required.
     /// The Context Menu applies to all CShItems
@@ -20,252 +63,201 @@ namespace ExpControlsLib
     /// <remarks>Though specifically designed for ListView and TreeView Controls, this Class will work for any Control which
     ///          is associated with a single Folder and can provide CShItems from that Folder.</remarks>
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
-    public class ContextMenu
+    public class ContextMenu : IDisposable
     {
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool DestroyMenu(IntPtr hMenu);
 
-        /// <summary>Base interface for basic context menu commands (Open, Copy, etc.).</summary>
-        public IContextMenu cntxMenuBase = null;
+        private IContextMenu cntxMenuBase = null;
         /// <summary>Extends IContextMenu to support owner-drawn items and submenus (HandleMenuMsg).</summary>
-        public IContextMenu2 cntxMenuExtended = null;
+        internal IContextMenu2 cntxMenuExtended = null;
         /// <summary>Extends IContextMenu2 to support advanced cascading menus with result return (HandleMenuMsg2).</summary>
-        public IContextMenu3 cntxMenuCascading = null;
+        internal IContextMenu3 cntxMenuCascading = null;
 
         /// <summary>Base interface for the 'New' submenu creation.</summary>
-        public IContextMenu newMenuBase = null;
+        internal IContextMenu newMenuBase = null;
         /// <summary>Extends newMenu to support owner-drawn items and submenus in the 'New' menu.</summary>
-        public IContextMenu2 newMenuExtended = null;
+        internal IContextMenu2 newMenuExtended = null;
         /// <summary>Extends newMenu2 to support advanced cascading features in the 'New' menu.</summary>
-        public IContextMenu3 newMenuCascading = null;
-        public IntPtr newMenuPtr = IntPtr.Zero;
+        internal IContextMenu3 newMenuCascading = null;
+        internal IntPtr newMenuPtr = IntPtr.Zero;
 
         private readonly int min = 1;
         private readonly int max = 100000;
+        private bool _disposed;
 
         /// <summary>
-        /// If this method returns true then the caller must call ReleaseMenu
+        /// Displays a shell context menu for the given items and returns the user's selection.
+        /// All COM resources are released before this method returns — callers do NOT need to
+        /// call <see cref="ReleaseMenu"/> afterward.
         /// </summary>
         /// <param name="hwnd">The handle to the control to host the ContextMenu</param>
         /// <param name="items">The items for which to show the ContextMenu. These items must be in the same folder.</param>
         /// <param name="pt">The point where the ContextMenu should appear</param>
-        /// <param name="allowrename">Set if the ContextMenu should contain the Rename command where appropriate</param>
-        /// <param name="cmi">The command information for the users selection</param>
+        /// <param name="allowRename">Set if the ContextMenu should contain the Rename command where appropriate</param>
         /// <param name="minimal">If true, uses CMF.VERBSONLY to filter out most 3rd party extensions</param>
-        /// <returns></returns>
-        /// <remarks></remarks>
-        public bool ShowMenu(
+        /// <returns>A <see cref="ContextMenuResult"/> indicating what the user selected.</returns>
+        public ContextMenuResult ShowMenu(
             IntPtr hwnd,
             CShellItem[] items,
             Point pt,
             bool allowRename,
-            [Out] out CMInvokeCommandInfoEx cmi,
             bool minimal = false)
         {
-            cmi = default;
             Debug.Assert(items.Length > 0);
 
             IntPtr comContextMenu = CreatePopupMenu();
-            IntPtr[] pidls = new IntPtr[items.Length];
             IShellFolder folder = null;
-
-            if (items[0] == ShellController.DesktopCSI)
-            {
-                folder = items[0].GetIShellFolder();
-            }
-            else
-            {
-                folder = items[0].Parent.GetIShellFolder();
-            }
-
-            for (int i = 0; i < items.Length; i++)
-            {
-                if (!items[i].CanRename) allowRename = false;
-                pidls[i] = CPidl.ILFindLastID(items[i].PIDL);
-            }
-
-            int prgf = 0;
+            IContextMenu localBase = null;
+            IContextMenu2 localExtended = null;
+            IContextMenu3 localCascading = null;
             IntPtr pIcontext = IntPtr.Zero;
-            int HR = folder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Length, pidls, IID_IContextMenu, prgf, out pIcontext);
-            Marshal.ReleaseComObject(folder);
-            folder = null;
 
-            if (HR != S_OK)
+            try
             {
+                if (items[0] == ShellController.DesktopCSI)
+                {
+                    folder = items[0].GetIShellFolder();
+                }
+                else
+                {
+                    folder = items[0].Parent.GetIShellFolder();
+                }
+
+                IntPtr[] pidls = new IntPtr[items.Length];
+                for (int i = 0; i < items.Length; i++)
+                {
+                    if (!items[i].CanRename) allowRename = false;
+                    pidls[i] = CPidl.ILFindLastID(items[i].PIDL);
+                }
+
+                int prgf = 0;
+                int HR = folder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Length, pidls, IID_IContextMenu, prgf, out pIcontext);
+                Marshal.ReleaseComObject(folder);
+                folder = null;
+
+                if (HR != S_OK)
+                {
 #if DEBUG
-                Marshal.ThrowExceptionForHR(HR);
+                    Marshal.ThrowExceptionForHR(HR);
 #endif
-                goto FAIL;
-            }
-
-            cntxMenuBase = (IContextMenu)Marshal.GetObjectForIUnknown(pIcontext);
-
-            IntPtr p = IntPtr.Zero;
-
-            // Depending on how IID_IContextMenu2/3 are defined, you may need local Guid vars with ref.
-            Marshal.QueryInterface(pIcontext, IID_IContextMenu2, out p);
-            if (p != IntPtr.Zero)
-            {
-                cntxMenuExtended = (IContextMenu2)Marshal.GetObjectForIUnknown(p);
-                Marshal.Release(p);
-                p = IntPtr.Zero;
-            }
-
-            Marshal.QueryInterface(pIcontext, IID_IContextMenu3, out p);
-            if (p != IntPtr.Zero)
-            {
-                cntxMenuCascading = (IContextMenu3)Marshal.GetObjectForIUnknown(p);
-                Marshal.Release(p);
-                p = IntPtr.Zero;
-            }
-
-            Marshal.Release(pIcontext);
-            pIcontext = IntPtr.Zero;
-
-            // Check item count - should always be 0 but check just in case
-            int startIndex = GetMenuItemCount(comContextMenu.ToInt32());
-
-            // Fill the context menu
-            int flags = (int)CMF.NORMAL;
-            if (items != null && items.Length > 0) flags |= (int)CMF.ITEMMENU;
-            if (allowRename) flags |= (int)CMF.CANRENAME;
-            if (minimal) flags |= (int)CMF.NOVERBS; //.VERBSONLY;
-            if ((Control.ModifierKeys & Keys.Shift) == Keys.Shift) flags |= (int)CMF.EXTENDEDVERBS;
-
-            int idCount = cntxMenuBase.QueryContextMenu(comContextMenu, startIndex, min, max, flags);
-
-            // Append separator and custom "Move" and "Copy to Folder" menu items
-            AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
-            uint moveCmdId = (uint)(max + 1);
-            AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, moveCmdId, "Move");
-            uint copyToFolderCmdId = (uint)(max + 2);
-            AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, copyToFolderCmdId, "Copy to Folder");
-
-            int cmd = TrackPopupMenuEx(comContextMenu, (int)TPM.RETURNCMD, pt.X, pt.Y, hwnd, IntPtr.Zero);
-
-            if (cmd == (int)moveCmdId || cmd == (int)copyToFolderCmdId)
-            {
-                cmi = new CMInvokeCommandInfoEx
-                {
-                    cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                    lpVerb = (IntPtr)(cmd == (int)moveCmdId ? 99999 : 99998),
-                    lpVerbW = (IntPtr)(cmd == (int)moveCmdId ? 99999 : 99998),
-                    nShow = (int)SW.SHOWNORMAL,
-                    fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
-                    ptInvoke = new Point(pt.X, pt.Y)
-                };
-
-                if (cntxMenuExtended != null)
-                {
-                    Marshal.ReleaseComObject(cntxMenuExtended);
-                    cntxMenuExtended = null;
+                    return new ContextMenuResult { Success = false };
                 }
 
-                if (cntxMenuCascading != null)
+                localBase = (IContextMenu)Marshal.GetObjectForIUnknown(pIcontext);
+
+                IntPtr p = IntPtr.Zero;
+
+                Marshal.QueryInterface(pIcontext, IID_IContextMenu2, out p);
+                if (p != IntPtr.Zero)
                 {
-                    Marshal.ReleaseComObject(cntxMenuCascading);
-                    cntxMenuCascading = null;
+                    localExtended = (IContextMenu2)Marshal.GetObjectForIUnknown(p);
+                    Marshal.Release(p);
+                    p = IntPtr.Zero;
                 }
 
-                if (comContextMenu != IntPtr.Zero)
+                Marshal.QueryInterface(pIcontext, IID_IContextMenu3, out p);
+                if (p != IntPtr.Zero)
                 {
-                    DestroyMenu(comContextMenu);
-                    comContextMenu = IntPtr.Zero;
+                    localCascading = (IContextMenu3)Marshal.GetObjectForIUnknown(p);
+                    Marshal.Release(p);
+                    p = IntPtr.Zero;
                 }
 
-                return true;
-            }
+                Marshal.Release(pIcontext);
+                pIcontext = IntPtr.Zero;
 
-            if (cmd >= min && cmd <= idCount)
-            {
-                cmi = new CMInvokeCommandInfoEx
-                {
-                    cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                    lpVerb = (IntPtr)(cmd - min),
-                    lpVerbW = (IntPtr)(cmd - min),
-                    nShow = (int)SW.SHOWNORMAL,
-                    fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
-                    ptInvoke = new Point(pt.X, pt.Y)
-                };
+                int startIndex = GetMenuItemCount(comContextMenu.ToInt32());
 
-                if (cntxMenuExtended != null)
+                int flags = (int)CMF.NORMAL;
+                if (items != null && items.Length > 0) flags |= (int)CMF.ITEMMENU;
+                if (allowRename) flags |= (int)CMF.CANRENAME;
+                if (minimal) flags |= (int)CMF.NOVERBS;
+                if ((Control.ModifierKeys & Keys.Shift) == Keys.Shift) flags |= (int)CMF.EXTENDEDVERBS;
+
+                int idCount = localBase.QueryContextMenu(comContextMenu, startIndex, min, max, flags);
+
+                AppendMenu(comContextMenu, (uint)MFT.SEPARATOR, 0, string.Empty);
+                uint moveCmdId = (uint)(max + 1);
+                AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, moveCmdId, "Move");
+                uint copyToFolderCmdId = (uint)(max + 2);
+                AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, copyToFolderCmdId, "Copy to Folder");
+
+                int cmd = TrackPopupMenuEx(comContextMenu, (int)TPM.RETURNCMD, pt.X, pt.Y, hwnd, IntPtr.Zero);
+
+                if (cmd == (int)moveCmdId || cmd == (int)copyToFolderCmdId)
                 {
-                    Marshal.ReleaseComObject(cntxMenuExtended);
-                    cntxMenuExtended = null;
+                    return new ContextMenuResult
+                    {
+                        Success = true,
+                        Verb = null,
+                        CommandInfo = new CMInvokeCommandInfoEx
+                        {
+                            cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                            lpVerb = (IntPtr)(cmd == (int)moveCmdId ? 99999 : 99998),
+                            lpVerbW = (IntPtr)(cmd == (int)moveCmdId ? 99999 : 99998),
+                            nShow = (int)SW.SHOWNORMAL,
+                            fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
+                            ptInvoke = new Point(pt.X, pt.Y)
+                        }
+                    };
                 }
 
-                if (cntxMenuCascading != null)
+                if (cmd >= min && cmd <= idCount)
                 {
-                    Marshal.ReleaseComObject(cntxMenuCascading);
-                    cntxMenuCascading = null;
+                    string verb = GetVerbString(localBase, cmd - min);
+
+                    return new ContextMenuResult
+                    {
+                        Success = true,
+                        Verb = verb,
+                        CommandInfo = new CMInvokeCommandInfoEx
+                        {
+                            cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                            lpVerb = (IntPtr)(cmd - min),
+                            lpVerbW = (IntPtr)(cmd - min),
+                            nShow = (int)SW.SHOWNORMAL,
+                            fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
+                            ptInvoke = new Point(pt.X, pt.Y)
+                        }
+                    };
                 }
 
-                if (comContextMenu != IntPtr.Zero)
-                {
-                    DestroyMenu(comContextMenu);
-                    comContextMenu = IntPtr.Zero;
-                }
-
-                return true;
+                return new ContextMenuResult { Success = false };
             }
-
-        FAIL:
-            if (cntxMenuBase != null)
+            finally
             {
-                Marshal.ReleaseComObject(cntxMenuBase);
-                cntxMenuBase = null;
+                if (localCascading != null) Marshal.ReleaseComObject(localCascading);
+                if (localExtended != null) Marshal.ReleaseComObject(localExtended);
+                if (localBase != null) Marshal.ReleaseComObject(localBase);
+                if (pIcontext != IntPtr.Zero) Marshal.Release(pIcontext);
+                if (folder != null) Marshal.ReleaseComObject(folder);
+                if (comContextMenu != IntPtr.Zero) DestroyMenu(comContextMenu);
             }
-
-            if (cntxMenuExtended != null)
-            {
-                Marshal.ReleaseComObject(cntxMenuExtended);
-                cntxMenuExtended = null;
-            }
-
-            if (cntxMenuCascading != null)
-            {
-                Marshal.ReleaseComObject(cntxMenuCascading);
-                cntxMenuCascading = null;
-            }
-
-            if (comContextMenu != IntPtr.Zero)
-            {
-                DestroyMenu(comContextMenu);
-                comContextMenu = IntPtr.Zero;
-            }
-
-            return false;
         }
 
-        public void ReleaseMenu()
+        private static string GetVerbString(IContextMenu contextMenu, int verbId)
         {
-            if (cntxMenuBase != null)
+            try
             {
-                Marshal.ReleaseComObject(cntxMenuBase);
-                cntxMenuBase = null;
+                var cmdBytes = new byte[257];
+                contextMenu.GetCommandString(verbId, (int)GCS.VERBA, 0, cmdBytes, 256);
+                return ShellHelper.SzToString(cmdBytes).ToLowerInvariant();
             }
-
-            if (cntxMenuExtended != null)
+            catch
             {
-                Marshal.ReleaseComObject(cntxMenuExtended);
-                cntxMenuExtended = null;
-            }
-
-            if (cntxMenuCascading != null)
-            {
-                Marshal.ReleaseComObject(cntxMenuCascading);
-                cntxMenuCascading = null;
+                return string.Empty;
             }
         }
 
         /// <summary>
-        /// Invokes a specific command from an IContextMenu
+        /// Invokes a specific command from an IContextMenu.
         /// </summary>
-	     /// <param name="iContextMenu">the IContextMenu containing the item</param>
-	     /// <param name="cmd">the index of the command to invoke</param>
-	     /// <param name="parentDir">the parent directory from where to invoke</param>
-	     /// <param name="ptInvoke">the point (in screen co�rdinates) from which to invoke</param>
-        public void InvokeCommand(IContextMenu iContextMenu, uint cmd, string parentDir, Point ptInvoke)
+        /// <param name="iContextMenu">the IContextMenu containing the item</param>
+        /// <param name="cmd">the index of the command to invoke</param>
+        /// <param name="parentDir">the parent directory from where to invoke</param>
+        /// <param name="ptInvoke">the point (in screen coordinates) from which to invoke</param>
+        public static void InvokeCommand(IContextMenu iContextMenu, uint cmd, string parentDir, Point ptInvoke)
         {
             var invoke = new ShellAPI.CMInvokeCommandInfoEx
             {
@@ -290,17 +282,17 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// If this method returns true then the caller must call ReleaseNewMenu
+        /// Creates and initializes a "New" submenu for the given folder.
+        /// Returns a <see cref="NewMenuScope"/> that must be disposed by the caller
+        /// (typically via a <c>using</c> statement) when the menu is no longer needed.
         /// </summary>
-        /// <param name="itm"></param>
-        /// <param name="contextMenu"></param>
-        /// <param name="index"></param>
-        /// <returns></returns>
-        /// <remarks></remarks>
-        public bool SetUpNewMenu(CShellItem itm, IntPtr contextMenu, int index)
+        /// <param name="itm">The folder for which to create the "New" submenu.</param>
+        /// <param name="contextMenu">The parent popup menu handle to attach the submenu to.</param>
+        /// <param name="index">The position index within the parent menu.</param>
+        /// <returns>A <see cref="NewMenuScope"/> that manages the submenu lifetime.</returns>
+        public NewMenuScope SetUpNewMenu(CShellItem itm, IntPtr contextMenu, int index)
         {
             int HR;
-            int idCount;
 
             newMenuPtr = IntPtr.Zero;
             var CLSID_NewMenu = ShellAPI.CLSID_NewMenu;
@@ -352,17 +344,16 @@ namespace ExpControlsLib
 #if DEBUG
                 Marshal.ThrowExceptionForHR(HR);
 #endif
-                return false;
+                return new NewMenuScope(this); // empty scope, safe to dispose
             }
 
-            idCount = newMenuBase.QueryContextMenu(contextMenu, index, min, max, (int)CMF.NORMAL);
+            newMenuBase.QueryContextMenu(contextMenu, index, min, max, (int)CMF.NORMAL);
             newMenuPtr = GetSubMenu(contextMenu, index);
-            //Marshal.Release(newMenuPtr);
 
-            return true;
+            return new NewMenuScope(this);
         }
 
-        public void ReleaseNewMenu()
+        internal void ReleaseNewMenu()
         {
             if (newMenuBase != null)
             {
@@ -385,14 +376,43 @@ namespace ExpControlsLib
             // CRITICAL: Do NOT release newMenuPtr after GetSubMenu() has been called!
             // GetSubMenu() returns a HMENU (window menu handle), NOT a COM object pointer.
             // Attempting to Marshal.Release() a HMENU causes access violations.
-            // The HMENU is managed by the parent menu and should NOT be manually released.
-            // newMenuPtr should only be released if it was never used with GetSubMenu().
-            // In the current flow, newMenuPtr is always used with GetSubMenu(), so we don't release it.
-            // The COM object reference (newMenu) handles the cleanup via ReleaseComObject above.
-            // Simply clear the reference without releasing the HMENU.
             if (newMenuPtr != IntPtr.Zero)
             {
                 newMenuPtr = IntPtr.Zero;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                _disposed = true;
+
+                if (cntxMenuBase != null)
+                {
+                    Marshal.ReleaseComObject(cntxMenuBase);
+                    cntxMenuBase = null;
+                }
+
+                if (cntxMenuExtended != null)
+                {
+                    Marshal.ReleaseComObject(cntxMenuExtended);
+                    cntxMenuExtended = null;
+                }
+
+                if (cntxMenuCascading != null)
+                {
+                    Marshal.ReleaseComObject(cntxMenuCascading);
+                    cntxMenuCascading = null;
+                }
+
+                ReleaseNewMenu();
             }
         }
     }

@@ -242,16 +242,22 @@ namespace ExpControlsLib
         public event ExpListCopyEventHandler ExpListCopy;
 
         /// <summary>
-        /// Delegate for the <see cref="ExpListSelectedIndexChangedEventHandler"/> event.
+        /// Delegate for the <see cref="ExpListDeleted"/> event.
         /// </summary>
-        /// <param name="items">The collection of selected list view items.</param>
-        public delegate void ExpListSelectedIndexChangedEventHandler(SelectedListViewItemCollection items);
+        public delegate void ExpListDeletedEventHandler(object? sender, ExpListDeletedEventArgs e);
         /// <summary>
-        /// Occurs when the selection in the list view is requested.
+        /// Occurs when items are deleted from the list view.
         /// </summary>
         [Category("Action")]
-        [Description("Fires when the selection collection changes, not when the selected index changes")]
-        public event ExpListSelectedIndexChangedEventHandler SelectedIndexChanged;
+        [Description("Fires when items are deleted from the list view")]
+        public event ExpListDeletedEventHandler ExpListDeleted;
+
+        /// <summary>
+        /// Occurs when the selection in the list view changes.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires when the selection changes")]
+        public event EventHandler SelectedIndexChanged;
 
         /// <summary>
         /// Delegate for the <see cref="ExpListItemSelectionChangedEventHandler"/> event.
@@ -936,10 +942,12 @@ namespace ExpControlsLib
                 }
 
                 int topItemIndex = -1;
+                int[] deletedIndices = Array.Empty<int>();
                 bool hasItems = VirtualMode ? _listView.VirtualListSize > 0 : _listView.Items.Count > 0;
                 if (cmd == "delete" && hasItems)
                 { //prevent null references from invalid selections that are about to be deleted
                     topItemIndex = _listViewWrapper.GetTopIndex();
+                    deletedIndices = _listView.SelectedIndices.Cast<int>().ToArray();
                     _listView.SelectedIndices.Clear();
                     if (!VirtualMode)
                     {
@@ -976,6 +984,8 @@ namespace ExpControlsLib
                                 : _currentFolderCsi.FullPath;
                             ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
                         }
+
+                        ExpListDeleted?.Invoke(this, new ExpListDeletedEventArgs(selectedItems, deletedIndices));
                     }
                     finally
                     {
@@ -1227,6 +1237,7 @@ namespace ExpControlsLib
                     // Add New menu for writable folders (excluding special shell folders like ::).
                     // The "New" submenu is managed by m_WindowsContextMenu.SetUpNewMenu(),
                     // which adds file creation options for the selected folder.
+                    // Cleanup is done via ReleaseNewMenu() in ShowAndHandleContextMenu's CLEANUP section.
                     if (_currentFolderCsi.IsFolder &&
                         ((!_currentFolderCsi.FullPath.StartsWith("::")) || _currentFolderCsi == ShellController.DesktopCSI))
                     {
@@ -2792,13 +2803,13 @@ namespace ExpControlsLib
 
                 if (VirtualMode)
                 {
-                    // In virtual mode, we pass null to because there are no items in _listView.SelectedItems
+                    // In virtual mode, SelectedListViewItemCollection is not populated.
                     // Consumers should use SelectedCShellItems property instead.
-                    SelectedIndexChanged?.Invoke(null);
+                    SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
                 }
                 else
                 {
-                    SelectedIndexChanged?.Invoke(_listView.SelectedItems);
+                    SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
                 }
             }
             catch (InvalidOperationException ex)
@@ -3119,9 +3130,10 @@ namespace ExpControlsLib
                         CMInvokeCommandInfoEx cmi;
                         bool allowRename = itms.Length <= 1; //Don't allow rename of more than 1 item
 
-                        if (m_WindowsContextMenu.ShowMenu(Handle, itms, MousePosition, allowRename, out cmi, MinimalContextMenu))
+                        var menuResult = m_WindowsContextMenu.ShowMenu(Handle, itms, MousePosition, allowRename, MinimalContextMenu);
+                        if (menuResult.Success)
                         {
-                            int verbId = cmi.lpVerb.ToInt32();
+                            int verbId = menuResult.CommandInfo.lpVerb.ToInt32();
                             if (verbId == 99999)
                             {
                                 ExpListMove?.Invoke(this, new ExpListMoveEventArgs(itms));
@@ -3132,9 +3144,7 @@ namespace ExpControlsLib
                             }
                             else
                             {
-                                byte[] cmdBytes = new byte[256];
-                                m_WindowsContextMenu.cntxMenuBase.GetCommandString(verbId, (int)GCS.VERBA, 0, cmdBytes, 256);
-                                string cmdName = SzToString(cmdBytes).ToLowerInvariant();
+                                string cmdName = menuResult.Verb ?? string.Empty;
 
                                 if (cmdName.Equals("rename"))
                                 {
@@ -3212,9 +3222,6 @@ namespace ExpControlsLib
                                     });
                                 }
                             }
-
-                            if (m_WindowsContextMenu.cntxMenuBase != null)
-                                Marshal.ReleaseComObject(m_WindowsContextMenu.cntxMenuBase);
                         }
                     }
                     else

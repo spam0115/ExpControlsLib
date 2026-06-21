@@ -189,8 +189,14 @@ namespace WindowsApiLib.Shell
             if (item == null || string.IsNullOrEmpty(newPath)) return;
 
             IntPtr newPidl = CPidl.PathToPidl(newPath);
-
-            UpdateLogic.DoUpdate(item, newPidl, CShItemUpdateType.Moved);
+            try
+            {
+                UpdateLogic.DoUpdate(item, newPidl, CShItemUpdateType.Moved);
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(newPidl);
+            }
         }
 
         public void OnMoveItem(CShellItem item, CShellItem newParent)

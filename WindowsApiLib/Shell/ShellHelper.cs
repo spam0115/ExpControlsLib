@@ -281,7 +281,7 @@ namespace WindowsApiLib.Shell
             var IID_IDropTargetHelper = ShellAPI.IID_IDropTargetHelper;
             if (CoCreateInstance(ref CLSID_DragDropHelper, IntPtr.Zero, CLSCTX.INPROC_SERVER, ref IID_IDropTargetHelper, out helperPtr) == S_OK)
             {
-                dropHelper = (IDropTargetHelper)Marshal.GetTypedObjectForIUnknown(helperPtr, typeof(IDropTargetHelper));
+                dropHelper = (IDropTargetHelper)Marshal.GetObjectForIUnknown(helperPtr);
                 return true;
             }
             else
