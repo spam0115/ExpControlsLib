@@ -107,6 +107,8 @@ namespace ExpControlsLib
 
             IntPtr dropHelperPtr;     // historical place to accept input from nxt call
             ShellHelper.GetIDropTargetHelper(out dropHelperPtr, out m_DropHelper);
+            if (dropHelperPtr != IntPtr.Zero)
+                Marshal.Release(dropHelperPtr);
         }
         #endregion
 
@@ -323,6 +325,7 @@ namespace ExpControlsLib
             {
                 m_ParentTarget.DragLeave();
                 Marshal.ReleaseComObject(m_ParentTarget);
+                m_ParentTarget = null;
             }
             m_ParentItem = null;
 
@@ -355,8 +358,9 @@ namespace ExpControlsLib
                 if (!(m_LastTarget == null))
                 {
                     res = m_LastTarget.DragDrop(pDataObj, grfKeyState, pt, ref pdwEffect);
-                    m_ParentTarget.DragLeave();            // Not dropping on it, so leave it
-                                                           // version 21 change 
+                    if (m_ParentTarget is not null)
+                        m_ParentTarget.DragLeave();            // Not dropping on it, so leave it
+                                                               // version 21 change 
                     if (res != 0 && res != 1)
                     {
                         Debug.WriteLine("Error in dropping on DropTarget. res = " + res.ToString("X"));
@@ -391,7 +395,11 @@ namespace ExpControlsLib
             }
             finally
             {
-                if (m_ParentTarget is not null) Marshal.ReleaseComObject(m_ParentTarget);
+                if (m_ParentTarget is not null)
+                {
+                    Marshal.ReleaseComObject(m_ParentTarget);
+                    m_ParentTarget = null;
+                }
             }
             
         }
@@ -432,11 +440,13 @@ namespace ExpControlsLib
             if (m_ParentTarget is not null)
             {
                 Marshal.ReleaseComObject(m_ParentTarget);
+                m_ParentTarget = null;
             }
             m_ParentItem = null;
             if (m_DropHelper is not null)
             {
                 Marshal.ReleaseComObject(m_DropHelper);
+                m_DropHelper = null;
             }
         }
 

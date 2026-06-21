@@ -76,6 +76,8 @@ namespace ExpControlsLib
 
             IntPtr dropHelperPtr;     // historical place to accept input from nxt call
             ShellHelper.GetIDropTargetHelper(out dropHelperPtr, out m_DropHelper);
+            if (dropHelperPtr != IntPtr.Zero)
+                Marshal.Release(dropHelperPtr);
         }
         #endregion
 
@@ -124,7 +126,11 @@ namespace ExpControlsLib
                 if (value.Equals(m_FullPath, StringComparison.CurrentCultureIgnoreCase))
                     return;
                 m_DirCSI.ClearItems(true, false);
-                Marshal.ReleaseComObject(m_Target);
+                if (m_Target is not null)
+                {
+                    Marshal.ReleaseComObject(m_Target);
+                    m_Target = null;
+                }
                 m_DirCSI = CShellItemFactory.Create(value);
                 m_Target = m_DirCSI.GetDropTargetOf(m_Owner);
                 m_FullPath = value;
@@ -182,7 +188,10 @@ namespace ExpControlsLib
     /// <returns>S_OK</returns>
         public int DragOver(MK grfKeyState, POINT pt, ref DragDropEffects pdwEffect)
         {
-            m_Target.DragOver(grfKeyState, pt, ref pdwEffect);
+            if (m_Target is not null)
+            {
+                m_Target.DragOver(grfKeyState, pt, ref pdwEffect);
+            }
             if (m_DropHelper is not null)
             {
                 m_DropHelper.DragOver(ref pt, pdwEffect);
@@ -221,7 +230,10 @@ namespace ExpControlsLib
     /// <returns>S_OK</returns>
         public int DragDrop(IntPtr pDataObj, MK grfKeyState, POINT pt, ref DragDropEffects pdwEffect)
         {
-            m_Target.DragDrop(pDataObj, grfKeyState, pt, ref pdwEffect);
+            if (m_Target is not null)
+            {
+                m_Target.DragDrop(pDataObj, grfKeyState, pt, ref pdwEffect);
+            }
             if (m_DropHelper is not null)
             {
                 m_DropHelper.Drop(pDataObj, ref pt, pdwEffect);
@@ -245,10 +257,12 @@ namespace ExpControlsLib
                 if (m_Target is not null)
                 {
                     Marshal.ReleaseComObject(m_Target);
+                    m_Target = null;
                 }
                 if (m_DropHelper is not null)
                 {
                     Marshal.ReleaseComObject(m_DropHelper);
+                    m_DropHelper = null;
                 }
                 if (m_Owner is not null && m_Owner.Handle != IntPtr.Zero)
                 {

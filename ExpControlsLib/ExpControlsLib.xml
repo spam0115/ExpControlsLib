@@ -820,6 +820,12 @@
             for the control and its child <see cref="F:ExpControlsLib.ExpList._listView"/> ListView.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ExpList.Initialize(WindowsApiLib.Shell.ShellController)">
+            <summary>
+            This initializes some fields in this user control.  This should be called before the Load event.
+            </summary>
+            <param name="shellController"></param>
+        </member>
         <member name="M:ExpControlsLib.ExpList.ExpList_Load(System.Object,System.EventArgs)">
             <summary>
             Handles the <see cref="!:Control.Load"/> event of the <see cref="T:ExpControlsLib.ExpList"/> control.
@@ -1481,6 +1487,12 @@
             wires Shell item update notifications, and configures the node-expansion hover timer.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.Initialize(WindowsApiLib.Shell.ShellController)">
+            <summary>
+            This initializes some fields in this user control.  This should be called before the Load event.
+            </summary>
+            <param name="shellController"></param>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.WndProc(System.Windows.Forms.Message@)">
             <summary>
             Windows Message Handler for receiving Messages associated with a System Menu. 
@@ -1927,6 +1939,14 @@
             <c>"copy"</c>, or <c>"paste"</c>).
             </param>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.PopulateNode(System.Windows.Forms.TreeNode)">
+            <summary>
+            Called to Populate the TreeNodes of a TreeNode that only contains a Dummy Node.
+            </summary>
+            <param name="NodeToFill">The unexpanded TreeNode to Fill</param>
+            <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
+            Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.SetRootItemAsync(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Asynchronously loads and displays the tree rooted at the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>
@@ -1940,6 +1960,18 @@
             <param name="dir">
             A <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value used to resolve the root when <paramref name="csi"/> is <c>null</c>.
             Defaults to <see cref="F:ExpControlsLib.ExpTree.StartDir.None"/>.
+            </param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.PopulateNodeAsync(System.Windows.Forms.TreeNode)">
+            <summary>
+            Asynchronously populates a lazy-loaded TreeNode by fetching its child
+            <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders on a background STA thread, then updating
+            the TreeView on the UI thread. Icon and sub-folder data are pre-warmed during
+            the background pass to keep subsequent expansions responsive.
+            </summary>
+            <param name="NodeToFill">
+            The <see cref="T:System.Windows.Forms.TreeNode"/> containing only a dummy placeholder node that should
+            be replaced with its real child nodes.
             </param>
         </member>
         <member name="M:ExpControlsLib.ExpTree.IsExcluded(WindowsApiLib.Shell.CShellItem)">
@@ -1963,26 +1995,6 @@
             <param name="node">The TreeNode to return the full path for.</param>
             <returns>The full path to the input node within a tree</returns>
             <remarks>Used only for some Debug.WriteLine statements.</remarks>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.PopulateNode(System.Windows.Forms.TreeNode)">
-            <summary>
-            Called to Populate the TreeNodes of a TreeNode that only contains a Dummy Node.
-            </summary>
-            <param name="NodeToFill">The unexpanded TreeNode to Fill</param>
-            <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
-            Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.PopulateNodeAsync(System.Windows.Forms.TreeNode)">
-            <summary>
-            Asynchronously populates a lazy-loaded TreeNode by fetching its child
-            <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders on a background STA thread, then updating
-            the TreeView on the UI thread. Icon and sub-folder data are pre-warmed during
-            the background pass to keep subsequent expansions responsive.
-            </summary>
-            <param name="NodeToFill">
-            The <see cref="T:System.Windows.Forms.TreeNode"/> containing only a dummy placeholder node that should
-            be replaced with its real child nodes.
-            </param>
         </member>
         <member name="M:ExpControlsLib.ExpTree.GetTreeNode(WindowsApiLib.Shell.CShellItem,System.Windows.Forms.TreeNode@)">
             <summary>

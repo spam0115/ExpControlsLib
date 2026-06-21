@@ -87,6 +87,8 @@ namespace ExpControlsLib
             int prgf = 0;
             IntPtr pIcontext = IntPtr.Zero;
             int HR = folder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Length, pidls, IID_IContextMenu, prgf, out pIcontext);
+            Marshal.ReleaseComObject(folder);
+            folder = null;
 
             if (HR != S_OK)
             {
@@ -117,10 +119,8 @@ namespace ExpControlsLib
                 p = IntPtr.Zero;
             }
 
-            if (pIcontext != IntPtr.Zero)
-            {
-                pIcontext = IntPtr.Zero;
-            }
+            Marshal.Release(pIcontext);
+            pIcontext = IntPtr.Zero;
 
             // Check item count - should always be 0 but check just in case
             int startIndex = GetMenuItemCount(comContextMenu.ToInt32());

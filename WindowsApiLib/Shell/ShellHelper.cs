@@ -107,16 +107,23 @@ namespace WindowsApiLib.Shell
         public static bool GetIStream(CShellItem item, IntPtr streamPtr, out IStream stream)
         {
             var ishellfolder = item.Parent.GetIShellFolder();
-            if (ishellfolder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStream, streamPtr) == S_OK)
+            try
             {
-                stream = (IStream)Marshal.GetTypedObjectForIUnknown(streamPtr, typeof(IStream));
-                return true;
+                if (ishellfolder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStream, streamPtr) == S_OK)
+                {
+                    stream = (IStream)Marshal.GetTypedObjectForIUnknown(streamPtr, typeof(IStream));
+                    return true;
+                }
+                else
+                {
+                    stream = null;
+                    streamPtr = IntPtr.Zero;
+                    return false;
+                }
             }
-            else
+            finally
             {
-                stream = null;
-                streamPtr = IntPtr.Zero;
-                return false;
+                Marshal.ReleaseComObject(ishellfolder);
             }
         }
         /// <summary>
@@ -130,17 +137,23 @@ namespace WindowsApiLib.Shell
         public static bool GetIStorage(CShellItem item, IntPtr storagePtr, out IStorage storage)
         {
             var ishellfolder = item.Parent.GetIShellFolder();
-
-            if (ishellfolder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStorage, storagePtr) == S_OK)
+            try
             {
-                storage = (IStorage)Marshal.GetTypedObjectForIUnknown(storagePtr, typeof(IStorage));
-                return true;
+                if (ishellfolder.BindToStorage(CPidl.ILFindLastID(item.PIDL), IntPtr.Zero, ShellAPI.IID_IStorage, storagePtr) == S_OK)
+                {
+                    storage = (IStorage)Marshal.GetTypedObjectForIUnknown(storagePtr, typeof(IStorage));
+                    return true;
+                }
+                else
+                {
+                    storage = null;
+                    storagePtr = IntPtr.Zero;
+                    return false;
+                }
             }
-            else
+            finally
             {
-                storage = null;
-                storagePtr = IntPtr.Zero;
-                return false;
+                Marshal.ReleaseComObject(ishellfolder);
             }
         }
 
@@ -180,16 +193,23 @@ namespace WindowsApiLib.Shell
 
             IntPtr rgfReserved = IntPtr.Zero; //unused
 
-            if (folder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { relpidl }, ShellAPI.IID_IDropTarget, rgfReserved, out dropTargetPtr) == 0)
+            try
             {
-                dropTarget = (IDropTarget)Marshal.GetTypedObjectForIUnknown(dropTargetPtr, typeof(IDropTarget));
-                return true;
+                if (folder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { relpidl }, ShellAPI.IID_IDropTarget, rgfReserved, out dropTargetPtr) == 0)
+                {
+                    dropTarget = (IDropTarget)Marshal.GetTypedObjectForIUnknown(dropTargetPtr, typeof(IDropTarget));
+                    Marshal.Release(dropTargetPtr); // RCW has its own ref; release the raw COM ref
+                    return true;
+                }
+                else
+                {
+                    dropTarget = null;
+                    return false;
+                }
             }
-            else
+            finally
             {
-                dropTarget = null;
-                dropTargetPtr = IntPtr.Zero;
-                return false;
+                Marshal.ReleaseComObject(folder);
             }
         }
 
@@ -226,14 +246,21 @@ namespace WindowsApiLib.Shell
             IntPtr dataObjectPtr = IntPtr.Zero;
             IntPtr rgfReserved = IntPtr.Zero; //unused
             var ishellfolder = parent.GetIShellFolder();
-            var uiObject = ishellfolder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Length, pidls, ShellAPI.IID_IDataObject, rgfReserved, out dataObjectPtr);
-            if (uiObject == S_OK)
+            try
             {
-                return dataObjectPtr;
+                var uiObject = ishellfolder.GetUIObjectOf(IntPtr.Zero, (uint)pidls.Length, pidls, ShellAPI.IID_IDataObject, rgfReserved, out dataObjectPtr);
+                if (uiObject == S_OK)
+                {
+                    return dataObjectPtr;
+                }
+                else
+                {
+                    return IntPtr.Zero;
+                }
             }
-            else
+            finally
             {
-                return IntPtr.Zero;
+                Marshal.ReleaseComObject(ishellfolder);
             }
         }
         #endregion
@@ -283,43 +310,51 @@ namespace WindowsApiLib.Shell
             IDropTarget target = null;
 
             var retVal = DragDropEffects.None;
-            if (GetIDropTarget(item, out target))
+            try
             {
-
-                var effects = DragDropEffects.Copy;
-                if (target.DragEnter(dataObject, MK.CONTROL, new POINT(0, 0), ref effects) == S_OK)
+                if (GetIDropTarget(item, out target))
                 {
-                    if (effects == DragDropEffects.Copy)
+
+                    var effects = DragDropEffects.Copy;
+                    if (target.DragEnter(dataObject, MK.CONTROL, new POINT(0, 0), ref effects) == S_OK)
                     {
-                        retVal = retVal | DragDropEffects.Copy;
+                        if (effects == DragDropEffects.Copy)
+                        {
+                            retVal = retVal | DragDropEffects.Copy;
+                        }
+
+                        target.DragLeave();
                     }
 
-                    target.DragLeave();
-                }
-
-                effects = DragDropEffects.Move;
-                if (target.DragEnter(dataObject, MK.SHIFT, new POINT(0, 0), ref effects) == S_OK)
-                {
-                    if (effects == DragDropEffects.Move)
+                    effects = DragDropEffects.Move;
+                    if (target.DragEnter(dataObject, MK.SHIFT, new POINT(0, 0), ref effects) == S_OK)
                     {
-                        retVal = retVal | DragDropEffects.Move;
+                        if (effects == DragDropEffects.Move)
+                        {
+                            retVal = retVal | DragDropEffects.Move;
+                        }
+
+                        target.DragLeave();
                     }
 
-                    target.DragLeave();
-                }
-
-                effects = DragDropEffects.Link;
-                if (target.DragEnter(dataObject, MK.ALT, new POINT(0, 0), ref effects) == S_OK)
-                {
-                    if (effects == DragDropEffects.Link)
+                    effects = DragDropEffects.Link;
+                    if (target.DragEnter(dataObject, MK.ALT, new POINT(0, 0), ref effects) == S_OK)
                     {
-                        retVal = retVal | DragDropEffects.Link;
+                        if (effects == DragDropEffects.Link)
+                        {
+                            retVal = retVal | DragDropEffects.Link;
+                        }
+
+                        target.DragLeave();
                     }
 
-                    target.DragLeave();
+                    Marshal.ReleaseComObject(target);
                 }
-
-                Marshal.ReleaseComObject(target);
+            }
+            finally
+            {
+                if (dataObject != IntPtr.Zero)
+                    Marshal.Release(dataObject);
             }
 
             return retVal;
@@ -351,18 +386,25 @@ namespace WindowsApiLib.Shell
 
             IntPtr rgfReserved = IntPtr.Zero; //unused
             var ishellfolder = parent.GetIShellFolder();
-            var ret = ishellfolder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { CPidl.ILFindLastID(item.PIDL) }, ShellAPI.IID_IQueryInfo, rgfReserved, out iQueryInfoPtr); 
+            try
+            {
+                var ret = ishellfolder.GetUIObjectOf(IntPtr.Zero, 1, new IntPtr[] { CPidl.ILFindLastID(item.PIDL) }, ShellAPI.IID_IQueryInfo, rgfReserved, out iQueryInfoPtr);
 
-            if (ret == S_OK)
-            {
-                iQueryInfo = (IQueryInfo)Marshal.GetTypedObjectForIUnknown(iQueryInfoPtr, typeof(IQueryInfo));
-                return true;
+                if (ret == S_OK)
+                {
+                    iQueryInfo = (IQueryInfo)Marshal.GetTypedObjectForIUnknown(iQueryInfoPtr, typeof(IQueryInfo));
+                    return true;
+                }
+                else
+                {
+                    iQueryInfo = null;
+                    iQueryInfoPtr = IntPtr.Zero;
+                    return false;
+                }
             }
-            else
+            finally
             {
-                iQueryInfo = null;
-                iQueryInfoPtr = IntPtr.Zero;
-                return false;
+                Marshal.ReleaseComObject(ishellfolder);
             }
         }
 

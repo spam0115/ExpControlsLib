@@ -207,7 +207,7 @@ namespace WindowsApiLib.Shell
             IntPtr fullPidl = IntPtr.Zero;
 
             GCHandle handle = GCHandle.Alloc(pidlFolder, GCHandleType.Pinned);
-            GCHandle handle2 = GCHandle.Alloc(pidlFolder, GCHandleType.Pinned);
+            GCHandle handle2 = GCHandle.Alloc(pidlItem, GCHandleType.Pinned);
             try
             {
                 fullPidl = CPidl.Concatenate(handle.AddrOfPinnedObject(), handle2.AddrOfPinnedObject());
@@ -461,6 +461,7 @@ namespace WindowsApiLib.Shell
             {
                 if (IEnum != null)
                     Marshal.ReleaseComObject(IEnum);
+                Marshal.ReleaseComObject(iShellFolder);
             }
             return listPidls;
 
@@ -634,6 +635,7 @@ namespace WindowsApiLib.Shell
             var pidl = csiOutput.m_Pidl;
             SHCreateItemFromIDList(pidl, ref iid, out IntPtr item);
             IShellItem shellItem = (IShellItem)Marshal.GetObjectForIUnknown(item);
+            Marshal.Release(item);
             shellItem.GetAttributes((uint)attrFlag, out uint attrs);
             Marshal.ReleaseComObject(shellItem);
 

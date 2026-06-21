@@ -139,6 +139,8 @@ namespace ExpControlsLib
 
             IntPtr dropHelperPtr;     // historical place to accept input from nxt call
             ShellHelper.GetIDropTargetHelper(out dropHelperPtr, out m_DropHelper);
+            if (dropHelperPtr != IntPtr.Zero)
+                Marshal.Release(dropHelperPtr);
         }
         #endregion
 
@@ -414,9 +416,7 @@ namespace ExpControlsLib
             if (m_LastTarget is not null)
             {
                 Marshal.ReleaseComObject(m_LastTarget);
-
                 m_LastTarget = null;
-                // m_dropHelperPtr = IntPtr.Zero
             }
         }
 

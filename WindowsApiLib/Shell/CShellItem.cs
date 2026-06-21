@@ -1122,30 +1122,19 @@ namespace WindowsApiLib.Shell
             // but throw an exception if the object has been disposed.
             // Whenever you do something with this class, 
             // check to see if it has been disposed.
-            if (!m_Disposed)
+            if (m_Disposed)
+                return;
+
+            m_Disposed = true;
+            if (disposing)
             {
-                // If disposing equals true, dispose all managed 
-                // and unmanaged resources.
-                m_Disposed = true;
-                if (disposing)
-                {
-                }
-                // Release unmanaged resources. If disposing is false,
-                // only the following code is executed. 
-                //if (!(m_IShellFolder == null))
-                //{
-                //    Marshal.ReleaseComObject(m_IShellFolder);
-                //    m_IShellFolder = null;
-                //}
-                if (!m_Pidl.Equals(IntPtr.Zero))
-                {
-                    Marshal.FreeCoTaskMem(m_Pidl);
-                    m_Pidl = IntPtr.Zero;
-                }
             }
-            else
+            // Release unmanaged resources. If disposing is false,
+            // only the following code is executed. 
+            if (!m_Pidl.Equals(IntPtr.Zero))
             {
-                throw new Exception("CShellItem Disposed more than once");
+                Marshal.FreeCoTaskMem(m_Pidl);
+                m_Pidl = IntPtr.Zero;
             }
         }
 
@@ -1645,9 +1634,18 @@ namespace WindowsApiLib.Shell
             var tnH = tn.Handle;
 
             var shellFolder = this.GetIShellFolder();
-            if (shellFolder.CreateViewObject(tnH, ShellAPI.IID_IDropTarget, ref pInterface) == S_OK)
+            try
             {
-                return (Shell.IDropTarget)Marshal.GetTypedObjectForIUnknown(pInterface, typeof(Shell.IDropTarget));
+                if (shellFolder.CreateViewObject(tnH, ShellAPI.IID_IDropTarget, ref pInterface) == S_OK)
+                {
+                    var dropTarget = (Shell.IDropTarget)Marshal.GetTypedObjectForIUnknown(pInterface, typeof(Shell.IDropTarget));
+                    Marshal.Release(pInterface); // RCW has its own ref; release the raw COM ref
+                    return dropTarget;
+                }
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(shellFolder);
             }
 
             return null;
