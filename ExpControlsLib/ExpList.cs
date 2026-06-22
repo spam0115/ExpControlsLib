@@ -1713,7 +1713,14 @@ namespace ExpControlsLib
                 bool isTargetFolder = CPidl.ResolvesToSamePathOrName(senderCsi.PIDL, _currentFolderCsi.PIDL);
                 bool isTargetItem = senderCsi.Parent != null && CPidl.ResolvesToSamePathOrName(senderCsi.Parent.PIDL, _currentFolderCsi.PIDL);
 
-                if (!isTargetFolder && !isTargetItem) return;
+                // For Moved events, the item's Parent/PIDL have already been updated to the
+                // new location, so isTargetFolder/isTargetItem will be false. The sender is
+                // the old (or new) parent CShellItem — check if it matches the current folder.
+                bool isTargetViaMoveSender = e.UpdateType == CShItemUpdateType.Moved
+                    && sender is CShellItem movedFromFolder
+                    && CPidl.ResolvesToSamePathOrName(movedFromFolder.PIDL, _currentFolderCsi.PIDL);
+
+                if (!isTargetFolder && !isTargetItem && !isTargetViaMoveSender) return;
 
                 try
                 {
@@ -1795,6 +1802,32 @@ namespace ExpControlsLib
                                     if (!IsExcluded(csi) && (_filter == null || _filter(csi)))
                                     {
                                         _listViewWrapper.InsertSorted(csi);
+                                    }
+                                }
+                                break;
+                            }
+
+                        case CShItemUpdateType.Moved:
+                            {
+                                var csi = e.Item;
+                                // The sender is the parent folder that raised this event.
+                                // For "moved from" events, sender is the old parent and
+                                // csi.Parent has already been updated to the new parent.
+                                // For "moved to" events, sender is the new parent and
+                                // csi.Parent matches it.
+                                if (sender is CShellItem senderFolder
+                                    && CPidl.ResolvesToSamePathOrName(senderFolder.PIDL, _currentFolderCsi.PIDL)
+                                    && (csi.Parent == null || !CPidl.ResolvesToSamePathOrName(csi.Parent.PIDL, _currentFolderCsi.PIDL)))
+                                {
+                                    // Item was moved FROM the current folder → remove it
+                                    _listViewWrapper.RemoveItems(new[] { csi });
+
+                                    if (_currentFolderCsi != null)
+                                    {
+                                        string path = _currentFolderCsi.FullPath.StartsWith(":")
+                                            ? _currentFolderCsi.DisplayName
+                                            : _currentFolderCsi.FullPath;
+                                        ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
                                     }
                                 }
                                 break;
@@ -2984,7 +3017,11 @@ namespace ExpControlsLib
 
         private void DW_DragEnd(object? sender, DragEndEventArgs e)
         {
-            if (e.Effect == DragDropEffects.Move && _shellController != null)
+            // Remove items that were dragged away from this folder.
+            // e.Effect == Move: standard move
+            // e.Effect == None && e.DropCompleted: optimized move (same-volume, shell already moved the file)
+            if ((e.Effect == DragDropEffects.Move || (e.DropCompleted && e.Effect == DragDropEffects.None))
+                && _shellController != null)
             {
                 bool useUpdate = e.Items.Length > BatchThreshold;
                 if (useUpdate) _listView.BeginUpdate();

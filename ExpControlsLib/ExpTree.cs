@@ -362,7 +362,7 @@ namespace ExpControlsLib
 
                 if (value.IsFolder)
                 {
-                    _ = SetRootItemAsync(value);
+                    _loadingRootTask = SetRootItemAsync(value);
                 }
             }
         }
@@ -690,20 +690,22 @@ namespace ExpControlsLib
         /// </returns>
         public async Task<bool> ExpandANodeAsync(string newPath, bool SelectExpandedNode = true)
         {
-            CShellItem newItem;
+            CShellItem csi;
             try
             {
-                newItem = _shellController.HierachyManager.FindAndAllowExpansion(newPath);
-                if (newItem is null)
+                csi = _shellController.HierachyManager.FindAndAllowExpansion(newPath);
+                if (csi is null)
                     return false;
-                if (!newItem.IsFolder)
+                if (!csi.IsFolder)
                     return false;
+
+                return await ExpandANodeAsync(csi, SelectExpandedNode);
             }
-            catch
+            catch(Exception ex)
             {
+                Debug.WriteLine("ERROR: Exception - " + ex.ToString());
                 return false;
             }
-            return await ExpandANodeAsync(newItem, SelectExpandedNode);
         }
 
         /// <summary>
@@ -808,6 +810,13 @@ namespace ExpControlsLib
         /// </returns>
         public async Task<bool> ExpandANodeAsync(CShellItem target, bool SelectExpandedNode = true)
         {
+            await _loadingRootTask;
+
+            return await ExpandANodeBaseAsync(target, SelectExpandedNode);
+        }
+
+        public async Task<bool> ExpandANodeBaseAsync(CShellItem target, bool SelectExpandedNode = true)
+        {
             var baseNode = _Root;
             if (baseNode == null)
             {
@@ -888,6 +897,7 @@ namespace ExpControlsLib
             }
         }
 
+
         /// <summary>
         /// Collapses all nodes in the TreeView.
         /// </summary>
@@ -917,7 +927,7 @@ namespace ExpControlsLib
                 _isNavigatingHistory = true;
                 try
                 {
-                    await ExpandANodeAsync(prev, true);
+                    await ExpandANodeBaseAsync(prev, true);
                 }
                 finally
                 {
@@ -938,7 +948,7 @@ namespace ExpControlsLib
                 _isNavigatingHistory = true;
                 try
                 {
-                    await ExpandANodeAsync(next, true);
+                    await ExpandANodeBaseAsync(next, true);
                 }
                 finally
                 {
@@ -954,7 +964,7 @@ namespace ExpControlsLib
         {
             if (_lastSelectedCSI?.Parent != null)
             {
-                await ExpandANodeAsync(_lastSelectedCSI.Parent, true);
+                await ExpandANodeBaseAsync(_lastSelectedCSI.Parent, true);
             }
         }
 
@@ -1169,19 +1179,19 @@ namespace ExpControlsLib
         /// the newly specified special folder.
         /// </summary>
         /// <param name="newVal">The new <see cref="StartDir"/> value that was applied.</param>
-        private void OnStartUpDirectoryChanged(StartDir newVal)
-        {
-            if (newVal == StartDir.None)
-            {
-                _TreeView.BeginUpdate();
-                ClearTree();
-                _TreeView.EndUpdate();
-                return;
-            }
+        //private void OnStartUpDirectoryChanged(StartDir newVal)
+        //{
+        //    if (newVal == StartDir.None)
+        //    {
+        //        _TreeView.BeginUpdate();
+        //        ClearTree();
+        //        _TreeView.EndUpdate();
+        //        return;
+        //    }
 
-            var csi = CShellItemFactory.Create((CSIDL)newVal);
-            _ = SetRootItemAsync(csi);
-        }
+        //    var csi = CShellItemFactory.Create((CSIDL)newVal);
+        //    _ = SetRootItemAsync(csi);
+        //}
 
         /// <summary>
         /// Populates the root TreeNode's <see cref="TreeNode.Nodes"/> collection from the
@@ -1944,6 +1954,7 @@ namespace ExpControlsLib
         private bool m_minimalContextMenu = false;
         private ShellController? _shellController = null;
         private bool _initialized = false;
+        private Task _loadingRootTask;
 
         /// <summary>
         /// Sets whether or not the control should use Windows System context menu for TreeNode items.
@@ -2218,7 +2229,7 @@ namespace ExpControlsLib
                         var itemToExpand = _pendingExpansionItem;
                         var select = _pendingSelectExpandedNode;
                         _pendingExpansionItem = null;
-                        _ = ExpandANodeAsync(itemToExpand, select);
+                        await ExpandANodeBaseAsync(itemToExpand, select);
                     }
                     else
                     {

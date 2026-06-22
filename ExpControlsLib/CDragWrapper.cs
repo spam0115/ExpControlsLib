@@ -221,9 +221,16 @@ namespace ExpControlsLib
                     allowedEffects = DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link;
                 }
 
+                // Right-button drags perform a copy rather than the default move
+                if (button == MouseButtons.Right)
+                {
+                    allowedEffects = DragDropEffects.Copy;
+                }
+
                 DragStart?.Invoke(sender, new DragStartEventArgs(parent, m_Client));
-                ShellAPI.DoDragDrop(dataObjectPtr, this, allowedEffects, out effects);
-                DragEnd?.Invoke(m_Client, new DragEndEventArgs(effects, itemsToReport));
+                int hr = ShellAPI.DoDragDrop(dataObjectPtr, this, allowedEffects, out effects);
+                bool dropCompleted = hr != ShellAPI.DRAGDROP_S_CANCEL;
+                DragEnd?.Invoke(m_Client, new DragEndEventArgs(effects, itemsToReport, dropCompleted));
             }
         }
 
@@ -357,14 +364,17 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="effect">The final effect of the drag-and-drop operation.</param>
         /// <param name="items">The items that were dragged.</param>
-        public DragEndEventArgs(DragDropEffects effect, CShellItem[] items)
+        /// <param name="dropCompleted">True if the drop was performed (DoDragDrop returned DRAGDROP_S_DROP or S_OK); false if the drag was cancelled.</param>
+        public DragEndEventArgs(DragDropEffects effect, CShellItem[] items, bool dropCompleted)
         {
             Effect = effect;
             Items = items;
+            DropCompleted = dropCompleted;
         }
 
         /// <summary>
         /// Gets the final effect of the drag-and-drop operation.
+        /// For optimized moves, the shell returns DragDropEffects.None even though the move succeeded.
         /// </summary>
         public DragDropEffects Effect { get; }
 
@@ -372,5 +382,12 @@ namespace ExpControlsLib
         /// Gets the items that were dragged.
         /// </summary>
         public CShellItem[] Items { get; }
+
+        /// <summary>
+        /// True if the drop was actually performed (DoDragDrop returned DRAGDROP_S_DROP or S_OK).
+        /// False if the drag was cancelled (DRAGDROP_S_CANCEL).
+        /// When true and Effect is None, the shell performed an optimized move.
+        /// </summary>
+        public bool DropCompleted { get; }
     }
 }

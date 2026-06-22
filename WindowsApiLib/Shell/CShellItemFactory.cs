@@ -603,7 +603,7 @@ namespace WindowsApiLib.Shell
             csi.m_Pidl = DesktopPidl;
             //csi.m_IShellFolder = iShellFolder;
             csi.m_DisplayName = shfi.szDisplayName;
-            csi.m_Path = "::{" + DesktopGUID.ToString() + "}";
+            csi.m_FullPath = "::{" + DesktopGUID.ToString() + "}";
             csi.m_IsFolder = true;
             csi.m_HasSubFolders = true;
             csi.m_IsBrowsable = true;
@@ -657,12 +657,12 @@ namespace WindowsApiLib.Shell
             if (pidl == DesktopPidl)
             {
                 csiOutput.m_IsFileSystem = false;
-                csiOutput.m_Path = "::{" + DesktopGUID.ToString() + "}";
+                csiOutput.m_FullPath = "::{" + DesktopGUID.ToString() + "}";
             }
             else
             {
                 csiOutput.m_IsFileSystem = (attrFlag & SFGAO.FILESYSTEM) != 0;
-                csiOutput.m_Path = CShellItemFactory.GetFullPath(csiOutput);
+                csiOutput.m_FullPath = CShellItemFactory.GetFullPath(csiOutput);
             }
             // m_IsReadOnly = (attrFlag & SFGAO.RDONLY) != 0;      'made into an on-demand attribute
             // m_HasSubFolders = (attrFlag & SFGAO.HASSUBFOLDER) != 0;  'made into an on-demand attribute
@@ -675,7 +675,7 @@ namespace WindowsApiLib.Shell
                     csiOutput.m_IsFolder = false;
             }
 
-            if (csiOutput.m_IsFolder && csiOutput.m_Path.Length == 3 && csiOutput.m_Path.Substring(1).Equals(@":\"))
+            if (csiOutput.m_IsFolder && csiOutput.m_FullPath.Length == 3 && csiOutput.m_FullPath.Substring(1).Equals(@":\"))
             {
                 csiOutput.m_IsDisk = true;
                 try
@@ -699,9 +699,9 @@ namespace WindowsApiLib.Shell
                 finally
                 {
                     csiOutput.m_XtrInfo = true;
-                    if (!DriveDict.ContainsKey(csiOutput.m_Path))
+                    if (!DriveDict.ContainsKey(csiOutput.m_FullPath))
                     {
-                        DriveDict.TryAdd(csiOutput.m_Path, csiOutput.m_IsRemote);
+                        DriveDict.TryAdd(csiOutput.m_FullPath, csiOutput.m_IsRemote);
                     }
                 }
             }
@@ -713,19 +713,19 @@ namespace WindowsApiLib.Shell
             // reference the actual components of the Path. It should be strictly String manipulation!
             // Error on Path = "C:\Testing\XXXXXA~1\YYYYYY~1\ABCDEF~1\ZZZZZZ~1\abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890123456789012345678901234.txt"
             // which is only 138 chars long.
-            if (!(csiOutput.m_IsDisk || csiOutput.m_Path.StartsWith("::")))
+            if (!(csiOutput.m_IsDisk || csiOutput.m_FullPath.StartsWith("::")))
             {
-                if (csiOutput.m_Path.StartsWith(@"\\"))
+                if (csiOutput.m_FullPath.StartsWith(@"\\"))
                 {
-                    string[] tmp = csiOutput.m_Path.Split(new char[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
+                    string[] tmp = csiOutput.m_FullPath.Split(new char[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
                     if (tmp.Length > 0 && tmp[0].Equals(CShellItemFactory.SystemName, StringComparison.InvariantCultureIgnoreCase))
                         csiOutput.m_IsRemote = false;
                     else
                         csiOutput.m_IsRemote = true;
                 }
-                else if (csiOutput.m_Path.Length > 2 && csiOutput.m_Path.Substring(1, 2).Equals(@":\"))
+                else if (csiOutput.m_FullPath.Length > 2 && csiOutput.m_FullPath.Substring(1, 2).Equals(@":\"))
                 {
-                    string itemroot = csiOutput.m_Path.Substring(0, 3);
+                    string itemroot = csiOutput.m_FullPath.Substring(0, 3);
                     if (DriveDict.ContainsKey(itemroot) && DriveDict[itemroot])
                         csiOutput.m_IsRemote = true;
                 }
@@ -741,7 +741,7 @@ namespace WindowsApiLib.Shell
             if (csi.m_HasDispType)
                 return;
 
-            csi.m_Path = GetFullPath(csi);
+            csi.m_FullPath = GetFullPath(csi);
 
             // Fast path for filesystem file items (most common case)
             if (csi.m_IsFileSystem && !csi.m_IsFolder)

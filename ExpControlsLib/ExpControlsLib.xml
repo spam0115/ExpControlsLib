@@ -113,21 +113,30 @@
             An EventArgs which provides information about the completion of a Drag operation.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.DragEndEventArgs.#ctor(System.Windows.Forms.DragDropEffects,WindowsApiLib.Shell.CShellItem[])">
+        <member name="M:ExpControlsLib.DragEndEventArgs.#ctor(System.Windows.Forms.DragDropEffects,WindowsApiLib.Shell.CShellItem[],System.Boolean)">
             <summary>
             Constructs a new instance of DragEndEventArgs.
             </summary>
             <param name="effect">The final effect of the drag-and-drop operation.</param>
             <param name="items">The items that were dragged.</param>
+            <param name="dropCompleted">True if the drop was performed (DoDragDrop returned DRAGDROP_S_DROP or S_OK); false if the drag was cancelled.</param>
         </member>
         <member name="P:ExpControlsLib.DragEndEventArgs.Effect">
             <summary>
             Gets the final effect of the drag-and-drop operation.
+            For optimized moves, the shell returns DragDropEffects.None even though the move succeeded.
             </summary>
         </member>
         <member name="P:ExpControlsLib.DragEndEventArgs.Items">
             <summary>
             Gets the items that were dragged.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DragEndEventArgs.DropCompleted">
+            <summary>
+            True if the drop was actually performed (DoDragDrop returned DRAGDROP_S_DROP or S_OK).
+            False if the drag was cancelled (DRAGDROP_S_CANCEL).
+            When true and Effect is None, the shell performed an optimized move.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ClvDropWrapper">

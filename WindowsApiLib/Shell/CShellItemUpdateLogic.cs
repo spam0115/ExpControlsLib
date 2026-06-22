@@ -512,7 +512,7 @@ namespace WindowsApiLib.Shell
                     {
                         csi.ClearItems(true, true);
                         csi.ResetInfo();
-                        csi.m_Path = _shellItemFactory.GetFullPath(csi);
+                        csi.m_FullPath = _shellItemFactory.GetFullPath(csi);
                         RaiseUpdateEvent(csi.Parent, new ShellItemUpdateEventArgs(csi, changeType));
                         break;
                     }
@@ -534,9 +534,11 @@ namespace WindowsApiLib.Shell
 
                 if (allegedParentCsi is null) //moved to somewhere not in the hierarchy
                 {
+                    var oldParentCsi = csi.Parent;
                     RemoveItem(csi.Parent, csi);
                     csi.m_Parent = null;
                     csi.m_Pidl = changedPidl;
+                    RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Moved));
                     return false;
                 }
                 else

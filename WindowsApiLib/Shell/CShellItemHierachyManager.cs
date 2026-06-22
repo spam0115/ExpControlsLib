@@ -105,7 +105,7 @@ namespace WindowsApiLib.Shell
 
         private static CShellItem? Find(CShellItem rootItem, PidlAndCanonicalParsingName pidlAndName)
         {
-            if (rootItem.FullPath == pidlAndName.Name)
+            if (string.Compare(rootItem.FullPath, pidlAndName.Name, StringComparison.OrdinalIgnoreCase) == 0)
                 return rootItem;
 
             if (rootItem.DirectoriesCollection is not null) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
@@ -128,8 +128,8 @@ namespace WindowsApiLib.Shell
                 }
                 else return null;
             }
-
-            return null;
+            else
+                return null;
         }
 
         /// <summary>

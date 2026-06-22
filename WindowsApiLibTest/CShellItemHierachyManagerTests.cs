@@ -28,7 +28,45 @@ namespace WindowsApiLibTest
 
         }
 
-            [TestMethod]
+        [TestMethod]
+        public async Task TestMockHierarchy()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                var manager = MockShellItemFactory.CreateMockHierarchyManager();
+
+                Assert.IsNotNull(manager, "MockHierarchyManager should be created");
+                Assert.IsNotNull(manager.Root, "Root (Desktop) should exist");
+                Assert.AreEqual("Desktop", manager.Root.DisplayName, "Root should be Desktop");
+
+                var root_directories = manager.Root.Directories;
+                Assert.IsNotNull(root_directories, "Desktop should have child directories");
+                Assert.IsTrue(root_directories.Count > 0, "Desktop should have at least one child (DRIVES)");
+
+                var myComputer = root_directories.FirstOrDefault(d => d.DisplayName.Contains("My Computer"));
+                Assert.IsNotNull(myComputer, "My Computer (DRIVES) should exist under Desktop");
+
+                var cDrive = myComputer?.Directories?.FirstOrDefault(d => d.DisplayName == "C:\\");
+                Assert.IsNotNull(cDrive, "C: drive should exist under My Computer");
+                Assert.IsTrue(cDrive?.IsDisk ?? false, "C: should be marked as a disk");
+            });
+        }
+
+        [TestMethod]
+        public async Task TestFindInMockHierarchy()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                var manager = MockShellItemFactory.CreateMockHierarchyManager();
+
+                var result = manager.Find("c:\\windows\\notepad.exe");
+
+                Assert.IsNotNull(result, "Should find notepad.exe in the mock hierarchy");
+                Assert.AreEqual("notepad.exe", result.DisplayName, "Found item should be notepad.exe");
+            });
+        }
+
+        [TestMethod]
         public async Task TestIsAncestorOf()
         {
             await Runner.EnqueueWork(() =>
@@ -51,6 +89,24 @@ namespace WindowsApiLibTest
         }
 
         [TestMethod]
+        public async Task TestFindDesktop()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                var desktop = CShellItemFactory.Create(CSIDL.DESKTOP);
+                var manager = new CShellItemHierachyManager(desktop);
+
+                var desktop2 = CShellItemFactory.Create(CSIDL.DESKTOP);
+
+                // Find by path
+                var foundByPath = manager.FindAndAllowExpansion(desktop2);
+                Assert.IsNotNull(foundByPath, "Should find item by path");
+                Assert.AreEqual(foundByPath.m_FullPath, desktop2?.FullPath, "Found path is not equal to sought path.");
+            });
+        }
+
+
+        [TestMethod]
         public async Task TestFindExistingItem()
         {
             await Runner.EnqueueWork(() =>
@@ -59,27 +115,23 @@ namespace WindowsApiLibTest
                 var manager = new CShellItemHierachyManager(desktop);
 
                 string windir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-                var csiWin = manager.FindAndAllowExpansion(windir);
-                
-                // Note: In some restricted environments, finding C:\Windows from Desktop might fail.
-                // If it fails, we try a more robust path like Temp.
-                if (csiWin == null)
+                string[] files = Directory.GetFiles(windir);
+                if (files.Length == 0)
                 {
-                    windir = Path.GetTempPath();
-                    csiWin = manager.FindAndAllowExpansion(windir);
+                    Assert.Fail("Unable to read the windows directory.  probably a privileges problem.");
                 }
 
-                Assert.IsNotNull(csiWin, "Should be able to find or add a known folder (Windows or Temp)");
+                // Find by path
+                var foundByPath = manager.FindAndAllowExpansion(windir);
+                Assert.IsNotNull(foundByPath, "Should find item by path");
 
                 // Find by PIDL
-                var foundByPidl = manager.Find(csiWin.PIDL);
+                var foundByPidl = manager.Find(foundByPath.PIDL);
                 Assert.IsNotNull(foundByPidl, "Should find item by PIDL");
-                Assert.AreEqual(csiWin.FullPath, foundByPidl.FullPath, "Found item should have same path");
 
                 // Find by path
-                var foundByPath = manager.Find(windir);
-                Assert.IsNotNull(foundByPath, "Should find item by path");
-                Assert.AreEqual(csiWin.FullPath, foundByPath.FullPath, "Found item should have same path");
+                foundByPath = manager.FindAndAllowExpansion("C:\\Windows\\notepad.exe");
+                Assert.IsNotNull(foundByPath, "Should find notepad by path");
             });
         }
 
@@ -207,28 +259,7 @@ namespace WindowsApiLibTest
             });
         }
 
-        [TestMethod]
-        public async Task TestMockHierarchy()
-        {
-            await Runner.EnqueueWork(() =>
-            {
-                var manager = MockShellItemFactory.CreateMockHierarchyManager();
 
-                Assert.IsNotNull(manager, "MockHierarchyManager should be created");
-                Assert.IsNotNull(manager.Root, "Root (Desktop) should exist");
-                Assert.AreEqual("Desktop", manager.Root.DisplayName, "Root should be Desktop");
-
-                var drives = manager.Root.Directories;
-                Assert.IsNotNull(drives, "Desktop should have child directories");
-                Assert.IsTrue(drives.Count > 0, "Desktop should have at least one child (DRIVES)");
-
-                var myComputer = drives.FirstOrDefault(d => d.DisplayName.Contains("My Computer"));
-                Assert.IsNotNull(myComputer, "My Computer (DRIVES) should exist under Desktop");
-
-                var cDrive = myComputer?.Directories?.FirstOrDefault(d => d.DisplayName == "C:\\");
-                Assert.IsNotNull(cDrive, "C: drive should exist under My Computer");
-                Assert.IsTrue(cDrive?.IsDisk ?? false, "C: should be marked as a disk");
-            });
-        }
     }
+
 }

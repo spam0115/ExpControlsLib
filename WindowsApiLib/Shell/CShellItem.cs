@@ -93,7 +93,7 @@ namespace WindowsApiLib.Shell
         //internal IShellFolder? m_IShellFolder = null;    // if item is a folder, contains the Folder interface for this instance.  Had to remove this because it has sta thread affinity and would throw exceptions when used in a multithreaded sta environment
         internal CShellItem? m_Parent = null;
         internal string m_DisplayName = "";
-        internal string? m_Path = null;
+        internal string? m_FullPath = null;
         internal string? m_TypeName = null;
         internal int m_IconIndexNormal = -1;        // index into the SystemImageListManager list for Normal icon
         internal int m_IconIndexOpen = -1;          // index into the SystemImageListManager list for Open icon
@@ -442,11 +442,11 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                if (m_Path is null)
+                if (m_FullPath is null)
                 {
-                    m_Path = CShellItemFactory.GetFullPath(this);
+                    m_FullPath = CShellItemFactory.GetFullPath(this);
                 }
-                return m_Path;
+                return m_FullPath;
             }
         }
 
@@ -1550,7 +1550,7 @@ namespace WindowsApiLib.Shell
         {
             Debug.WriteLine("DisplayName = " + m_DisplayName);
             Debug.WriteLine("PIDL        = " + m_Pidl.ToString());
-            Debug.WriteLine("\tPath        = " + m_Path);
+            Debug.WriteLine("\tPath        = " + m_FullPath);
             Debug.WriteLine("\tTypeName    = " + TypeName);
             Debug.WriteLine("\tiIconNormal = " + m_IconIndexNormal);
             Debug.WriteLine("\tiIconSelect = " + m_IconIndexOpen);
@@ -1721,7 +1721,7 @@ namespace WindowsApiLib.Shell
         /// <remarks></remarks>
         internal void UpdateFolderPidlAndPath()
         {
-            m_Path = string.Empty;             // will update when needed
+            m_FullPath = string.Empty;             // will update when needed
             IntPtr newPidl;
             newPidl = CPidl.Concatenate(Parent.PIDL, ILFindLastID(PIDL));
             Marshal.FreeCoTaskMem(m_Pidl);

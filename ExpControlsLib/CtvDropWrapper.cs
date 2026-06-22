@@ -248,9 +248,18 @@ namespace ExpControlsLib
                 {
                     if (ReferenceEquals(tn, m_LastNode))
                     {
+                        // Still delegate to the shell's IDropTarget.DragOver so it can
+                        // react to modifier key changes (e.g. Ctrl → Copy).
+                        if (m_LastTarget is not null)
+                        {
+                            m_LastTarget.DragOver(grfKeyState, pt, ref pdwEffect);
+                        }
+
                         if (m_DropHelper is not null)
                             m_DropHelper.DragOver(ref pt, pdwEffect); // 7/11/2012
-                        return S_OK;        // all set up anyhow
+
+                        ShDragOver?.Invoke(tn, ptClient, (int)grfKeyState, (int)pdwEffect);
+                        return S_OK;
                     }
                     else
                     {

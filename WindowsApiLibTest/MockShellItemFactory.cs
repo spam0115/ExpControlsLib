@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
 
@@ -14,6 +15,12 @@ namespace WindowsApiLibTest
             return CreateMockShellItemFromPidlBytes(pidlBytes, parent);
         }
 
+        public static CShellItem CreateMockShellItem(string path, CShellItem? parent = null)
+        {
+            byte[] pidlBytes = MockPidlFactory.CreateMockPidlFromPath(path);
+            return CreateMockShellItemFromPidlBytes(pidlBytes, parent);
+        }
+        
         public static CShellItem CreateMockShellItemFromPidlBytes(byte[] pidlBytes, CShellItem? parent = null)
         {
             IntPtr pidl = MockPidl.BytesToPidl(pidlBytes);
@@ -23,7 +30,7 @@ namespace WindowsApiLibTest
             var csi = new CShellItem();
             csi.m_Pidl = pidl;
             csi.m_DisplayName = displayName;
-            csi.m_Path = displayPath;
+            csi.m_FullPath = displayPath;
             csi.m_Parent = parent;
             csi.m_IsFolder = true;
             csi.m_IsFileSystem = !IsVirtualFolder(pidlBytes);
@@ -104,6 +111,10 @@ namespace WindowsApiLibTest
             cDrive.m_directories = new CShellItemCollection(cDrive);
             cDrive.m_directories.Append(windows);
 
+            var notepad = CreateMockShellItem("C:\\Windows\\notepad.exe", windows);
+            windows.m_files = new CShellItemCollection(windows);
+            windows.Files?.Add(notepad);
+
             var system = CreateMockShellItem(CSIDL.SYSTEM, windows);
             windows.m_directories = new CShellItemCollection(windows);
             windows.m_directories.Append(system);
@@ -131,6 +142,8 @@ namespace WindowsApiLibTest
             profile.m_directories.Append(myPictures);
 
             return new CShellItemHierachyManager(desktop);
+
+            
         }
 
         public List<IntPtr> Pidls = new List<IntPtr>();
