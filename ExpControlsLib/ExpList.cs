@@ -697,8 +697,10 @@ namespace ExpControlsLib
         /// <param name="shellController"></param>
         public void Initialize(ShellController shellController)
         {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.Initialize: Begin");
             _shellController = shellController;
             _initialized = true;
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.Initialize: End");
         }
 
         /// <summary>
@@ -710,19 +712,22 @@ namespace ExpControlsLib
             if (IsInDesignMode)
                 return;
 
-            Debug.WriteLine("ExpList: ExpList_Load Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Begin");
             try
             {
                 // Setup Drag and Drop Wrappers
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Setting up drag/drop...");
                 DW = new CDragWrapper(_listView);
                 DW.DragEnd += DW_DragEnd;
                 DropWrap = new ClvDropWrapper(_listView);
 
                 // Initialize Thumbnail Manager
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Initializing thumbnail manager...");
                 _thumbnailManager = new ThumbnailImageListManager(this);
                 _thumbnailManager.ThumbnailReady += ThumbnailManager_ThumbnailReady;
 
                 //set up sorter
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Initializing sorter...");
                 _listViewWrapper.Initialize();
                 _listViewWrapper.Sorter.SortOrderChanged += (s, e) =>
                 {
@@ -735,6 +740,7 @@ namespace ExpControlsLib
                 };
 
                 // Initialize thumbnail timer for lazy loading
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Setting up scroll debounce timer...");
                 _scrollDebounceTimer = new System.Windows.Forms.Timer();
                 _scrollDebounceTimer.Interval = 100;
                 _scrollDebounceTimer.Tick += (s, e) =>
@@ -746,12 +752,10 @@ namespace ExpControlsLib
 
 
                 // Setup Change Notification
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Wiring shell update events...");
                 ShellController.Instance.ShellUpdater.UpdateEvent += UpdateInvoke;
 
-                //DisplayMode = (ListViewDisplayMode)_listView.View;
-
-                //SetImageListForMode(DisplayMode);
-                //LoadImagesForItems();
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: End");
             }
             finally
             {
@@ -764,14 +768,14 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpFileList_HandleCreated(object? sender, EventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpFileList_HandleCreated Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpFileList_HandleCreated: Begin");
             try
             {
                 _scrollHook = new ListViewScrollHook(_listViewWrapper, OnScroll);
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpFileList_HandleCreated End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpFileList_HandleCreated: End");
             }
         }
 
@@ -2183,7 +2187,12 @@ namespace ExpControlsLib
         /// <param name="reload">True to force a reload even if the same item was previously selected.</param>
         public async Task LoadDirectoryAsync(string pathName, bool includeFolder = true, bool reload = false)
         {
-            if (!reload && (_currentFolderCsi is not null && pathName == CurrentPath)) return;
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(string): Begin for '{pathName}', reload={reload}");
+            if (!reload && (_currentFolderCsi is not null && pathName == CurrentPath))
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(string): Skipping - same path");
+                return;
+            }
 
             CShellItem csi;
             if (pathName == null) 
@@ -2191,21 +2200,34 @@ namespace ExpControlsLib
             else
                 csi = _shellController.HierachyManager.FindAndAllowExpansion(pathName);
 
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(string): Found csi='{csi?.DisplayName}', calling LoadDirectoryBaseAsync...");
             await LoadDirectoryBaseAsync(csi, includeFolder);
 
             CurrentFolderCsi = csi;
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(string): End for '{pathName}'");
         }
 
         public async Task LoadDirectoryAsync(CShellItem? csi, bool includeFolder = true, bool reload = false)
         {
-            if (csi is null) return;
-            if (!reload && (_currentFolderCsi is not null && csi.FullPath == CurrentPath)) return;
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(CShellItem): Begin for '{csi?.DisplayName}', reload={reload}");
+            if (csi is null)
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(CShellItem): csi is null, returning");
+                return;
+            }
+            if (!reload && (_currentFolderCsi is not null && csi.FullPath == CurrentPath))
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(CShellItem): Skipping - same path");
+                return;
+            }
 
             var hierarchyCsi = _shellController.HierachyManager.FindAndAllowExpansion(csi);
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(CShellItem): hierarchyCsi='{hierarchyCsi?.DisplayName}', calling LoadDirectoryBaseAsync...");
 
             await LoadDirectoryBaseAsync(hierarchyCsi, includeFolder);
 
             CurrentFolderCsi = hierarchyCsi;
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(CShellItem): End for '{csi?.DisplayName}'");
         }
 
         /// <summary>
@@ -2213,10 +2235,11 @@ namespace ExpControlsLib
         /// </summary>
         public async Task LoadDirectoryBaseAsync(CShellItem? csi, bool includeFolder = true)
         {
-            Debug.WriteLine("LoadDirectoryBaseAsync: " + csi?.FullPath);
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: Begin for '{csi?.FullPath}'");
 
             if (csi is null)
             {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: csi is null, clearing list");
                 ClearListView();
                 return;
             }
@@ -2259,11 +2282,13 @@ namespace ExpControlsLib
                     return;
                 }
 
-                int x = 2;
-
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: Enqueueing STA work for '{csi.DisplayName}'...");
                 var result = await _staRunner.EnqueueWork(t =>
                 {
-                    _shellController.LoadFolderContents(csi, SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: Begin loading folder contents for '{csi.DisplayName}'");
+
+                    var flags = SHCONTF.NONFOLDERS | (includeFolder ? SHCONTF.FOLDERS : 0);
+                    _shellController.EnsureChildrenPopulated(csi, flags);
 
                     var dirList = new List<CShellItem>();
                     var fileList = new List<CShellItem>();
@@ -2283,15 +2308,14 @@ namespace ExpControlsLib
                             if (!IsExcluded(file)) fileList.Add(file);
                         }
                     }
-
-                    //fileList.Sort(); can't sort yet - we don't have all the column data yet
-                    //if (includeFolder) dirList.Sort();
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: {dirList.Count} dirs, {fileList.Count} files");
 
                     var combined = new List<CShellItem>(dirList.Count + fileList.Count);
                     if (includeFolder) combined.AddRange(dirList);
                     combined.AddRange(fileList);
 
                     // Warming up
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: Warming up {combined.Count} items...");
                     bool isLarge = (_listViewWrapper.DisplayMode == ListViewDisplayMode.LargeIcon);
                     foreach (var item in combined)
                     {
@@ -2305,12 +2329,15 @@ namespace ExpControlsLib
                             item.ImageIndex = SystemImageListManager.GetIconIndex(item, isLarge);
                         }
                     }
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: Warmup complete");
 
                     // Sort according to current settings after data is fetched
                     if (comparer != null)
                     {
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: Sorting...");
                         combined.Sort(comparer);
                     }
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: Complete, returning {combined.Count} items");
 
                     return new
                     {
@@ -2320,10 +2347,13 @@ namespace ExpControlsLib
                     };
                 }, token);
 
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: STA work returned, result={result != null}, cancelled={token.IsCancellationRequested}");
+
                 if (token.IsCancellationRequested) return;
 
                 if (result != null)
                 {
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: Updating ListView with {result.Items.Count} items...");
                     _listView.BeginUpdate();
                     try
                     {
@@ -2340,6 +2370,7 @@ namespace ExpControlsLib
                         _listView.Tag = csi;
 
                         OnScroll();
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: ListView update complete");
                     }
                     finally
                     {
@@ -2354,9 +2385,9 @@ namespace ExpControlsLib
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                Debug.WriteLine("Error in LoadDirectoryBaseAsync: " + ex.ToString());
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: ERROR - {ex}");
             }
-            Debug.WriteLine("LoadDirectoryBaseAsync: done.");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: End for '{csi?.FullPath}'");
         }
 
         private void ClearListView()

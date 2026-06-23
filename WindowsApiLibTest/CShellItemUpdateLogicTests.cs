@@ -129,7 +129,7 @@ namespace WindowsApiLibTest
                 logic.HandleNotification(documents.PIDL, IntPtr.Zero);
 
                 Assert.IsTrue(eventRaised, "Created event should be raised");
-                Assert.AreEqual(1, userfolder.m_files.Count, "Parent should have 1 child in FileList");
+                Assert.AreEqual(1, userfolder.FilesList?.Count, "Parent should have 1 child in FileList");
                 
                 Marshal.FreeCoTaskMem(pNotifyStruct);
                 Marshal.FreeCoTaskMem(documents.PIDL);
@@ -148,20 +148,20 @@ namespace WindowsApiLibTest
 
                 var parent = new CShellItem();
                 parent.m_IsFolder = true;
-                parent.m_directories = new CShellItemCollection(parent);
-                parent.m_files = new CShellItemCollection(parent);
+                parent.Directories = new CShellItemCollection(parent);
+                parent.Files = new CShellItemCollection(parent);
                 //parent.FoldersInitialized = true; //uneeded - FoldersInitialized has no backing field and just test m_Directories for non-null values
                 //parent.FilesInitialized = true; //uneeded - FilesInitialized has no backing field and just test m_Files for non-null values
 
                 var child = new CShellItem();
-                child.m_Parent = parent;
-                parent.m_files.Add(child);
+                child.Parent = parent;
+                parent.Files.Add(child);
 
                 var logic = new CShellItemUpdateLogic<MockPidl>(manager);
                 bool removed = logic.RemoveItem(parent, child);
 
                 Assert.IsTrue(removed, "RemoveItem should return true");
-                Assert.IsFalse(parent.m_files.Contains(child), "Child should be removed from parent's file list");
+                Assert.IsFalse(parent.Files.Contains(child), "Child should be removed from parent's file list");
             });
         }
 
@@ -178,15 +178,15 @@ namespace WindowsApiLibTest
                 var parent = new CShellItem();
                 parent.m_Pidl = parentPidl;
                 parent.m_IsFolder = true;
-                parent.m_files = new CShellItemCollection(parent);
+                parent.Files = new CShellItemCollection(parent);
                 manager.Add(parent);
 
                 var relativeChildPidl = CreateValidPidl();
                 var childPidl = MockPidl.Concatenate(parentPidl, relativeChildPidl);
                 var child = new CShellItem();
                 child.m_Pidl = childPidl;
-                child.m_Parent = parent;
-                parent.m_files.Add(child);
+                child.Parent = parent;
+                parent.Files.Add(child);
 
                 var mockApi = new MockShellApi();
                 var logic = new CShellItemUpdateLogic<MockPidl>(manager, mockApi);
@@ -211,7 +211,7 @@ namespace WindowsApiLibTest
                 logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
 
                 Assert.IsTrue(eventRaised, "Deleted event should be raised");
-                Assert.AreEqual(0, parent.m_files.Count, "Child should be removed from parent's FileList");
+                Assert.AreEqual(0, parent.Files.Count, "Child should be removed from parent's FileList");
                 
                 Marshal.FreeCoTaskMem(pNotifyStruct);
                 Marshal.FreeCoTaskMem(childPidl);
@@ -238,7 +238,7 @@ namespace WindowsApiLibTest
                 var oldChildPidl = MockPidl.Concatenate(parentPidl, relativeChildPidl);
                 var child = new CShellItem();
                 child.m_Pidl = oldChildPidl;
-                child.m_Parent = parent;
+                child.Parent = parent;
                 manager.Add(child);
 
                 var mockApi = new MockShellApi();
@@ -301,7 +301,7 @@ namespace WindowsApiLibTest
                 var itemPidl = MockPidl.Concatenate(parentPidl, relativeItemPidl);
                 var item = new CShellItem();
                 item.m_Pidl = itemPidl;
-                item.m_Parent = parent;
+                item.Parent = parent;
                 manager.Add(item);
 
                 var mockApi = new MockShellApi();
@@ -347,15 +347,15 @@ namespace WindowsApiLibTest
                 var folder = new CShellItem();
                 folder.m_Pidl = parentPidl;
                 folder.m_IsFolder = true;
-                folder.m_files = new CShellItemCollection(folder);
+                folder.Directories = new CShellItemCollection(folder);
                 manager.Add(folder);
                 
                 var relativeChildPidl = CreateValidPidl();
                 var childPidl = MockPidl.Concatenate(parentPidl, relativeChildPidl);
                 var child = new CShellItem();
                 child.m_Pidl = childPidl;
-                child.m_Parent = folder;
-                folder.m_files.Add(child);
+                child.Parent = folder;
+                folder.Files.Add(child);
 
                 var mockFactory = new MockShellItemFactory();
                 mockFactory.Pidls.Add(relativeChildPidl); // Same PIDL exists in folder

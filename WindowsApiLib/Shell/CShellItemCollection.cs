@@ -11,8 +11,9 @@ namespace WindowsApiLib.Shell
     /// <remarks></remarks>
     public class CShellItemCollection : IEnumerable<CShellItem>, ICollection
     {
-        private readonly CShellItem m_parent; //needed to set parent values
-        private readonly List<CShellItem> m_items; //todo: maybe change this to HugeList ?
+        private CShellItem _parent; //needed to set parent values
+        private List<CShellItem> _items; //todo: maybe change this to HugeList ?
+        private Dictionary<string, CShellItem>? _dictionary = null;
 
         /// <summary>
         /// A collection of CShellItems releted to a given parent
@@ -20,15 +21,51 @@ namespace WindowsApiLib.Shell
         /// <param name="parent">The parent item for all items that will eventually be added to this collection.</param>
         public CShellItemCollection(CShellItem parent)
         {
-            m_parent = parent;
-            m_items = new List<CShellItem>();
+            _parent = parent;
+            _items = new List<CShellItem>();
         }
 
-        public CShellItem Owner
+        public CShellItemCollection(CShellItem parent, List<CShellItem> items)
+        {
+            _parent = parent;
+            _items = items;
+        }
+
+        public int Count => _items.Count;
+
+        public List<CShellItem> Items => _items;
+
+
+        public CShellItem Parent
         {
             get
             {
-                return m_parent;
+                return _parent;
+            }
+            set //need this to support move operations
+            {
+                _parent = value;
+            }
+        }
+
+        /// <summary>
+        /// Lazy loaded dictionary of the collection indexed by display name.
+        /// </summary>
+        public Dictionary<string, CShellItem> Dictionary
+        {
+            get
+            {
+                if (_dictionary is null)
+                {
+                    lock (_items)
+                    {
+                        if (_dictionary == null)
+                        {
+                            _dictionary = _items.ToDictionary(o => o.DisplayName, o => o, StringComparer.OrdinalIgnoreCase);
+                        }
+                    }
+                }
+                return _dictionary;
             }
         }
 
@@ -36,7 +73,7 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                return m_items;
+                return _items;
             }
         }
 
@@ -48,61 +85,75 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        public int Count => m_items.Count;
-
-        public List<CShellItem> Items => m_items;
 
         public void Sort()
         {
-            lock (m_items)
-                m_items.Sort();
+            lock (_items)
+                _items.Sort();
         }
 
         internal int Add(CShellItem value)
         {
             if (value.Parent is null)
             {
-                value.SetParent(m_parent);
+                value.SetParent(_parent);
             }
-            lock (m_items)
+            lock (_items)
             {
-                m_items.Add(value);
-                return m_items.Count - 1;
+                _items.Add(value);
+                if (_dictionary is not null)
+                    _dictionary[value.DisplayName] = value;
+                return _items.Count - 1;
             }
         }
 
         internal void AddRange(IEnumerable<CShellItem> value)
         {
-            lock (m_items)
-                m_items.AddRange(value);
+            lock (_items)
+            {
+                _items.AddRange(value);
+                if (_dictionary is not null)
+                {
+                    foreach (var item in value)
+                        _dictionary[item.DisplayName] = item;
+                }
+            }
         }
 
-        internal void Clear()
+        public void Clear()
         {
-            lock (m_items)
-                m_items.Clear();
+            lock (_items)
+            {
+                _items.Clear();
+                if (_dictionary is not null)
+                    _dictionary.Clear();
+            }
+        }
+
+        public void ClearCaches()
+        {
+            if (_dictionary is not null)
+                _dictionary.Clear();
         }
 
         public bool Contains(CShellItem value)
         {
-            return m_items.Contains(value);
+            return _items.Contains(value);
         }
 
         public bool Contains(string name)
         {
-            foreach (CShellItem itm in m_items)
-            {
-                if (string.Compare(itm.GetFileName(), name, true) == 0)
-                {
-                    return true;
-                }
-            }
-            return false;
+            return Dictionary.ContainsKey(name);
         }
 
+        /// <summary>
+        /// Note: this is slow O(n).
+        /// </summary>
+        /// <param name="pidl"></param>
+        /// <returns></returns>
         public bool Contains(IntPtr pidl)
         {
-            foreach (CShellItem itm in m_items)
+            foreach (CShellItem itm in _items)
             {
                 if (CPidl.IsBinaryEqual(itm.PIDL, pidl))
                 {
@@ -114,21 +165,32 @@ namespace WindowsApiLib.Shell
 
         public bool ContainsEquivalentAbsolutePidl(IntPtr pidl)
         {
-            var result = CShellItemHierachyManager.Find(m_parent, pidl);
+            var result = CShellItemHierachyManager.Find(_parent, pidl);
 
             return result != null;
         }
 
-        public int IndexOf(CShellItem value)
+        public CShellItem Find(string name)
         {
-            return m_items.IndexOf(value);
+            Dictionary.TryGetValue(name, out var item);
+            return item;
         }
 
+        public int IndexOf(CShellItem value)
+        {
+            return _items.IndexOf(value);
+        }
+
+        /// <summary>
+        /// Note: this is slow O(n).
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
         public int IndexOf(string name)
         {
-            for (int i = 0; i < m_items.Count; i++)
+            for (int i = 0; i < _items.Count; i++)
             {
-                if (string.Compare(m_items[i].GetFileName(), name, true) == 0)
+                if (string.Compare(_items[i].GetFileName(), name, true) == 0)
                 {
                     return i;
                 }
@@ -136,20 +198,26 @@ namespace WindowsApiLib.Shell
             return -1;
         }
 
-	public int IndexOf(IntPtr pidl)
+        /// <summary>
+        /// Note: this is slow O(n).
+        /// </summary>
+        /// <param name="pidl"></param>
+        /// <returns></returns>
+	     public int IndexOf(IntPtr pidl)
         {
-            for (int i = 0; i < m_items.Count; i++)
+            //fast memcomp
+            for (int i = 0; i < _items.Count; i++)
             {
-                if (CPidl.IsBinaryEqual(m_items[i].PIDL, pidl))
+                if (CPidl.IsBinaryEqual(_items[i].PIDL, pidl))
                 {
                     return i;
                 }
             }
 
             // Fallback to more expensive but robust comparison for absolute PIDLs
-            for (int i = 0; i < m_items.Count; i++)
+            for (int i = 0; i < _items.Count; i++)
             {
-                if (CPidl.ResolvesToSamePathOrName(m_items[i].PIDL, pidl))
+                if (CPidl.ResolvesToSamePathOrName(_items[i].PIDL, pidl))
                 {
                     return i;
                 }
@@ -157,27 +225,31 @@ namespace WindowsApiLib.Shell
             return -1;
         }
 
-
+        /// <summary>
+        /// Note: this is slow O(n).
+        /// </summary>
+        /// <param name="relPidl"></param>
+        /// <returns></returns>
         public int IndexOfRelative(IntPtr relPidl)
         {
             if (relPidl == IntPtr.Zero) return -1;
 
             // First try binary equal as it is fastest
-            for (int i = 0; i < m_items.Count; i++)
+            for (int i = 0; i < _items.Count; i++)
             {
-                if (CPidl.IsBinaryEqual(m_items[i].LastPIDL, relPidl))
+                if (CPidl.IsBinaryEqual(_items[i].LastPIDL, relPidl))
                 {
                     return i;
                 }
             }
 
             // Fallback to shell-based comparison
-            IShellFolder folder = m_parent.GetIShellFolder();
+            IShellFolder folder = _parent.GetIShellFolder();
             if (folder != null)
             {
-                for (int i = 0; i < m_items.Count; i++)
+                for (int i = 0; i < _items.Count; i++)
                 {
-                    if (CPidl.AreEqual(folder, m_items[i].LastPIDL, relPidl))
+                    if (CPidl.AreEqual(folder, _items[i].LastPIDL, relPidl))
                     {
                         return i;
                     }
@@ -189,49 +261,68 @@ namespace WindowsApiLib.Shell
 
         internal void Insert(int index, CShellItem value)
         {
-            lock (m_items)
-                m_items.Insert(index, value);
+            lock (_items)
+            {
+                _items.Insert(index, value);
+                if (_dictionary is not null)
+                    _dictionary[value.DisplayName] = value;
+            }
         }
 
         internal void Remove(CShellItem value)
         {
-            lock (m_items)
-                m_items.Remove(value);
+            lock (_items)
+            {
+                _items.Remove(value);
+                if (_dictionary is not null)
+                    _dictionary.Remove(value.DisplayName);
+            }
         }
 
         internal void RemoveRange(IEnumerable<CShellItem> items)
         {
             if (items == null) return;
             var toRemove = new HashSet<CShellItem>(items);
-            lock (m_items)
+            lock (_items)
             {
-                m_items.RemoveAll(i => toRemove.Contains(i));
+                _items.RemoveAll(i => toRemove.Contains(i));
+                if (_dictionary is not null)
+                {
+                    foreach (var item in items)
+                        _dictionary.Remove(item.DisplayName);
+                }
             }
         }
 
         internal void Remove(string name)
         {
-            lock (m_items)
+            lock (_items)
             {
                 int index = IndexOf(name);
                 if (index > -1)
                 {
-                    m_items.RemoveAt(index);
+                    _items.RemoveAt(index);
+                    if (_dictionary is not null)
+                        _dictionary.Remove(name);
                 }
             }
         }
 
         internal void RemoveAt(int index)
         {
-            lock (m_items)
-                m_items.RemoveAt(index);
+            lock (_items)
+            {
+                if (_dictionary is not null)
+                    _dictionary.Remove(_items[index].DisplayName);
+                _items.RemoveAt(index);
+            }
         }
 
         public CShellItem this[int index]
         {
             get
             {
-                return m_items[index];
+                return _items[index];
             }
         }
 
@@ -240,14 +331,14 @@ namespace WindowsApiLib.Shell
             get
             {
                 int index = IndexOf(name);
-                return index > -1 ? m_items[index] : null;
+                return index > -1 ? _items[index] : null;
             }
             set
             {
                 int index = IndexOf(name);
                 if (index > -1)
                 {
-                    m_items[index] = value;
+                    _items[index] = value;
                 }
             }
         }
@@ -261,7 +352,7 @@ namespace WindowsApiLib.Shell
             {
                 int index = IndexOf(pidl);
                 if (index == -1) index = IndexOfRelative(pidl);
-                return index > -1 ? m_items[index] : null;
+                return index > -1 ? _items[index] : null;
             }
             set
             {
@@ -269,15 +360,15 @@ namespace WindowsApiLib.Shell
                 if (index == -1) index = IndexOfRelative(pidl);
                 if (index > -1)
                 {
-                    m_items[index] = value;
+                    _items[index] = value;
                 }
             }
         }
 
         public IEnumerator<CShellItem> GetEnumerator()
         {
-            lock (m_items)
-                return new List<CShellItem>(m_items).GetEnumerator();
+            lock (_items)
+                return new List<CShellItem>(_items).GetEnumerator();
         }
 
         IEnumerator IEnumerable.GetEnumerator()
@@ -287,14 +378,14 @@ namespace WindowsApiLib.Shell
 
         public void CopyTo(Array array, int index)
         {
-            lock (m_items)
-                ((ICollection)m_items).CopyTo(array, index);
+            lock (_items)
+                ((ICollection)_items).CopyTo(array, index);
         }
 
         public CShellItem[] ToArray()
         {
-            lock (m_items)
-                return m_items.ToArray();
+            lock (_items)
+                return _items.ToArray();
         }
     }
 }

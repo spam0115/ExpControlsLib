@@ -31,7 +31,7 @@ namespace WindowsApiLibTest
             csi.m_Pidl = pidl;
             csi.m_DisplayName = displayName;
             csi.m_FullPath = displayPath;
-            csi.m_Parent = parent;
+            csi.Parent = parent;
             csi.m_IsFolder = true;
             csi.m_IsFileSystem = !IsVirtualFolder(pidlBytes);
             csi.m_IsBrowsable = true;
@@ -97,53 +97,51 @@ namespace WindowsApiLibTest
         public static CShellItemHierachyManager CreateMockHierarchyManager()
         {
             var desktop = CreateMockShellItem(CSIDL.DESKTOP);
-            desktop.m_Parent = null;
+            desktop.Parent = null;
 
             var drives = CreateMockShellItem(CSIDL.DRIVES, desktop);
-            desktop.m_directories = new CShellItemCollection(desktop);
-            desktop.m_directories.Append(drives);
+            desktop.Directories = new CShellItemCollection(desktop);
+            desktop.DirectoriesList.Append(drives);
 
             var cDrive = CreateMockShellItem(CSIDL.C_DRIVE, drives);
-            drives.m_directories = new CShellItemCollection(drives);
-            drives.m_directories.Append(cDrive);
+            drives.Directories = new CShellItemCollection(drives);
+            drives.DirectoriesList.Append(cDrive);
 
             var windows = CreateMockShellItem(CSIDL.WINDOWS, cDrive);
-            cDrive.m_directories = new CShellItemCollection(cDrive);
-            cDrive.m_directories.Append(windows);
+            cDrive.Directories = new CShellItemCollection(cDrive);
+            cDrive.DirectoriesList.Append(windows);
 
             var notepad = CreateMockShellItem("C:\\Windows\\notepad.exe", windows);
-            windows.m_files = new CShellItemCollection(windows);
-            windows.Files?.Add(notepad);
+            windows.Files = new CShellItemCollection(windows);
+            windows.FilesList?.Add(notepad);
 
             var system = CreateMockShellItem(CSIDL.SYSTEM, windows);
-            windows.m_directories = new CShellItemCollection(windows);
-            windows.m_directories.Append(system);
+            windows.Directories = new CShellItemCollection(windows);
+            windows.DirectoriesList.Append(system);
 
             var programFiles = CreateMockShellItem(CSIDL.PROGRAM_FILES, cDrive);
-            cDrive.m_directories.Append(programFiles);
+            cDrive.DirectoriesList.Append(programFiles);
 
             var programFilesX86 = CreateMockShellItem(CSIDL.PROGRAM_FILESX86, cDrive);
-            cDrive.m_directories.Append(programFilesX86);
+            cDrive.DirectoriesList.Append(programFilesX86);
 
             var profile = CreateMockShellItem(CSIDL.PROFILE, cDrive);
-            cDrive.m_directories.Append(profile);
+            cDrive.DirectoriesList.Append(profile);
 
             var desktopDirectory = CreateMockShellItem(CSIDL.DESKTOPDIRECTORY, profile);
-            profile.m_directories = new CShellItemCollection(profile);
-            profile.m_directories.Append(desktopDirectory);
+            profile.Directories = new CShellItemCollection(profile);
+            profile.DirectoriesList.Append(desktopDirectory);
 
             var localAppData = CreateMockShellItem(CSIDL.LOCAL_APPDATA, profile);
-            profile.m_directories.Append(localAppData);
+            profile.DirectoriesList.Append(localAppData);
 
             var myDocuments = CreateMockShellItem(CSIDL.MYDOCUMENTS, profile);
-            profile.m_directories.Append(myDocuments);
+            profile.DirectoriesList.Append(myDocuments);
 
             var myPictures = CreateMockShellItem(CSIDL.MYPICTURES, profile);
-            profile.m_directories.Append(myPictures);
+            profile.DirectoriesList.Append(myPictures);
 
             return new CShellItemHierachyManager(desktop);
-
-            
         }
 
         public List<IntPtr> Pidls = new List<IntPtr>();
@@ -157,7 +155,7 @@ namespace WindowsApiLibTest
         {
             var csi = new CShellItem();
             csi.m_Pidl = MockPidl.Clone(pidl);
-            csi.m_Parent = parent;
+            csi.Parent = parent;
             return csi;
         }
 

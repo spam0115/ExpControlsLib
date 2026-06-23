@@ -35,7 +35,7 @@ namespace WindowsApiLibTest
                 var result = controller.LoadFolderContents(myComputer, SHCONTF.FOLDERS);
 
                 Assert.IsNotNull(result, "Result should not be null.");
-                Assert.IsTrue(result.FoldersInitialized, "Directories collection should be initialized after loading with FOLDERS flag.");
+                Assert.IsTrue(result.DirectoriesInitialized, "Directories collection should be initialized after loading with FOLDERS flag.");
                 Assert.IsTrue(result.DirCount > 0, "My Computer should contain at least one subfolder (drives).");
             });
         }
@@ -68,7 +68,7 @@ namespace WindowsApiLibTest
                 var result = controller.LoadFolderContents(profile, SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
 
                 Assert.IsNotNull(result, "Result should not be null.");
-                Assert.IsTrue(result.FoldersInitialized, "Directories collection should be initialized.");
+                Assert.IsTrue(result.DirectoriesInitialized, "Directories collection should be initialized.");
                 Assert.IsTrue(result.FilesInitialized, "Files collection should be initialized.");
             });
         }
@@ -79,17 +79,29 @@ namespace WindowsApiLibTest
             await Runner.EnqueueWork(() =>
             {
                 var controller = ShellController.Instance;
-                var myComputer = CShellItemFactory.Create(CSIDL.DRIVES);
+                var windowsDir = CShellItemFactory.Create(CSIDL.WINDOWS);
+                Assert.IsNotNull(windowsDir, "Failed to create windowsDir");
 
-                controller.LoadFolderContents(myComputer, SHCONTF.FOLDERS);
-                int firstCount = myComputer.DirCount;
-                Assert.IsTrue(firstCount > 0, "First load should find subfolders.");
+                //first load
+                controller.LoadFolderContents(windowsDir, SHCONTF.NONFOLDERS);
+                int firstCount = windowsDir.FileCount;
+                Assert.IsTrue(firstCount > 0, "First load should find items");
 
-                var result = controller.LoadFolderContents(myComputer, SHCONTF.FOLDERS);
+                CShellItem? firstNotepad = null;
+                firstNotepad = windowsDir.Files?.Where(o => string.Equals(o.DisplayName, "notepad.exe", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                Assert.IsNotNull(firstNotepad, "notepad.exe should exist in C:\\Windows.");
+                
+                //second load
+                var result = controller.LoadFolderContents(windowsDir, SHCONTF.NONFOLDERS);
 
                 Assert.IsNotNull(result, "Second load result should not be null.");
-                Assert.IsTrue(result.FoldersInitialized, "Directories should still be initialized after second load.");
-                Assert.AreEqual(firstCount, result.DirCount, "Directory count should be consistent on reload.");
+                Assert.IsTrue(result.FileCount > 0, "First load should find items");
+                
+                CShellItem? secondNotepad = null;
+                secondNotepad = result.Files?.Where(o => string.Equals(o.DisplayName, "notepad.exe", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                Assert.IsNotNull(firstNotepad, "notepad.exe should exist in C:\\Windows.");
+                Assert.AreNotEqual(firstNotepad, secondNotepad, "First and second fetches of notepad.exe should be different.");
+
             });
         }
 
@@ -117,9 +129,9 @@ namespace WindowsApiLibTest
 
                 controller.LoadFolderContents(myComputer, SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
 
-                if (myComputer.DirectoriesCollection != null)
+                if (myComputer.Directories != null)
                 {
-                    foreach (CShellItem item in myComputer.DirectoriesCollection)
+                    foreach (CShellItem item in myComputer.Directories)
                     {
                         Assert.IsTrue(item.IsFolder, "All items in DirectoryList should be folders.");
                     }
@@ -139,7 +151,7 @@ namespace WindowsApiLibTest
                 var result = controller.LoadFolderContents(profile, SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
 
                 Assert.IsNotNull(result, "Should be able to load contents of user profile folder.");
-                Assert.IsTrue(result.FoldersInitialized || result.FilesInitialized, "Profile folder should have some contents.");
+                Assert.IsTrue(result.DirectoriesInitialized || result.FilesInitialized, "Profile folder should have some contents.");
             });
         }
 
@@ -160,6 +172,47 @@ namespace WindowsApiLibTest
 
                 Assert.IsNotNull(result, "Result should not be null.");
                 Assert.IsTrue(result.FilesInitialized, "Files collection should be initialized after loading with NONFOLDERS flag.");
+            });
+        }
+
+        /// <summary>
+        /// test the conditional loading logic which considers age time out for items before loading.
+        /// </summary>
+        /// <returns></returns>
+        [TestMethod]
+        public async Task EnsureChildrenPopulated_NonFolders_CachesWithinTimeout()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                var controller = ShellController.Instance;
+                var windowsDir = CShellItemFactory.Create(CSIDL.WINDOWS);
+                Assert.IsNotNull(windowsDir, "windowsDir should not be null.");
+
+                controller.EnsureChildrenPopulated(windowsDir, SHCONTF.NONFOLDERS);
+
+                Assert.IsTrue(windowsDir.FilesInitialized, "Files should be initialized after first call.");
+                Assert.IsTrue(windowsDir.Files?.Count > 0, "Windows directory should contain some items.");
+
+                CShellItem? firstNotepad = null;
+                firstNotepad = windowsDir.Files.Where(o => string.Equals(o.DisplayName, "notepad.exe", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                Assert.IsNotNull(firstNotepad, "notepad.exe should exist in C:\\Windows.");
+
+                controller.EnsureChildrenPopulated(windowsDir, SHCONTF.NONFOLDERS);
+
+                CShellItem? secondNotepad = null;
+                secondNotepad = windowsDir.Files.Where(o => string.Equals(o.DisplayName, "notepad.exe", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                Assert.IsNotNull(secondNotepad, "notepad.exe should still exist after second call.");
+                Assert.AreSame(firstNotepad, secondNotepad, "Within timeout, EnsureChildrenPopulated should return the same cached item references.");
+
+                Thread.Sleep(ShellController.FolderTimeout * 1000);
+
+                controller.EnsureChildrenPopulated(windowsDir, SHCONTF.NONFOLDERS);
+
+                CShellItem? thirdNotepad = null;
+                thirdNotepad = windowsDir.Files.Where(o => string.Equals(o.DisplayName, "notepad.exe", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+
+                Assert.IsNotNull(thirdNotepad, "notepad.exe should still exist after third call.");
+                Assert.AreNotSame(firstNotepad, thirdNotepad, "After cache expiry, EnsureChildrenPopulated should reload and produce new item references.");
             });
         }
 

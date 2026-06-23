@@ -39,14 +39,14 @@ namespace WindowsApiLibTest
                 Assert.IsNotNull(manager.Root, "Root (Desktop) should exist");
                 Assert.AreEqual("Desktop", manager.Root.DisplayName, "Root should be Desktop");
 
-                var root_directories = manager.Root.Directories;
+                var root_directories = manager.Root.DirectoriesList;
                 Assert.IsNotNull(root_directories, "Desktop should have child directories");
                 Assert.IsTrue(root_directories.Count > 0, "Desktop should have at least one child (DRIVES)");
 
                 var myComputer = root_directories.FirstOrDefault(d => d.DisplayName.Contains("My Computer"));
                 Assert.IsNotNull(myComputer, "My Computer (DRIVES) should exist under Desktop");
 
-                var cDrive = myComputer?.Directories?.FirstOrDefault(d => d.DisplayName == "C:\\");
+                var cDrive = myComputer?.DirectoriesList?.FirstOrDefault(d => d.DisplayName == "C:\\");
                 Assert.IsNotNull(cDrive, "C: drive should exist under My Computer");
                 Assert.IsTrue(cDrive?.IsDisk ?? false, "C: should be marked as a disk");
             });

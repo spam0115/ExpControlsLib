@@ -541,6 +541,7 @@ namespace ExpControlsLib
 
         private void ExpTree_Load(object sender, EventArgs e)
         {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Begin");
             if (IsInDesignMode)
                 return;
 
@@ -548,26 +549,37 @@ namespace ExpControlsLib
 
             _staRunner = new StaThreadRunner(5, "ExpTreeStaRunner");
 
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Setting image list...");
             SetTreeViewImageList(_TreeView, false);
 
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Wiring shell update and timer events...");
             _shellController.ShellUpdater.UpdateEvent += OnItemUpdate;
             expandNodeTimer.Tick += ExpandNodeTimer_Tick;
 
             if (_rootPath is not null)
             {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Custom root path '{_rootPath}' - starting SetRootItemAsync...");
                 m_StartUpDirectory = StartDir.Custom;
                 var csi = _shellController.HierachyManager.FindAndAllowExpansion(_rootPath.Trim());
                 if (csi is null) throw new ArgumentException("ExpTree: root path could not be found.");
                 Root = csi;
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Root property set (custom path).");
             }
             else if (StartUpDirectory != StartDir.None && StartUpDirectory != StartDir.Custom)
             {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: StartUpDirectory={StartUpDirectory} - starting SetRootItemAsync...");
                 var csi = CShellItemFactory.Create((CSIDL)StartUpDirectory);
                 if (csi is null) throw new ArgumentException("ExpTree: StartUpDirectory item could not be created.");
                 csi = _shellController.HierachyManager.FindAndAllowExpansion(csi);
                 if (csi is null) throw new ArgumentException("ExpTree: StartUpDirectory item could not be found.");
                 Root = csi;
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Root property set (StartUpDirectory).");
             }
+            else
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: No root path or StartUpDirectory set.");
+            }
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: End");
         }
 
         /// <summary>
@@ -576,8 +588,10 @@ namespace ExpControlsLib
         /// <param name="shellController"></param>
         public void Initialize(ShellController shellController)
         {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Initialize: Begin");
             _shellController = shellController;
             _initialized = true;
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Initialize: End");
         }
 
         /// <summary>
@@ -690,20 +704,30 @@ namespace ExpControlsLib
         /// </returns>
         public async Task<bool> ExpandANodeAsync(string newPath, bool SelectExpandedNode = true)
         {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): Begin for '{newPath}'");
+
+            //await Task.Delay(5000);
+            
             CShellItem csi;
             try
             {
                 csi = _shellController.HierachyManager.FindAndAllowExpansion(newPath);
                 if (csi is null)
+                {
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): csi is null for '{newPath}'");
                     return false;
+                }
                 if (!csi.IsFolder)
+                {
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): csi is not a folder for '{newPath}'");
                     return false;
+                }
 
                 return await ExpandANodeAsync(csi, SelectExpandedNode);
             }
             catch(Exception ex)
             {
-                Debug.WriteLine("ERROR: Exception - " + ex.ToString());
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): ERROR - {ex}");
                 return false;
             }
         }
@@ -810,19 +834,24 @@ namespace ExpControlsLib
         /// </returns>
         public async Task<bool> ExpandANodeAsync(CShellItem target, bool SelectExpandedNode = true)
         {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(CShellItem): Begin for '{target.DisplayName}', awaiting _loadingRootTask...");
             await _loadingRootTask;
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(CShellItem): _loadingRootTask complete, calling ExpandANodeBaseAsync...");
 
             return await ExpandANodeBaseAsync(target, SelectExpandedNode);
         }
 
         public async Task<bool> ExpandANodeBaseAsync(CShellItem target, bool SelectExpandedNode = true)
         {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: Begin for '{target.DisplayName}'");
             var baseNode = _Root;
             if (baseNode == null)
             {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: _Root is null");
                 // If a load is in progress, store as pending
                 if (_rootLoadCts != null && !_rootLoadCts.IsCancellationRequested)
                 {
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: Storing as pending expansion");
                     _pendingExpansionItem = target;
                     _pendingSelectExpandedNode = SelectExpandedNode;
                     return true;
@@ -888,11 +917,12 @@ namespace ExpControlsLib
 
                 baseNode.EnsureVisible();
                 _TreeView.EndUpdate();
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: End - success");
                 return true;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("Error in ExpandANodeAsync: " + ex.Message);
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: Error - {ex.Message}");
                 return false;
             }
         }
@@ -1299,6 +1329,7 @@ namespace ExpControlsLib
         /// <param name="e">Event data (unused).</param>
         private void Tv1_HandleCreated(object sender, EventArgs e)
         {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Tv1_HandleCreated: Begin");
             if (IsInDesignMode)
                 return;
 
@@ -1307,6 +1338,7 @@ namespace ExpControlsLib
             if (m_AllowDrop)
                 DropHandler = new CtvDropWrapper(_TreeView);
             SetWindowTheme(_TreeView.Handle, "explorer", null);
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Tv1_HandleCreated: End");
         }
 
         /// <summary>
@@ -1331,6 +1363,7 @@ namespace ExpControlsLib
         /// </param>
         private async void Tv1_BeforeExpand(object sender, TreeViewCancelEventArgs e)
         {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Tv1_BeforeExpand: Begin for '{e.Node?.Text}'");
             if (e.Node.Nodes.Count == 1 && e.Node.Nodes[0].Text.Equals(DummyText))
             {
                 var oldCursor = Cursor;
@@ -1345,6 +1378,7 @@ namespace ExpControlsLib
                 }
             }
             e.Node.ImageIndex = ((CShellItem)e.Node.Tag).IconIndexOpen;
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Tv1_BeforeExpand: End for '{e.Node?.Text}'");
         }
 
         private void Tv1_BeforeSelect(object sender, TreeViewCancelEventArgs e)
@@ -2122,12 +2156,7 @@ namespace ExpControlsLib
 
             var flags = SHCONTF.FOLDERS;
             if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-            var target = _shellController.LoadFolderContents(csi, flags);
-            if (target != null && !ReferenceEquals(csi, target))
-            {
-                NodeToFill.Tag = target;
-                csi = target;
-            }
+            _shellController.EnsureChildrenPopulated(csi, flags);
 
             var D = csi.Directories;
 
@@ -2164,14 +2193,17 @@ namespace ExpControlsLib
         /// </param>
         private async Task SetRootItemAsync(CShellItem? csi)
         {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Begin for '{csi?.DisplayName}'");
             _rootLoadCts?.Cancel();
             _rootLoadCts = new CancellationTokenSource();
             var token = _rootLoadCts.Token;
 
             try
             {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Enqueueing STA work...");
                 var result = await _staRunner.EnqueueWork(t =>
                 {
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync.STA: Begin background work");
                     try
                     {
                         if (csi == null || !csi.IsFolder) return null;
@@ -2181,10 +2213,10 @@ namespace ExpControlsLib
 
                         var flags = SHCONTF.FOLDERS;
                         if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-                        target = _shellController.LoadFolderContents(target, flags);
+                        _shellController.EnsureChildrenPopulated(target, flags);
 
                         var children = target.Directories;
-                        // Warming up
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync.STA: Warming up {children.Count} children...");
                         foreach (var child in children)
                         {
                             if (t.IsCancellationRequested) return null;
@@ -2192,6 +2224,7 @@ namespace ExpControlsLib
                             _ = child.IconIndexNormal;
                             _ = child.IconIndexOpen;
                         }
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync.STA: Background work complete");
 
                         return new
                         {
@@ -2203,13 +2236,16 @@ namespace ExpControlsLib
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine("ERROR: SetRootItemAsync.EnqueueWork({...}) - " + ex.ToString());
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync.STA: ERROR - {ex}");
                         return null;
                     }
                 }, token);
 
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: STA work returned, result={result != null}, cancelled={token.IsCancellationRequested}");
+
                 if (token.IsCancellationRequested || result == null) return;
 
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Building tree UI...");
                 _TreeView.BeginUpdate();
                 try
                 {
@@ -2223,17 +2259,21 @@ namespace ExpControlsLib
 
                     _TreeView.Nodes.Add(_Root);
                     _Root.Expand();
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Tree built, root expanded");
 
                     if (_pendingExpansionItem != null)
                     {
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Processing pending expansion for '{_pendingExpansionItem.DisplayName}'...");
                         var itemToExpand = _pendingExpansionItem;
                         var select = _pendingSelectExpandedNode;
                         _pendingExpansionItem = null;
                         await ExpandANodeBaseAsync(itemToExpand, select);
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Pending expansion complete");
                     }
                     else
                     {
                         _TreeView.SelectedNode = _Root;
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Root selected");
                     }
                 }
                 finally
@@ -2241,11 +2281,12 @@ namespace ExpControlsLib
                     _TreeView.EndUpdate();
                 }
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException) { Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Cancelled"); }
             catch (Exception ex)
             {
-                Debug.WriteLine("Error in SetRootItemAsync: " + ex.ToString());
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: ERROR - {ex}");
             }
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: End");
         }
 
         /// <summary>
@@ -2261,16 +2302,19 @@ namespace ExpControlsLib
         private async Task PopulateNodeAsync(TreeNode NodeToFill)
         {
             if (NodeToFill.Tag is not CShellItem csi) return;
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Begin for '{csi.DisplayName}'");
 
             try
             {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Enqueueing STA work for '{csi.DisplayName}'...");
                 var result = await _staRunner.EnqueueWork(t =>
                 {
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync.STA: Begin for '{csi.DisplayName}'");
                     var flags = SHCONTF.FOLDERS;
                     if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-                    var target = _shellController.LoadFolderContents(csi, flags);
+                    _shellController.EnsureChildrenPopulated(csi, flags);
 
-                    var children = target.Directories;
+                    var children = csi.Directories;
                     foreach (var child in children)
                     {
                         if (t.IsCancellationRequested) return null;
@@ -2278,11 +2322,12 @@ namespace ExpControlsLib
                         _ = child.IconIndexNormal;
                         _ = child.IconIndexOpen;
                     }
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync.STA: Complete for '{csi.DisplayName}', {children.Count} children");
 
                     return new
                     {
                         Children = children,
-                        Target = target
+                        Target = csi
                     };
                 });
 
@@ -2291,6 +2336,7 @@ namespace ExpControlsLib
                 var children = result.Children;
                 children.Sort();
 
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Updating TreeView for '{csi.DisplayName}'...");
                 _TreeView.BeginUpdate();
                 try
                 {
@@ -2309,10 +2355,11 @@ namespace ExpControlsLib
                 {
                     _TreeView.EndUpdate();
                 }
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: End for '{csi.DisplayName}'");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("Error in PopulateNodeAsync: " + ex.ToString());
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Error - {ex}");
             }
         }
 

@@ -33,6 +33,56 @@ namespace WindowsApiLib.Shell
 
         public CShellItem DesktopCSI { get; internal set; }
 
+        /// <summary>
+        /// A case-insensitive set of paths representing Shell items that should be excluded from
+        /// lookup and expansion in the hierarchy. Items whose trimmed FullPath matches an entry
+        /// in this set will be ignored by Find and FindAndAllowExpansion methods.
+        /// </summary>
+        private HashSet<string> _excludedItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Gets or sets the collection of excluded item paths. Items whose trimmed FullPath
+        /// is in this set will be ignored by Add, Find, and FindAndAllowExpansion methods.
+        /// Any item whose path contains an excluded item as an ancestor will also be ignored.
+        /// </summary>
+        public HashSet<string> ExcludedItems
+        {
+            get => _excludedItems;
+            set => _excludedItems = value ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Determines whether the specified <see cref="CShellItem"/> should be excluded based
+        /// on the <see cref="ExcludedItems"/> collection.
+        /// </summary>
+        /// <param name="item">The <see cref="CShellItem"/> to test.</param>
+        /// <returns>
+        /// <c>true</c> if the item's path (stripped of leading/trailing <c>:</c>, <c>{</c>, and <c>}</c>
+        /// characters) is found in <see cref="ExcludedItems"/>; otherwise <c>false</c>.
+        /// </returns>
+        public bool IsExcluded(CShellItem item)
+        {
+            if (_excludedItems.Count == 0 || item == null) return false;
+            var path = (item.FullPath ?? "").Trim(':', '{', '}');
+            return _excludedItems.Contains(path);
+        }
+
+        /// <summary>
+        /// Determines whether the specified path should be excluded based on the
+        /// <see cref="ExcludedItems"/> collection.
+        /// </summary>
+        /// <param name="path">The path to test.</param>
+        /// <returns>
+        /// <c>true</c> if the path (stripped of leading/trailing <c>:</c>, <c>{</c>, and <c>}</c>
+        /// characters) is found in <see cref="ExcludedItems"/>; otherwise <c>false</c>.
+        /// </returns>
+        private bool IsExcludedPath(string? path)
+        {
+            if (_excludedItems.Count == 0 || string.IsNullOrEmpty(path)) return false;
+            var trimmed = path.Trim(':', '{', '}');
+            return _excludedItems.Contains(trimmed);
+        }
+
         public CShellItemHierachyManager(CShellItem? root = null) {
             this.Root = root;
 
@@ -49,9 +99,14 @@ namespace WindowsApiLib.Shell
         /// <remarks> 5/31/2012 - most code in this function replaced by a call to FindCShItem(BaseItem as CShellItem, Abs as IntPtr)</remarks>
         public CShellItem? Find(IntPtr ptr)
         {
-            //Debug.WriteLine("CShellItemHierachyManager.Find begin: " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            if (_excludedItems.Count > 0)
+            {
+                var name = CPidl.GetFullName(ptr);
+                if (name != null && IsExcludedPath(name))
+                    return null;
+            }
+
             var result = Find(Root, ptr);
-            //Debug.WriteLine("CShellItemHierachyManager.Find   end: " + DateTime.Now.ToString("HH:mm:ss.fff"));
             return result;
         }
 
@@ -63,6 +118,7 @@ namespace WindowsApiLib.Shell
         public CShellItem? Find(string fullFileName)
         {
             if (string.IsNullOrEmpty(fullFileName)) return null;
+            if (IsExcludedPath(fullFileName)) return null;
 
             IntPtr pidl = ShellAPI.ILCreateFromPathW(fullFileName);
             if (pidl == IntPtr.Zero) return null;
@@ -108,9 +164,9 @@ namespace WindowsApiLib.Shell
             if (string.Compare(rootItem.FullPath, pidlAndName.Name, StringComparison.OrdinalIgnoreCase) == 0)
                 return rootItem;
 
-            if (rootItem.DirectoriesCollection is not null) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
+            if (rootItem.DirectoriesInitialized) //problem: if you jump multiple folders deep when navigating, you will have Folders that are not initialized and this search can fail.  This function isn't supposed to fill in the tree but not doing so makes it hard to navigate
             {
-                foreach (CShellItem childDir in rootItem.DirectoriesCollection)
+                foreach (CShellItem childDir in rootItem.Directories)
                 {
                     if (childDir.FullPath == pidlAndName.Name)
                         return childDir;
@@ -119,10 +175,10 @@ namespace WindowsApiLib.Shell
                 }
             }
 
-            if (rootItem.m_files is not null && CPidl.IsAncestorOf(rootItem.PIDL, pidlAndName.Pidl, true))
+            if (rootItem.FilesInitialized && CPidl.IsAncestorOf(rootItem.PIDL, pidlAndName.Pidl, true))
             {
                 var displayName = CPidl.GetDisplayName(pidlAndName.Pidl);
-                if (rootItem.FilesDic.TryGetValue(displayName, out CShellItem? fileItem))
+                if (rootItem.Files.Dictionary.TryGetValue(displayName, out CShellItem? fileItem))
                 {
                     return fileItem;
                 }
@@ -141,11 +197,28 @@ namespace WindowsApiLib.Shell
         /// referencing the item to be Found.</param>
         /// <returns>The existant CShellItem if found, Nothing if not found.</returns>
         /// <remarks></remarks>
-        public CShellItem Find(byte[] b)
+        public CShellItem? Find(byte[] b)
         {
-            CShellItem FindCShItemRet = default;
             if (!CPidl.IsValid(b))
                 return null;
+
+            if (_excludedItems.Count > 0)
+            {
+                var tempPidl = Marshal.AllocCoTaskMem(b.Length);
+                try
+                {
+                    Marshal.Copy(b, 0, tempPidl, b.Length);
+                    var name = CPidl.GetFullName(tempPidl);
+                    if (name != null && IsExcludedPath(name))
+                        return null;
+                }
+                finally
+                {
+                    Marshal.FreeCoTaskMem(tempPidl);
+                }
+            }
+
+            CShellItem FindCShItemRet = default;
             var thisPidl = Marshal.AllocCoTaskMem(b.Length);
             if (thisPidl.Equals(IntPtr.Zero))
                 return null;
@@ -222,6 +295,13 @@ namespace WindowsApiLib.Shell
 
             if (absPidl == IntPtr.Zero) throw new ArgumentNullException(nameof(absPidl));
 
+            if (_excludedItems.Count > 0)
+            {
+                var targetName = CPidl.GetFullName(absPidl);
+                if (targetName != null && IsExcludedPath(targetName))
+                    return null;
+            }
+
             var currentFolder = Root;
             if (currentFolder == null) throw new Exception("The root of the shell hierarchy was null.");
 
@@ -241,6 +321,9 @@ namespace WindowsApiLib.Shell
                     {
                         if (IsAncestorOf(currentCSI.PIDL, absPidl))
                         {
+                            if (IsExcluded(currentCSI))
+                                return null;
+
                             if (CPidl.ResolvesToSamePathOrName(currentCSI.PIDL, absPidl))  // we found the desired item
                             {
                                 Parent = currentFolder;
@@ -274,7 +357,7 @@ namespace WindowsApiLib.Shell
             // Check for files in the current folder
             lock (currentFolder)
             {
-                if (currentFolder.FilesDic.TryGetValue(name, out CShellItem fileItem))
+                if (currentFolder.Files.Dictionary.TryGetValue(name, out CShellItem fileItem))
                 {
                     Parent = currentFolder;
                     return fileItem;
@@ -370,15 +453,15 @@ namespace WindowsApiLib.Shell
                                 {
                                     if (target.FilesInitialized)
                                     {
-                                        foreach (var child in target.m_files)
-                                            child.m_Parent = null;
-                                        target.m_files.Clear();
+                                        foreach (var child in target.Files)
+                                            child.Parent = null;
+                                        target.Files.Clear();
                                     }
-                                    if (target.FoldersInitialized)
+                                    if (target.DirectoriesInitialized)
                                     {
-                                        foreach (var child in target.m_directories)
-                                            child.m_Parent = null;
-                                        target.m_directories.Clear();
+                                        foreach (var child in target.Directories)
+                                            child.Parent = null;
+                                        target.Directories.Clear();
                                     }
                                 }
                                 dirsToRemove.Add(target);
@@ -391,11 +474,11 @@ namespace WindowsApiLib.Shell
 
                         if (filesToRemove.Count > 0)
                         {
-                            parent.m_files.RemoveRange(filesToRemove);
+                            parent.Files.RemoveRange(filesToRemove);
                         }
                         if (dirsToRemove.Count > 0)
                         {
-                            parent.m_directories.RemoveRange(dirsToRemove);
+                            parent.Directories.RemoveRange(dirsToRemove);
                         }
                         
                         parent.ClearCaches();
@@ -457,23 +540,23 @@ namespace WindowsApiLib.Shell
         {
             if (item is null) return;
 
-            if (item.FoldersInitialized)
+            if (item.DirectoriesInitialized)
             {
-                foreach (var child in item.m_directories)
+                foreach (var child in item.Directories)
                 {
-                    child.m_Parent = null;
+                    child.Parent = null;
                     ClearRecursive(child);
                 }
-                item.m_directories.Clear();
+                item.Directories.Clear();
             }
 
             if (item.FilesInitialized)
             {
-                foreach (var child in item.m_files)
+                foreach (var child in item.Files)
                 {
-                    child.m_Parent = null;
+                    child.Parent = null;
                 }
-                item.m_files.Clear();
+                item.Files.Clear();
             }
 
             item.ClearCaches();

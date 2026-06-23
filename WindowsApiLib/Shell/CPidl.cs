@@ -399,7 +399,7 @@ namespace WindowsApiLib
 
             try
             {
-                if (ILIsEqual(pidl1, pidl2)) return true;
+                if (ILIsEqual(pidl1, pidl2)) return true; //this causes some sort of un-catchable error sometimes.
             }
             catch (Exception ex)
             {

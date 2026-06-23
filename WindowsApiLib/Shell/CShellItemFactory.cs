@@ -1,16 +1,7 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.IO;
-using System.DirectoryServices;
-using System.Reflection.Metadata;
-using System.Reflection.Metadata.Ecma335;
 using System.Runtime.InteropServices;
 using System.Text;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
 
@@ -32,8 +23,9 @@ namespace WindowsApiLib.Shell
         private static CShellItem? DesktopCSI { get; set; }
 
         private static readonly ConcurrentDictionary<string, string> s_typeNameCache = new(StringComparer.OrdinalIgnoreCase);
-
-
+#if DEBUG
+        private static Queue<CShellItem> debugCsis = new(10);
+#endif
         // Optional cache for no-extension files
         private const string NoExtensionCacheKey = "<​NOEXT>";
 
@@ -253,7 +245,7 @@ namespace WindowsApiLib.Shell
                 if (CPidl.IsShellNamespaceRoot(pidl))
                 {
                     PopulateCsi(csi, pidl);
-                    csi.m_Parent = null;
+                    csi.Parent = null;
                     return csi;
                 }
                 else
@@ -326,11 +318,11 @@ namespace WindowsApiLib.Shell
             else
             {
 #if DEBUG
-                var length = CPidl.SegmentCount(pidl);
+                //var length = CPidl.SegmentCount(pidl);
 #endif
                 csi.m_Pidl = pidl;
                
-                csi.m_Parent = parentCsi;
+                csi.Parent = parentCsi;
 
                 // Get some attributes
                 PopulateBasicFields(csi);
@@ -347,6 +339,13 @@ namespace WindowsApiLib.Shell
                         //csi.m_IShellFolder = ShellHelper.GetIShellFolder(pidl); // get IShellFolder from absolute PIDL
                     }
                 }
+
+#if DEBUG
+                if (csi.FullPath == @"C:\Downloads")
+                {
+                    debugCsis.Enqueue(csi);
+                }
+#endif
             }
         }
 
@@ -472,30 +471,29 @@ namespace WindowsApiLib.Shell
         /// Returns the requested Items of the given Folder as a CShitemCollection
         /// </summary>
         /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
-        public static CShellItemCollection? GetContents(CShellItem csi, SHCONTF flags) //todo: move to shellcontroller
+        public static List<CShellItem>? GetContents(CShellItem csi, SHCONTF flags) //todo: move to shellcontroller
         {
             if (!csi.IsFolder) return null;
 
-            var items = new CShellItemCollection(csi);
 
             Debug.WriteLine($"Getting contents for folder '{csi.FullPath}'.");
 
-            CShellItem itm;
             var pidls = CShellItemFactory.GetChildPidls(csi, flags);
+            var items = new List<CShellItem>(pidls.Count);
 
             Debug.WriteLine("\tCreating " + pidls.Count() + " cshellitems...");
             foreach (IntPtr pidl in pidls)
             {
                 if (pidl == IntPtr.Zero)
                 {
-                    Debug.WriteLine("Content=IntPtr.Zero while filling " + csi.FullPath);
+                    Debug.WriteLine("\tFetch pidl==0 while reading contents of " + csi.FullPath);
                     Marshal.FreeCoTaskMem(pidl);
                     continue;
                 }
                 else
                 {
-                    itm = CShellItemFactory.Create(pidl, csi);
-                    items.Add(itm);
+                    var tmpCsi = CShellItemFactory.Create(pidl, csi);
+                    items.Add(tmpCsi);
                 }
             }
 

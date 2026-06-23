@@ -28,6 +28,7 @@ namespace WindowsApiLib.Shell
         public static readonly Guid ControlPanel_Home = new("5399E694-6CE5-4D6C-8FCE-1D8870FDCBA0");
         public static readonly Guid ControlPanel_Category = new("26EE0668-A00A-44D7-9371-BEB064C98683");
         public static readonly Guid Network = new("208D2C60-3AEA-1069-A2D7-08002B30309D");
+        public static readonly Guid NetworkFolder = new("F02C1A0D-BE21-4350-88B0-7367FC96EF3C");
         public static readonly Guid Libraries = new("031E4825-7B94-4DC3-B131-E946B44C8DD5");
         public static readonly Guid MyDocuments = new("450D8FBA-AD25-11D0-98A8-0800361B1103");
         public static readonly Guid Printers = new("2227A280-3AEA-1069-A2DE-08002B30309D");

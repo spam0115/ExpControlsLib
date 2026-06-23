@@ -1731,14 +1731,6 @@
             and the type of update that occurred.
             </param>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.OnStartUpDirectoryChanged(ExpControlsLib.ExpTree.StartDir)">
-            <summary>
-            Responds to a change in <see cref="P:ExpControlsLib.ExpTree.StartUpDirectory"/> by clearing the tree (when
-            <see cref="F:ExpControlsLib.ExpTree.StartDir.None"/> is selected) or asynchronously reloading it rooted at
-            the newly specified special folder.
-            </summary>
-            <param name="newVal">The new <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value that was applied.</param>
-        </member>
         <member name="M:ExpControlsLib.ExpTree.BuildTree(System.Collections.Generic.IEnumerable{WindowsApiLib.Shell.CShellItem})">
             <summary>
             Populates the root TreeNode's <see cref="P:System.Windows.Forms.TreeNode.Nodes"/> collection from the

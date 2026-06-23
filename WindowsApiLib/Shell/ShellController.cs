@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Text;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
-using static WindowsApiLib.Shell.ShellAPI;
+﻿using static WindowsApiLib.Shell.ShellAPI;
 
 namespace WindowsApiLib.Shell
 {
@@ -14,6 +8,7 @@ namespace WindowsApiLib.Shell
 
         public CShellItemHierachyManager HierachyManager { get; private set; }
         public CShellItemUpdater ShellUpdater { get; private set; }
+        public readonly static int FolderTimeout = 5;
    
         /// <summary>
         /// the desktop cShellIitem
@@ -31,12 +26,38 @@ namespace WindowsApiLib.Shell
             ShellUpdater = new CShellItemUpdater(HierachyManager, (uint)SHCNE.DISKEVENTS);
         }
 
-        public static ShellController Initialize() { 
+        public static ShellController Initialize() 
+        { 
             if (Instance == null)
             {
                 Instance = new ShellController();
             }
             return Instance;
+        }
+
+        /// <summary>
+        /// Conditionally loads child objects depending on whether or not they are old.
+        /// </summary>
+        /// <param name="csi"></param>
+        /// <param name="flags"></param>
+        public void EnsureChildrenPopulated(CShellItem csi, SHCONTF flags)
+        {
+            bool wantFolders = (flags & SHCONTF.FOLDERS) > 0;
+            bool wantFiles = (flags & SHCONTF.NONFOLDERS) > 0;
+            bool filesOld = csi.FilesCollectionTimestamp is null || (DateTime.Now - csi.FilesCollectionTimestamp > new TimeSpan(0, 0, FolderTimeout));
+            bool foldersOld = csi.DirsCollectionTimestamp is null || (DateTime.Now - csi.DirsCollectionTimestamp > new TimeSpan(0, 0, FolderTimeout));
+
+            if (wantFolders && foldersOld && wantFiles && filesOld)
+            {
+                LoadFolderContents(csi, SHCONTF.FOLDERS | SHCONTF.NONFOLDERS);
+            }
+            else if (filesOld && wantFiles) {
+                LoadFolderContents(csi, SHCONTF.NONFOLDERS);
+            }
+            else if (foldersOld && wantFolders)
+            {
+                LoadFolderContents(csi, SHCONTF.FOLDERS);
+            }
         }
 
         /// <summary>
@@ -62,36 +83,38 @@ namespace WindowsApiLib.Shell
             //    return null;
             //}
 
-            var target = csi;
+            var contents = CShellItemFactory.GetContents((CShellItem)csi, flags);
 
-            lock (target)
+            lock (csi)
             {
-                var contents = CShellItemFactory.GetContents(target, flags);
-
                 if ((flags & SHCONTF.FOLDERS) > 0)
                 {
-                    if (target.m_directories is null)
-                        target.m_directories = new CShellItemCollection(target);
-                    else target.m_directories.Clear();
+                    lock (csi._directoriesLock) { 
+                        if (!csi.DirectoriesInitialized)
+                        {
+                            csi.Directories.Clear();
+                        }
+                        var folders = contents.Where(o => o.IsFolder == true).ToList();
+                        csi.Directories = new CShellItemCollection(csi, folders);
+                    }
                 }
 
                 if ((flags & SHCONTF.NONFOLDERS) > 0)
                 {
-                    if (target.m_files is null)
-                        target.m_files = new CShellItemCollection(target);
-                    else target.m_files.Clear();
-                }
+                    lock (csi._filesLock)
+                    {
+                        if (!csi.FilesInitialized)
+                        {
+                            csi.Files.Clear();
+                        }
 
-                foreach (var item in contents.Items)
-                {
-                    if (item.IsFolder && target.m_directories != null)
-                        target.m_directories.Add(item);
-                    else if (!item.IsFolder && target.m_files != null)
-                        target.m_files.Add(item);
+                        var files = contents.Where(o => o.IsFolder == false).ToList();
+                        csi.Files = new CShellItemCollection(csi, files);
+                    }
                 }
             }
 
-            return target;
+            return csi;
         }
 
 

@@ -863,7 +863,7 @@ namespace WindowsApiLib.Shell
 
         private static void WalkHelper(CShellItem item, List<CShellItem> list)
         {
-            if (item.FoldersInitialized)
+            if (item.DirectoriesInitialized)
             {
                 foreach (CShellItem CSI in item.Directories)
                 {
