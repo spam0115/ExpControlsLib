@@ -1995,7 +1995,7 @@ namespace ExpControlsLib
                 IntPtr relPidl = csi.LastPIDL;
                 if (relPidl == IntPtr.Zero) return;
 
-                var capturedRelPidl = CPidl.Copy(relPidl);
+                var capturedRelPidl = CPidl.Clone(relPidl);
                 var capturedParentPidl = parentPidl; //not sure if we need to copy this
 
                 // Offload shell interaction to background STA thread to make dialog non-blocking (non-modal to UI thread)

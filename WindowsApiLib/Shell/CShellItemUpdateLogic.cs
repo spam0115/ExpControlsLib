@@ -90,7 +90,7 @@ namespace WindowsApiLib.Shell
                                     Debug.WriteLine("  [CREATE] Parent found: " + parentItem.ItemPath);
                                     if (parentItem.DirectoriesInitialized || parentItem.FilesInitialized)
                                     {
-                                        var clonedCreatePidl = CPidl.Copy(shNotify.dwItem1);
+                                        var clonedCreatePidl = CPidl.Clone(shNotify.dwItem1);
                                         var newItem = _shellItemFactory.Create(clonedCreatePidl, parentItem);
                                         if (newItem is not null)
                                         {
@@ -278,7 +278,7 @@ namespace WindowsApiLib.Shell
                                         if (!parentItem.Directories.Contains(shNotify.dwItem1))
                                         {
                                             Debug.WriteLine("  [MKDIR] Parent folders initialized and NOT in list. Adding.");
-                                            var clonedMkdirPidl = CPidl.Copy(shNotify.dwItem1);
+                                            var clonedMkdirPidl = CPidl.Clone(shNotify.dwItem1);
                                             var newItem = _shellItemFactory.Create(clonedMkdirPidl, parentItem);
                                             if (newItem is not null)
                                             {
@@ -555,7 +555,7 @@ namespace WindowsApiLib.Shell
 
                     if (CPidl.ResolvesToSamePathOrName(allegedParentCsi.PIDL, csi.Parent.PIDL)) //rename
                     {
-                        csi.m_Pidl = CPidl.Copy(changedPidl);
+                        csi.m_Pidl = CPidl.Clone(changedPidl);
                         csi.ReloadInfo();
                         RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Renamed));
                         return true;
@@ -568,7 +568,7 @@ namespace WindowsApiLib.Shell
 
                         csi.Parent = allegedParentCsi;
 
-                        csi.m_Pidl = CPidl.Copy(changedPidl);
+                        csi.m_Pidl = CPidl.Clone(changedPidl);
                         csi.ReloadInfo();
 
                         if (csi.IsFolder)

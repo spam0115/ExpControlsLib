@@ -103,7 +103,6 @@ namespace WindowsApiLib.Shell
         /// <param name="stream">Returned Interface</param>
         /// <returns>An IStream Interface for the input CShellItem</returns>
         /// <remarks>Not used by WindowsApiLib or its' Demo</remarks>
-        /// 
         public static bool GetIStream(CShellItem item, IntPtr streamPtr, out IStream stream)
         {
             var ishellfolder = item.Parent.GetIShellFolder();
@@ -281,8 +280,6 @@ namespace WindowsApiLib.Shell
         /// <param name="dropHelper">Returns the Interface itself.</param>
         /// <returns>True if successful, False otherwise.</returns>
         /// <remarks>This interface is used by drop targets to enable the drag-image manager to display the drag image while the image is over the target window. </remarks>
-        /// 
-        [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static bool GetIDropTargetHelper(out IntPtr helperPtr, out IDropTargetHelper dropHelper)
         {
             var CLSID_DragDropHelper = ShellAPI.CLSID_DragDropHelper;
@@ -308,8 +305,6 @@ namespace WindowsApiLib.Shell
         /// <param name="item">The item whose ability to accept a Paste is to be queried.</param>
         /// <returns>A DragDropEffect indicating what actions the input CShellItem is willing to do.</returns>
         /// <remarks>Used to determine if Paste is a valid menu item.</remarks>
-        /// 
-        [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static DragDropEffects CanDropClipboard(CShellItem item)
         {
             IntPtr dataObject;
@@ -378,8 +373,6 @@ namespace WindowsApiLib.Shell
         /// <param name="iQueryInfo">The actual Interface</param>
         /// <returns>True if successful, False otherwise.</returns>
         /// <remarks>Not used by ExpTree or its' Demo.</remarks>
-        /// 
-        [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static bool GetIQueryInfo(CShellItem item, ref IntPtr iQueryInfoPtr, out IQueryInfo iQueryInfo)
         {
             CShellItem parent;
@@ -418,11 +411,11 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
-        #region        Make Shell ID Array (CIDA)
+        #region        Make Shell ID List Array (CIDA)
         /// <summary>
         /// Shell Folders prefer their IDragData to contain this format which is
         /// NOT directly supported by .Net.  The underlying structure is the CIDA structure
-        /// which is basically VB, VB.Net, and C# Hostile.
+        /// which is basically .net Hostile.
         /// If "Make ShortCut(s) here" is the desired or
         /// POSSIBLE effect of the drag, then this format is REQUIRED -- otherwise the
         /// Folder will interpret the DragDropEffects.Link to be "Create Document Shortcut"
@@ -444,7 +437,6 @@ namespace WindowsApiLib.Shell
         /// http://www.Planet-Source-Code.com/vb/scripts/ShowCode.asp?txtCodeId=61324%26lngWId=1
         /// </remark>
         /// 
-        [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static System.IO.MemoryStream MakeShellIDArray(List<CShellItem> CSIList)
         {
             System.IO.MemoryStream MakeShellIDArrayRet = default;
@@ -499,7 +491,6 @@ namespace WindowsApiLib.Shell
         /// <summary>Builds a List of the CShItems being dragged from m_StreamCIDA</summary>
         /// <param name="ptr">IntPtr pointing to a CIDA</param>
         /// <returns>A List of the CShItems being dragged or nothing on failure</returns>
-        [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         internal static List<CShellItem> MakeDragListFromPtr(IntPtr ptr)
         {
             List<CShellItem> MakeDragListFromPtrRet = default;
@@ -635,7 +626,6 @@ namespace WindowsApiLib.Shell
         /// <param name="dataObj">A well formed ShellDll.IDataObject from which to extract the CShItems.</param>
         /// <returns>List(Of CShItems) with all CShItems represented by the PIDLs in the CIDA.</returns>
         /// <remarks>Used by ExplorerControls for standalone ExpList.</remarks>
-        [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
         public static List<CShellItem> GetCShItemsFromDataObject(IDataObject dataObj)
         {
             var items = new List<CShellItem>();

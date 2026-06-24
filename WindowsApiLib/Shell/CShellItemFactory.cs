@@ -394,6 +394,12 @@ namespace WindowsApiLib.Shell
             //IShellFolder iShellFolder = csi.IShlFolder;
             IShellFolder iShellFolder = ShellHelper.GetIShellFolder(csi.PIDL);
 
+            if (iShellFolder is null)
+            {
+                //i think there is a bug wherein we are storing a pidl that is actually OS owned and sometimes it can be released by the OS before the current point in code.
+                Debugger.Break(); 
+            }
+
             try
             {
                 HR = iShellFolder.EnumObjects(0, flags, out IEnum);
@@ -457,6 +463,10 @@ namespace WindowsApiLib.Shell
                     }
                 }
             }
+            catch(Exception ex) 
+            {
+                Debug.WriteLine("ERROR: CShellItemFactory.GetChildPidls exception - " + ex.ToString());
+            }
             finally
             {
                 if (IEnum != null)
@@ -464,7 +474,6 @@ namespace WindowsApiLib.Shell
                 Marshal.ReleaseComObject(iShellFolder);
             }
             return listPidls;
-
         }
 
         /// <summary>

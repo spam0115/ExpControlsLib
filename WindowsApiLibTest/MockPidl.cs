@@ -208,7 +208,7 @@ namespace WindowsApiLibTest
             return MockPidlFactory.IsValidPidl(b);
         }
 
-        public static int ItemIDListSize(nint pidl)
+        public static int GetPidlLength(nint pidl)
         {
             return PidlToBytes(pidl).Length - 2;
         }

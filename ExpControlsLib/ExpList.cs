@@ -200,9 +200,9 @@ namespace ExpControlsLib
         [Description("Fires after a directory load completes with the total item count")]
         public event ExpListDirectoryLoadedEventHandler ExpListDirectoryLoaded;
 
-        public event Action ExpListDirectoryLoading;
+        public event EventHandler ExpListDirectoryLoading;
 
-        public event Action ExpListEmptyClick;
+        public event EventHandler ExpListEmptyClick;
 
         ///// <summary>
         ///// Delegate for the <see cref="ExpListPathChanged"/> event.
@@ -909,7 +909,7 @@ namespace ExpControlsLib
 
                 CShellItem[] selectedItems;
                 IShellFolder? folder;
-                List<IntPtr> pidls;
+                List<IntPtr> relPidls;
 
                 try
                 {
@@ -927,7 +927,7 @@ namespace ExpControlsLib
                     else
                         selectedItems = _listView?.SelectedItems?.Cast<ListViewItem>()?.Select(item => item.Tag as CShellItem)?.ToArray() ?? new CShellItem[0];
 
-                    pidls = new List<IntPtr>(selectedItems.Length);
+                    relPidls = new List<IntPtr>(selectedItems.Length);
 
                     for (int i = 0; i < selectedItems.Length; i++)
                     {
@@ -954,7 +954,7 @@ namespace ExpControlsLib
                             continue;
                         }
 
-                        pidls.Add(CPidl.Copy(pidl));
+                        relPidls.Add(CPidl.Clone(pidl));
                     }
                 }
                 catch (Exception ex)
@@ -965,7 +965,7 @@ namespace ExpControlsLib
                     return;
                 }
 
-                if (pidls.Count == 0)
+                if (relPidls.Count == 0)
                 {
                     Debug.WriteLine("No items to delete");
                     return;
@@ -984,7 +984,7 @@ namespace ExpControlsLib
                 }
 
                 var capturedParentPidl = _currentFolderCsi.PIDL;
-                _staRunner.EnqueueWork(InvokeMenuCommand("delete", capturedParentPidl, pidls));
+                _staRunner.EnqueueWork(InvokeMenuCommand("delete", capturedParentPidl, relPidls));
 
                 if (hasItems)
                 {
@@ -1058,7 +1058,7 @@ namespace ExpControlsLib
                 }
 
                 IShellFolder? folder = null;
-                List<IntPtr>? pidls = null;
+                List<IntPtr>? relPidls = null;
                 CShellItem[] selectedItems = Array.Empty<CShellItem>();
 
                 if (cmd == "paste")
@@ -1085,7 +1085,7 @@ namespace ExpControlsLib
                             return;
                         }
 
-                        pidls = new List<IntPtr> { relPidl };
+                        relPidls = new List<IntPtr> { relPidl };
                     }
                     catch (Exception ex)
                     {
@@ -1119,7 +1119,7 @@ namespace ExpControlsLib
                             selectedItems = _listView?.SelectedItems?.Cast<ListViewItem>()?.Select(item => item.Tag as CShellItem)?.ToArray() ?? new CShellItem[0];
                         }
 
-                        pidls = new List<IntPtr>(selectedItems.Length);
+                        relPidls = new List<IntPtr>(selectedItems.Length);
 
                         for (int i = 0; i < selectedItems.Length; i++)
                         {
@@ -1139,7 +1139,7 @@ namespace ExpControlsLib
                                 continue;
                             }
 
-                            pidls.Add(CPidl.Copy(pidl));
+                            relPidls.Add(CPidl.Clone(pidl));
                         }
                     }
                     catch (Exception ex)
@@ -1152,7 +1152,7 @@ namespace ExpControlsLib
                 }
 
                 // Validate items to process
-                if (pidls == null || pidls.Count == 0)
+                if (relPidls == null || relPidls.Count == 0)
                 {
                     Debug.WriteLine("No items to process");
                     return;
@@ -1160,7 +1160,7 @@ namespace ExpControlsLib
 
                 // Capture for background thread
                 var capturedParentPidl = _currentFolderCsi.PIDL;
-                var capturedRelPidls = pidls;
+                var capturedRelPidls = relPidls;
 
                 // Offload shell interaction to background STA thread. 
                 // Binding MUST happen on this thread to avoid marshaling back to UI thread.
@@ -1579,9 +1579,13 @@ namespace ExpControlsLib
                             ? _currentFolderCsi.PIDL
                             : _currentFolderCsi.Parent.PIDL;
 
-                        IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
-                        var capturedRelPidl = relPidl != IntPtr.Zero ? CPidl.Copy(relPidl) : IntPtr.Zero;
-                        var capturedParentPidl = parentPidl;
+                        if (_currentFolderCsi.LastPIDL == IntPtr.Zero)
+                        {
+                            Debug.WriteLine("ERROR: no relative pidl for CSI.  Is this the root of the namespace?");
+                            Debugger.Break();
+                        }
+                        var capturedRelPidl = CPidl.Clone(_currentFolderCsi.LastPIDL);
+                        var capturedParentPidl = CPidl.Clone(parentPidl); //I don't think this is needed but just in case.
                         var cmi_shell = cmi;
 
                         await _staRunner.EnqueueWork(_ =>
@@ -1627,11 +1631,12 @@ namespace ExpControlsLib
                                 }
                                 finally
                                 {
-                                    if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
+                                    if (iUnknownOut != IntPtr.Zero) Marshal.ReleaseComObject(iUnknownOut);
                                     if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
                                     if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
                                     if (desktop != null) Marshal.ReleaseComObject(desktop);
                                     if (capturedRelPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(capturedRelPidl);
+                                    if (capturedParentPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(capturedParentPidl);
                                 }
                             }
                         });
@@ -2269,7 +2274,7 @@ namespace ExpControlsLib
             _displayFilesCts = new CancellationTokenSource();
             var token = _displayFilesCts.Token;
 
-            ExpListDirectoryLoading?.Invoke();
+            ExpListDirectoryLoading?.Invoke(this, EventArgs.Empty);
 
             // Capture sort settings and create comparer on UI thread to ensure thread-safe access to ColumnHeader properties
             int sortCol = _listViewWrapper.SortColumn;
@@ -2325,12 +2330,9 @@ namespace ExpControlsLib
                         }
                     }
 
-                    if (!csi.DisplayName.Equals(CShellItemFactory.StrMyComputer))
+                    foreach (var file in csi.Files)
                     {
-                        foreach (var file in csi.Files)
-                        {
-                            if (!IsExcluded(file)) fileList.Add(file);
-                        }
+                        if (!IsExcluded(file)) fileList.Add(file);
                     }
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: {dirList.Count} dirs, {fileList.Count} files");
 
@@ -2374,7 +2376,7 @@ namespace ExpControlsLib
                         FolderCsi = csi,
                         IsSamePath = samePath
                     };
-                }, token);
+                }, token); //end async function
 
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: STA work returned, result={result != null}, cancelled={token.IsCancellationRequested}");
 
@@ -2938,7 +2940,7 @@ namespace ExpControlsLib
 
                 if (listView.SelectedIndices.Count == 0)
                 {
-                    ExpListEmptyClick?.Invoke();
+                    ExpListEmptyClick?.Invoke(this, EventArgs.Empty);
                     return;
                 }
 
@@ -3093,7 +3095,7 @@ namespace ExpControlsLib
                 if (useUpdate) _listView.BeginUpdate();
                 try
                 {
-                    // Batch remove from hierarchy (suppress individual events)
+                    // Batch remove from hierarchy.  This can trigger a ton of events
                     _shellController.HierachyManager.RemoveRange(e.Items, raiseEvents: false);
 
                     // Batch remove from list view wrapper
@@ -3105,10 +3107,11 @@ namespace ExpControlsLib
                     // Fire single update event for the folder
                     if (_currentFolderCsi != null)
                     {
-                        string path = _currentFolderCsi.FullPath.StartsWith(":")
-                            ? _currentFolderCsi.DisplayName
-                            : _currentFolderCsi.FullPath;
-                        ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
+                        //string path = _currentFolderCsi.FullPath.StartsWith(":")
+                        //    ? _currentFolderCsi.DisplayName
+                        //    : _currentFolderCsi.FullPath;
+                        //ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
+                        ExpListItemsChanged?.Invoke(_currentFolderCsi.FullPath, _currentFolderCsi);
                     }
                 }
                 finally
@@ -3403,7 +3406,7 @@ namespace ExpControlsLib
                                         ? itms[0].PIDL
                                         : itms[0].Parent.PIDL;
                                     
-                                    var capturedRelPidls = itms.Select(i => CPidl.Copy(i.LastPIDL)).ToArray();
+                                    var capturedRelPidls = itms.Select(i => CPidl.Clone(i.LastPIDL)).ToArray();
                                     var capturedParentPidl = parentPidl;
 
                                     await _staRunner.EnqueueWork(_ =>
@@ -4104,7 +4107,8 @@ namespace ExpControlsLib
 
         public void Redraw(CShellItem csi)
         {
-            throw new NotImplementedException();
+            int index = _listViewWrapper.GetIndex(csi);
+            _listViewWrapper.RedrawItem(index);
         }
     }
 

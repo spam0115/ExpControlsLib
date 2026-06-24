@@ -35,7 +35,7 @@ namespace WindowsApiLib
         static abstract bool IsBinaryEqual(nint pidl1, nint pidl2);
         static abstract bool IsShellNamespaceRoot(nint pidl);
         static abstract bool IsValid(byte[] b);
-        static abstract int ItemIDListSize(nint pidl);
+        static abstract int GetPidlLength(nint pidl);
         static abstract byte[] JoinPidlBytes(byte[] b1, byte[] b2);
         static abstract nint PathToPidl(string path);
         static abstract string? ResolveShellGUID(string guidPath);

@@ -28,7 +28,7 @@ namespace WindowsApiLib
         /// <param name="pidl">IntPtr pointing to a valid PIDL</param>
         public CPidl(IntPtr pidl)
         {
-            int cb = ItemIDListSize(pidl);
+            int cb = GetPidlLength(pidl);
             if (cb > 0)
             {
                 m_bytes = new byte[cb + 1 + 1];
@@ -50,7 +50,7 @@ namespace WindowsApiLib
 
             if (pidl == IntPtr.Zero) throw new ArgumentException("Invalid path provided to CPidl.");
 
-            int cb = ItemIDListSize(pidl);
+            int cb = GetPidlLength(pidl);
             if (cb > 0)
             {
                 m_bytes = new byte[cb + 1 + 1];
@@ -204,7 +204,7 @@ namespace WindowsApiLib
         /// </summary>
         /// <param name="pidl">The pidl pointing to an ItemIDList</param>
         /// <returns> Returns actual size of the ItemIDList, less the terminating nulnul</returns>
-        public static int ItemIDListSize(IntPtr pidl)
+        public static int GetPidlLength(IntPtr pidl)
         {
             if (!pidl.Equals(IntPtr.Zero))
             {
@@ -259,7 +259,7 @@ namespace WindowsApiLib
         /// <remarks>The returned PIDLs must be Released when no longer needed by calling PIDLFree.</remarks>
         public static IntPtr[] Decompose(IntPtr pidl)
         {
-            int lim = (int)ItemIDListSize(pidl);
+            int lim = (int)GetPidlLength(pidl);
             var PIDLs = new IntPtr[(SegmentCount(pidl))];
             int i = 0;
             var curB = default(int);
@@ -293,8 +293,8 @@ namespace WindowsApiLib
         {
             int cb1;
             int cb2;
-            cb1 = ItemIDListSize(pidl1);
-            cb2 = ItemIDListSize(pidl2);
+            cb1 = GetPidlLength(pidl1);
+            cb2 = GetPidlLength(pidl2);
             if (cb1 != cb2)
                 return false;
             int lim32 = cb1 / 4;
@@ -1174,7 +1174,7 @@ namespace WindowsApiLib
         /// <param name="pidl">The IntPtr(a PIDL) pointing to the block to dump</param>
         public static void Dump(IntPtr pidl)
         {
-            int cb = ItemIDListSize(pidl);
+            int cb = GetPidlLength(pidl);
             Debug.WriteLine("PIDL " + pidl.ToString() + " contains " + cb + " bytes");
             if (cb > 0)
             {
@@ -1435,7 +1435,7 @@ namespace WindowsApiLib
         internal static IntPtr PIDLClone(IntPtr pidl)
         {
             IntPtr PIDLCloneRet = default;
-            var cb = (int)ItemIDListSize(pidl);
+            var cb = (int)GetPidlLength(pidl);
             var b = new byte[cb + 1 + 1];
             Marshal.Copy(pidl, b, 0, cb); // not including terminating nulnul
             b[cb] = 0;

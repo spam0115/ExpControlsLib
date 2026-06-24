@@ -398,7 +398,6 @@ namespace WindowsApiLib.Shell
             return ShellAPI.ILIsParent(AncestorPidl, ChildPidl, fParent);
         }
 
-
         /// <summary>
         /// Removes an item from the hierarchy if it is found.
         /// </summary>
@@ -409,6 +408,12 @@ namespace WindowsApiLib.Shell
             return RemoveRange(new[] { item }, true);
         }
 
+        /// <summary>
+        /// Recursively remove items from the hierarchy.
+        /// </summary>
+        /// <param name="items"></param>
+        /// <param name="raiseEvents"></param>
+        /// <returns></returns>
         public bool RemoveRange(IEnumerable<CShellItem> items, bool raiseEvents = true)
         {
             if (items == null) return false;
@@ -529,6 +534,96 @@ namespace WindowsApiLib.Shell
                 var desktopCsi = CShellItemFactory.Create(CSIDL.DESKTOP);
                 this.DesktopCSI = desktopCsi;
                 Root = desktopCsi;
+            }
+        }
+
+        /// <summary>
+        /// Moves a CShellItem from its current parent to <paramref name="newParent"/>.
+        /// Creates a shallow copy that takes over the hierarchy slot, updates its path and PIDL,
+        /// then ghosts the original so it no longer holds references to shared objects.
+        /// The ghosted original is returned.
+        /// </summary>
+        /// <param name="csi">The item to move.</param>
+        /// <param name="newParent">The new parent folder.</param>
+        /// <returns>The original (now ghosted) CShellItem.</returns>
+        public CShellItem Move(CShellItem csi, CShellItem newParent)
+        {
+            if (csi == null) throw new ArgumentNullException(nameof(csi));
+            if (newParent == null) throw new ArgumentNullException(nameof(newParent));
+
+            var oldParent = csi.Parent;
+            var copy = csi.ShallowCopy();
+
+            // Point the copy at its new parent and build the new full path
+            copy.Parent = newParent;
+            var parentPath = newParent.FullPath?.TrimEnd('\\') ?? "";
+            copy.m_FullPath = parentPath + @"\" + copy.m_DisplayName;
+
+            // Derive a new PIDL from the new parent's PIDL and the item's own last segment
+            copy.m_Pidl = CPidl.Concatenate(newParent.PIDL, CPidl.ILFindLastID(csi.PIDL));
+            copy.m_UpdateFolder = true;
+
+            // Recursively update paths and PIDLs for all descendants
+            UpdateDescendantsRecursive(copy);
+
+            // Remove the original from the old parent's collection and add the copy to the new parent
+            if (oldParent != null)
+            {
+                lock (oldParent)
+                {
+                    if (csi.IsFolder)
+                        oldParent.Directories?.Remove(csi);
+                    else
+                        oldParent.Files?.Remove(csi);
+                }
+            }
+
+            lock (newParent)
+            {
+                if (copy.IsFolder)
+                    newParent.Directories?.Add(copy);
+                else
+                    newParent.Files?.Add(copy);
+            }
+
+            // Ghost the original so it releases its shared references
+            csi.Ghost();
+
+            return csi;
+        }
+
+        /// <summary>
+        /// Recursively updates the FullPath and PIDL of every descendant under <paramref name="item"/>
+        /// so that they reflect their new location in the shell namespace after a move.
+        /// Also clears lookup dictionaries on any populated CShellItemCollections since
+        /// display-name keys will have changed.
+        /// </summary>
+        private static void UpdateDescendantsRecursive(CShellItem item)
+        {
+            if (item.DirectoriesInitialized)
+            {
+                var dirs = item.Directories;
+                dirs.ClearCaches();
+                foreach (var child in dirs)
+                {
+                    var parentPath = item.FullPath?.TrimEnd('\\') ?? "";
+                    child.m_FullPath = parentPath + @"\" + child.m_DisplayName;
+                    child.m_Pidl = CPidl.Concatenate(item.PIDL, CPidl.ILFindLastID(child.PIDL));
+                    child.m_UpdateFolder = true;
+                    UpdateDescendantsRecursive(child);
+                }
+            }
+
+            if (item.FilesInitialized)
+            {
+                var files = item.Files;
+                files.ClearCaches();
+                foreach (var child in files)
+                {
+                    var parentPath = item.FullPath?.TrimEnd('\\') ?? "";
+                    child.m_FullPath = parentPath + @"\" + child.m_DisplayName;
+                    child.m_Pidl = CPidl.Concatenate(item.PIDL, CPidl.ILFindLastID(child.PIDL));
+                }
             }
         }
 

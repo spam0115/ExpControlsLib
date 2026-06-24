@@ -1682,6 +1682,106 @@ namespace WindowsApiLib.Shell
         #endregion
 
 
+        #region ShallowCopy / Ghost
+
+        /// <summary>
+        /// Creates a new CShellItem with all value-type fields copied directly and
+        /// reference-type fields sharing the same top-level reference (no deep clone).
+        /// The PIDL is duplicated via CoTaskMem so each instance owns its own unmanaged memory.
+        /// </summary>
+        public CShellItem ShallowCopy()
+        {
+            var copy = new CShellItem();
+
+            // PIDL – duplicate unmanaged memory so each instance owns its own
+            if (m_Pidl != IntPtr.Zero)
+            {
+                copy.m_Pidl = ILClone(m_Pidl);
+            }
+
+            // Value types – direct copy
+            copy.m_IconIndexNormal = m_IconIndexNormal;
+            copy.m_IconIndexOpen = m_IconIndexOpen;
+            copy.m_IconIndexNormalOrig = m_IconIndexNormalOrig;
+            copy.m_IconIndexOpenOrig = m_IconIndexOpenOrig;
+            copy.m_IsBrowsable = m_IsBrowsable;
+            copy.m_IsFileSystem = m_IsFileSystem;
+            copy.m_IsFolder = m_IsFolder;
+            copy.m_HasSubFolders = m_HasSubFolders;
+            copy.m_IsLink = m_IsLink;
+            copy.m_IsDisk = m_IsDisk;
+            copy.m_IsShared = m_IsShared;
+            copy.m_IsHidden = m_IsHidden;
+            copy.m_IsNetWorkDrive = m_IsNetWorkDrive;
+            copy.m_IsRemovable = m_IsRemovable;
+            copy.m_IsReadOnly = m_IsReadOnly;
+            copy.m_CanMove = m_CanMove;
+            copy.m_CanCopy = m_CanCopy;
+            copy.m_CanDelete = m_CanDelete;
+            copy.m_CanLink = m_CanLink;
+            copy.m_CanRename = m_CanRename;
+            copy.m_Attributes = m_Attributes;
+            copy.m_SFGAO_Attributes = m_SFGAO_Attributes;
+            copy.m_IsRemote = m_IsRemote;
+            copy.m_W32Data = m_W32Data;
+            copy.m_SortFlag = m_SortFlag;
+            copy.m_XtrInfo = m_XtrInfo;
+            copy.m_LastWriteTime = m_LastWriteTime;
+            copy.m_CreationTime = m_CreationTime;
+            copy.m_LastAccessTime = m_LastAccessTime;
+            copy.m_Length = m_Length;
+            copy.m_HasDispType = m_HasDispType;
+            copy.m_IsReadOnlySetup = m_IsReadOnlySetup;
+            copy.m_UpdateFolder = m_UpdateFolder;
+            copy.m_Disposed = false;
+            copy.ID = ID;
+            copy.IsDropTarget = IsDropTarget;
+            copy.ImageIndex = ImageIndex;
+            copy.NeedsRefresh = NeedsRefresh;
+            copy._IsSystem_HaveSysInfo = _IsSystem_HaveSysInfo;
+            copy._IsSystem_m_IsSystem = _IsSystem_m_IsSystem;
+            copy.DirsCollectionTimestamp = DirsCollectionTimestamp;
+            copy.FilesCollectionTimestamp = FilesCollectionTimestamp;
+
+            // Reference types – share top-level reference
+            copy.m_Parent = m_Parent;
+            copy.m_DisplayName = m_DisplayName;
+            copy.m_FullPath = m_FullPath;
+            copy.m_TypeName = m_TypeName;
+            copy.m_cPidl = m_cPidl;
+            copy.m_columnDic = m_columnDic;
+            copy.LVItem = LVItem;
+            copy.TNode = TNode;
+            copy.Tag = Tag;
+            copy._directories = _directories;
+            copy._files = _files;
+            copy.m_size = m_size;
+            copy.currentPath = currentPath;
+
+            return copy;
+        }
+
+        /// <summary>
+        /// Sets all reference-type fields to null, effectively severing the
+        /// shallow links created by <see cref="ShallowCopy"/>.
+        /// Value types are left untouched.
+        /// </summary>
+        public void Ghost()
+        {
+            m_Parent = null;
+            m_FullPath = null;
+            m_TypeName = null;
+            m_cPidl = null;
+            m_columnDic = null;
+            LVItem = null;
+            TNode = null;
+            Tag = null;
+            _directories = null;
+            _files = null;
+        }
+
+        #endregion
+
         #region    Private Methods
 
         public void ReloadInfo()
