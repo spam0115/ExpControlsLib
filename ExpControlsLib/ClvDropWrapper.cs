@@ -64,6 +64,15 @@ namespace ExpControlsLib
         private DragDropEffects m_Default_Effect;     // Default for this control, for this Drag
         private WindowsApiLib.Shell.IDropTarget m_LastTarget;    // IDropTarget of most recent Folder dragged over
         private ListViewItem m_LastItem;              // Most recent ListViewItem dragged over
+        private ListViewItem? m_PendingItem;                  // Folder item awaiting dwell resolution
+        private CShellItem? m_PendingItemCSI;                  // CShellItem of m_PendingItem (cached to avoid re-reading Tag)
+        private readonly System.Windows.Forms.Timer m_DwellTimer; // Debounce timer: defer shell IDropTarget resolution
+        private POINT m_LastPt;                       // Last DragOver position (for use in dwell tick)
+        private MK m_LastKeyState;                    // Last DragOver key state (for use in dwell tick)
+        // Dwell threshold: cursor must linger this long before the shell IDropTarget is resolved.
+        // Prevents calling GetDropTargetOf (and the underlying IShellFolder BindToObject) for every
+        // virtual shell namespace item the cursor sweeps over during a drag.
+        private static readonly TimeSpan DwellingThreshold = TimeSpan.FromMilliseconds(400);
         private Color m_OriginalColor;                // Original BackColor of ListViewItem Dragged Over
         private IDropTargetHelper m_DropHelper;       // IDropTargetHelper interface for this control
         private CShellItem? m_ParentItem;                 // CShellItem of Parent dir, if any, otherwise Nothing
@@ -105,6 +114,12 @@ namespace ExpControlsLib
             m_ListView.HandleCreated += View_HandleCreated;
             m_ListView.HandleDestroyed += View_HandleDestroyed;
 
+            m_DwellTimer = new System.Windows.Forms.Timer
+            {
+                Interval = (int)DwellingThreshold.TotalMilliseconds
+            };
+            m_DwellTimer.Tick += DwellTimer_Tick;
+
             IntPtr dropHelperPtr;     // historical place to accept input from nxt call
             ShellHelper.GetIDropTargetHelper(out dropHelperPtr, out m_DropHelper);
             if (dropHelperPtr != IntPtr.Zero)
@@ -141,6 +156,9 @@ namespace ExpControlsLib
         #region    ResetPreviousTarget -- a utility/cleanup Method
         private void ResetPrevTarget()
         {
+            m_DwellTimer.Stop();
+            m_PendingItem = null;
+            m_PendingItemCSI = null;
             if (!(m_LastTarget == null))
             {
                 int hr = m_LastTarget.DragLeave();
@@ -153,6 +171,46 @@ namespace ExpControlsLib
                 m_LastItem.ForeColor = Color.Empty;
                 m_LastItem = null;
             }
+        }
+
+        /// <summary>
+        /// Resolves the shell IDropTarget for the pending folder item and notifies it with
+        /// DragEnter. Called either when the dwell timer fires (cursor lingered) or immediately
+        /// when a Drop occurs before the timer fired (so a quick release doesn't lose the target).
+        /// </summary>
+        private void ResolvePendingTarget(ref DragDropEffects pdwEffect)
+        {
+            var item = m_PendingItem;
+            var csi = m_PendingItemCSI;
+            m_DwellTimer.Stop();
+            m_PendingItem = null;
+            m_PendingItemCSI = null;
+            if (item is null || csi is null) return;
+
+            // A later DragOver may have moved on; if so, abort.
+            if (!ReferenceEquals(item, m_LastItem)) return;
+
+            m_LastTarget = csi.GetDropTargetOf(m_ListView);
+            if (m_LastTarget is null)
+            {
+                pdwEffect = DragDropEffects.None;
+                return;
+            }
+
+            pdwEffect = m_Original_Effect;
+            int res = m_LastTarget.DragEnter(m_DataObj, m_LastKeyState, m_LastPt, ref pdwEffect);
+            if (res != 0 && res != 1)
+            {
+                Debug.WriteLine("DragEnter on resolved target failed: 0x" + res.ToString("X"));
+            }
+        }
+
+        private void DwellTimer_Tick(object? sender, EventArgs e)
+        {
+            m_DwellTimer.Stop();
+            if (m_PendingItem is null) return;
+            var effect = m_Original_Effect;
+            ResolvePendingTarget(ref effect);
         }
         #endregion
 
@@ -250,8 +308,6 @@ namespace ExpControlsLib
     /// <returns>S_OK</returns>
         public int DragOver(MK grfKeyState, POINT pt, ref DragDropEffects pdwEffect)
         {
-            bool reset = false;
-
             var point = m_ListView.PointToClient(new Point(pt.x, pt.y));
 
             var hitTest = m_ListView.HitTest(point);
@@ -267,9 +323,24 @@ namespace ExpControlsLib
                         m_OriginalColor = m_LastItem.BackColor;
                         m_LastItem.BackColor = SystemColors.Highlight;
                         m_LastItem.ForeColor = SystemColors.HighlightText;
-                        m_LastTarget = item.GetDropTargetOf(m_ListView);
-                        reset = true;
+
+                        // Defer the (potentially crashing / expensive) shell IDropTarget resolution
+                        // until the cursor dwells on this item for DwellingThreshold. The highlight
+                        // is applied immediately for responsiveness; only GetDropTargetOf is deferred.
+                        m_PendingItem = hitTest.Item;
+                        m_PendingItemCSI = item;
+                        m_LastPt = pt;
+                        m_LastKeyState = grfKeyState;
+                        m_DwellTimer.Stop();
+                        m_DwellTimer.Start();
                     }
+                }
+                else if (m_PendingItem is not null)
+                {
+                    // Same item, still awaiting dwell resolution. Refresh saved input so the
+                    // eventual DragEnter uses the latest key state / point.
+                    m_LastPt = pt;
+                    m_LastKeyState = grfKeyState;
                 }
             }
             else
@@ -277,16 +348,15 @@ namespace ExpControlsLib
                 ResetPrevTarget();
             }
 
-            if (m_LastTarget is not null)
+            if (m_LastTarget is not null && m_PendingItem is null)
             {
-                if (reset)
-                {
-                    m_LastTarget.DragEnter(m_DataObj, grfKeyState, pt, ref pdwEffect);
-                }
-                else
-                {
-                    m_LastTarget.DragOver(grfKeyState, pt, ref pdwEffect);
-                }
+                // Resolved target: forward DragOver (not DragEnter — that was done on resolution).
+                m_LastTarget.DragOver(grfKeyState, pt, ref pdwEffect);
+            }
+            else if (m_PendingItem is not null)
+            {
+                // Still dwelling: report None until the target is resolved.
+                pdwEffect = DragDropEffects.None;
             }
             else if (m_ParentTarget is not null)
             {
@@ -355,6 +425,17 @@ namespace ExpControlsLib
             {
                 // Debug.WriteLine("In DragDrop: Effect = " & pdwEffect & " Keystate = " & grfKeyState)
                 int res;
+
+                // If the cursor released before the dwell timer fired, resolve the target now
+                // so the drop is delivered to the intended folder rather than falling back to
+                // the parent target (or being lost).
+                if (m_LastTarget == null && m_PendingItem is not null)
+                {
+                    m_LastPt = pt;
+                    m_LastKeyState = grfKeyState;
+                    ResolvePendingTarget(ref pdwEffect);
+                }
+
                 if (!(m_LastTarget == null))
                 {
                     res = m_LastTarget.DragDrop(pDataObj, grfKeyState, pt, ref pdwEffect);
@@ -413,6 +494,11 @@ namespace ExpControlsLib
                 if (disposing)
                 {
                     DisposeDropWrapper();
+                }
+                if (m_DwellTimer is not null)
+                {
+                    m_DwellTimer.Stop();
+                    m_DwellTimer.Dispose();
                 }
                 if (m_ListView is not null && m_ListView.Handle != IntPtr.Zero)
                 {

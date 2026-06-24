@@ -42,7 +42,7 @@ namespace WindowsApiLib.Shell
             IntPtr ppidl = IntPtr.Zero;
             var msgID = default(SHCNE);
             SHNOTIFYSTRUCT shNotify = default;
-            var hLock = _shellApi.SHChangeNotification_Lock(wParam, (uint)lParam, ref ppidl, ref msgID);
+            var hLock = _shellApi.SHChangeNotification_Lock(wParam, (uint)lParam, ref ppidl, ref msgID); //note that the memory blocks pointed to by the params and pidl are owned by the OS, not user space. 
             if (hLock == IntPtr.Zero) return;
 
             try
@@ -89,11 +89,12 @@ namespace WindowsApiLib.Shell
                                 {
                                     Debug.WriteLine("  [CREATE] Parent found: " + parentItem.ItemPath);
                                     if (parentItem.FilesInitialized)
-                                    {
-                                        if (!parentItem.Files.ContainsEquivalentAbsolutePidl(shNotify.dwItem1))
                                         {
-                                            Debug.WriteLine("  [CREATE] Parent files initialized and item NOT in list. Adding.");
-                                            var newItem = _shellItemFactory.Create(shNotify.dwItem1, parentItem);
+                                            if (!parentItem.Files.ContainsEquivalentAbsolutePidl(shNotify.dwItem1))
+                                            {
+                                                Debug.WriteLine("  [CREATE] Parent files initialized and item NOT in list. Adding.");
+                                                var clonedCreatePidl = CPidl.Copy(shNotify.dwItem1);
+                                                var newItem = _shellItemFactory.Create(clonedCreatePidl, parentItem);
                                             if (newItem is not null)
                                             {
                                                 Debug.WriteLine("  [CREATE] Created newItem: " + newItem.ItemPath);
@@ -272,7 +273,8 @@ namespace WindowsApiLib.Shell
                                         if (!parentItem.Directories.Contains(shNotify.dwItem1))
                                         {
                                             Debug.WriteLine("  [MKDIR] Parent folders initialized and NOT in list. Adding.");
-                                            var newItem = _shellItemFactory.Create(shNotify.dwItem1, parentItem);
+                                            var clonedMkdirPidl = CPidl.Copy(shNotify.dwItem1);
+                                            var newItem = _shellItemFactory.Create(clonedMkdirPidl, parentItem);
                                             if (newItem is not null)
                                             {
                                                 Debug.WriteLine("  [MKDIR] Created newItem: " + newItem.ItemPath);
@@ -537,7 +539,7 @@ namespace WindowsApiLib.Shell
                     var oldParentCsi = csi.Parent;
                     RemoveItem(csi.Parent, csi);
                     csi.Parent = null;
-                    csi.m_Pidl = changedPidl;
+                    csi.m_Pidl = CPidl.Copy(changedPidl);
                     RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Moved));
                     return false;
                 }

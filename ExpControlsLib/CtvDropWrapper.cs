@@ -33,15 +33,23 @@ namespace ExpControlsLib
     {
 
         #region    Private Fields
-
+ 
         private TreeView m_TreeView;                  // The Tree if m_treeview is a TreeView, else nothing
         private IntPtr m_DataObj;                     // The COM interface to IDragData - saved in DragEnter
         private int m_Original_Effect;            // Save it
         private WindowsApiLib.Shell.IDropTarget m_LastTarget;    // IDropTarget of most recent Folder dragged over
         private TreeNode m_LastNode;                  // Most recent node dragged over
+        private TreeNode? m_PendingNode;                      // Node under cursor awaiting dwell resolution
+        private readonly System.Windows.Forms.Timer m_DwellTimer; // Debounce timer: defer shell IDropTarget resolution
+        private POINT m_LastPt;                       // Last DragOver position (for use in dwell tick)
+        private MK m_LastKeyState;                    // Last DragOver key state (for use in dwell tick)
+        // Dwell threshold: cursor must linger this long before the shell IDropTarget is resolved.
+        // Prevents calling GetDropTargetOf (and the underlying IShellFolder BindToObject) for every
+        // virtual shell namespace item the cursor sweeps over during a drag.
+        private static readonly TimeSpan DwellingThreshold = TimeSpan.FromMilliseconds(400);
         private readonly IDropTargetHelper m_DropHelper;       // IDropTargetHelper interface for this control
         private bool m_disposed = false;           // To detect redundant Dispose calls
-
+ 
         #endregion
 
         #region    Public Events
@@ -137,6 +145,12 @@ namespace ExpControlsLib
             m_TreeView.HandleCreated += View_HandleCreated;
             m_TreeView.HandleDestroyed += View_HandleDestroyed;
 
+            m_DwellTimer = new System.Windows.Forms.Timer
+            {
+                Interval = (int)DwellingThreshold.TotalMilliseconds
+            };
+            m_DwellTimer.Tick += DwellTimer_Tick;
+
             IntPtr dropHelperPtr;     // historical place to accept input from nxt call
             ShellHelper.GetIDropTargetHelper(out dropHelperPtr, out m_DropHelper);
             if (dropHelperPtr != IntPtr.Zero)
@@ -175,6 +189,8 @@ namespace ExpControlsLib
         #region    ResetPreviousTarget -- a utility/cleanup Method
         private void ResetPrevTarget()
         {
+            m_DwellTimer.Stop();
+            m_PendingNode = null;
             if (!(m_LastTarget == null))
             {
                 int hr = m_LastTarget.DragLeave();
@@ -182,6 +198,55 @@ namespace ExpControlsLib
                 m_LastTarget = null;
             }
             m_LastNode = null;
+        }
+
+        /// <summary>
+        /// Resolves the shell IDropTarget for the pending node and notifies it with DragEnter/DragOver.
+        /// Called either when the dwell timer fires (cursor lingered) or immediately when a Drop
+        /// occurs before the timer fired (so a quick release doesn't lose the drop target).
+        /// </summary>
+        private void ResolvePendingTarget(ref DragDropEffects pdwEffect)
+        {
+            var node = m_PendingNode;
+            m_DwellTimer.Stop();
+            m_PendingNode = null;
+            if (node is null) return;
+
+            // Another (later) DragOver may have moved m_LastNode elsewhere; if so, abort.
+            if (!ReferenceEquals(node, m_LastNode)) return;
+
+            CShellItem CSI = (CShellItem)node.Tag;
+            if (!CSI.IsDropTarget)
+            {
+                pdwEffect = DragDropEffects.None;
+                return;
+            }
+
+            m_LastTarget = CSI.GetDropTargetOf(m_TreeView);
+            if (m_LastTarget is null)
+            {
+                pdwEffect = DragDropEffects.None;
+                return;
+            }
+
+            pdwEffect = (DragDropEffects)m_Original_Effect;
+            int res = m_LastTarget.DragEnter(m_DataObj, m_LastKeyState, m_LastPt, ref pdwEffect);
+            if (res == 0)
+            {
+                res = m_LastTarget.DragOver(m_LastKeyState, m_LastPt, ref pdwEffect);
+            }
+            if (res != 0)
+            {
+                Marshal.ThrowExceptionForHR(res);
+            }
+        }
+
+        private void DwellTimer_Tick(object? sender, EventArgs e)
+        {
+            m_DwellTimer.Stop();
+            if (m_PendingNode is null) return;
+            var effect = (DragDropEffects)m_Original_Effect;
+            ResolvePendingTarget(ref effect);
         }
         #endregion
 
@@ -248,10 +313,19 @@ namespace ExpControlsLib
                 {
                     if (ReferenceEquals(tn, m_LastNode))
                     {
-                        // Still delegate to the shell's IDropTarget.DragOver so it can
-                        // react to modifier key changes (e.g. Ctrl → Copy).
-                        if (m_LastTarget is not null)
+                        // Still on the same node. If we're still awaiting dwell resolution,
+                        // keep reporting None and refresh the saved key state / point so the
+                        // eventual DragEnter/DragOver uses the latest input.
+                        if (m_PendingNode is not null)
                         {
+                            m_LastPt = pt;
+                            m_LastKeyState = grfKeyState;
+                            pdwEffect = DragDropEffects.None;
+                        }
+                        else if (m_LastTarget is not null)
+                        {
+                            // Already resolved: delegate to the shell's IDropTarget.DragOver so
+                            // it can react to modifier key changes (e.g. Ctrl → Copy).
                             m_LastTarget.DragOver(grfKeyState, pt, ref pdwEffect);
                         }
 
@@ -273,30 +347,19 @@ namespace ExpControlsLib
                     m_LastNode = tn;
                 }     // save current node
 
-                // Drag is now over a new node. Get the IDropTarget of the Folder and interact with it
-
+                // Drag is now over a new node. Defer the (potentially crashing / expensive) shell
+                // IDropTarget resolution until the cursor dwells on this node for DwellingThreshold.
+                // Cheap pre-filter using the cached SFGAO.DROPTARGET flag: skip non-drop-targets
+                // entirely so the timer isn't even armed for them.
                 CShellItem CSI = (CShellItem)tn.Tag;
                 if (CSI.IsDropTarget)
                 {
-                    m_LastTarget = CSI.GetDropTargetOf(m_TreeView);
-                    if (!(m_LastTarget == null))
-                    {
-                        pdwEffect = (DragDropEffects)m_Original_Effect;
-
-                        int res = m_LastTarget.DragEnter(m_DataObj, grfKeyState, pt, ref pdwEffect);
-                        if (res == 0)
-                        {
-                            res = m_LastTarget.DragOver(grfKeyState, pt, ref pdwEffect);
-                        }
-                        if (res != 0)
-                        {
-                            Marshal.ThrowExceptionForHR(res);
-                        }
-                    }
-                    else
-                    {
-                        pdwEffect = DragDropEffects.None;
-                    } // couldn't get IDropTarget, so report effect None
+                    m_PendingNode = tn;
+                    m_LastPt = pt;
+                    m_LastKeyState = grfKeyState;
+                    m_DwellTimer.Stop();
+                    m_DwellTimer.Start();
+                    pdwEffect = DragDropEffects.None; // until resolved
                 }
                 else
                 {
@@ -356,6 +419,16 @@ namespace ExpControlsLib
 
             // Debug.WriteLine("In DragDrop: Effect = " & pdwEffect & " Keystate = " & grfKeyState)
             int res;
+
+            // If the cursor released before the dwell timer fired, resolve the target now
+            // so the drop is delivered to the intended folder rather than being lost.
+            if (m_LastTarget == null && m_PendingNode is not null)
+            {
+                m_LastPt = pt;
+                m_LastKeyState = grfKeyState;
+                ResolvePendingTarget(ref pdwEffect);
+            }
+
             if (!(m_LastTarget == null))
             {
                 res = m_LastTarget.DragDrop(pDataObj, grfKeyState, pt, ref pdwEffect);
@@ -387,6 +460,11 @@ namespace ExpControlsLib
                 if (disposing)
                 {
                     DisposeDropWrapper();
+                }
+                if (m_DwellTimer is not null)
+                {
+                    m_DwellTimer.Stop();
+                    m_DwellTimer.Dispose();
                 }
                 if (m_TreeView is not null)
                 {

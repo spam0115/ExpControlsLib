@@ -188,6 +188,13 @@
             <param name="ctl">The ListView for whom this Class will Handle Drag/Drops.</param>
             <remarks>Registers itself to Handle Drag/Drops for the ListView.</remarks>
         </member>
+        <member name="M:ExpControlsLib.ClvDropWrapper.ResolvePendingTarget(System.Windows.Forms.DragDropEffects@)">
+            <summary>
+            Resolves the shell IDropTarget for the pending folder item and notifies it with
+            DragEnter. Called either when the dwell timer fires (cursor lingered) or immediately
+            when a Drop occurs before the timer fired (so a quick release doesn't lose the target).
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ClvDropWrapper.DragEnter(System.IntPtr,WindowsApiLib.Shell.ShellAPI.MK,WindowsApiLib.Shell.ShellAPI.POINT,System.Windows.Forms.DragDropEffects@)">
             <summary>
             For internal use only
@@ -476,6 +483,13 @@
             <param name="ctl">The TreeView for which this instance will Handle Drag/Drop</param>
             <remarks>Registers itself to Handle Drag/Drops for the TreeView.</remarks>
         </member>
+        <member name="M:ExpControlsLib.CtvDropWrapper.ResolvePendingTarget(System.Windows.Forms.DragDropEffects@)">
+            <summary>
+            Resolves the shell IDropTarget for the pending node and notifies it with DragEnter/DragOver.
+            Called either when the dwell timer fires (cursor lingered) or immediately when a Drop
+            occurs before the timer fired (so a quick release doesn't lose the drop target).
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.CtvDropWrapper.DragEnter(System.IntPtr,WindowsApiLib.Shell.ShellAPI.MK,WindowsApiLib.Shell.ShellAPI.POINT,System.Windows.Forms.DragDropEffects@)">
             <summary>
             For internal use only<br />
@@ -700,6 +714,18 @@
         <member name="E:ExpControlsLib.ExpList.ExpListGetColumnData">
             <summary>
             Occurs when data for a custom column is requested.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ExpList.ExpListBulkColumnDataRequestedEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListBulkColumnDataRequested"/> event.
+            </summary>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.ExpListBulkColumnDataRequested">
+            <summary>
+            Occurs during directory loading with all items, allowing bulk column data fetching.
+            This is more efficient than <see cref="E:ExpControlsLib.ExpList.ExpListGetColumnData"/> for large directories
+            because it allows a single database query for all items instead of one per item.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ExpList.DisplayModeChangedEventHandler">
@@ -1261,6 +1287,17 @@
             <summary> 
             Required method for Designer support - do not modify 
             the contents of this method with the code editor.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ExpListBulkColumnDataEventArgs">
+            <summary>
+            Event arguments for the <see cref="E:ExpControlsLib.ExpList.ExpListBulkColumnDataRequested"/> event.
+            Contains all items in the directory being loaded, allowing bulk column data fetching.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListBulkColumnDataEventArgs.Items">
+            <summary>
+            Gets all <see cref="T:WindowsApiLib.Shell.CShellItem"/>s in the directory being loaded.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ExpListCopyEventArgs">

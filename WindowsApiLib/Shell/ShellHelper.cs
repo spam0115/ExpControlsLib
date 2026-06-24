@@ -174,6 +174,7 @@ namespace WindowsApiLib.Shell
         /// 
         public static bool GetIDropTarget(CShellItem item, out IDropTarget dropTarget)
         {
+            dropTarget = null;
             IntPtr dropTargetPtr = IntPtr.Zero;
             var parent = item.Parent;
 
@@ -189,8 +190,11 @@ namespace WindowsApiLib.Shell
             {
                 folder = item.Parent.GetIShellFolder();
             }
-            var relpidl = item.LastPIDL;
 
+            if (folder == null) //some virtual locations don't provide an IShellFolder
+                return false;
+
+            var relpidl = item.LastPIDL;
             IntPtr rgfReserved = IntPtr.Zero; //unused
 
             try
@@ -203,9 +207,13 @@ namespace WindowsApiLib.Shell
                 }
                 else
                 {
-                    dropTarget = null;
                     return false;
                 }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("ERROR: Exception: " + ex.ToString());
+                return false;
             }
             finally
             {

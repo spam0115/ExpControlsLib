@@ -1,9 +1,11 @@
-﻿using WindowsApiLib.Shell;
-using System;
+﻿using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
+using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
+using IDropTarget = WindowsApiLib.Shell.IDropTarget;
 
 namespace ExpControlsLib
 {

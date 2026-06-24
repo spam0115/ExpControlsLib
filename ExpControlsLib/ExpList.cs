@@ -195,6 +195,15 @@ namespace ExpControlsLib
         [Description("Fires after the currently loaded folder has changed")]
         public event ExpListCurrentFolderChangedEventHandler ExpListCurrentFolderChanged;
 
+        public delegate void ExpListDirectoryLoadedEventHandler(int itemCount);
+        [Category("Action")]
+        [Description("Fires after a directory load completes with the total item count")]
+        public event ExpListDirectoryLoadedEventHandler ExpListDirectoryLoaded;
+
+        public event Action ExpListDirectoryLoading;
+
+        public event Action ExpListEmptyClick;
+
         ///// <summary>
         ///// Delegate for the <see cref="ExpListPathChanged"/> event.
         ///// </summary>
@@ -291,6 +300,18 @@ namespace ExpControlsLib
         /// </summary>
         [Category("Action"), Description("Occurs when data for a custom column is requested.")]
         public event ExpListGetColumnDataEventHandler ExpListGetColumnData;
+
+        /// <summary>
+        /// Delegate for the <see cref="ExpListBulkColumnDataRequested"/> event.
+        /// </summary>
+        public delegate void ExpListBulkColumnDataRequestedEventHandler(object? sender, ExpListBulkColumnDataEventArgs e);
+        /// <summary>
+        /// Occurs during directory loading with all items, allowing bulk column data fetching.
+        /// This is more efficient than <see cref="ExpListGetColumnData"/> for large directories
+        /// because it allows a single database query for all items instead of one per item.
+        /// </summary>
+        [Category("Action"), Description("Occurs during directory loading with all items for bulk column data fetching.")]
+        public event ExpListBulkColumnDataRequestedEventHandler ExpListBulkColumnDataRequested;
 
         /// <summary>
         /// Delegate for the <see cref="DisplayModeChanged"/> event.
@@ -2247,6 +2268,8 @@ namespace ExpControlsLib
             _displayFilesCts = new CancellationTokenSource();
             var token = _displayFilesCts.Token;
 
+            ExpListDirectoryLoading?.Invoke();
+
             // Capture sort settings and create comparer on UI thread to ensure thread-safe access to ColumnHeader properties
             int sortCol = _listViewWrapper.SortColumn;
             SortOrder sortOrder = _listViewWrapper.SortOrder;
@@ -2316,6 +2339,11 @@ namespace ExpControlsLib
 
                     // Warming up
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: Warming up {combined.Count} items...");
+
+                    // Fire bulk column data event so external handlers can do a single
+                    // DB query for all items instead of one query per item.
+                    ExpListBulkColumnDataRequested?.Invoke(this, new ExpListBulkColumnDataEventArgs(combined));
+
                     bool isLarge = (_listViewWrapper.DisplayMode == ListViewDisplayMode.LargeIcon);
                     foreach (var item in combined)
                     {
@@ -2376,6 +2404,8 @@ namespace ExpControlsLib
                     {
                         _listView.EndUpdate();
                     }
+
+                    ExpListDirectoryLoaded?.Invoke(result.Items.Count);
                 }
                 else
                 {
@@ -2905,7 +2935,11 @@ namespace ExpControlsLib
             {
                 ListView listView = (ListView)sender;
 
-                if (listView.SelectedIndices.Count == 0) return;
+                if (listView.SelectedIndices.Count == 0)
+                {
+                    ExpListEmptyClick?.Invoke();
+                    return;
+                }
 
                 CShellItem? csi = null;
                 if (listView.FocusedItem != null) //could be selected OR deselected
@@ -3556,6 +3590,13 @@ namespace ExpControlsLib
                 if (e.KeyCode == Keys.F5)
                 {
                     await RefreshContents();
+                }
+
+                if (e.KeyCode == Keys.Space)
+                {
+                    PostMessage(_listView.Handle, (uint)WindowsMessages.WM_KEYDOWN, (IntPtr)0x22, IntPtr.Zero);
+                    e.Handled = true;
+                    e.SuppressKeyPress = true;
                 }
 
                 if (e.KeyCode == Keys.Enter && _listView.SelectedIndices.Count > 0)
