@@ -615,6 +615,7 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Gets the indices of the selected items.
+        /// Note: the items are in sorted order, not chronological order.
         /// </summary>
         [Browsable(false)]
         public ListView.SelectedIndexCollection SelectedIndices => _listViewWrapper.SelectedIndices;
@@ -4101,7 +4102,10 @@ namespace ExpControlsLib
             }
         }
 
-
+        public void Redraw(CShellItem csi)
+        {
+            throw new NotImplementedException();
+        }
     }
 
 

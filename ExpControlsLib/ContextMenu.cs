@@ -23,6 +23,9 @@ namespace ExpControlsLib
 
         /// <summary>The raw command information from the shell context menu.</summary>
         public CMInvokeCommandInfoEx CommandInfo { get; init; }
+
+        /// <summary>The HRESULT from invoking the command on the original IContextMenu, or 0 if not invoked.</summary>
+        public int InvokeHResult { get; init; }
     }
 
     /// <summary>
@@ -182,10 +185,12 @@ namespace ExpControlsLib
                 AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, moveCmdId, "Move");
                 uint copyToFolderCmdId = (uint)(max + 2);
                 AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, copyToFolderCmdId, "Copy to Folder");
+                uint newFolderCmdId = (uint)(max + 3);
+                AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, newFolderCmdId, "New Folder");
 
                 int cmd = TrackPopupMenuEx(comContextMenu, (int)TPM.RETURNCMD, pt.X, pt.Y, hwnd, IntPtr.Zero);
 
-                if (cmd == (int)moveCmdId || cmd == (int)copyToFolderCmdId)
+                if (cmd == (int)moveCmdId || cmd == (int)copyToFolderCmdId || cmd == (int)newFolderCmdId)
                 {
                     return new ContextMenuResult
                     {
@@ -194,8 +199,8 @@ namespace ExpControlsLib
                         CommandInfo = new CMInvokeCommandInfoEx
                         {
                             cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                            lpVerb = (IntPtr)(cmd == (int)moveCmdId ? 99999 : 99998),
-                            lpVerbW = (IntPtr)(cmd == (int)moveCmdId ? 99999 : 99998),
+                            lpVerb = (IntPtr)(cmd == (int)moveCmdId ? 99999 : cmd == (int)copyToFolderCmdId ? 99998 : 99997),
+                            lpVerbW = (IntPtr)(cmd == (int)moveCmdId ? 99999 : cmd == (int)copyToFolderCmdId ? 99998 : 99997),
                             nShow = (int)SW.SHOWNORMAL,
                             fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
                             ptInvoke = new Point(pt.X, pt.Y)
@@ -207,19 +212,27 @@ namespace ExpControlsLib
                 {
                     string verb = GetVerbString(localBase, cmd - min);
 
+                    var invokeInfo = new CMInvokeCommandInfoEx
+                    {
+                        cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
+                        hwnd = hwnd,
+                        lpVerb = (IntPtr)(cmd - min),
+                        lpVerbW = (IntPtr)(cmd - min),
+                        nShow = (int)SW.SHOWNORMAL,
+                        fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
+                        ptInvoke = new Point(pt.X, pt.Y)
+                    };
+
+                    int invokeHr = localBase.InvokeCommand(invokeInfo);
+                    if (invokeHr != S_OK)
+                        Debug.WriteLine($"ContextMenu.ShowMenu InvokeCommand for '{verb}' failed with HRESULT: {invokeHr:X}");
+
                     return new ContextMenuResult
                     {
                         Success = true,
                         Verb = verb,
-                        CommandInfo = new CMInvokeCommandInfoEx
-                        {
-                            cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                            lpVerb = (IntPtr)(cmd - min),
-                            lpVerbW = (IntPtr)(cmd - min),
-                            nShow = (int)SW.SHOWNORMAL,
-                            fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
-                            ptInvoke = new Point(pt.X, pt.Y)
-                        }
+                        CommandInfo = invokeInfo,
+                        InvokeHResult = invokeHr
                     };
                 }
 

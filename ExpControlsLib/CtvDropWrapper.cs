@@ -46,7 +46,7 @@ namespace ExpControlsLib
         // Dwell threshold: cursor must linger this long before the shell IDropTarget is resolved.
         // Prevents calling GetDropTargetOf (and the underlying IShellFolder BindToObject) for every
         // virtual shell namespace item the cursor sweeps over during a drag.
-        private static readonly TimeSpan DwellingThreshold = TimeSpan.FromMilliseconds(400);
+        private static readonly TimeSpan DwellingThreshold = TimeSpan.FromMilliseconds(250);
         private readonly IDropTargetHelper m_DropHelper;       // IDropTargetHelper interface for this control
         private bool m_disposed = false;           // To detect redundant Dispose calls
  

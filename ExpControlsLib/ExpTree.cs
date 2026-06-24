@@ -1471,84 +1471,29 @@ namespace ExpControlsLib
                             _TreeView.LabelEdit = true;
                             tn.BeginEdit();
                         }
-                        else
+                        else if (verbId == 99997)
                         {
-                            IntPtr parentPidl = ReferenceEquals(itms[0], _shellController.HierachyManager.DesktopCSI)
-                                ? itms[0].PIDL
-                                : itms[0].Parent.PIDL;
+                            string parentPath = ReferenceEquals(itms[0], _shellController.HierachyManager.DesktopCSI)
+                                ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+                                : itms[0].FullPath;
 
-                            IntPtr relPidl = CPidl.ILFindLastID(itms[0].PIDL);
-                            if (relPidl != IntPtr.Zero)
+                            if (!string.IsNullOrEmpty(parentPath) && System.IO.Directory.Exists(parentPath))
                             {
-                                var capturedRelPidl = CPidl.Copy(relPidl);
-                                var capturedParentPidl = parentPidl;
-                                string strPath = ReferenceEquals(itms[0], _shellController.HierachyManager.DesktopCSI)
-                                    ? Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-                                    : itms[0].Parent.FullPath;
-
-                                await _staRunner.EnqueueWork(_ =>
+                                string newFolderName = "New folder";
+                                string newFolderPath = System.IO.Path.Combine(parentPath, newFolderName);
+                                int counter = 1;
+                                while (System.IO.Directory.Exists(newFolderPath))
                                 {
-                                    IShellFolder desktop = null;
-                                    IShellFolder parentFolder = null;
-                                    IntPtr iUnknownOut = IntPtr.Zero;
-                                    IContextMenu? contextMenu = null;
+                                    counter++;
+                                    newFolderPath = System.IO.Path.Combine(parentPath, $"{newFolderName} ({counter})");
+                                }
+                                System.IO.Directory.CreateDirectory(newFolderPath);
 
-                                    // Create a hidden dummy window on this thread to act as the owner.
-                                    using (Control dummy = new Control())
-                                    {
-                                        IntPtr dummyHandle = dummy.Handle;
-
-                                        try
-                                        {
-                                            SHGetDesktopFolder(ref desktop);
-                                            if (desktop == null) return -1;
-
-                                            if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
-                                                parentFolder = desktop;
-                                            else
-                                            {
-                                                IntPtr folderPtr = IntPtr.Zero;
-                                                if (desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr) != S_OK) return -1;
-                                                parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
-                                                Marshal.Release(folderPtr);
-                                            }
-
-                                            IntPtr rgfReserved = IntPtr.Zero;
-                                            var relPidls = new IntPtr[] { capturedRelPidl };
-                                            if (parentFolder.GetUIObjectOf(IntPtr.Zero, 1, relPidls, IID_IContextMenu, rgfReserved, out iUnknownOut) != S_OK) return -1;
-
-                                            contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
-
-                                            var invokeCmi = new CMInvokeCommandInfoEx
-                                            {
-                                                cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                                                hwnd = dummyHandle,
-                                                nShow = (int)SW.SHOWNORMAL,
-                                                fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE | CMIC.ASYNCOK),
-                                                ptInvoke = pt,
-                                                lpVerb = (IntPtr)verbId,
-                                                lpVerbW = (IntPtr)verbId
-                                            };
-
-                                            return contextMenu.InvokeCommand(invokeCmi);
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Debug.WriteLine($"Error in background tree context menu invocation: {ex.Message}");
-                                            return -1;
-                                        }
-                                        finally
-                                        {
-                                            if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
-                                            if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
-                                            if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
-                                            if (desktop != null) Marshal.ReleaseComObject(desktop);
-                                            Marshal.FreeCoTaskMem(capturedRelPidl);
-                                        }
-                                    }
-                                });
+                                if (!tn.IsExpanded) tn.Expand();
                             }
                         }
+                        // All other shell verbs (delete, cut, copy, paste, etc.) are already
+                        // invoked by ShowMenu on the original IContextMenu — no further action needed.
                     }
                 }
             }

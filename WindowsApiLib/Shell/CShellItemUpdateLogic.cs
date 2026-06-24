@@ -88,31 +88,36 @@ namespace WindowsApiLib.Shell
                                 if (parentItem is not null)
                                 {
                                     Debug.WriteLine("  [CREATE] Parent found: " + parentItem.ItemPath);
-                                    if (parentItem.FilesInitialized)
+                                    if (parentItem.DirectoriesInitialized || parentItem.FilesInitialized)
+                                    {
+                                        var clonedCreatePidl = CPidl.Copy(shNotify.dwItem1);
+                                        var newItem = _shellItemFactory.Create(clonedCreatePidl, parentItem);
+                                        if (newItem is not null)
                                         {
-                                            if (!parentItem.Files.ContainsEquivalentAbsolutePidl(shNotify.dwItem1))
-                                            {
-                                                Debug.WriteLine("  [CREATE] Parent files initialized and item NOT in list. Adding.");
-                                                var clonedCreatePidl = CPidl.Copy(shNotify.dwItem1);
-                                                var newItem = _shellItemFactory.Create(clonedCreatePidl, parentItem);
-                                            if (newItem is not null)
+                                            bool alreadyExists = false;
+                                            if (newItem.IsFolder && parentItem.DirectoriesInitialized && parentItem.Directories.Contains(newItem.PIDL))
+                                                alreadyExists = true;
+                                            else if (!newItem.IsFolder && parentItem.FilesInitialized && parentItem.Files.ContainsEquivalentAbsolutePidl(newItem.PIDL))
+                                                alreadyExists = true;
+
+                                            if (!alreadyExists)
                                             {
                                                 Debug.WriteLine("  [CREATE] Created newItem: " + newItem.ItemPath);
                                                 AddItem(parentItem, newItem);
                                             }
                                             else
                                             {
-                                                Debug.WriteLine("  [CREATE] CShellItemFactory.Create returned null");
+                                                Debug.WriteLine("  [CREATE] Item already in list");
                                             }
                                         }
                                         else
                                         {
-                                            Debug.WriteLine("  [CREATE] Item already in FileList");
+                                            Debug.WriteLine("  [CREATE] CShellItemFactory.Create returned null");
                                         }
                                     }
                                     else
                                     {
-                                        Debug.WriteLine("  [CREATE] Parent files NOT initialized. Skipping add.");
+                                        Debug.WriteLine("  [CREATE] Parent not ready (neither Directories nor Files initialized). Skipping add.");
                                     }
                                 }
                                 else
@@ -548,11 +553,9 @@ namespace WindowsApiLib.Shell
                     IntPtr newIShellFolderPtr = IntPtr.Zero;
                     var oldParentCsi = csi.Parent;
 
-                    //Marshal.FreeCoTaskMem(csi.m_Pidl);
-                    //csi.m_Pidl = TPidl.Concatenate(splitPidl.ParentPidl, pidlRel);
-
                     if (CPidl.ResolvesToSamePathOrName(allegedParentCsi.PIDL, csi.Parent.PIDL)) //rename
                     {
+                        csi.m_Pidl = CPidl.Copy(changedPidl);
                         csi.ReloadInfo();
                         RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Renamed));
                         return true;
@@ -565,6 +568,7 @@ namespace WindowsApiLib.Shell
 
                         csi.Parent = allegedParentCsi;
 
+                        csi.m_Pidl = CPidl.Copy(changedPidl);
                         csi.ReloadInfo();
 
                         if (csi.IsFolder)
