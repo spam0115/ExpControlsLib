@@ -553,7 +553,7 @@ namespace ExpControlsLib
             SetTreeViewImageList(_TreeView, false);
 
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Wiring shell update and timer events...");
-            _shellController.ShellUpdater.UpdateEvent += OnItemUpdate;
+            _shellController.ShellUpdater.UpdateEvent += ShellController_UpdateEventHandler;
             expandNodeTimer.Tick += ExpandNodeTimer_Tick;
 
             if (_rootPath is not null)
@@ -1050,11 +1050,18 @@ namespace ExpControlsLib
         /// A <see cref="ShellItemUpdateEventArgs"/> containing the affected <see cref="CShellItem"/>
         /// and the type of update that occurred.
         /// </param>
-        private void OnItemUpdate(object sender, ShellItemUpdateEventArgs e)
+        private void ShellController_UpdateEventHandler(object sender, ShellItemUpdateEventArgs e)
         {
             // Debug.WriteLine("Enter ExpTree OnItemUpdate -- " & e.Item.DisplayName & " - " & e.UpdateType.ToString)
             if (e.Item is not null && e.Item.IsFolder)  // no interest in non-folder events (or UpdateDir)
             {
+
+                if (InvokeRequired)
+                {
+                    this.BeginInvoke(new Action(() => { ShellController_UpdateEventHandler(sender, e); }));
+                    return;
+                }
+
                 try
                 {
                     CShellItem parent = e.Item.Parent;
@@ -2563,7 +2570,7 @@ namespace ExpControlsLib
             _rootLoadCts?.Dispose();
             _rootLoadCts = null;
             if (_shellController?.ShellUpdater != null)
-                _shellController.ShellUpdater.UpdateEvent -= OnItemUpdate;
+                _shellController.ShellUpdater.UpdateEvent -= ShellController_UpdateEventHandler;
         }
 
         /// <summary> 
