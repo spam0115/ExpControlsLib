@@ -30,8 +30,6 @@ namespace ExpControlsLib
         private readonly System.Collections.Generic.Dictionary<string, ThumbnailSlot> _slotByKey = new();
         private readonly int _maxThumbnails;
 
-        private readonly System.Collections.Generic.HashSet<ImageList> _corruptImageLists = new System.Collections.Generic.HashSet<ImageList>();
-
         private class ThumbnailSlot
         {
             public int Index;
@@ -105,50 +103,18 @@ namespace ExpControlsLib
             }
         }
 
-
-        //public void BeginSession(int thumbnailSize)
-        //{
-        //    _generation++;
-        //    _activeSize = thumbnailSize;
-
-        //    var imageList = GetImageList(thumbnailSize);
-        //    imageList.Images.Clear();
-            
-        //    _lruKeys.Clear();
-        //    _slotByKey.Clear();
-
-        //    _expList._listView.LargeImageList = imageList;
-
-        //    if (!_expList._listView.VirtualMode)
-        //    {
-        //        foreach (ListViewItem item in _expList._listView.Items)
-        //        {
-        //            if (item is null) continue;
-        //            item.ImageIndex = -1;
-        //        }
-        //    }
-        //}
-
         /// <summary>
         /// Gets or creates an ImageList for the specified thumbnail size
         /// </summary>
         public ImageList GetImageList(int thumbnailSize)
         {
-            if (_imageLists.TryGetValue(thumbnailSize, out var imageList) && !_corruptImageLists.Contains(imageList))
+            if (_imageLists.TryGetValue(thumbnailSize, out var imageList))
             {
                 return imageList;
             }
 
-            if (imageList != null)
-            {
-                _corruptImageLists.Remove(imageList);
-                imageList.Dispose();
-                _imageLists.TryRemove(thumbnailSize, out _);
-            }
+            Debug.WriteLine("Creating new image list for thumbnails...");
 
-#if DEBUG
-            Console.WriteLine("Creating new image list for thumbnails...");
-#endif
             imageList = new ImageList
             {
                 ImageSize = new Size(thumbnailSize, thumbnailSize),
@@ -320,12 +286,6 @@ namespace ExpControlsLib
             {
                 Debug.WriteLine("Error adding thumbnail: " + ex.Message);
       
-                if (imageList != null)
-                {
-                    Debug.WriteLine("Adding imagelist to the corrupt list.");
-                    _corruptImageLists.Add(imageList);
-                }
-
                 return -1;
             }
         }

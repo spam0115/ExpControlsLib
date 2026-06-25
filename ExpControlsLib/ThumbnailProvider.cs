@@ -336,8 +336,7 @@ namespace ExpControlsLib
                 Console.WriteLine("\tRequesting thumbnail from OS: " + fileName);
 #endif
 
-                var (hr, ptr) = createFactory();
-                factoryPtr = ptr;
+                (var hr, factoryPtr) = createFactory();
                 if (hr != 0 || factoryPtr == IntPtr.Zero)
                     return null;
 
