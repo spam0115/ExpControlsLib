@@ -61,7 +61,7 @@ namespace WindowsApiLib.Shell
                     {
                         if (_dictionary == null)
                         {
-                            _dictionary = _items.ToDictionary(o => o.DisplayName, o => o, StringComparer.OrdinalIgnoreCase);
+                            _dictionary = _items.DistinctBy(o => o.DisplayName).ToDictionary(o => o.DisplayName, o => o, StringComparer.OrdinalIgnoreCase);
                         }
                     }
                 }

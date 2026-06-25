@@ -1003,14 +1003,14 @@
             Exposes the SelectedItems collection of the internal ListView to allow external handlers to access the currently selected items.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.UpdateInvoke(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
+        <member name="M:ExpControlsLib.ExpList.ShellController_UpdateEventInvoker(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
             <summary>
             Marshals shell item update events to the UI thread.
             </summary>
             <param name="sender">The source of the event.</param>
             <param name="e">The <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the event data.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.DoItemUpdate(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
+        <member name="M:ExpControlsLib.ExpList.ShellController_UpdateEventHandler(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
             <summary>
             Performs the actual update of list view items in response to shell changes.
             Handles creation, deletion, renaming, and other updates of files and folders.
@@ -1729,6 +1729,15 @@
             Passing <c>false</c> is a no-op (reserved for future expansion).
             </param>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.SelectNodeSilentlyAsync(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Expands and selects the node for the given <paramref name="target"/> in the tree
+            without raising the <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/> event. Intermediate nodes
+            are expanded as needed to make the target visible.
+            </summary>
+            <param name="target">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> whose node should be selected.</param>
+            <returns><c>true</c> if the node was found and selected; <c>false</c> otherwise.</returns>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.GoBack">
             <summary>
             Navigates back to the previous folder in the history.
@@ -1759,7 +1768,7 @@
             Gets a value indicating whether the current folder has a parent folder to navigate to.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.OnItemUpdate(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
+        <member name="M:ExpControlsLib.ExpTree.ShellController_UpdateEventHandler(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
             <summary>
             Handles Shell item update notifications from <see cref="T:WindowsApiLib.Shell.CShellItemUpdater"/>.
             Responds to folder creation, deletion, rename, media change, and general update events

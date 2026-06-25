@@ -2384,6 +2384,7 @@ namespace ExpControlsLib
 
                 if (result != null)
                 {
+                    if (InvokeRequired) Debug.WriteLine("ERROR: begin invoke required but not being used in explist.");
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: Updating ListView with {result.Items.Count} items...");
                     _listView.BeginUpdate();
                     try
@@ -2437,7 +2438,6 @@ namespace ExpControlsLib
                 _listView.EndUpdate();
             }
         }
-
 
 
         /// <summary>
