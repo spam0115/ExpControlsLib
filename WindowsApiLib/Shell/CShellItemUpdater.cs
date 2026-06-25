@@ -191,7 +191,7 @@ namespace WindowsApiLib.Shell
             IntPtr newPidl = CPidl.PathToPidl(newPath);
             try
             {
-                UpdateLogic.DoUpdate(item, newPidl, CShItemUpdateType.Moved);
+                UpdateLogic.DoUpdateMoved(item, newPidl);
             }
             finally
             {
@@ -203,7 +203,7 @@ namespace WindowsApiLib.Shell
         {
             if (item == null || newParent == null) return;
 
-            UpdateLogic.DoUpdate(item, newParent.PIDL, CShItemUpdateType.Moved);
+            UpdateLogic.DoUpdateMoved(item, newParent.PIDL);
         }
 
         #endregion

@@ -125,7 +125,7 @@ namespace ExpControlsLib
             _displayFilesCts?.Dispose();
             _displayFilesCts = null;
             if (_shellController?.ShellUpdater != null)
-                _shellController.ShellUpdater.UpdateEvent -= UpdateInvoke;
+                _shellController.ShellUpdater.UpdateEvent -= ShellController_UpdateEventInvoker;
         }
 
         #endregion
@@ -775,7 +775,7 @@ namespace ExpControlsLib
 
                 // Setup Change Notification
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Wiring shell update events...");
-                ShellController.Instance.ShellUpdater.UpdateEvent += UpdateInvoke;
+                ShellController.Instance.ShellUpdater.UpdateEvent += ShellController_UpdateEventInvoker;
 
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: End");
             }
@@ -1085,7 +1085,7 @@ namespace ExpControlsLib
                             return;
                         }
 
-                        relPidls = new List<IntPtr> { relPidl };
+                        relPidls = new List<IntPtr> { CPidl.Clone(relPidl) };
                     }
                     catch (Exception ex)
                     {
@@ -1680,7 +1680,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
-        private void UpdateInvoke(object? sender, ShellItemUpdateEventArgs e)
+        private void ShellController_UpdateEventInvoker(object? sender, ShellItemUpdateEventArgs e)
         {
             //Debug.WriteLine("ExpList: UpdateInvoke Begin");
             try
@@ -1699,13 +1699,13 @@ namespace ExpControlsLib
                 {
                     try
                     {
-                        BeginInvoke((InvokeUpdate)DoItemUpdate, sender, e);
+                        BeginInvoke((InvokeUpdate)ShellController_UpdateEventHandler, sender, e);
                     }
                     catch (InvalidOperationException) { } // Handle race condition where control is disposed just after check
                 }
                 else
                 {
-                    DoItemUpdate(sender, e);
+                    ShellController_UpdateEventHandler(sender, e);
                 }
             }
             finally
@@ -1721,7 +1721,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
-        private async void DoItemUpdate(object? sender, ShellItemUpdateEventArgs e)
+        private async void ShellController_UpdateEventHandler(object? sender, ShellItemUpdateEventArgs e)
         {
             try
             {
@@ -2599,7 +2599,7 @@ namespace ExpControlsLib
                 while (_deferredUpdates.Count > 0)
                 {
                     var (sender, e) = _deferredUpdates.Dequeue();
-                    DoItemUpdate(sender, e);
+                    ShellController_UpdateEventHandler(sender, e);
                 }
             }
             finally
@@ -3095,13 +3095,13 @@ namespace ExpControlsLib
                 if (useUpdate) _listView.BeginUpdate();
                 try
                 {
-                    // Batch remove from hierarchy.  This can trigger a ton of events
-                    _shellController.HierachyManager.RemoveRange(e.Items, raiseEvents: false);
+                    // Batch remove from hierarchy.  This triggers a ton of events
+                    //_shellController.HierachyManager.RemoveRange(e.Items, raiseEvents: false);
 
                     // Batch remove from list view wrapper
                     _listViewWrapper.RemoveItems(e.Items);
 
-                    if (e.Items.Length > this._listViewWrapper.GetApproxVisibleCount())
+                    if (e.Items.Length > this._listViewWrapper.GetApproxVisibleCount()) //if new items are brought into view
                         OnScroll();
 
                     // Fire single update event for the folder

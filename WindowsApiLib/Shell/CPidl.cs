@@ -833,11 +833,11 @@ namespace WindowsApiLib
         /// <summary>
         /// Get's the display name for a pidl.
         /// </summary>
-        /// <param name="pidl"></param>
+        /// <param name="pidl">must be an absolute pidl, not a relative pidl</param>
         /// <returns></returns>
         public static string? GetDisplayName(nint pidl)
         {
-            return GetShellNameBase(pidl, (uint)SIGDN.PARENTRELATIVEEDITING);
+            return GetShellNameBase(pidl, (uint)SIGDN.PARENTRELATIVEEDITING); //note, this get's the displ
         }
 
         public static string? GetParsingName(IntPtr pidl)

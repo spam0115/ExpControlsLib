@@ -490,13 +490,14 @@ namespace WindowsApiLib.Shell
                         removedAny = true;
                     }
 
-                    if (raiseEvents)
-                    {
-                        foreach (var target in targets)
-                        {
-                            ShellController.Instance.ShellUpdater.RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(target, CShItemUpdateType.Deleted));
-                        }
-                    }
+                    //
+                    //if (raiseEvents)
+                    //{
+                    //    foreach (var target in targets)
+                    //    {
+                    //        ShellController.Instance.ShellUpdater.RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(target, CShItemUpdateType.Deleted));
+                    //    }
+                    //}
                 }
             }
             catch (Exception ex)
@@ -525,7 +526,7 @@ namespace WindowsApiLib.Shell
             {
                 if (Root is not null)
                 {
-                    ClearRecursive(Root);
+                    DisposeRecursive(Root);
                 }
 
                 CurrentFolder = null;
@@ -631,7 +632,7 @@ namespace WindowsApiLib.Shell
         /// Recursively clears all children (files and directories) from the given
         /// <see cref="CShellItem"/> and its descendants, detaching parent references.
         /// </summary>
-        private void ClearRecursive(CShellItem item)
+        private void UnlinkRecursive(CShellItem item)
         {
             if (item is null) return;
 
@@ -640,7 +641,7 @@ namespace WindowsApiLib.Shell
                 foreach (var child in item.Directories)
                 {
                     child.Parent = null;
-                    ClearRecursive(child);
+                    UnlinkRecursive(child);
                 }
                 item.Directories.Clear();
             }
@@ -655,6 +656,39 @@ namespace WindowsApiLib.Shell
             }
 
             item.ClearCaches();
+        }
+
+        /// <summary>
+        /// Recursively disposes the given <see cref="CShellItem"/> and all of its descendants
+        /// (files and directories). Each child's PIDL is freed and parent references are
+        /// detached before disposal. Collections are cleared after all children are disposed.
+        /// </summary>
+        /// <param name="item">The root <see cref="CShellItem"/> whose entire subtree should be disposed.</param>
+        public void DisposeRecursive(CShellItem item)
+        {
+            if (item is null) return;
+
+            if (item.DirectoriesInitialized)
+            {
+                foreach (var child in item.Directories)
+                {
+                    child.Parent = null;
+                    DisposeRecursive(child);
+                }
+                item.Directories.Clear();
+            }
+
+            if (item.FilesInitialized)
+            {
+                foreach (var child in item.Files)
+                {
+                    child.Parent = null;
+                    child.Dispose();
+                }
+                item.Files.Clear();
+            }
+
+            item.Dispose();
         }
 
     }

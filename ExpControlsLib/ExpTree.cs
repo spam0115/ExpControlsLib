@@ -943,6 +943,26 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Expands and selects the node for the given <paramref name="target"/> in the tree
+        /// without raising the <see cref="ExpTreeNodeSelected"/> event. Intermediate nodes
+        /// are expanded as needed to make the target visible.
+        /// </summary>
+        /// <param name="target">The <see cref="CShellItem"/> whose node should be selected.</param>
+        /// <returns><c>true</c> if the node was found and selected; <c>false</c> otherwise.</returns>
+        public async Task<bool> SelectNodeSilentlyAsync(CShellItem target)
+        {
+            EnableEventPost = false;
+            try
+            {
+                return await ExpandANodeAsync(target, SelectExpandedNode: true);
+            }
+            finally
+            {
+                EnableEventPost = true;
+            }
+        }
+
         #region Navigation
 
         /// <summary>

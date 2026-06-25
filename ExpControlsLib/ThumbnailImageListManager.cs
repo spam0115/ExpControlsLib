@@ -48,7 +48,7 @@ namespace ExpControlsLib
 
         public event EventHandler<ThumbnailReadyEventArgs> ThumbnailReady;
 
-        public ThumbnailImageListManager(ExpList expList, int capacity = 1000)
+        public ThumbnailImageListManager(ExpList expList, int capacity = 2000)
         {
             _expList = expList;
             _maxThumbnails = capacity;

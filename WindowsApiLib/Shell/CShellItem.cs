@@ -69,7 +69,7 @@ namespace WindowsApiLib.Shell
         // private static string SystemName;                              // 4/14/2012
 
         /// Keep list of Drives and their DriveType for IsRemote testing
-        private static readonly Dictionary<string, bool> DriveDict = new Dictionary<string, bool>();   // 4/16/2012
+        private static readonly Dictionary<string, bool> DriveDict = new Dictionary<string, bool>();   // todo: move this to cshellitemfactory
 
         /// <summary>
         /// LockObj is used for locking critical updating blocks of code
@@ -1141,6 +1141,9 @@ namespace WindowsApiLib.Shell
             if (disposing)
             {
             }
+
+            ClearCaches();
+
             // Release unmanaged resources. If disposing is false,
             // only the following code is executed. 
             if (!m_Pidl.Equals(IntPtr.Zero))
@@ -1148,6 +1151,7 @@ namespace WindowsApiLib.Shell
                 Marshal.FreeCoTaskMem(m_Pidl);
                 m_Pidl = IntPtr.Zero;
             }
+
         }
 
 
@@ -1765,13 +1769,16 @@ namespace WindowsApiLib.Shell
         /// Sets all reference-type fields to null, effectively severing the
         /// shallow links created by <see cref="ShallowCopy"/>.
         /// Value types are left untouched.
+        /// Note that we can't recursively dispose of child elements here because they might still be
+        /// valid because they might have been moved to another directory and are childred of a new item 
+        /// now.
         /// </summary>
         public void Ghost()
         {
-            m_Parent = null;
-            m_FullPath = null;
-            m_TypeName = null;
-            m_cPidl = null;
+            //m_Parent = null; still might need these
+            //m_FullPath = null;
+            //m_TypeName = null;
+            //m_cPidl = null;
             m_columnDic = null;
             LVItem = null;
             TNode = null;
