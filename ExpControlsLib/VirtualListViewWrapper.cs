@@ -1267,27 +1267,39 @@ namespace ExpControlsLib
                 if (view == View.SmallIcon || view == View.LargeIcon || view == View.Tile)
                 {
                     int byOrigin = FindTopLeftByOrigin(total);
-                    if (byOrigin >= 0) { LastTopIndex = byOrigin; return byOrigin; }
+                    if (byOrigin >= 0) { 
+                        LastTopIndex = byOrigin;
+                        Debug.WriteLine("\tFound TopLeft by FindTopLeftByOrigin.");
+                        return byOrigin; 
+                    }
 
                     int bySingleHit = FindTopLeftBySingleHitTest(total);
-                    if (bySingleHit >= 0) { LastTopIndex = bySingleHit; return bySingleHit; }
+                    if (bySingleHit >= 0) { LastTopIndex = bySingleHit;
+                        Debug.WriteLine("\tFound TopLeft by FindTopLeftBySingleHitTest.");
+                        return bySingleHit; }
                 }
 
                 // 3) Visible enumeration (works in many non-virtual cases)
                 int byVisibleEnum = FindTopLeftByVisibleEnumeration(total);
-                if (byVisibleEnum >= 0) { LastTopIndex = byVisibleEnum; return byVisibleEnum; }
+                if (byVisibleEnum >= 0) { LastTopIndex = byVisibleEnum;
+                    Debug.WriteLine("\tFound TopLeft by FindTopLeftByVisibleEnumeration.");
+                    return byVisibleEnum; }
 
                 // 4) Last-resort fallback: scan viewport by hit-test
                 int byHitTestScan = FindTopLeftByHitTestScan(total);
-                if (byHitTestScan >= 0) { LastTopIndex = byHitTestScan; return byHitTestScan; }
+                if (byHitTestScan >= 0) { LastTopIndex = byHitTestScan;
+                    Debug.WriteLine("\tFound TopLeft by FindTopLeftByHitTestScan.");
+                    return byHitTestScan; }
 
                 // 5) Absolute fallback
+                Debug.WriteLine("\tFailed to find topleft.");
+
                 LastTopIndex = 0;
                 return LastTopIndex;
             }
             finally
             {
-                Debug.WriteLine("ExpList: GetTopIndex End");
+                //Debug.WriteLine("ExpList: GetTopIndex End");
             }
         }
 
@@ -1333,7 +1345,7 @@ namespace ExpControlsLib
                 if (cellW <= 0 || cellH <= 0) return -1;
 
                 int vw = Math.Max(1, _ListView.ClientSize.Width);
-                int cols = Math.Max(1, (int)Math.Ceiling(vw / (double)cellW));
+                int cols = Math.Max(1, (int)Math.Floor(vw / (float)cellW));
 
                 int row = Math.Max(0, origin.y / cellH);
                 int col = Math.Max(0, origin.x / cellW);
@@ -1344,7 +1356,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: FindTopLeftByOrigin End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+                //Debug.WriteLine("ExpList: FindTopLeftByOrigin End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             }
         }
 
