@@ -604,10 +604,19 @@ namespace WindowsApiLib
         ///   Caller must Free this pidl when done with it</returns>
         /// <remarks>On Win2k or above systems, will use the API function ILCombine, otherwise performs
         /// byte array manipulation to accomplish the same thing.
-        /// Caller must free the returned Pidl when no longer needed.</remarks>
+        /// Caller must free the returned Pidl when no longer needed.
+        /// I suspect that this function will sometimes return invalid pidls</remarks>
         public static IntPtr Concatenate(IntPtr pidl1, IntPtr pidl2)
         {
-            return ILCombine(pidl1, pidl2);
+            var combined = ILCombine(pidl1, pidl2);
+
+            if (!IsPidlValid(combined))
+            {
+                Debug.WriteLine("Combined pidl is not valid.");
+                Debugger.Break();
+            }
+
+            return combined;
             //if (WinSDK.Win2KOrAbove)
             //{
             //    return ILCombine(pidl1, pidl2);
@@ -807,7 +816,21 @@ namespace WindowsApiLib
             IsValidPidlRet = true;
             return IsValidPidlRet;
         }
+        
+        /// <summary>
+        /// Returns true if the shell can successfully bind to the PIDL,
+        /// confirming it is both structurally valid and exists in the namespace.
+        /// </summary>
+        public static bool IsPidlValid(IntPtr pidl)
+        {
+            if (pidl == IntPtr.Zero)
+                return false;
 
+            Guid IID_IShellItem = new Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE");
+            IntPtr shellItem;
+            int hr = SHCreateItemFromIDList(pidl, ref IID_IShellItem, out shellItem);
+            return hr == 0 && shellItem != IntPtr.Zero;
+        }
 
         /// <summary>IsAncestorOf tests if Pidl1 is an ancestor of Pidl2.</summary>
         /// <param name="pidl1">Relative or Absolute PIDL of potential ancestor.</param>

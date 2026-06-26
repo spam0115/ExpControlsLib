@@ -931,7 +931,7 @@ namespace ExpControlsLib
                             //don't create the thumbnail yet because windows will ask for items that aren't even on the screen.
                         }
                     }
-
+                    
                     return lvi;
                 }
                 else
@@ -1187,11 +1187,34 @@ namespace ExpControlsLib
         private const int LVM_HITTEST = LVM_FIRST + 18;
         private const int LVM_GETITEMSPACING = LVM_FIRST + 51; // returns packed x/y in LPARAM
         private const int LVM_GETTOPINDEX = LVM_FIRST + 39;
+        private const int LVM_GETORIGIN = LVM_FIRST + 41; // icon/tile views only; lParam -> POINT
         private const int LVNI_VISIBLE = 0x0008;
         private const int LVIR_BOUNDS = 0; // for LVM_GETITEMRECT
         private const int LVM_GETCOUNTPERPAGE = 0x1000 + 40;
 
-        public int LastTopIndex = -1;
+        /// <summary>
+        /// Cache the last top index value for a short period of time because windows will sometimes 
+        /// ask for it repeatedly.
+        /// </summary>
+        private DateTime _lastTopIndexDate = DateTime.MinValue;
+        private static TimeSpan expirationAge = new TimeSpan(1000000); //100 ms
+        public int LastTopIndex
+        {
+            get
+            {
+                if (DateTime.Now - _lastTopIndexDate > expirationAge)
+                {
+                    field = -1;
+                }
+
+                return field;
+            }
+            set
+            {
+                field = value;
+                _lastTopIndexDate = DateTime.Now;
+            }
+        }
 
         /// <summary>
         /// Returns a "top-like" index for any ListView mode.
@@ -1209,30 +1232,163 @@ namespace ExpControlsLib
                 int total = _ListView.VirtualMode ? _ListView.VirtualListSize : _ListView.Items.Count;
                 if (total <= 0) return -1;
 
-                if (LastTopIndex > -1) return LastTopIndex; // cache for repeated calls.  The OS will sometimes make tons of redundant calls
+                if (LastTopIndex > -1) return LastTopIndex; // cache for repeated calls.  The OS will sometimes make tons of redundant calls in a brief amount of time.
 
-                int top = 0;
-                if (!_ListView.VirtualMode && _ListView.TopItem != null)
+                var view = _ListView.View;
+
+                // 1) Fast O(1) path for Details/List views.
+                if (view == View.Details || view == View.List)
                 {
-                    LastTopIndex = _ListView.TopItem.Index;
-                    return _ListView.TopItem.Index;
+                    if (!_ListView.VirtualMode && _ListView.TopItem != null)
+                    {
+                        LastTopIndex = _ListView.TopItem.Index;
+                        return LastTopIndex;
+                    }
+
+                    int byTopIndex = FindTopLeftByTopIndex(total);
+                    if (byTopIndex >= 0) { LastTopIndex = byTopIndex; return byTopIndex; }
                 }
 
-                // 2) Try visible enumeration (works in many non-virtual cases)
+                // 2) Fast O(1) path for icon-grid views (SmallIcon, LargeIcon, Tile).
+                if (view == View.SmallIcon || view == View.LargeIcon || view == View.Tile)
+                {
+                    int byOrigin = FindTopLeftByOrigin(total);
+                    if (byOrigin >= 0) { LastTopIndex = byOrigin; return byOrigin; }
+
+                    int bySingleHit = FindTopLeftBySingleHitTest(total);
+                    if (bySingleHit >= 0) { LastTopIndex = bySingleHit; return bySingleHit; }
+                }
+
+                // 3) Visible enumeration (works in many non-virtual cases)
                 int byVisibleEnum = FindTopLeftByVisibleEnumeration(total);
-                if (byVisibleEnum >= 0) return byVisibleEnum;
+                if (byVisibleEnum >= 0) { LastTopIndex = byVisibleEnum; return byVisibleEnum; }
 
-                // 3) Virtual-safe fallback: scan viewport by hit-test
+                // 4) Last-resort fallback: scan viewport by hit-test
                 int byHitTestScan = FindTopLeftByHitTestScan(total);
-                if (byHitTestScan >= 0) return byHitTestScan;
+                if (byHitTestScan >= 0) { LastTopIndex = byHitTestScan; return byHitTestScan; }
 
-                // 4) Last fallback
-                LastTopIndex = (top >= 0 && top < total) ? top : -1;
+                // 5) Absolute fallback
+                LastTopIndex = 0;
                 return LastTopIndex;
             }
             finally
             {
                 Debug.WriteLine("ExpList: GetTopIndex End");
+            }
+        }
+
+        /// <summary>
+        /// Uses LVM_GETTOPINDEX to return the topmost visible item in Details/List views.
+        /// This is a single message call, O(1), and virtual-mode safe.
+        /// </summary>
+        private int FindTopLeftByTopIndex(int total)
+        {
+            Debug.WriteLine("ExpList: FindTopLeftByTopIndex Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            try
+            {
+                int idx = (int)SendMessage(_ListView.Handle, LVM_GETTOPINDEX, IntPtr.Zero, IntPtr.Zero);
+                if (idx >= 0 && idx < total) return idx;
+                return -1;
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: FindTopLeftByTopIndex End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            }
+        }
+
+        /// <summary>
+        /// Computes the top-left visible item for icon-grid views (SmallIcon, LargeIcon, Tile)
+        /// from the viewport scroll origin (LVM_GETORIGIN) and the per-item cell spacing
+        /// (LVM_GETITEMSPACING). Two message calls, O(1), virtual-mode safe.
+        /// </summary>
+        private int FindTopLeftByOrigin(int total)
+        {
+            Debug.WriteLine("ExpList: FindTopLeftByOrigin Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            try
+            {
+                POINT origin = new POINT();
+                IntPtr res = SendMessage(_ListView.Handle, LVM_GETORIGIN, IntPtr.Zero, ref origin);
+                if (res == IntPtr.Zero) return -1; // message unsupported / failed
+
+                bool largeIcon = (_ListView.View == View.LargeIcon);
+                int packed = (int)SendMessage(_ListView.Handle, LVM_GETITEMSPACING,
+                    largeIcon ? IntPtr.Zero : (IntPtr)1, IntPtr.Zero);
+                int cellW = packed & 0xFFFF;
+                int cellH = (packed >> 16) & 0xFFFF;
+
+                if (cellW <= 0 || cellH <= 0) return -1;
+
+                int vw = Math.Max(1, _ListView.ClientSize.Width);
+                int cols = Math.Max(1, (int)Math.Ceiling(vw / (double)cellW));
+
+                int row = Math.Max(0, origin.y / cellH);
+                int col = Math.Max(0, origin.x / cellW);
+
+                int idx = row * cols + col;
+                if (idx < 0 || idx >= total) return -1;
+                return idx;
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: FindTopLeftByOrigin End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            }
+        }
+
+        /// <summary>
+        /// Single LVM_HITTEST probe near the top-left of the client area. One message call,
+        /// O(1). Used as a fast fallback when the grid-math path is unavailable for icon views.
+        /// </summary>
+        private int FindTopLeftBySingleHitTest(int total)
+        {
+            Debug.WriteLine("ExpList: FindTopLeftBySingleHitTest Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            try
+            {
+                var client = _ListView.ClientRectangle;
+                if (client.Width <= 0 || client.Height <= 0) return -1;
+
+                int half = Math.Max(3, GetSizeForDisplayMode() / 2);
+
+                // Probe a small fixed set of points just inside the top-left corner.
+                int[] xs = { half / 2, half, half + half / 2 };
+                int[] ys = { half / 2, half, half + half / 2 };
+
+                int bestIndex = -1;
+                int bestTop = int.MaxValue;
+                int bestLeft = int.MaxValue;
+
+                foreach (int y in ys)
+                {
+                    if (y >= client.Height) break;
+                    foreach (int x in xs)
+                    {
+                        if (x >= client.Width) break;
+                        int idx = HitTestIndex(x, y);
+                        if (idx < 0 || idx >= total) continue;
+
+                        RECT rc = new RECT { left = LVIR_BOUNDS };
+                        if (SendMessage(_ListView.Handle, LVM_GETITEMRECT, (IntPtr)idx, ref rc) != IntPtr.Zero)
+                        {
+                            if (rc.top < bestTop || (rc.top == bestTop && rc.left < bestLeft))
+                            {
+                                bestTop = rc.top;
+                                bestLeft = rc.left;
+                                bestIndex = idx;
+                            }
+                        }
+                        else if (bestIndex < 0)
+                        {
+                            bestIndex = idx;
+                            bestTop = y;
+                            bestLeft = x;
+                        }
+                    }
+                }
+
+                return bestIndex;
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: FindTopLeftBySingleHitTest End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             }
         }
 
@@ -1272,7 +1428,12 @@ namespace ExpControlsLib
             }
         }
 
-        private int FindTopLeftByHitTestScan(int total)
+        /// <summary>
+        /// Tries to find the first item visible in the ListView's current viewport.  Works in both list and icon view modes.
+        /// </summary>
+        /// <param name="listCount">the number of items in the listview</param>
+        /// <returns>index number of what is believed to be the first top-left most item.</returns>
+        private int FindTopLeftByHitTestScan(int listCount)
         {
             Debug.WriteLine("ExpList: FindTopLeftByHitTestScan Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             try
@@ -1292,7 +1453,7 @@ namespace ExpControlsLib
                     for (int x = 0; x < client.Width; x += step)
                     {
                         int idx = HitTestIndex(x, y);
-                        if (idx < 0 || idx >= total) continue;
+                        if (idx < 0 || idx >= listCount) continue;
 
                         RECT rc = new RECT { left = LVIR_BOUNDS };
                         if (SendMessage(_ListView.Handle, LVM_GETITEMRECT, (IntPtr)idx, ref rc) != IntPtr.Zero)

@@ -104,6 +104,11 @@ namespace ExpControlsLib
         // image list while the OS is in the middle of a draw cycle (e.g. RetrieveVirtualItem).
         private int _imageListMutationDepth = 0;
         private readonly Queue<(object? sender, ThumbnailReadyEventArgs e)> _deferredThumbnailUpdates = new();
+        // Tracks whether a deferred-drain message has been posted to the UI message pump.
+        // Ensures the drain runs on a clean pump cycle (not reentrantly on the
+        // RetrieveVirtualItem / paint call stack) so that RedrawItems calls issued
+        // by the drain are not coalesced away by the control's in-flight draw.
+        private bool _drainScheduled = false;
 
         private bool IsInDesignMode => (DesignMode || LicenseManager.UsageMode == LicenseUsageMode.Designtime);
 
@@ -740,6 +745,7 @@ namespace ExpControlsLib
                 // Setup Drag and Drop Wrappers
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Setting up drag/drop...");
                 DW = new CDragWrapper(_listView);
+                DW.DragStart += DW_DragStart;
                 DW.DragEnd += DW_DragEnd;
                 DropWrap = new ClvDropWrapper(_listView);
 
@@ -2620,8 +2626,15 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Decrements the image list mutation depth counter. When it reaches 0, 
-        /// any deferred thumbnail updates are drained and applied.
+        /// Decrements the image list mutation depth counter. When it reaches 0,
+        /// any deferred thumbnail updates are drained. The drain is posted to the
+        /// UI message pump via <see cref="BeginInvoke(Action)"/> rather than run
+        /// inline, so it executes on a clean pump cycle outside of any in-flight
+        /// <c>RetrieveVirtualItem</c> / WM_PAINT call stack. This prevents
+        /// <see cref="System.Windows.Forms.ListView.RedrawItems"/> calls issued by
+        /// the drain from being coalesced away by the ListView's reentrant draw,
+        /// which previously left thumbnails visually blank until a click forced a
+        /// synchronous repaint.
         /// Must be paired with <see cref="EnterImageListMutation"/>.
         /// </summary>
         internal void ExitImageListMutation()
@@ -2630,16 +2643,40 @@ namespace ExpControlsLib
             if (_imageListMutationDepth <= 0)
             {
                 _imageListMutationDepth = 0;
-                DrainDeferredThumbnailUpdates();
+                ScheduleDeferredThumbnailDrain();
             }
         }
 
         /// <summary>
+        /// Schedules a single <see cref="DrainDeferredThumbnailUpdates"/> call on the
+        /// UI thread's message pump. If a drain is already scheduled, this is a no-op,
+        /// so callers may invoke it freely without flooding the message queue.
+        /// </summary>
+        private void ScheduleDeferredThumbnailDrain()
+        {
+            if (_drainScheduled) return;
+            if (_deferredThumbnailUpdates.Count == 0) return;
+            if (IsDisposed || !IsHandleCreated) return;
+
+            _drainScheduled = true;
+            BeginInvoke(new Action(() =>
+            {
+                _drainScheduled = false;
+                DrainDeferredThumbnailUpdates();
+            }));
+        }
+
+        /// <summary>
         /// Processes all deferred thumbnail updates that were queued while an image list 
-        /// mutation guard was active.
+        /// mutation guard was active. Must run on the UI thread outside of any ListView
+        /// draw/retrieve callback; use <see cref="ScheduleDeferredThumbnailDrain"/> to
+        /// enqueue it safely.
         /// </summary>
         private void DrainDeferredThumbnailUpdates()
         {
+            // Drain in a loop so that any updates deferred by re-entrancy during the
+            // drain itself (e.g. if a RetrieveVirtualItem fires while we are mutating
+            // the image list) are also processed before we return.
             while (_deferredThumbnailUpdates.Count > 0)
             {
                 var (sender, e) = _deferredThumbnailUpdates.Dequeue();
@@ -3013,6 +3050,11 @@ namespace ExpControlsLib
             }
         }
 
+        private void DW_DragStart(object? sender, DragStartEventArgs e)
+        {
+            _listView.SelectedIndices.Clear();
+        }
+
         private void DW_DragEnd(object? sender, DragEndEventArgs e)
         {
             // Remove items that were dragged away from this folder.
@@ -3158,6 +3200,18 @@ namespace ExpControlsLib
                 return;
             }
 
+            if (e.Size != GetThumbnailSizeForMode()) // if the display mode is changed, the thumbnail will have the wrong size. Discard.
+            {
+                e.Thumbnail?.Dispose();
+                return;
+            }
+
+            if (e.Item == null || e.Item.Parent == null || e.Item.Parent.FullPath != CurrentPath)
+            {
+                e.Thumbnail?.Dispose();
+                return;
+            }
+
             // If a draw cycle or another mutation is in progress, defer this update.
             if (_imageListMutationDepth > 0)
             {
@@ -3165,22 +3219,10 @@ namespace ExpControlsLib
                 return;
             }
 
-            EnterImageListMutation();
+            int image_index = -1;
             try
             {
-                if (e.Size != GetThumbnailSizeForMode()) // if the display mode is changed, the thumbnail will have the wrong size. Discard.
-                {
-                    e.Thumbnail?.Dispose();
-                    return;
-                }
-
-                if (e.Item == null || e.Item.Parent == null || e.Item.Parent.FullPath != CurrentPath)
-                {
-                    e.Thumbnail?.Dispose();
-                    return;
-                }
-
-                int image_index = -1;
+                EnterImageListMutation();
                 if (e.Thumbnail != null)
                 {
                     using (var bitmap = (Bitmap)e.Thumbnail)
@@ -3192,40 +3234,40 @@ namespace ExpControlsLib
                 {
                     image_index = _thumbnailManager.AddThumbnail(e, null);
                 }
-
-                if (image_index == -1)
-                {
-                    // Failed to add thumbnail, likely due to disposal or mode change. Just exit.
-                    Debug.WriteLine("Failed to add thumbnail for item: " + e.Item.DisplayName);
-                    return;
-                }
-
-                if (VirtualMode)
-                {
-                    lock (_listViewWrapper.MasterItems)
-                    {
-                        int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
-                        if (index == -1)
-                        {
-                            // Failed to find item in listview, possibly due to deletion or move. Just exit.
-                            Debug.WriteLine("Failed to find the item in the listview: " + e.Item.DisplayName);
-                            return;
-                        }
-                        _listViewWrapper.GetItem(index).ImageIndex = image_index;
-                        //Debug.WriteLine("Redrawing: " + e.Item.DisplayName);
-                        _listViewWrapper._ListView.RedrawItems(index, index, false);
-                    }
-                }
-                else
-                {
-                    int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
-                    var lvi = _listViewWrapper.GetItem(index);
-                    if (lvi != null) lvi.ImageIndex = image_index;
-                }
             }
             finally
             {
                 ExitImageListMutation();
+            }
+
+            if (image_index == -1)
+            {
+                // Failed to add thumbnail, likely due to disposal or mode change. Just exit.
+                Debug.WriteLine("Failed to add thumbnail for item: " + e.Item.DisplayName);
+                return;
+            }
+
+            if (VirtualMode)
+            {
+                lock (_listViewWrapper.MasterItems)
+                {
+                    int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
+                    if (index == -1)
+                    {
+                        // Failed to find item in listview, possibly due to deletion or move. Just exit.
+                        Debug.WriteLine("Failed to find the item in the listview: " + e.Item.DisplayName);
+                        return;
+                    }
+                    _listViewWrapper.GetItem(index).ImageIndex = image_index;
+                    //Debug.WriteLine("Redrawing: " + e.Item.DisplayName);
+                    _listViewWrapper._ListView.RedrawItems(index, index, false);
+                }
+            }
+            else
+            {
+                int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
+                var lvi = _listViewWrapper.GetItem(index);
+                if (lvi != null) lvi.ImageIndex = image_index;
             }
 
         }
@@ -3634,7 +3676,7 @@ namespace ExpControlsLib
                 }
                 else //custom thumbnail view modes
                 {
-                    EnterListViewEnumeration();
+                    //EnterListViewEnumeration();
                     try
                     {
                         EnterImageListMutation();
@@ -3649,7 +3691,7 @@ namespace ExpControlsLib
                     }
                     finally
                     {
-                        ExitListViewEnumeration();
+                        //ExitListViewEnumeration();
                     }
                 }
             }

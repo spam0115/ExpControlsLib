@@ -251,6 +251,8 @@ namespace WindowsApiLib.Shell
                 else
                 {
                     if (parent is null) throw new ArgumentException("parent can't be null when pidl is not absolute.");
+                    
+
                     fullPidl = CPidl.Concatenate(parent.PIDL, pidl);
                 }
             }
@@ -373,28 +375,33 @@ namespace WindowsApiLib.Shell
         }
 
         /// <summary>
-        /// Returns the requested Items of this Folder as a List of relative PIDLs 
+        /// Returns the requested Items of this Folder as a List of relative or full PIDLs 
         /// (caller must free the pidls after use).
         /// </summary>
         /// <param name="flags">A set of one or more SHCONTF flags indicating which items to return</param>
         /// <returns>On error, returns an empty (count=0) List. Otherwise, returns the relative PIDLs of
         /// the requested (via flags param) items in this Folder.</returns>
-        public static List<IntPtr> GetChildPidls(CShellItem csi, SHCONTF flags)
+        public static List<IntPtr> GetChildPidls(CShellItem csi, SHCONTF flags, bool fullPidls = false)
         {
             const uint BATCH_SIZE = 64; //this always only fetches 1 pidl at a time
             bool includeFolders = (flags & SHCONTF.FOLDERS) != 0;
             bool includeNonFolders = (flags & SHCONTF.NONFOLDERS) != 0;
 
-            List<IntPtr> listPidls = new List<IntPtr>(0);
-            int HR;
-            IEnumIDList IEnum = null;
+            List<IntPtr> results = new List<IntPtr>(0);
+            if (!includeFolders && !includeNonFolders) //nonsense flags
+            {
+                return results;
+            }
 
-            listPidls = new List<IntPtr>();
+            int hr;
+            IEnumIDList enumerator = null;
+
+            results = new List<IntPtr>();
 
             //IShellFolder iShellFolder = csi.IShlFolder;
-            IShellFolder iShellFolder = ShellHelper.GetIShellFolder(csi.PIDL);
+            IShellFolder parentIShellFolder = ShellHelper.GetIShellFolder(csi.PIDL);
 
-            if (iShellFolder is null)
+            if (parentIShellFolder is null)
             {
                 //i think there is a bug wherein we are storing a pidl that is actually OS owned and sometimes it can be released by the OS before the current point in code.
                 Debugger.Break(); 
@@ -402,9 +409,9 @@ namespace WindowsApiLib.Shell
 
             try
             {
-                HR = iShellFolder.EnumObjects(0, flags, out IEnum);
-                if (HR != S_OK)
-                    return listPidls;
+                hr = parentIShellFolder.EnumObjects(0, flags, out enumerator);
+                if (hr != S_OK)
+                    return results;
 
                 IntPtr[] batch = new IntPtr[BATCH_SIZE];
                 uint fetched = 0;
@@ -412,23 +419,23 @@ namespace WindowsApiLib.Shell
                 while (true)
                 {
                     // IMPORTANT: This assumes your interop signature supports array/batch Next (see note below).
-                    HR = IEnum.Next(BATCH_SIZE, batch, out fetched);
+                    hr = enumerator.Next(BATCH_SIZE, batch, out fetched);
 
                     //Console.WriteLine($"\tfetched {fetched.ToString()} pidls.");
 
                     // Any COM error besides S_FALSE(end) should go to error path.
-                    if (HR != S_OK && HR != S_FALSE) // UPDATE: Vista and above strictly respect the SHCONTF flags. The "flags" param is now used only to determine what user wants
+                    if (hr != S_OK && hr != S_FALSE) // UPDATE: Vista and above strictly respect the SHCONTF flags. The "flags" param is now used only to determine what user wants
                     {
                         // Sharepoint folders return this at the end of the enum
-                        if (HR == unchecked((int)0x80004005))
+                        if (hr == unchecked((int)0x80004005))
                             break;
-                        else if (HR == -2147417848) //RPC_E_DISCONNECTED
+                        else if (hr == -2147417848) //RPC_E_DISCONNECTED
                             break;
                         else break;
                     }
 
                     // S_FALSE means end of enumeration (possibly with a short final batch already processed).
-                    if (HR == S_FALSE)
+                    if (hr == S_FALSE)
                         break;
 
                     // Defensive guard against unusual providers returning S_OK with 0 items.
@@ -438,27 +445,45 @@ namespace WindowsApiLib.Shell
                     // Handle partial batches (fetched may be < BATCH_SIZE).
                     for (uint i = 0; i < fetched; i++)
                     {
-                        IntPtr ptr = batch[i];
+                        IntPtr pidlChild = batch[i];
                         batch[i] = IntPtr.Zero; // clear slot immediately
 
-                        if (ptr == IntPtr.Zero)
+                        if (pidlChild == IntPtr.Zero)
                             continue;
 
-                        if (!includeFolders && !includeNonFolders)
-                        {
-                            Marshal.FreeCoTaskMem(ptr);
+                        // get a full pidl if desired
+                        IntPtr finalPidl = pidlChild;
+                        if (fullPidls) { 
+                            Object shellItem;
+                            hr = SHCreateItemWithParent(
+                                IntPtr.Zero,
+                                parentIShellFolder,
+                                pidlChild,
+                                ref IID_IShellItem,
+                                out shellItem);
+
+                            if (hr == 0 && shellItem != null)
+                            {
+                                // 5. Extract the full absolute PIDL from the IShellItem
+                                hr = SHGetIDListFromObject(shellItem, out finalPidl);
+                                if (hr == 0 && finalPidl != IntPtr.Zero)
+                                    results.Add(finalPidl);
+                            }
+
+                            Marshal.FreeCoTaskMem(pidlChild);
                         }
-                        else if (includeFolders && includeNonFolders)
+
+                        if (includeFolders && includeNonFolders)
                         {
-                            listPidls.Add(ptr);
+                            results.Add(finalPidl);
                         }
                         else // Only one category is allowed; now we need to know what this item is.
                         {
-                            bool itemIsFolder = IsFolderRel(iShellFolder, ptr); // only when needed
+                            bool itemIsFolder = IsFolderRel(parentIShellFolder, pidlChild); // only when needed
                             if ((itemIsFolder && !includeFolders) || (!itemIsFolder && !includeNonFolders))
-                                Marshal.FreeCoTaskMem(ptr);
+                                Marshal.FreeCoTaskMem(finalPidl);
                             else
-                                listPidls.Add(ptr);
+                                results.Add(finalPidl);
                         }
                     }
                 }
@@ -469,11 +494,11 @@ namespace WindowsApiLib.Shell
             }
             finally
             {
-                if (IEnum != null)
-                    Marshal.ReleaseComObject(IEnum);
-                Marshal.ReleaseComObject(iShellFolder);
+                if (enumerator != null)
+                    Marshal.ReleaseComObject(enumerator);
+                Marshal.ReleaseComObject(parentIShellFolder);
             }
-            return listPidls;
+            return results;
         }
 
         /// <summary>
@@ -485,12 +510,15 @@ namespace WindowsApiLib.Shell
             if (!csi.IsFolder) return null;
 
 
-            Debug.WriteLine($"Getting contents for folder '{csi.FullPath}'.");
+            Debug.WriteLine($"CShellItemFactory: Getting contents for folder '{csi.FullPath}'.");
 
+            //var pidls = CShellItemFactory.GetChildPidls(csi, flags, true);
             var pidls = CShellItemFactory.GetChildPidls(csi, flags);
             var items = new List<CShellItem>(pidls.Count);
 
             Debug.WriteLine("\tCreating " + pidls.Count() + " cshellitems...");
+            var parentIshellfolder = csi.GetIShellFolder();
+
             foreach (IntPtr pidl in pidls)
             {
                 if (pidl == IntPtr.Zero)
@@ -501,8 +529,10 @@ namespace WindowsApiLib.Shell
                 }
                 else
                 {
+                    //var tmpCsi = CShellItemFactory.Create(pidl, csi);
                     var tmpCsi = CShellItemFactory.Create(pidl, csi);
                     items.Add(tmpCsi);
+                    Marshal.FreeCoTaskMem(pidl);
                 }
             }
 

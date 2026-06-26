@@ -1122,15 +1122,31 @@
         </member>
         <member name="M:ExpControlsLib.ExpList.ExitImageListMutation">
             <summary>
-            Decrements the image list mutation depth counter. When it reaches 0, 
-            any deferred thumbnail updates are drained and applied.
+            Decrements the image list mutation depth counter. When it reaches 0,
+            any deferred thumbnail updates are drained. The drain is posted to the
+            UI message pump via <see cref="!:BeginInvoke(Action)"/> rather than run
+            inline, so it executes on a clean pump cycle outside of any in-flight
+            <c>RetrieveVirtualItem</c> / WM_PAINT call stack. This prevents
+            <see cref="M:System.Windows.Forms.ListView.RedrawItems(System.Int32,System.Int32,System.Boolean)"/> calls issued by
+            the drain from being coalesced away by the ListView's reentrant draw,
+            which previously left thumbnails visually blank until a click forced a
+            synchronous repaint.
             Must be paired with <see cref="M:ExpControlsLib.ExpList.EnterImageListMutation"/>.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ScheduleDeferredThumbnailDrain">
+            <summary>
+            Schedules a single <see cref="M:ExpControlsLib.ExpList.DrainDeferredThumbnailUpdates"/> call on the
+            UI thread's message pump. If a drain is already scheduled, this is a no-op,
+            so callers may invoke it freely without flooding the message queue.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.DrainDeferredThumbnailUpdates">
             <summary>
             Processes all deferred thumbnail updates that were queued while an image list 
-            mutation guard was active.
+            mutation guard was active. Must run on the UI thread outside of any ListView
+            draw/retrieve callback; use <see cref="M:ExpControlsLib.ExpList.ScheduleDeferredThumbnailDrain"/> to
+            enqueue it safely.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.InvokeWhenListViewReady(System.Action)">
@@ -2919,6 +2935,12 @@
             </summary>
             <returns>True if in a thumbnail view mode.</returns>
         </member>
+        <member name="F:ExpControlsLib.VirtualListViewWrapper._lastTopIndexDate">
+            <summary>
+            Cache the last top index value for a short period of time because windows will sometimes 
+            ask for it repeatedly.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.GetTopIndex">
             <summary>
             Returns a "top-like" index for any ListView mode.
@@ -2926,6 +2948,32 @@
             - LargeIcon/SmallIcon/Tile: top-left visible item index
             Works in virtual and non-virtual mode.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.FindTopLeftByTopIndex(System.Int32)">
+            <summary>
+            Uses LVM_GETTOPINDEX to return the topmost visible item in Details/List views.
+            This is a single message call, O(1), and virtual-mode safe.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.FindTopLeftByOrigin(System.Int32)">
+            <summary>
+            Computes the top-left visible item for icon-grid views (SmallIcon, LargeIcon, Tile)
+            from the viewport scroll origin (LVM_GETORIGIN) and the per-item cell spacing
+            (LVM_GETITEMSPACING). Two message calls, O(1), virtual-mode safe.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.FindTopLeftBySingleHitTest(System.Int32)">
+            <summary>
+            Single LVM_HITTEST probe near the top-left of the client area. One message call,
+            O(1). Used as a fast fallback when the grid-math path is unavailable for icon views.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.FindTopLeftByHitTestScan(System.Int32)">
+            <summary>
+            Tries to find the first item visible in the ListView's current viewport.  Works in both list and icon view modes.
+            </summary>
+            <param name="listCount">the number of items in the listview</param>
+            <returns>index number of what is believed to be the first top-left most item.</returns>
         </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.GetSizeForDisplayMode">
             <summary>

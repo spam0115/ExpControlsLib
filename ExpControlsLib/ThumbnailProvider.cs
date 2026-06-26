@@ -240,13 +240,19 @@ namespace ExpControlsLib
                 {
                     if (magickImage != null)
                     {
-                        // Store in cache as raw PArgb bytes to maintain compatibility with BytesToBitmap
+                        // Create the Bitmap FIRST, while the image still has straight
+                        // (non-premultiplied) alpha. MagickImage.ToBitmap() returns a
+                        // Format32bppArgb bitmap, which expects straight-alpha pixel data.
+                        // Calling this after Alpha(Associate) would embed premultiplied
+                        // data in a straight-alpha-format bitmap, causing partially-
+                        // transparent pixels (e.g. anti-aliased edges) to render too dark.
+                        thumbnail = magickImage.ToBitmap();
+
+                        // Store in cache as premultiplied BGRA bytes, paired with
+                        // BytesToBitmap's Format32bppPArgb for correct round-tripping.
                         magickImage.Alpha(AlphaOption.Associate);
                         byte[] bytes = magickImage.ToByteArray(MagickFormat.Bgra);
                         _thumbnailCache.TryAdd(ConstructCacheKey(request.Item.FullPath, request.Size), bytes);
-
-                        // Final output stage: convert to Bitmap
-                        thumbnail = magickImage.ToBitmap();
                     }
                 }
 

@@ -896,6 +896,84 @@ namespace WindowsApiLib.Shell
         );
 
         /// <summary>
+        /// Creates an <see cref="IShellItem"/> for a child item given its parent folder and relative PIDL.
+        /// This is the preferred shell-validated alternative to <c>ILCombine</c> for constructing
+        /// absolute shell items from a parent/child pair.
+        /// </summary>
+        /// <param name="pidlParent">
+        /// An absolute PIDL of the parent folder. Can be <see cref="IntPtr.Zero"/> if
+        /// <paramref name="psfParent"/> is provided instead.
+        /// </param>
+        /// <param name="psfParent">
+        /// The <c>IShellFolder</c> interface of the parent folder. Can be <c>null</c> if
+        /// <paramref name="pidlParent"/> is provided instead. If both are provided,
+        /// <paramref name="psfParent"/> takes precedence.
+        /// </param>
+        /// <param name="pidlChild">
+        /// A relative PIDL identifying the child item within the parent folder.
+        /// Typically obtained from <c>IShellFolder::EnumObjects</c> or <c>IShellFolder::ParseDisplayName</c>.
+        /// </param>
+        /// <param name="riid">
+        /// The IID of the interface to retrieve. Typically <c>IID_IShellItem</c>
+        /// (<c>43826D1E-E718-42EE-BC55-A1E261C37BFE</c>).
+        /// </param>
+        /// <param name="ppvItem">
+        /// When this method returns, contains the requested interface pointer for the child shell item.
+        /// The caller is responsible for releasing this object.
+        /// </param>
+        /// <returns>
+        /// Returns <c>S_OK</c> (0) on success, or a COM error <c>HRESULT</c> on failure.
+        /// Common failure codes include <c>E_INVALIDARG</c> if both parent parameters are <c>null</c>/zero,
+        /// or <c>E_NOINTERFACE</c> if the requested interface is not supported.
+        /// </returns>
+        /// <remarks>
+        /// Requires Windows Vista or later.
+        /// At least one of <paramref name="pidlParent"/> or <paramref name="psfParent"/> must be provided.
+        /// Unlike <c>ILCombine</c>, this function is namespace-aware and validates that the child
+        /// item belongs to the given parent, making it the safer choice for constructing shell items.
+        /// </remarks>
+        [DllImport("shell32.dll")]
+        public static extern int SHCreateItemWithParent(
+            IntPtr pidlParent,
+            [MarshalAs(UnmanagedType.IUnknown)] object psfParent,
+            IntPtr pidlChild,
+            ref Guid riid,
+            [MarshalAs(UnmanagedType.IUnknown)] out object ppvItem);
+
+        /// <summary>
+        /// Retrieves the absolute PIDL (<c>PIDLIST_ABSOLUTE</c>) for a shell object that
+        /// implements <c>IPersistIDList</c> or <c>IPersistFolder2</c>, such as an
+        /// <c>IShellItem</c> or <c>IShellFolder</c>.
+        /// </summary>
+        /// <param name="punk">
+        /// The COM object from which to retrieve the PIDL. Must implement either
+        /// <c>IPersistIDList</c> or <c>IPersistFolder2</c>. Commonly an <c>IShellItem</c>
+        /// or <c>IShellFolder</c> instance.
+        /// </param>
+        /// <param name="ppidl">
+        /// When this method returns, contains the absolute PIDL representing the full
+        /// path of the shell object from the desktop root. The caller is responsible
+        /// for freeing this PIDL using <c>ILFree</c> or <c>CoTaskMemFree</c>.
+        /// Set to <see cref="IntPtr.Zero"/> on failure.
+        /// </param>
+        /// <returns>
+        /// Returns <c>S_OK</c> (0) on success, or a COM error <c>HRESULT</c> on failure.
+        /// Returns <c>E_NOINTERFACE</c> if <paramref name="punk"/> does not implement
+        /// <c>IPersistIDList</c> or <c>IPersistFolder2</c>.
+        /// </returns>
+        /// <remarks>
+        /// Requires Windows Vista or later.
+        /// This is the preferred way to obtain an absolute PIDL from a COM shell object,
+        /// as it works with any object that supports <c>IPersistIDList</c> — including
+        /// <c>IShellItem</c>, <c>IShellFolder</c>, and custom namespace extension objects.
+        /// The returned PIDL must always be freed by the caller to avoid memory leaks.
+        /// </remarks>
+        [DllImport("shell32.dll")]
+        public static extern int SHGetIDListFromObject(
+            [MarshalAs(UnmanagedType.IUnknown)] object punk,
+            out IntPtr ppidl);
+
+        /// <summary>
         /// Retrieves the display name of a Shell item identified by its PIDL.
         /// </summary>
         /// <param name="pidl">The PIDL of the item.</param>
@@ -1134,6 +1212,10 @@ namespace WindowsApiLib.Shell
         /// <inheritdoc cref="SendMessage(IntPtr, uint, int, int)" />
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref LVHITTESTINFO lParam);
+
+        /// <inheritdoc cref="SendMessage(IntPtr, uint, int, int)" />
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref POINT lParam);
 
         /// <summary>
         /// Retrieves the current position of a scrollbar thumb in the specified window.

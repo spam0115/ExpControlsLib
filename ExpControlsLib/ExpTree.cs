@@ -2130,17 +2130,17 @@ namespace ExpControlsLib
             if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
             _shellController.EnsureChildrenPopulated(csi, flags);
 
-            var D = csi.Directories;
+            var dirs = csi.Directories;
 
-            if (D.Count > 0)
+            if (dirs.Count > 0)
             {
-                D.Sort();
+                dirs.Sort();
                 NodeToFill.Nodes.Clear();
-                foreach (CShellItem Item in D)
+                foreach (CShellItem item in dirs)
                 {
-                    if (!(Item.IsHidden & !m_showHiddenFolders) && !IsExcluded(Item))
+                    if (!(item.IsHidden & !m_showHiddenFolders) && !IsExcluded(item))
                     {
-                        NodeToFill.Nodes.Add(MakeNode(Item));
+                        NodeToFill.Nodes.Add(MakeNode(item));
                     }
                 }
             }
