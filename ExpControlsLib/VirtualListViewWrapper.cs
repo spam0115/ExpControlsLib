@@ -836,6 +836,21 @@ namespace ExpControlsLib
         }
 
         /// <summary>
+        /// Returns true if the given item index is within the currently visible
+        /// viewport. Uses <see cref="GetTopIndex"/> + <see cref="GetApproxVisibleCount"/>,
+        /// which is O(1) and works in virtual mode without realizing items.
+        /// Used to prevent LRU eviction of on-screen thumbnails.
+        /// </summary>
+        public bool IsItemVisible(int index)
+        {
+            if (index < 0) return false;
+            int top = GetTopIndex();
+            if (top < 0) return false;
+            int visible = GetApproxVisibleCount();
+            return index >= top && index < top + visible;
+        }
+
+        /// <summary>
         /// Invalidates the image indices of all virtual items and cached ListViewItems.
         /// This is necessary when switching between display modes to ensure that the correct
         /// icons or thumbnails are loaded for the current view.
@@ -921,15 +936,14 @@ namespace ExpControlsLib
             {
                 if (_itemCache.TryGetValue(index, out var lvi))
                 {
-                    // Sync ImageIndex if it was updated in the background while item was cached
-                    if (lvi.ImageIndex == -1)
+                    // Sync ImageIndex if it was updated in the background while item was cached.
+                    // Bidirectional: also pick up when item.ImageIndex has been reset to -1
+                    // (e.g. by LRU eviction in ThumbnailImageListManager) so that the cached
+                    // lvi doesn't keep pointing at a slot whose image has been replaced by
+                    // another item's thumbnail.
+                    if (lvi.ImageIndex != item.ImageIndex)
                     {
-                        if (item.ImageIndex > -1)
-                            lvi.ImageIndex = item.ImageIndex;
-                        else
-                        {
-                            //don't create the thumbnail yet because windows will ask for items that aren't even on the screen.
-                        }
+                        lvi.ImageIndex = item.ImageIndex;
                     }
                     
                     return lvi;

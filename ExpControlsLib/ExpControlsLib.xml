@@ -1069,6 +1069,12 @@
             <param name="fullPath">The full path identifying the item to look up.</param>
             <returns>The zero-based index of the item if found; otherwise -1.</returns>
         </member>
+        <member name="M:ExpControlsLib.ExpList.IsItemVisible(System.Int32)">
+            <summary>
+            Returns true if the item at the given index is within the currently
+            visible viewport. See <see cref="M:ExpControlsLib.VirtualListViewWrapper.IsItemVisible(System.Int32)"/>.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ExpList.FindItemByName(System.String)">
             <summary>
             Finds a ListViewItem by its display name (case-insensitive).
@@ -2892,6 +2898,14 @@
             </summary>
             <param name="column">The column index.</param>
             <param name="order">The sort order.</param>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.IsItemVisible(System.Int32)">
+            <summary>
+            Returns true if the given item index is within the currently visible
+            viewport. Uses <see cref="M:ExpControlsLib.VirtualListViewWrapper.GetTopIndex"/> + <see cref="M:ExpControlsLib.VirtualListViewWrapper.GetApproxVisibleCount"/>,
+            which is O(1) and works in virtual mode without realizing items.
+            Used to prevent LRU eviction of on-screen thumbnails.
+            </summary>
         </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.InvalidateVirtualItemImagesIndexes">
             <summary>

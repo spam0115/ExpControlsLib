@@ -29,6 +29,13 @@ namespace ExpControlsLib
         // A bool to indicate whether this class has been disposed
         private bool disposed = false;
 
+        // Reentrancy guard: DoDragDrop runs a modal message loop that pumps pending
+        // BeginInvoke callbacks. A second StartDragInternal queued before the drag
+        // started would otherwise reenter while the first DoDragDrop is still on the
+        // stack, releasing the in-use IDataObject / IDropTarget and corrupting the
+        // COM apartment (System.ExecutionEngineException).
+        private bool m_IsDragging = false;
+
         // Deferral fields
         private object? m_PendingItem;
         private MouseButtons m_PendingButton;
@@ -147,90 +154,97 @@ namespace ExpControlsLib
 
         private void StartDragInternal(object? sender, object? itemToDrag, MouseButtons button)
         {
-            ReleaseCom();
-            startButton = button;
-
-            CShellItem item;
-            CShellItem[] itemsToReport;
-            if (isTreeView) // Can only drag 1 Item
+            if (m_IsDragging) return;          // block reentrancy while DoDragDrop pumps messages
+            m_IsDragging = true;
+            try
             {
-                item = (itemToDrag as TreeNode)?.Tag as CShellItem;
-                if (item == null)
-                    return;
+                ReleaseCom();
+                startButton = button;
 
-                itemsToReport = new[] { item };
-                dataObjectPtr = ShellHelper.GetIDataObject(itemsToReport);
-            }
-            else // ListView may have more than one item to drag
-            {
-                var ctl = (ListView)m_Client;
-                if (ctl.SelectedIndices.Count == 0) return;
-
-                var items = new CShellItem[ctl.SelectedIndices.Count];
-
-                // Get first item to establish parent
-                CShellItem firstItem = null;
-                if (ctl.Parent is ExpList expList)
+                CShellItem item;
+                CShellItem[] itemsToReport;
+                if (isTreeView) // Can only drag 1 Item
                 {
-                    firstItem = expList.GetItem(ctl.SelectedIndices[0]);
+                    item = (itemToDrag as TreeNode)?.Tag as CShellItem;
+                    if (item == null)
+                        return;
+
+                    itemsToReport = new[] { item };
+                    dataObjectPtr = ShellHelper.GetIDataObject(itemsToReport);
                 }
-                else if (!ctl.VirtualMode)
+                else // ListView may have more than one item to drag
                 {
-                    firstItem = ctl.Items[ctl.SelectedIndices[0]].Tag as CShellItem;
-                }
+                    var ctl = (ListView)m_Client;
+                    if (ctl.SelectedIndices.Count == 0) return;
 
-                if (firstItem == null) return;
-                var parent = firstItem.Parent;
+                    var items = new CShellItem[ctl.SelectedIndices.Count];
 
-                for (int i = 0; i < ctl.SelectedIndices.Count; i++)
-                {
-                    int index = ctl.SelectedIndices[i];
-                    CShellItem itemTag = null;
-                    if (ctl.Parent is ExpList el)
+                    // Get first item to establish parent
+                    CShellItem firstItem = null;
+                    if (ctl.Parent is ExpList expList)
                     {
-                        itemTag = el.GetItem(index);
+                        firstItem = expList.GetItem(ctl.SelectedIndices[0]);
                     }
                     else if (!ctl.VirtualMode)
                     {
-                        itemTag = ctl.Items[index].Tag as CShellItem;
+                        firstItem = ctl.Items[ctl.SelectedIndices[0]].Tag as CShellItem;
                     }
 
-                    if (itemTag == null || !ReferenceEquals(parent, itemTag.Parent))
-                        return;
+                    if (firstItem == null) return;
+                    var parent = firstItem.Parent;
 
-                    items[i] = itemTag;
+                    for (int i = 0; i < ctl.SelectedIndices.Count; i++)
+                    {
+                        int index = ctl.SelectedIndices[i];
+                        CShellItem itemTag = null;
+                        if (ctl.Parent is ExpList el)
+                        {
+                            itemTag = el.GetItem(index);
+                        }
+                        else if (!ctl.VirtualMode)
+                        {
+                            itemTag = ctl.Items[index].Tag as CShellItem;
+                        }
+
+                        if (itemTag == null || !ReferenceEquals(parent, itemTag.Parent))
+                            return;
+
+                        items[i] = itemTag;
+                    }
+
+                    item = items[0];
+                    itemsToReport = items;
+                    dataObjectPtr = ShellHelper.GetIDataObject(itemsToReport);
                 }
 
-                item = items[0];
-                itemsToReport = items;
-                dataObjectPtr = ShellHelper.GetIDataObject(itemsToReport);
+                if (dataObjectPtr != IntPtr.Zero)
+                {
+                    DragDropEffects allowedEffects;
+                    DragDropEffects effects;
+                    CShellItem parent = item.Parent ?? item;
+
+                    if (m_Client is TreeView)
+                    {
+                        allowedEffects = DragDropEffects.Copy | DragDropEffects.Move;
+                    }
+                    else // must be ListView
+                    {
+                        allowedEffects = DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link;
+                    }
+
+                    // Right-button drags show a context menu at the drop target.
+                    // The shell builds the menu from allowedEffects (Move, Copy, etc.).
+                    // Keep the same allowed effects so the user gets both Move and Copy.
+
+                    DragStart?.Invoke(sender, new DragStartEventArgs(parent, m_Client));
+                    int hr = ShellAPI.DoDragDrop(dataObjectPtr, this, allowedEffects, out effects);
+                    bool dropCompleted = hr != ShellAPI.DRAGDROP_S_CANCEL;
+                    DragEnd?.Invoke(m_Client, new DragEndEventArgs(effects, itemsToReport, dropCompleted));
+                }
             }
-
-            if (dataObjectPtr != IntPtr.Zero)
+            finally
             {
-                DragDropEffects allowedEffects;
-                DragDropEffects effects;
-                CShellItem parent = item.Parent ?? item;
-
-                if (m_Client is TreeView)
-                {
-                    allowedEffects = DragDropEffects.Copy | DragDropEffects.Move;
-                }
-                else // must be ListView
-                {
-                    allowedEffects = DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link;
-                }
-
-                // Right-button drags perform a copy rather than the default move
-                if (button == MouseButtons.Right)
-                {
-                    allowedEffects = DragDropEffects.Copy;
-                }
-
-                DragStart?.Invoke(sender, new DragStartEventArgs(parent, m_Client));
-                int hr = ShellAPI.DoDragDrop(dataObjectPtr, this, allowedEffects, out effects);
-                bool dropCompleted = hr != ShellAPI.DRAGDROP_S_CANCEL;
-                DragEnd?.Invoke(m_Client, new DragEndEventArgs(effects, itemsToReport, dropCompleted));
+                m_IsDragging = false;
             }
         }
 

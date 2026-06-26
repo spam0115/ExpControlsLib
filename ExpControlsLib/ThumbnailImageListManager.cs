@@ -240,24 +240,53 @@ namespace ExpControlsLib
                     bool reused = false;
                     if (_lruKeys.Count >= _maxThumbnails)
                     {
-                        string oldestKey = _lruKeys.RemoveFirst();
-                        if (_slotByKey.TryGetValue(oldestKey, out var oldestSlot))
+                        // Evict the least-recently-used slot that is NOT currently visible.
+                        // Skipping visible items prevents the user from seeing a thumbnail
+                        // briefly replaced by another item's image. If no invisible candidate
+                        // can be found (e.g. the list is short enough to all fit on screen),
+                        // fall through to append a new slot instead.
+                        string? evictedKey = null;
+                        ThumbnailSlot? evictedSlot = null;
+
+                        while (_lruKeys.Count > 0)
                         {
-                            _slotByKey.Remove(oldestKey);
-                            if (oldestSlot.Item != null)
+                            string candidateKey = _lruKeys.RemoveFirst();
+                            if (!_slotByKey.TryGetValue(candidateKey, out var candidateSlot))
                             {
-                                oldestSlot.Item.ImageIndex = -1;
+                                // Orphaned LRU entry with no slot; drop it and continue.
+                                continue;
                             }
 
-                            index = oldestSlot.Index;
-                            oldestSlot.Item = reqArgs.Item;
-                            oldestSlot.Key = key;
+                            int itemIndex = _expList.GetIndexFromFullPath(candidateSlot.Item?.FullPath ?? string.Empty);
+                            if (itemIndex >= 0 && _expList.IsItemVisible(itemIndex))
+                            {
+                                // Visible — put back at the end (most-recently-used) and keep looking.
+                                _lruKeys.Add(candidateKey);
+                                continue;
+                            }
+
+                            evictedKey = candidateKey;
+                            evictedSlot = candidateSlot;
+                            break;
+                        }
+
+                        if (evictedSlot != null && evictedKey != null)
+                        {
+                            _slotByKey.Remove(evictedKey);
+                            if (evictedSlot.Item != null)
+                            {
+                                evictedSlot.Item.ImageIndex = -1;
+                            }
+
+                            index = evictedSlot.Index;
+                            evictedSlot.Item = reqArgs.Item;
+                            evictedSlot.Key = key;
 
                             lock (imageList)
                             {
                                 imageList.Images[index] = square;
                                 _lruKeys.Add(key);
-                                _slotByKey[key] = oldestSlot;
+                                _slotByKey[key] = evictedSlot;
                             }
                             reused = true;
                         }

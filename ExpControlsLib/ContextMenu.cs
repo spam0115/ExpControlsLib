@@ -89,6 +89,13 @@ namespace ExpControlsLib
         private readonly int max = 100000;
         private bool _disposed;
 
+        // Reentrancy guard: TrackPopupMenuEx runs a modal message loop that pumps
+        // pending BeginInvoke callbacks. A second ShowMenu queued before the first
+        // returned would re-enter while local COM objects (localBase/localExtended/
+        // localCascading) and the menu handle are still live, risking premature
+        // release and COM apartment corruption.
+        private bool m_IsShowingMenu;
+
         /// <summary>
         /// Displays a shell context menu for the given items and returns the user's selection.
         /// All COM resources are released before this method returns — callers do NOT need to
@@ -106,6 +113,28 @@ namespace ExpControlsLib
             Point pt,
             bool allowRename,
             bool minimal = false)
+        {
+            if (m_IsShowingMenu)
+            {
+                return new ContextMenuResult { Success = false };
+            }
+            m_IsShowingMenu = true;
+            try
+            {
+                return ShowMenuCore(hwnd, items, pt, allowRename, minimal);
+            }
+            finally
+            {
+                m_IsShowingMenu = false;
+            }
+        }
+
+        private ContextMenuResult ShowMenuCore(
+            IntPtr hwnd,
+            CShellItem[] items,
+            Point pt,
+            bool allowRename,
+            bool minimal)
         {
             Debug.Assert(items.Length > 0);
 

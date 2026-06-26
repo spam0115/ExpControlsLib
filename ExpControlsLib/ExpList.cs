@@ -100,6 +100,13 @@ namespace ExpControlsLib
         private int _enumerationDepth = 0;
         private readonly Queue<(object? sender, ShellItemUpdateEventArgs e)> _deferredUpdates = new();
 
+        // Reentrancy guard for ShowAndHandleContextMenu. TrackPopupMenuEx runs a modal
+        // message loop, and the method is async void with awaits that resume on the UI
+        // thread message pump. A second right-click arriving during the first call's
+        // await continuation would re-enter and corrupt the in-flight menu handles /
+        // m_WindowsContextMenu state.
+        private bool m_IsShowingContextMenu = false;
+
         // Reentrancy guard for image list modifications. Prevents modifying the 
         // image list while the OS is in the middle of a draw cycle (e.g. RetrieveVirtualItem).
         private int _imageListMutationDepth = 0;
@@ -1442,6 +1449,20 @@ namespace ExpControlsLib
         /// </remarks>
         private async void ShowAndHandleContextMenu(Point pt)
         {
+            if (m_IsShowingContextMenu) return;
+            m_IsShowingContextMenu = true;
+            try
+            {
+                await ShowAndHandleContextMenuCore(pt);
+            }
+            finally
+            {
+                m_IsShowingContextMenu = false;
+            }
+        }
+
+        private async Task ShowAndHandleContextMenuCore(Point pt)
+        {
             Debug.WriteLine("ExpList: ShowAndHandleContextMenu Begin");
             try
             {
@@ -2457,6 +2478,15 @@ namespace ExpControlsLib
         public int GetIndexFromFullPath(string fullPath)
         {
             return _listViewWrapper.GetIndexFromFullPath(fullPath);
+        }
+
+        /// <summary>
+        /// Returns true if the item at the given index is within the currently
+        /// visible viewport. See <see cref="VirtualListViewWrapper.IsItemVisible"/>.
+        /// </summary>
+        internal bool IsItemVisible(int index)
+        {
+            return _listViewWrapper.IsItemVisible(index);
         }
 
         /// <summary>
