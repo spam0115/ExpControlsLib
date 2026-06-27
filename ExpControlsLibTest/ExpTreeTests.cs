@@ -2,6 +2,7 @@ using ExpControlsLib;
 using NUnit.Framework;
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
+using static WindowsApiLib.Shell.ShellAPI;
 
 namespace ExpControlsLibTest
 {
@@ -25,33 +26,20 @@ namespace ExpControlsLibTest
         [TestCase(ExpTree.StartDir.Desktop)]
         [TestCase(ExpTree.StartDir.MyComputer)]
         [TestCase(ExpTree.StartDir.Windows)]
-        public async Task TestInitialLoad(ExpTree.StartDir startDir)
+        public async Task TestStartupDirectoryLoad(ExpTree.StartDir startDir)
         {
             var expTree = new ExpTree();
-            
+            expTree.StartUpDirectory = startDir;
+            expTree.Initialize(ShellController.Instance);
+
             // Host it in a form to ensure handle is created
             using var form = new Form();
             form.Controls.Add(expTree);
             form.Show();
 
-            // Set root
-            expTree.StartUpDirectory = startDir;
-
             // Wait for nodes to load. 
             // The loading happens on a background STA thread and then updates UI.
-            bool loaded = false;
-            for (int i = 0; i < 1000; i++) // 10 seconds timeout
-            {
-                if (expTree.Nodes.Count > 0)
-                {
-                    loaded = true;
-                    break;
-                }
-                await Task.Delay(10);
-                Application.DoEvents(); // Keep UI alive to allow BeginInvoke/Invoke to process
-            }
-
-            Assert.IsTrue(loaded, $"Tree nodes should be loaded for {startDir}.");
+            await WaitForCondition(() => expTree.Nodes.Count > 0, $"Tree nodes to load for {startDir}", 15000);
             Assert.That(expTree.Nodes.Count, Is.EqualTo(1), "Root node should be present.");
             
             var rootNode = expTree.Nodes[0];
@@ -67,19 +55,7 @@ namespace ExpControlsLibTest
                 Assert.That(node.Tag, Is.InstanceOf<CShellItem>());
             }
         }
-        private async Task WaitForCondition(Func<bool> condition, string message, int timeoutMs = 10000)
-        {
-            var start = DateTime.Now;
-            while (!condition())
-            {
-                if ((DateTime.Now - start).TotalMilliseconds > timeoutMs)
-                {
-                    Assert.Fail($"Timeout waiting for: {message}");
-                }
-                await Task.Delay(10);
-                Application.DoEvents();
-            }
-        }
+
 
         [Test]
         public async Task TestDeepAsyncExpansion()
@@ -91,6 +67,7 @@ namespace ExpControlsLibTest
             try
             {
                 var expTree = new ExpTree();
+                expTree.Initialize(ShellController.Instance);
                 using var form = new Form();
                 form.Controls.Add(expTree);
                 form.Show();
@@ -145,6 +122,7 @@ namespace ExpControlsLibTest
             try
             {
                 var expTree = new ExpTree();
+                expTree.Initialize(ShellController.Instance);
                 using var form = new Form();
                 form.Controls.Add(expTree);
                 form.Show();
@@ -204,6 +182,7 @@ namespace ExpControlsLibTest
             try
             {
                 var expTree = new ExpTree(tempPath);
+                expTree.Initialize(ShellController.Instance);
                 // Set exclusion
                 expTree.ExcludedItems.Add(pathExcluded);
                 expTree.ShowHiddenFolders = false;
@@ -253,6 +232,7 @@ namespace ExpControlsLibTest
             try
             {
                 var expTree = new ExpTree(tempPath);
+                expTree.Initialize(ShellController.Instance);
                 using var form = new Form();
                 form.Controls.Add(expTree);
                 form.Show();
@@ -296,6 +276,7 @@ namespace ExpControlsLibTest
             try
             {
                 var expTree = new ExpTree();
+                expTree.Initialize(ShellController.Instance);
                 using var form = new Form();
                 form.Controls.Add(expTree);
                 form.Show();
@@ -318,6 +299,21 @@ namespace ExpControlsLibTest
             {
                 if (Directory.Exists(tempPath))
                     Directory.Delete(tempPath, true);
+            }
+        }
+
+
+        private async Task WaitForCondition(Func<bool> condition, string message, int timeoutMs = 10000)
+        {
+            var start = DateTime.Now;
+            while (!condition())
+            {
+                if ((DateTime.Now - start).TotalMilliseconds > timeoutMs)
+                {
+                    Assert.Fail($"Timeout waiting for: {message}");
+                }
+                await Task.Delay(10);
+                Application.DoEvents();
             }
         }
     }

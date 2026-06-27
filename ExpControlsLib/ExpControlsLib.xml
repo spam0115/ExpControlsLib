@@ -1693,7 +1693,7 @@
         <member name="P:ExpControlsLib.ExpTree.StartUpDirectory">
             <summary>
             Sets the initial Root directory of ExpTree.
-            This should only be set once before the tree is shown.
+            This must be set before the tree is loaded.  Setting this after load will have no effect.
             </summary>
             <value>Must be one of the StartDir Enum values.</value>
             <returns>Current StartDir value.</returns>

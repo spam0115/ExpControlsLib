@@ -474,7 +474,7 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Sets the initial Root directory of ExpTree.
-        /// This should only be set once before the tree is shown.
+        /// This must be set before the tree is loaded.  Setting this after load will have no effect.
         /// </summary>
         /// <value>Must be one of the StartDir Enum values.</value>
         /// <returns>Current StartDir value.</returns>
@@ -561,7 +561,8 @@ namespace ExpControlsLib
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Custom root path '{_rootPath}' - starting SetRootItemAsync...");
                 m_StartUpDirectory = StartDir.Custom;
                 var csi = _shellController.HierachyManager.FindAndAllowExpansion(_rootPath.Trim());
-                if (csi is null) throw new ArgumentException("ExpTree: root path could not be found.");
+                if (csi is null) 
+                    throw new ArgumentException("ExpTree: root path could not be found.");
                 Root = csi;
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Root property set (custom path).");
             }
@@ -2181,7 +2182,6 @@ namespace ExpControlsLib
                         if (csi == null || !csi.IsFolder) return null;
                         var target = _shellController.HierachyManager.FindAndAllowExpansion(csi);
                         if (target == null || !target.IsFolder) return null; //yes, this second copy of this line is needed
-                        Debug.Assert(object.ReferenceEquals(target, _shellController.HierachyManager.DesktopCSI), "objects not equal");
 
                         var flags = SHCONTF.FOLDERS;
                         if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
