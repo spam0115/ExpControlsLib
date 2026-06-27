@@ -1697,11 +1697,12 @@ namespace WindowsApiLib.Shell
         {
             var copy = new CShellItem();
 
-            // PIDL – duplicate unmanaged memory so each instance owns its own
-            if (m_Pidl != IntPtr.Zero)
-            {
-                copy.m_Pidl = ILClone(m_Pidl);
-            }
+            //// PIDL – duplicate unmanaged memory so each instance owns its own
+            //if (m_Pidl != IntPtr.Zero)
+            //{
+            //    copy.m_Pidl = ILClone(m_Pidl);
+            //}
+            copy.m_Pidl = m_Pidl;
 
             // Value types – direct copy
             copy.m_IconIndexNormal = m_IconIndexNormal;
@@ -1773,7 +1774,7 @@ namespace WindowsApiLib.Shell
         /// valid because they might have been moved to another directory and are childred of a new item 
         /// now.
         /// </summary>
-        public void Ghost()
+        public void Ghostify()
         {
             //m_Parent = null; still might need these
             //m_FullPath = null;

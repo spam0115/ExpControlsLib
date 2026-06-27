@@ -149,5 +149,17 @@ namespace WindowsApiLib.Shell
                 return m_Type;
             }
         }
+
+        /// <summary>
+        /// For Renamed/Moved events: the FullPath of the item before the rename/move.
+        /// Null for other update types.
+        /// </summary>
+        public string? OldPath { get; init; }
+
+        /// <summary>
+        /// For Renamed/Moved events: the FullPath of the item after the rename/move.
+        /// Null for other update types.
+        /// </summary>
+        public string? NewPath { get; init; }
     }
 }

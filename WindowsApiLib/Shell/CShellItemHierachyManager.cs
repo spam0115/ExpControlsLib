@@ -150,13 +150,42 @@ namespace WindowsApiLib.Shell
             var name = CPidl.GetFullName(absPidl);
             if (name == null)
             {
-                Debug.WriteLine("Could not get name for pidl using Find...CPidl.GetFullName");
-                return null;
+                Debug.WriteLine("CPidl.GetFullName returned null for pidl, falling back to binary comparison");
+                return FindByBinaryComparison(rootItem, absPidl);
             }
 
             var pidlAndName = new PidlAndCanonicalParsingName(absPidl, name);
 
             return Find(rootItem, pidlAndName);
+        }
+
+        /// <summary>
+        /// Fallback find that walks the entire tree using binary PIDL comparison.
+        /// Used when CPidl.GetFullName cannot resolve a PIDL (e.g. mock PIDLs in tests).
+        /// </summary>
+        private static CShellItem? FindByBinaryComparison(CShellItem root, IntPtr absPidl)
+        {
+            if (root is null || absPidl == IntPtr.Zero) return null;
+            if (CPidl.IsBinaryEqual(root.PIDL, absPidl)) return root;
+
+            if (root.DirectoriesInitialized)
+            {
+                foreach (var dir in root.Directories)
+                {
+                    var result = FindByBinaryComparison(dir, absPidl);
+                    if (result is not null) return result;
+                }
+            }
+
+            if (root.FilesInitialized)
+            {
+                foreach (var file in root.Files)
+                {
+                    if (CPidl.IsBinaryEqual(file.PIDL, absPidl)) return file;
+                }
+            }
+
+            return null;
         }
 
         private static CShellItem? Find(CShellItem rootItem, PidlAndCanonicalParsingName pidlAndName)
@@ -533,6 +562,8 @@ namespace WindowsApiLib.Shell
 
                 CShellItemFactory.ResetDesktopCache();
                 var desktopCsi = CShellItemFactory.Create(CSIDL.DESKTOP);
+                CShellItemFactory.DesktopCSI = desktopCsi;
+                ShellController.DesktopCSI = desktopCsi;
                 this.DesktopCSI = desktopCsi;
                 Root = desktopCsi;
             }
@@ -588,7 +619,7 @@ namespace WindowsApiLib.Shell
             }
 
             // Ghost the original so it releases its shared references
-            csi.Ghost();
+            csi.Ghostify();
 
             return csi;
         }

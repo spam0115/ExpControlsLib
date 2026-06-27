@@ -137,7 +137,7 @@ namespace ExpControlsLib
             _displayFilesCts?.Dispose();
             _displayFilesCts = null;
             if (_shellController?.ShellUpdater != null)
-                _shellController.ShellUpdater.UpdateEvent -= ShellController_UpdateEventInvoker;
+                _shellController.ShellUpdater.UpdateEvent -= ShellUpdater_UpdateEventInvoker;
         }
 
         #endregion
@@ -262,6 +262,19 @@ namespace ExpControlsLib
         [Category("Action")]
         [Description("Fires when Copy to Folder is selected from the context menu")]
         public event ExpListCopyEventHandler ExpListCopy;
+
+        /// <summary>
+        /// Delegate for the <see cref="ExpListDragCompleted"/> event.
+        /// </summary>
+        public delegate void ExpListDragCompletedEventHandler(object? sender, ExpListDragCompletedEventArgs e);
+        /// <summary>
+        /// Occurs when a drag-and-drop operation completes (move or copy).
+        /// Unlike <see cref="ExpListMove"/> and <see cref="ExpListCopy"/>, this fires for
+        /// shell drag-and-drop operations where the move/copy was already performed by the shell.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires when a drag-and-drop operation completes (move or copy)")]
+        public event ExpListDragCompletedEventHandler ExpListDragCompleted;
 
         /// <summary>
         /// Delegate for the <see cref="ExpListDeleted"/> event.
@@ -788,7 +801,7 @@ namespace ExpControlsLib
 
                 // Setup Change Notification
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Wiring shell update events...");
-                ShellController.Instance.ShellUpdater.UpdateEvent += ShellController_UpdateEventInvoker;
+                ShellController.Instance.ShellUpdater.UpdateEvent += ShellUpdater_UpdateEventInvoker;
 
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: End");
             }
@@ -1707,7 +1720,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
-        private void ShellController_UpdateEventInvoker(object? sender, ShellItemUpdateEventArgs e)
+        private void ShellUpdater_UpdateEventInvoker(object? sender, ShellItemUpdateEventArgs e)
         {
             //Debug.WriteLine("ExpList: UpdateInvoke Begin");
             try
@@ -1726,13 +1739,13 @@ namespace ExpControlsLib
                 {
                     try
                     {
-                        BeginInvoke((InvokeUpdate)ShellController_UpdateEventHandler, sender, e);
+                        BeginInvoke((InvokeUpdate)ShellUpdater_UpdateEventHandler, sender, e);
                     }
                     catch (InvalidOperationException) { } // Handle race condition where control is disposed just after check
                 }
                 else
                 {
-                    ShellController_UpdateEventHandler(sender, e);
+                    ShellUpdater_UpdateEventHandler(sender, e);
                 }
             }
             finally
@@ -1742,13 +1755,14 @@ namespace ExpControlsLib
         }
 
         private LruConcurrentDictionary<String, bool> _activeDeletes = new(1000);
+        private CShellItem[]? _pendingDragItems;  // items from an active drag, awaiting shell notification with paths
         /// <summary>
         /// Performs the actual update of list view items in response to shell changes.
         /// Handles creation, deletion, renaming, and other updates of files and folders.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
-        private async void ShellController_UpdateEventHandler(object? sender, ShellItemUpdateEventArgs e)
+        private async void ShellUpdater_UpdateEventHandler(object? sender, ShellItemUpdateEventArgs e)
         {
             try
             {
@@ -1868,14 +1882,10 @@ namespace ExpControlsLib
                         case CShItemUpdateType.Moved:
                             {
                                 var csi = e.Item;
-                                // The sender is the parent folder that raised this event.
-                                // For "moved from" events, sender is the old parent and
+                                // The sender is the old parent folder.
                                 // csi.Parent has already been updated to the new parent.
-                                // For "moved to" events, sender is the new parent and
-                                // csi.Parent matches it.
                                 if (sender is CShellItem senderFolder
-                                    && CPidl.ResolvesToSamePathOrName(senderFolder.PIDL, _currentFolderCsi.PIDL)
-                                    && (csi.Parent == null || !CPidl.ResolvesToSamePathOrName(csi.Parent.PIDL, _currentFolderCsi.PIDL)))
+                                    && CPidl.ResolvesToSamePathOrName(senderFolder.PIDL, _currentFolderCsi.PIDL))
                                 {
                                     // Item was moved FROM the current folder → remove it
                                     _listViewWrapper.RemoveItems(new[] { csi });
@@ -1886,6 +1896,22 @@ namespace ExpControlsLib
                                             ? _currentFolderCsi.DisplayName
                                             : _currentFolderCsi.FullPath;
                                         ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
+                                    }
+                                }
+
+                                // If this item was part of a pending drag, fire DragCompleted with paths
+                                if (_pendingDragItems is not null)
+                                {
+                                    var match = Array.Find(_pendingDragItems, i => ReferenceEquals(i, csi));
+                                    if (match is not null)
+                                    {
+                                        // Remove from pending so DW_DragEnd doesn't fire a duplicate
+                                        _pendingDragItems = _pendingDragItems.Where(i => !ReferenceEquals(i, csi)).ToArray();
+                                        if (_pendingDragItems.Length == 0) _pendingDragItems = null;
+
+                                        ExpListDragCompleted?.Invoke(this,
+                                            new ExpListDragCompletedEventArgs(DragDropEffects.Move,
+                                                new[] { csi }, e.OldPath, e.NewPath));
                                     }
                                 }
                                 break;
@@ -2635,7 +2661,7 @@ namespace ExpControlsLib
                 while (_deferredUpdates.Count > 0)
                 {
                     var (sender, e) = _deferredUpdates.Dequeue();
-                    ShellController_UpdateEventHandler(sender, e);
+                    ShellUpdater_UpdateEventHandler(sender, e);
                 }
             }
             finally
@@ -3083,6 +3109,7 @@ namespace ExpControlsLib
         private void DW_DragStart(object? sender, DragStartEventArgs e)
         {
             _listView.SelectedIndices.Clear();
+            _pendingDragItems = e.Items;
         }
 
         private void DW_DragEnd(object? sender, DragEndEventArgs e)
@@ -3097,9 +3124,6 @@ namespace ExpControlsLib
                 if (useUpdate) _listView.BeginUpdate();
                 try
                 {
-                    // Batch remove from hierarchy.  This triggers a ton of events
-                    //_shellController.HierachyManager.RemoveRange(e.Items, raiseEvents: false);
-
                     // Batch remove from list view wrapper
                     _listViewWrapper.RemoveItems(e.Items);
 
@@ -3109,10 +3133,6 @@ namespace ExpControlsLib
                     // Fire single update event for the folder
                     if (_currentFolderCsi != null)
                     {
-                        //string path = _currentFolderCsi.FullPath.StartsWith(":")
-                        //    ? _currentFolderCsi.DisplayName
-                        //    : _currentFolderCsi.FullPath;
-                        //ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
                         ExpListItemsChanged?.Invoke(_currentFolderCsi.FullPath, _currentFolderCsi);
                     }
                 }
@@ -3121,6 +3141,24 @@ namespace ExpControlsLib
                     if (useUpdate) _listView.EndUpdate();
                 }
             }
+
+            // Fire ExpListDragCompleted for copy operations (move is handled by the shell notification
+            // handler which provides source/destination paths via OldPath/NewPath).
+            if (e.DropCompleted && e.Items.Length > 0 && e.Effect == DragDropEffects.Copy)
+            {
+                ExpListDragCompleted?.Invoke(this, new ExpListDragCompletedEventArgs(e.Effect, e.Items));
+            }
+
+            // If the shell notification didn't fire for a move (e.g. cross-volume DELETE+CREATE
+            // which doesn't go through DoRenameOrMove), fire DragCompleted here as fallback.
+            if (e.DropCompleted && _pendingDragItems is not null && _pendingDragItems.Length > 0
+                && (e.Effect == DragDropEffects.Move || e.Effect == DragDropEffects.None))
+            {
+                ExpListDragCompleted?.Invoke(this,
+                    new ExpListDragCompletedEventArgs(e.Effect, _pendingDragItems));
+            }
+
+            _pendingDragItems = null;
         }
 
         /// <summary>

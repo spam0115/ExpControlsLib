@@ -47,15 +47,6 @@ namespace WindowsApiLib.Shell
         int SHChangeNotification_Unlock(IntPtr hLock);
 
         /// <summary>
-        /// Converts a simple (relative) PIDL to a full (absolute) PIDL by appending it to the folder's PIDL.
-        /// </summary>
-        /// <param name="psf">The <see cref="IShellFolder"/> that owns the simple PIDL.</param>
-        /// <param name="pidlSimple">A simple (relative) PIDL to convert.</param>
-        /// <param name="ppidlReal">Receives the full PIDL. The caller must free this with <c>CoTaskMemFree</c>.</param>
-        /// <returns>An <c>HRESULT</c> indicating success or failure.</returns>
-        int SHGetRealIDL(IShellFolder psf, IntPtr pidlSimple, out IntPtr ppidlReal);
-
-        /// <summary>
         /// Places a message in the message queue of the specified window and returns without waiting for the window to process the message.
         /// </summary>
         /// <param name="hWnd">Handle of the window whose message queue is to receive the message. Use <see cref="IntPtr.Zero"/> for the current thread.</param>
@@ -65,41 +56,6 @@ namespace WindowsApiLib.Shell
         /// <returns><c>true</c> if the message was successfully posted; otherwise <c>false</c>.</returns>
         bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
-        /// <summary>
-        /// Returns a human-readable display name for the given PIDL.
-        /// </summary>
-        /// <param name="pidl">An absolute or relative PIDL. May be <see cref="IntPtr.Zero"/>.</param>
-        /// <returns>The display name, parsing path, or hex dump of the PIDL; <c>null</c> if the PIDL is <see cref="IntPtr.Zero"/>.</returns>
-        string GetPidlName(IntPtr pidl);
-
-        /// <summary>
-        /// Splits an absolute PIDL into its parent PIDL and the last (child) item ID as a separate relative PIDL.
-        /// </summary>
-        /// <param name="pidl">A well-formed absolute PIDL with at least one item.</param>
-        /// <returns>A tuple containing the parent PIDL (with the last segment removed) and the child PIDL (the last segment). Both must be freed by the caller.</returns>
-        (IntPtr ParentPidl, IntPtr ChildPidl) SplitPidl(IntPtr pidl);
-
-        /// <summary>
-        /// Concatenates two PIDLs into a single new PIDL.
-        /// </summary>
-        /// <param name="pidl1">The first PIDL (typically a parent or absolute PIDL).</param>
-        /// <param name="pidl2">The second PIDL (typically a relative child PIDL).</param>
-        /// <returns>A newly allocated PIDL containing the concatenation. The caller must free this with <c>CoTaskMemFree</c>.</returns>
-        IntPtr ConcatenatePidls(IntPtr pidl1, IntPtr pidl2);
-
-        /// <summary>
-        /// Returns a copy of the given PIDL with the last item ID removed, effectively returning the parent PIDL.
-        /// </summary>
-        /// <param name="pidl">A well-formed PIDL with at least one item.</param>
-        /// <returns>A newly allocated PIDL with the last segment removed. The caller must free this with <c>CoTaskMemFree</c>.</returns>
-        IntPtr TrimLastPidl(IntPtr pidl);
-
-        /// <summary>
-        /// Returns the number of item IDs (segments) in a PIDL.
-        /// </summary>
-        /// <param name="pidl">The PIDL to inspect. May be <see cref="IntPtr.Zero"/>.</param>
-        /// <returns>The number of <c>SHITEMID</c> segments in the PIDL, or <c>0</c> if the PIDL is <see cref="IntPtr.Zero"/>.</returns>
-        int GetPidlSegmentCount(IntPtr pidl);
     }
 
     /// <summary>
@@ -132,11 +88,6 @@ namespace WindowsApiLib.Shell
             return ShellAPI.SHChangeNotification_Unlock(hLock);
         }
 
-        /// <inheritdoc />
-        public int SHGetRealIDL(IShellFolder psf, IntPtr pidlSimple, out IntPtr ppidlReal)
-        {
-            return ShellAPI.SHGetRealIDL(psf, pidlSimple, out ppidlReal);
-        }
 
         /// <inheritdoc />
         public bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam)
@@ -144,35 +95,5 @@ namespace WindowsApiLib.Shell
             return ShellAPI.PostMessage(hWnd, Msg, wParam, lParam);
         }
 
-        /// <inheritdoc />
-        public string GetPidlName(IntPtr pidl)
-        {
-            return CPidl.ToString(pidl);
-        }
-
-        /// <inheritdoc />
-        public (IntPtr ParentPidl, IntPtr ChildPidl) SplitPidl(IntPtr pidl)
-        {
-            var result = CPidl.Split(pidl);
-            return (result.ParentPidl, result.ChildPidl);
-        }
-
-        /// <inheritdoc />
-        public IntPtr ConcatenatePidls(IntPtr pidl1, IntPtr pidl2)
-        {
-            return CPidl.Concatenate(pidl1, pidl2);
-        }
-
-        /// <inheritdoc />
-        public IntPtr TrimLastPidl(IntPtr pidl)
-        {
-            return CPidl.TrimLast(pidl);
-        }
-
-        /// <inheritdoc />
-        public int GetPidlSegmentCount(IntPtr pidl)
-        {
-            return CPidl.SegmentCount(pidl);
-        }
     }
 }

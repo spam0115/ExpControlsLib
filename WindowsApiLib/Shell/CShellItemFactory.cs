@@ -20,7 +20,7 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// 
         /// </summary>
-        private static CShellItem? DesktopCSI { get; set; }
+        internal static CShellItem? DesktopCSI { get; set; }
 
         private static readonly ConcurrentDictionary<string, string> s_typeNameCache = new(StringComparer.OrdinalIgnoreCase);
 #if DEBUG

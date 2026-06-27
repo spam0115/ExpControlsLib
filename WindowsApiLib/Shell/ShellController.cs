@@ -13,7 +13,7 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// the desktop cShellIitem
         /// </summary>
-        public static CShellItem? DesktopCSI { get; private set; }
+        public static CShellItem? DesktopCSI { get; internal set; }
 
         private ShellController() {
 

@@ -81,12 +81,13 @@
             and the Control in which the Drag originated.
             </remarks>
         </member>
-        <member name="M:ExpControlsLib.DragStartEventArgs.#ctor(WindowsApiLib.Shell.CShellItem,System.Windows.Forms.Control)">
+        <member name="M:ExpControlsLib.DragStartEventArgs.#ctor(WindowsApiLib.Shell.CShellItem,System.Windows.Forms.Control,WindowsApiLib.Shell.CShellItem[])">
             <summary>
             Contructs a new Instance of this Class
             </summary>
             <param name="parent">The Folder being Dragged or the Parent Folder of the Items being Dragged</param>
             <param name="dragStartControl">Control in which the Drag originated</param>
+            <param name="items">The items being dragged</param>
         </member>
         <member name="P:ExpControlsLib.DragStartEventArgs.Parent">
             <summary>
@@ -100,6 +101,11 @@
         <member name="P:ExpControlsLib.DragStartEventArgs.DragStartControl">
             <summary>
             The Control in which the Drag originated
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DragStartEventArgs.Items">
+            <summary>
+            The items being dragged.
             </summary>
         </member>
         <member name="T:ExpControlsLib.DragEndEventHandler">
@@ -672,6 +678,18 @@
             Occurs when Copy to Folder is selected from the context menu.
             </summary>
         </member>
+        <member name="T:ExpControlsLib.ExpList.ExpListDragCompletedEventHandler">
+            <summary>
+            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListDragCompleted"/> event.
+            </summary>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.ExpListDragCompleted">
+            <summary>
+            Occurs when a drag-and-drop operation completes (move or copy).
+            Unlike <see cref="E:ExpControlsLib.ExpList.ExpListMove"/> and <see cref="E:ExpControlsLib.ExpList.ExpListCopy"/>, this fires for
+            shell drag-and-drop operations where the move/copy was already performed by the shell.
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.ExpList.ExpListDeletedEventHandler">
             <summary>
             Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListDeleted"/> event.
@@ -1003,14 +1021,14 @@
             Exposes the SelectedItems collection of the internal ListView to allow external handlers to access the currently selected items.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.ShellController_UpdateEventInvoker(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
+        <member name="M:ExpControlsLib.ExpList.ShellUpdater_UpdateEventInvoker(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
             <summary>
             Marshals shell item update events to the UI thread.
             </summary>
             <param name="sender">The source of the event.</param>
             <param name="e">The <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the event data.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.ShellController_UpdateEventHandler(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
+        <member name="M:ExpControlsLib.ExpList.ShellUpdater_UpdateEventHandler(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
             <summary>
             Performs the actual update of list view items in response to shell changes.
             Handles creation, deletion, renaming, and other updates of files and folders.
@@ -1349,6 +1367,45 @@
         <member name="P:ExpControlsLib.ExpListDeletedEventArgs.Indices">
             <summary>
             Gets the indices the deleted items occupied before removal.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ExpListDragCompletedEventArgs">
+            <summary>
+            Event arguments for the <see cref="E:ExpControlsLib.ExpList.ExpListDragCompleted"/> event.
+            Fired when a drag-and-drop operation completes, providing the effect and the items involved.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.Effect">
+            <summary>
+            Gets the effect of the completed drag operation (Move, Copy, Link, or None for optimized moves).
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.Items">
+            <summary>
+            Gets the items that were dragged.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.IsMove">
+            <summary>
+            Gets whether the drag was a move operation.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.IsCopy">
+            <summary>
+            Gets whether the drag was a copy operation.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.SourcePath">
+            <summary>
+            For move operations resolved via shell notifications: the original path of the first item before the move.
+            Null when the source path is not available (e.g. copy operations or when fired from <c>DW_DragEnd</c>
+            before the shell notification arrives).
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.DestinationPath">
+            <summary>
+            For move operations resolved via shell notifications: the destination path of the first item after the move.
+            Null when the destination path is not available.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ExpListGetColumnDataEventArgs">

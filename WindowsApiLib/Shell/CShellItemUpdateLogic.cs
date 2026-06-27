@@ -196,7 +196,7 @@ namespace WindowsApiLib.Shell
                                         if (childItem != null)
                                         {
                                             Debug.WriteLine("  [DELETE] Child item found: " + childItem.ItemPath + ". Updating as deleted.");
-                                            childItem.Ghost();
+                                            childItem.Ghostify();
                                             DoUpdateDeleted(childItem);
                                         }
                                         else
@@ -573,7 +573,10 @@ namespace WindowsApiLib.Shell
         private bool DoRenameOrMove(CShellItem csi, IntPtr changedPidl, CShItemUpdateType changeType)
         {
             var splitPidl = TPidl.Split(changedPidl);
-            var allegedParentCsi = _hierarchyManager.Find(splitPidl.ParentPidl);
+            var newParentCsi = _hierarchyManager.Find(splitPidl.ParentPidl);
+
+            // Capture old path before mutation
+            string? oldPath = csi.FullPath;
 
             try
             {
@@ -583,13 +586,34 @@ namespace WindowsApiLib.Shell
                     return false;
                 }
 
-                if (allegedParentCsi is null) //moved to somewhere not in the hierarchy
+                // Derive new path from the changed PIDL
+                string? newPath = TPidl.GetFileSystemPath(changedPidl);
+                if (newPath is null)
+                {
+                    // Virtual item — fall back to parsing name
+                    IntPtr pName = IntPtr.Zero;
+                    try
+                    {
+                        if (SHGetNameFromIDList(changedPidl, SIGDN.DESKTOPABSOLUTEPARSING, out pName) == S_OK && pName != IntPtr.Zero)
+                            newPath = Marshal.PtrToStringUni(pName);
+                    }
+                    finally
+                    {
+                        if (pName != IntPtr.Zero) Marshal.FreeCoTaskMem(pName);
+                    }
+                }
+
+                if (newParentCsi is null) //moved to somewhere not in the hierarchy
                 {
                     var oldParentCsi = csi.Parent;
                     RemoveItem(csi.Parent, csi);
                     csi.Parent = null;
                     csi.m_Pidl = TPidl.Copy(changedPidl);
-                    RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Moved));
+                    RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Moved)
+                    {
+                        OldPath = oldPath,
+                        NewPath = newPath
+                    });
                     return false;
                 }
                 else
@@ -597,50 +621,69 @@ namespace WindowsApiLib.Shell
                     IntPtr newIShellFolderPtr = IntPtr.Zero;
                     var oldParentCsi = csi.Parent;
 
-                    if (TPidl.ResolvesToSamePathOrName(allegedParentCsi.PIDL, csi.Parent.PIDL)) //rename
+                    if (TPidl.ResolvesToSamePathOrName(newParentCsi.PIDL, csi.Parent.PIDL)) //rename
                     {
                         csi.m_Pidl = TPidl.Clone(changedPidl);
                         csi.ReloadInfo();
-                        RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Renamed));
+                        RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Renamed)
+                        {
+                            OldPath = oldPath,
+                            NewPath = newPath
+                        });
                         return true;
                     }
                     else //move
                     {
+                        /* There is a problem with instance state validity during a move operation.
+                         * The item that is moved is owned at multiple locations - in the hierarchy as well as possibly in multiple controls.
+                         * So if an item (CSI) is moved, it's path is changed different.  The controls which are tied to
+                         * specific paths will be confused because path in the CSI will have been changed from under their feet.
+                         * For example, if the control tries to search for that moved item in their caches indexed by path, it will fail 
+                         * because the new path is wrong.
+                         * 
+                         * To get around this problem, I have decided to strip down the old CSI and create a new
+                         * CSI to represent the new state of the moved item.  The new csi will shallow copy all the imporant 
+                         * values of the original CSI but the pidl and path will be updated.  The original CSI will be stripped
+                         * down by calling "Ghostify" on it.  Ghostify will remove all the children but keep path and pidl the same.
+                         * The new csi will be sent to event handlers for the destination folder and the old csi will be sent to 
+                         * event handlers for the original folder.
+                        */
                         RemoveItem(csi.Parent, csi);
 
-                        AddItem(allegedParentCsi, csi);
+                        var newCsi = csi.ShallowCopy();
+                        csi.Ghostify();
+                        newCsi.Parent = newParentCsi;
+                        newCsi.m_Pidl = TPidl.Clone(changedPidl);
+                        newCsi.ReloadInfo();
 
-                        csi.Parent = allegedParentCsi;
+                        AddItem(newParentCsi, newCsi);
 
-                        csi.m_Pidl = TPidl.Clone(changedPidl);
-                        csi.ReloadInfo();
-
-                        if (csi.IsFolder)
+                        if (newCsi.IsFolder) //recursively update child paths
                         {
-                            //var ishellFolder = allegedParentCsi.GetIShellFolder();
-
-                            //if (ishellFolder.BindToObject(splitPidl.ChildPidl, IntPtr.Zero, IID_IShellFolder, ref newIShellFolderPtr) != S_OK)
-                            //{
-                            //    Marshal.Release(newIShellFolderPtr);
-                            //    return false;
-                            //}
-
-                            //csi.m_IShellFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(newIShellFolderPtr, typeof(IShellFolder));
-                            //Marshal.Release(newIShellFolderPtr);
-
-                            if (csi.FilesInitialized)
+                            if (newCsi.FilesInitialized)
                             {
                                 foreach (CShellItem item in csi.Files)
                                     item.UpdateFolderPidlAndPath();
                             }
-                            if (csi.DirectoriesInitialized)
+                            if (newCsi.DirectoriesInitialized)
                             {
                                 foreach (CShellItem item in csi.Directories)
                                     item.UpdateFolderPidlAndPath();
                             }
                         }
-                        RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Moved));
-                        RaiseUpdateEvent(allegedParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Moved));
+
+                        //we raise two update events.  one for the old folder so controls can remove the old item.
+                        //The second for the new folder so controls can all the new item.
+                        RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Moved)
+                        {
+                            OldPath = oldPath,
+                            NewPath = newPath
+                        });
+                        RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(newCsi, CShItemUpdateType.Moved)
+                        {
+                            OldPath = oldPath,
+                            NewPath = newPath
+                        });
 
                         return false;
                     }
@@ -825,7 +868,7 @@ namespace WindowsApiLib.Shell
                         {
                             if (!parent.Directories.Contains(item.PIDL))
                             {
-                                parent.Directories.Append(item);
+                                parent.Directories.Add(item);
                                 changed = true;
                             }
                         }

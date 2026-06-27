@@ -236,7 +236,7 @@ namespace ExpControlsLib
                     // The shell builds the menu from allowedEffects (Move, Copy, etc.).
                     // Keep the same allowed effects so the user gets both Move and Copy.
 
-                    DragStart?.Invoke(sender, new DragStartEventArgs(parent, m_Client));
+                    DragStart?.Invoke(sender, new DragStartEventArgs(parent, m_Client, itemsToReport));
                     int hr = ShellAPI.DoDragDrop(dataObjectPtr, this, allowedEffects, out effects);
                     bool dropCompleted = hr != ShellAPI.DRAGDROP_S_CANCEL;
                     DragEnd?.Invoke(m_Client, new DragEndEventArgs(effects, itemsToReport, dropCompleted));
@@ -341,10 +341,12 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="parent">The Folder being Dragged or the Parent Folder of the Items being Dragged</param>
         /// <param name="dragStartControl">Control in which the Drag originated</param>
-        public DragStartEventArgs(CShellItem parent, Control dragStartControl)
+        /// <param name="items">The items being dragged</param>
+        public DragStartEventArgs(CShellItem parent, Control dragStartControl, CShellItem[] items)
         {
             m_parent = parent;
             m_DragStartControl = dragStartControl;
+            Items = items;
         }
 
         /// <summary>
@@ -360,6 +362,11 @@ namespace ExpControlsLib
         /// The Control in which the Drag originated
         /// </summary>
         public Control DragStartControl => m_DragStartControl;
+
+        /// <summary>
+        /// The items being dragged.
+        /// </summary>
+        public CShellItem[] Items { get; }
     }
 
     /// <summary>

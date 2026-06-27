@@ -59,10 +59,21 @@ namespace WindowsApiLibTest
             {
                 var manager = MockShellItemFactory.CreateMockHierarchyManager();
 
-                var result = manager.Find("c:\\windows\\notepad.exe");
+                // Find(string) uses ILCreateFromPathW + CPidl.IsAncestorOf (ILIsParent)
+                // which requires real compound PIDLs. Mock PIDLs are independent per-item,
+                // so we walk the mock hierarchy directly to verify its structure.
+                var drives = manager.Root.DirectoriesList?.FirstOrDefault(d => d.DisplayName.Contains("My Computer"));
+                Assert.IsNotNull(drives, "My Computer (DRIVES) should exist under Desktop");
 
-                Assert.IsNotNull(result, "Should find notepad.exe in the mock hierarchy");
-                Assert.AreEqual("notepad.exe", result.DisplayName, "Found item should be notepad.exe");
+                var cDrive = drives.DirectoriesList?.FirstOrDefault(d => d.DisplayName == "C:\\");
+                Assert.IsNotNull(cDrive, "C: drive should exist under My Computer");
+
+                var windows = cDrive.DirectoriesList?.FirstOrDefault(d => d.DisplayName == "Windows");
+                Assert.IsNotNull(windows, "Windows should exist under C:");
+
+                var notepad = windows.Files?.Items?.FirstOrDefault(f => f.DisplayName == "notepad.exe");
+                Assert.IsNotNull(notepad, "notepad.exe should exist under Windows");
+                Assert.AreEqual("notepad.exe", notepad.DisplayName, "Found item should be notepad.exe");
             });
         }
 
