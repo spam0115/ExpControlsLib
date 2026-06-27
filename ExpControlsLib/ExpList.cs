@@ -569,6 +569,16 @@ namespace ExpControlsLib
          DefaultValue("")]
         public CShellItem? SelectedItem;
 
+        public CShellItem? FocusedItem
+        {
+            get
+            {
+                if (_listView.FocusedItem != null)
+                    return GetItem(_listView.FocusedItem.Index);
+                return null;
+            }
+        }
+
         private CShellItem? _currentFolderCsi; //todo: get rid of this and just use _listViewWrapper.currentFolderCsi everywhere instead.
 
         /// <summary>
@@ -3768,6 +3778,25 @@ namespace ExpControlsLib
                 Debug.WriteLine("ExpList: SetAndLoadImageList End");
             }
         }
+        private void LoadImageAtIndex(int index, int endIndex = -1)
+        {
+            Debug.WriteLine("ExpList: LoadImageAtIndex Begin");
+            try
+            {
+                if (DisplayMode <= ListViewDisplayMode.Tile)
+                {
+                    LoadIconsForItems(index, endIndex);
+                }
+                else
+                {
+                    LoadThumbnailsAtIndexes(index, endIndex);
+                }
+            }
+            finally
+            {
+                //Debug.WriteLine("ExpList: LoadImageAtIndex End");
+            }
+        }
 
         private void LoadImagesForVisibleItems(ListViewDisplayMode? mode = null)
         {
@@ -3855,6 +3884,75 @@ namespace ExpControlsLib
                         {
                             if (item is null) continue;
                             if (!clientRect.IntersectsWith(item.Bounds)) continue;
+
+                            if (item.Tag is CShellItem csi && item.ImageIndex == -1)
+                            {
+                                item.ImageIndex = SystemImageListManager.GetIconIndex(csi, isLarge);
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    ExitListViewEnumeration();
+                }
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: LoadIconsForItems End");
+            }
+        }
+
+        private void LoadIconsForItems(int startIndex, int endIndex = -1)
+        {
+            Debug.WriteLine("ExpList: LoadIconsForItems Begin");
+            try
+            {
+                if (!_listView.IsHandleCreated) return;
+
+                bool isLarge = (_listView.View == View.LargeIcon);
+
+                EnterListViewEnumeration();
+                try
+                {
+                    if (endIndex == -1) endIndex = startIndex;
+                    endIndex = Math.Min(_listViewWrapper.Count - 1, endIndex);
+
+                    if (VirtualMode)
+                    {
+                        for (int i = startIndex; i <= endIndex; i++)
+                        {
+                            var csi = GetItem(i);
+                            if (csi is null)
+                            {
+                                Debug.WriteLine($"LoadIconsForItems: GetItem returned null for index {i}");
+                                continue;
+                            }
+                            csi.ImageIndex = SystemImageListManager.GetIconIndex(csi, isLarge);
+
+                            var lvi = _listViewWrapper.GetLviFromVirtual(i);
+
+                            if (lvi is null)
+                            {
+                                Debug.WriteLine($"LoadIconsForItems: GetItemInternal returned null for index {i}");
+                                continue;
+                            }
+
+                            if (lvi.ImageIndex != csi.ImageIndex)
+                            {
+                                lvi.ImageIndex = csi.ImageIndex;
+                                _listView.RedrawItems(i, i, false);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Rectangle clientRect = _listView.ClientRectangle;
+
+                        for (int i = startIndex; i <= endIndex; i++)
+                        {
+                            var item = _listView.Items[i];
+                            if (item is null) continue;
 
                             if (item.Tag is CShellItem csi && item.ImageIndex == -1)
                             {
@@ -3992,6 +4090,58 @@ namespace ExpControlsLib
             }
         }
 
+        private void LoadThumbnailsAtIndexes(int startIndex, int endIndex = -1)
+        {
+            Debug.WriteLine("ExpList: LoadThumbnailsAtIndexes Begin");
+
+            try
+            {
+                if (!_listView.IsHandleCreated) return;
+
+                EnterListViewEnumeration();
+                try
+                {
+                    if (endIndex == -1) endIndex = startIndex;
+                    endIndex = Math.Min(_listViewWrapper.Count - 1, endIndex);
+
+                    if (VirtualMode)
+                    {
+                        for (int i = startIndex; i <= endIndex; i++)
+                        {
+                            var csi = _listViewWrapper.GetItem(i);
+                            if (csi.ImageIndex != -1)
+                            {
+                                // Skip if already in image list (GetThumbnailIndex will return != -1)
+                                if (_thumbnailManager.GetThumbnailIndex(csi, GetThumbnailSizeForMode()) != -1) continue;
+                            }
+
+                            _thumbnailManager.RequestThumbnail(csi, GetThumbnailSizeForMode(), i);
+                            Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
+                        }
+                    }
+                    else
+                    {
+                        for (int i = startIndex; i <= endIndex; i++)
+                        {
+                            var item = _listView.Items[i];
+                            if (item is null) continue;
+
+                            if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
+                                _thumbnailManager.RequestThumbnail(csi, GetThumbnailSizeForMode());
+                        }
+                    }
+                }
+                finally
+                {
+                    ExitListViewEnumeration();
+                }
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: LoadThumbnailsAtIndexes End");
+            }
+        }
+
         private ListViewScrollHook _scrollHook;
         /// <summary>
         /// The _thumbnailTimer is a debounce timer used to implement Lazy Loading. Even though the actual thumbnail generation
@@ -4117,6 +4267,7 @@ namespace ExpControlsLib
         public void EnsureVisible(int index)
         {
             _listViewWrapper._ListView.EnsureVisible(index);
+            LoadImageAtIndex(index);
         }
 
         #endregion
