@@ -494,9 +494,8 @@ namespace WindowsApiLib.Shell
             }
             finally
             {
-                if (enumerator != null)
-                    Marshal.ReleaseComObject(enumerator);
-                Marshal.ReleaseComObject(parentIShellFolder);
+                if (enumerator != null) Marshal.ReleaseComObject(enumerator);
+                if (parentIShellFolder != null)  Marshal.ReleaseComObject(parentIShellFolder);
             }
             return results;
         }
