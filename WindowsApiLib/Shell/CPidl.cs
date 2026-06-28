@@ -1389,6 +1389,38 @@ namespace WindowsApiLib
             return h;
         }
 
+
+        /// <summary>
+        /// Given a Byte() containing a valid PIDL of a Folder, return the IShellFolder of that Folder
+        /// </summary>
+        /// <param name="b">Byte() containing a valid PIDL of a Folder</param>
+        /// <returns>The IShellFolder for the requested PIDL. If Byte() does not contain a valid PIDL of a Folder, return Nothing</returns>
+        public static IShellFolder GetIShellFolder(byte[] b)
+        {
+            IShellFolder shellFolder = default;
+            if (!CPidl.IsValid(b))
+                return null;
+
+            if ((b.Length == 2 && b[0] == 0 & b[1] == 0)
+                || b.Length == 0) // this is the desktop
+            {
+                //return ShellController.DesktopCSI.IShlFolder;
+                return ShellHelper.GetIShellFolder(ShellController.DesktopCSI.PIDL);
+            }
+            else
+            {
+                var ptr = Marshal.AllocCoTaskMem(b.Length);
+                if (ptr.Equals(IntPtr.Zero))
+                    return null;
+                Marshal.Copy(b, 0, ptr, b.Length);
+                // the next statement assigns a IshellFolder object to the function return, or has an error
+                shellFolder = ShellHelper.GetIShellFolder(ptr);
+                Marshal.FreeCoTaskMem(ptr);
+            }
+
+            return shellFolder;
+        }
+
         #endregion
 
 
@@ -1424,17 +1456,22 @@ namespace WindowsApiLib
             return new ICPidlEnumerator(m_bytes);
         }
 
+        public IShellFolder GetIShellFolder()
+        {
+            return GetIShellFolder(this.PidlBytes);
+        }
+
         #endregion
 
-        #region Private methods
+            #region Private methods
 
-        /// <summary>
-        /// Get Size in bytes of the first (possibly only)
-        /// SHItem in an ID list.  Note: the full size of
-        ///   the item is the sum of the sizes of all SHItems
-        ///   in the list!!
-        /// </summary>
-        /// <param name="pidl">A pointer to a PIDL.</param>
+            /// <summary>
+            /// Get Size in bytes of the first (possibly only)
+            /// SHItem in an ID list.  Note: the full size of
+            ///   the item is the sum of the sizes of all SHItems
+            ///   in the list!!
+            /// </summary>
+            /// <param name="pidl">A pointer to a PIDL.</param>
         private static int ItemIDSize(IntPtr pidl)
         {
             if (!pidl.Equals(IntPtr.Zero))

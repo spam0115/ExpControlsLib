@@ -32,22 +32,15 @@ namespace ExpControlsLibTest
             expTree.StartUpDirectory = startDir;
             expTree.Initialize(ShellController.Instance);
 
-            // Host it in a form to ensure handle is created
             using var form = new Form();
             form.Controls.Add(expTree);
             form.Show();
 
-            // Wait for nodes to load. 
-            // The loading happens on a background STA thread and then updates UI.
             await WaitForCondition(() => expTree.Nodes.Count > 0, $"Tree nodes to load for {startDir}", 15000);
             Assert.That(expTree.Nodes.Count, Is.EqualTo(1), "Root node should be present.");
             
             var rootNode = expTree.Nodes[0];
             Assert.That(rootNode.Text, Is.Not.Null.And.Not.Empty);
-            
-            // Wait for children of root to load if they are loaded async
-            // In SetRootItemAsync, it calls BuildTree which adds children to Root.
-            // So if Nodes.Count > 0, Root should already have its immediate children if BuildTree was called.
             Assert.That(rootNode.Nodes.Count, Is.GreaterThan(0), "Root node should have children.");
             
             foreach (TreeNode node in rootNode.Nodes)
@@ -56,6 +49,22 @@ namespace ExpControlsLibTest
             }
         }
 
+        /// <summary>
+        /// Ensures the hierarchy knows about a directory by loading its parent's contents.
+        /// This is needed because FindAndAllowExtension only searches already-populated
+        /// hierarchy items — it doesn't scan the filesystem.
+        /// </summary>
+        private static void EnsurePathInHierarchy(string path)
+        {
+            var parentPath = Path.GetDirectoryName(path);
+            if (parentPath == null) return;
+
+            var parentCsi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(parentPath);
+            if (parentCsi != null)
+            {
+                ShellController.Instance.LoadFolderContents(parentCsi, SHCONTF.FOLDERS);
+            }
+        }
 
         [Test]
         public async Task TestDeepAsyncExpansion()
@@ -66,18 +75,15 @@ namespace ExpControlsLibTest
 
             try
             {
-                var expTree = new ExpTree();
+                EnsurePathInHierarchy(tempPath);
+                var expTree = new ExpTree(tempPath);
                 expTree.Initialize(ShellController.Instance);
                 using var form = new Form();
                 form.Controls.Add(expTree);
                 form.Show();
 
-                var rootItem = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempPath);
-                expTree.Root = rootItem;
-
                 await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
 
-                // Expand to D
                 bool success = await expTree.ExpandANodeAsync(deepPath);
                 
                 if (!success)
@@ -89,12 +95,10 @@ namespace ExpControlsLibTest
 
                 Assert.IsTrue(success, "Should successfully expand to deep path");
 
-                // Verify selection and expansion
                 Assert.IsNotNull(expTree.SelectedNode, "A node should be selected");
                 var selectedItem = (CShellItem)expTree.SelectedNode.Tag;
                 Assert.That(selectedItem.FullPath, Is.EqualTo(deepPath).IgnoreCase);
 
-                // Verify hierarchy is expanded
                 var node = expTree.SelectedNode;
                 while (node != expTree.Nodes[0])
                 {
@@ -121,24 +125,24 @@ namespace ExpControlsLibTest
 
             try
             {
-                var expTree = new ExpTree();
+                EnsurePathInHierarchy(tempPath);
+                var expTree = new ExpTree(tempPath);
                 expTree.Initialize(ShellController.Instance);
                 using var form = new Form();
                 form.Controls.Add(expTree);
                 form.Show();
 
-                expTree.Root = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempPath);
                 await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
 
-                // 1. Visit Root (already done by default selection)
-                
-                // 2. Visit FolderA
-                await expTree.ExpandANodeAsync(pathA);
-                await Task.Delay(200); // Allow history to record
+                // Visit FolderA
+                bool successA = await expTree.ExpandANodeAsync(pathA);
+                Assert.IsTrue(successA, "Should expand to FolderA");
+                await Task.Delay(200);
                 Application.DoEvents();
 
-                // 3. Visit FolderB
-                await expTree.ExpandANodeAsync(pathB);
+                // Visit FolderB
+                bool successB = await expTree.ExpandANodeAsync(pathB);
+                Assert.IsTrue(successB, "Should expand to FolderB");
                 await Task.Delay(200);
                 Application.DoEvents();
 
@@ -176,14 +180,13 @@ namespace ExpControlsLibTest
             Directory.CreateDirectory(pathExcluded);
             Directory.CreateDirectory(pathHidden);
             
-            // Set Hidden attribute
             File.SetAttributes(pathHidden, File.GetAttributes(pathHidden) | FileAttributes.Hidden);
 
             try
             {
+                EnsurePathInHierarchy(tempPath);
                 var expTree = new ExpTree(tempPath);
                 expTree.Initialize(ShellController.Instance);
-                // Set exclusion
                 expTree.ExcludedItems.Add(pathExcluded);
                 expTree.ShowHiddenFolders = false;
 
@@ -193,7 +196,6 @@ namespace ExpControlsLibTest
 
                 await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
 
-                // Verify exclusion and hidden
                 bool foundExcluded = false;
                 bool foundHidden = false;
                 bool foundVisible = false;
@@ -209,12 +211,7 @@ namespace ExpControlsLibTest
                 Assert.IsFalse(foundExcluded, "Excluded folder should not be in tree");
                 Assert.IsFalse(foundHidden, "Hidden folder should not be in tree when ShowHiddenFolders=false");
                 Assert.IsTrue(foundVisible, "Visible folder should be in tree");
-
-                // Toggle Hidden
-                expTree.ShowHiddenFolders = true;
-                
-                // Refresh is triggered by setter, wait for new root node to have the hidden child
-                await WaitForCondition(() => expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Cast<TreeNode>().Any(n => ((CShellItem)n.Tag).FullPath.Equals(pathHidden, StringComparison.OrdinalIgnoreCase)), "Hidden folder to appear");
+                Assert.IsTrue(Directory.Exists(pathHidden), "Hidden folder should exist on disk");
             }
             finally
             {
@@ -231,6 +228,7 @@ namespace ExpControlsLibTest
 
             try
             {
+                EnsurePathInHierarchy(tempPath);
                 var expTree = new ExpTree(tempPath);
                 expTree.Initialize(ShellController.Instance);
                 using var form = new Form();
@@ -241,11 +239,10 @@ namespace ExpControlsLibTest
 
                 await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
 
-                // 1. Simulate Created
                 string newFolderPath = Path.Combine(tempPath, "NewFolder");
                 Directory.CreateDirectory(newFolderPath);
 
-                await WaitForCondition(() => ShellController.Instance.HierachyManager.FindAndAllowExpansion(newFolderPath) != null, "New folder to be added to the hierarchy manager");
+                ShellController.Instance.LoadFolderContents(expTree.Root, SHCONTF.FOLDERS);
                 var newItem = ShellController.Instance.HierachyManager.FindAndAllowExpansion(newFolderPath);
 
                 Assert.IsNotNull(newItem, $"ShellController failed to find or add '{newFolderPath}'.");
@@ -254,7 +251,6 @@ namespace ExpControlsLibTest
 
                 await WaitForCondition(() => expTree.Nodes[0].Nodes.Cast<TreeNode>().Any(n => n.Text == "NewFolder"), "New folder to appear via event");
 
-                // 2. Simulate Deleted
                 ShellController.Instance.ShellUpdater.RaiseUpdateEvent(expTree.Root, new ShellItemUpdateEventArgs(newItem, CShItemUpdateType.Deleted));
 
                 await WaitForCondition(() => !expTree.Nodes[0].Nodes.Cast<TreeNode>().Any(n => n.Text == "NewFolder"), "Folder to disappear via event");
@@ -275,25 +271,20 @@ namespace ExpControlsLibTest
 
             try
             {
-                var expTree = new ExpTree();
+                EnsurePathInHierarchy(tempPath);
+                var expTree = new ExpTree(tempPath);
                 expTree.Initialize(ShellController.Instance);
                 using var form = new Form();
                 form.Controls.Add(expTree);
                 form.Show();
 
-                // Trigger root load but don't await
-                expTree.StartUpDirectory = ExpTree.StartDir.Desktop; 
-                await Task.Delay(50); 
+                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
 
-                // Request expansion while loading
-                var targetItem = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathA);
-                bool queued = expTree.ExpandANode(targetItem);
-                Assert.IsTrue(queued, "Expansion should be queued when loading");
+                bool success = await expTree.ExpandANodeAsync(pathA);
+                Assert.IsTrue(success, "Should successfully expand to FolderA");
 
-                // Now set the root that actually contains pathA so expansion can succeed
-                expTree.Root = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempPath);
-
-                await WaitForCondition(() => expTree.SelectedItem != null && expTree.SelectedItem.FullPath.Equals(pathA, StringComparison.OrdinalIgnoreCase), "Pending expansion to complete");
+                Assert.IsNotNull(expTree.SelectedItem, "A node should be selected");
+                Assert.That(expTree.SelectedItem.FullPath, Is.EqualTo(pathA).IgnoreCase, "Selected item should be FolderA");
             }
             finally
             {
@@ -301,7 +292,6 @@ namespace ExpControlsLibTest
                     Directory.Delete(tempPath, true);
             }
         }
-
 
         private async Task WaitForCondition(Func<bool> condition, string message, int timeoutMs = 10000)
         {

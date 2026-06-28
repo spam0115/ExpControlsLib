@@ -1584,61 +1584,31 @@ namespace WindowsApiLib.Shell
             // SHCONTF_FOLDERS: Only look for folders
             // SHCONTF_INCLUDEHIDDEN: Optional, if you want to be certain about hidden ones
             var shellFolder = this.GetIShellFolder();
-            int hr = shellFolder.EnumObjects(IntPtr.Zero, SHCONTF.FOLDERS, out enumList);
-
-            if (hr == S_OK && enumList != null)
+            try
             {
-                // Try to get exactly one item
-                hr = enumList.Next(1, pidlSub, out fetched);
+                int hr = shellFolder.EnumObjects(IntPtr.Zero, SHCONTF.FOLDERS, out enumList);
 
-                // Clean up immediately
-                if (pidlSub[0] != IntPtr.Zero) Marshal.FreeCoTaskMem(pidlSub[0]);
-                Marshal.ReleaseComObject(enumList);
+                if (hr == S_OK && enumList != null)
+                {
+                    // Try to get exactly one item
+                    hr = enumList.Next(1, pidlSub, out fetched);
 
-                // S_OK means at least one was found.
-                // S_FALSE means the folder is empty.
-                return (hr == S_OK && fetched > 0);
+                    // Clean up immediately
+                    if (pidlSub[0] != IntPtr.Zero) Marshal.FreeCoTaskMem(pidlSub[0]);
+
+                    // S_OK means at least one was found.
+                    // S_FALSE means the folder is empty.
+                    return (hr == S_OK && fetched > 0);
+                }
+            }
+            finally
+            {
+                if (enumList is not null) Marshal.ReleaseComObject(enumList);
+                Marshal.ReleaseComObject(shellFolder);
             }
 
             return false;
         }
-
-        #region        Utility functions
-
-        /// <summary>
-        /// Given a Byte() containing a valid PIDL of a Folder, return the IShellFolder of that Folder
-        /// </summary>
-        /// <param name="b">Byte() containing a valid PIDL of a Folder</param>
-        /// <returns>The IShellFolder for the requested PIDL. If Byte() does not contain a valid PIDL of a Folder, return Nothing</returns>
-        public static IShellFolder GetIShellFolder(byte[] b)
-        {
-            IShellFolder MakeFolderFromBytesRet = default;
-            //GetDeskTop();                        // ensure we are initialized
-            // MakeFolderFromBytes = Nothing       'get rid of VS2005 warning
-            if (!CPidl.IsValid(b))
-                return null;
-
-            if ((b.Length == 2 && b[0] == 0 & b[1] == 0)
-                || b.Length == 0) // this is the desktop
-            {
-                //return ShellController.DesktopCSI.IShlFolder;
-                return ShellHelper.GetIShellFolder(ShellController.DesktopCSI.PIDL);
-            }
-            else
-            {
-                var ptr = Marshal.AllocCoTaskMem(b.Length);
-                if (ptr.Equals(IntPtr.Zero))
-                    return null;
-                Marshal.Copy(b, 0, ptr, b.Length);
-                // the next statement assigns a IshellFolder object to the function return, or has an error
-                MakeFolderFromBytesRet = ShellHelper.GetIShellFolder(ptr);
-                Marshal.FreeCoTaskMem(ptr);
-            }
-
-            return MakeFolderFromBytesRet;
-        }
-
-        #endregion
 
         #endregion
 
