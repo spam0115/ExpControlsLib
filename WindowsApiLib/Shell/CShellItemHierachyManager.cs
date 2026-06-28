@@ -346,6 +346,13 @@ namespace WindowsApiLib.Shell
                 CShellItem nextFolder = null;
                 lock (currentFolder)
                 {
+                    bool areFoldersOld = currentFolder.DirsCollectionTimestamp is null || (DateTime.Now - currentFolder.DirsCollectionTimestamp > new TimeSpan(0, 0, ShellController.FolderTimeout));
+                    if (areFoldersOld)
+                    {
+                        var directories = CShellItemFactory.GetContents(currentFolder, SHCONTF.FOLDERS | SHCONTF.INCLUDEHIDDEN); //todo: change the hidden handling
+                        currentFolder.Directories = new CShellItemCollection(currentFolder, directories);
+                    }
+
                     foreach (var currentCSI in currentFolder.Directories) 
                     {
                         if (IsAncestorOf(currentCSI.PIDL, absPidl))

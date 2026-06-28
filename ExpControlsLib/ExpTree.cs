@@ -868,7 +868,7 @@ namespace ExpControlsLib
 
             CShellItem baseItem = (CShellItem)baseNode.Tag;
             IntPtr basePidl = baseItem.PIDL;
-            int lim = CPidl.SegmentCount(target.PIDL) - CPidl.SegmentCount(basePidl);
+            int depthLimit = CPidl.SegmentCount(target.PIDL) - CPidl.SegmentCount(basePidl); //drill down limit
 
             try
             {
@@ -881,9 +881,9 @@ namespace ExpControlsLib
                 baseNode.Expand();
                 _TreeView.EndUpdate();
 
-                while (lim > 0)
+                while (depthLimit > 0)
                 {
-                    bool continueDo = false;
+                    bool continueWhile = false;
                     foreach (TreeNode currentNode in baseNode.Nodes)
                     {
                         if (CPidl.IsAncestorOf((CShellItem)currentNode.Tag, target, false))
@@ -896,29 +896,28 @@ namespace ExpControlsLib
                             _TreeView.BeginUpdate();
                             baseNode.Expand();
                             _TreeView.EndUpdate();
-                            lim -= 1;
-                            continueDo = true;
+                            depthLimit -= 1;
+                            continueWhile = true;
                             break;
                         }
                     }
 
-                    if (continueDo)
-                    {
-                        continue;
-                    }
-                    baseNode.EnsureVisible();
+                    if (continueWhile) continue;
+
+                    //fall through due to failure to find 
+                    baseNode.EnsureVisible(); 
                     return false;
                 }
 
                 _TreeView.BeginUpdate();
                 _TreeView.HideSelection = false;
-                Select();
                 if (SelectExpandedNode)
                     _TreeView.SelectedNode = baseNode;
 
                 baseNode.EnsureVisible();
                 _TreeView.EndUpdate();
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: End - success");
+
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: End - success");
                 return true;
             }
             catch (Exception ex)

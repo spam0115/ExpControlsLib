@@ -23,7 +23,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Gets whether the drag was a move operation.
         /// </summary>
-        public bool IsMove => Effect == DragDropEffects.Move || Effect == DragDropEffects.None;
+        public bool IsMove => Effect == DragDropEffects.Move;
 
         /// <summary>
         /// Gets whether the drag was a copy operation.

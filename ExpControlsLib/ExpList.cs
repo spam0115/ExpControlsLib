@@ -946,6 +946,7 @@ namespace ExpControlsLib
                 CShellItem[] selectedItems;
                 IShellFolder? folder;
                 List<IntPtr> relPidls;
+                int deleteCount = 0;
 
                 try
                 {
@@ -1001,7 +1002,8 @@ namespace ExpControlsLib
                     return;
                 }
 
-                if (relPidls.Count == 0)
+                deleteCount = relPidls.Count;
+                if (deleteCount == 0)
                 {
                     Debug.WriteLine("No items to delete");
                     return;
@@ -1019,7 +1021,7 @@ namespace ExpControlsLib
                         _listView.SelectedItems.Clear();
                 }
 
-                var capturedParentPidl = _currentFolderCsi.PIDL;
+                var capturedParentPidl = CPidl.Clone(_currentFolderCsi.PIDL);
                 _staRunner.EnqueueWork(InvokeMenuCommand("delete", capturedParentPidl, relPidls));
 
                 if (hasItems)
@@ -1047,16 +1049,11 @@ namespace ExpControlsLib
                     }
                 }
 
-                if (topItemIndex >= 0)
+                if (topItemIndex >= 0 && deleteCount > 10)
                 {
                     int count = VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
-                    if (topItemIndex < count)
-                    {
-                        if (VirtualMode)
-                            _listView.EnsureVisible(topItemIndex);
-                        else
-                            _listView.Items[topItemIndex].EnsureVisible();
-                    }
+                    topItemIndex = topItemIndex >= count ? count : topItemIndex;
+                    EnsureVisible(topItemIndex);
                 }
             }
             catch (Exception ex)
@@ -1314,7 +1311,7 @@ namespace ExpControlsLib
                         if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
                         if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
                         if (desktop != null) Marshal.ReleaseComObject(desktop);
-
+                        if (capturedParentPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(capturedParentPidl);
                         foreach (var pidl in capturedRelPidls) Marshal.FreeCoTaskMem(pidl);
                     }
                 }
@@ -2314,9 +2311,8 @@ namespace ExpControlsLib
             var hierarchyCsi = _shellController.HierachyManager.FindAndAllowExpansion(csi);
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(CShellItem): hierarchyCsi='{hierarchyCsi?.DisplayName}', calling LoadDirectoryBaseAsync...");
 
-            await LoadDirectoryBaseAsync(hierarchyCsi, includeFolder);
-
             CurrentFolderCsi = hierarchyCsi;
+            await LoadDirectoryBaseAsync(hierarchyCsi, includeFolder);
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(CShellItem): End for '{csi?.DisplayName}'");
         }
 
@@ -3125,9 +3121,11 @@ namespace ExpControlsLib
         private void DW_DragEnd(object? sender, DragEndEventArgs e)
         {
             // Remove items that were dragged away from this folder.
-            // e.Effect == Move: standard move
-            // e.Effect == None && e.DropCompleted: optimized move (same-volume, shell already moved the file)
-            if ((e.Effect == DragDropEffects.Move || (e.DropCompleted && e.Effect == DragDropEffects.None))
+            // Only remove on an explicit Move effect — the "optimized move" case
+            // (same-volume, Effect == None) is already handled by the Moved shell
+            // notification handler, which fires during the DoDragDrop modal loop
+            // and removes items before we get here.
+            if (e.DropCompleted && e.Effect == DragDropEffects.Move
                 && _shellController != null)
             {
                 bool useUpdate = e.Items.Length > BatchThreshold;
@@ -3161,8 +3159,10 @@ namespace ExpControlsLib
 
             // If the shell notification didn't fire for a move (e.g. cross-volume DELETE+CREATE
             // which doesn't go through DoRenameOrMove), fire DragCompleted here as fallback.
+            // Only fire for explicit Move — optimized moves (Effect == None) are handled
+            // by the Moved shell notification handler.
             if (e.DropCompleted && _pendingDragItems is not null && _pendingDragItems.Length > 0
-                && (e.Effect == DragDropEffects.Move || e.Effect == DragDropEffects.None))
+                && e.Effect == DragDropEffects.Move)
             {
                 ExpListDragCompleted?.Invoke(this,
                     new ExpListDragCompletedEventArgs(e.Effect, _pendingDragItems));
@@ -4266,8 +4266,12 @@ namespace ExpControlsLib
 
         public void EnsureVisible(int index)
         {
-            _listViewWrapper._ListView.EnsureVisible(index);
             LoadImageAtIndex(index);
+
+            if (VirtualMode)
+                _listViewWrapper._ListView.EnsureVisible(index);
+            else
+                _listViewWrapper._ListView.Items[index].EnsureVisible();
         }
 
         #endregion
