@@ -22,9 +22,16 @@ namespace ExpControlsLib
         private readonly BlockingCollection<IWorkItem> _queue = new();
         private readonly Thread[] _threads;
         private readonly CountdownEvent _ready;
+        private readonly CancellationTokenSource _shutdownCts = new();
         private volatile bool _disposed;
 
         public int StaThreadCount => _threads.Length;
+
+        /// <summary>
+        /// Token that is canceled when <see cref="Dispose"/> is called. Work items can
+        /// check this to cooperatively abort long-running operations during shutdown.
+        /// </summary>
+        public CancellationToken ShutdownToken => _shutdownCts.Token;
 
         public StaThreadRunner(int staThreadCount = 1, string threadNamePrefix = null)
         {
@@ -198,13 +205,21 @@ namespace ExpControlsLib
             if (_disposed) return;
             _disposed = true;
 
+            // Signal work items to cooperatively abort any long-running operations.
+            _shutdownCts.Cancel();
+
             _queue.CompleteAdding();
 
             foreach (var thread in _threads)
             {
-                thread.Join();
+                // Use a timeout instead of indefinite Join. If a thread is stuck in
+                // COM work that needs to marshal to the UI thread (which called Dispose),
+                // Join would deadlock. The timeout lets us bail out — the thread is a
+                // background thread and will exit when the process terminates.
+                thread.Join(TimeSpan.FromSeconds(2));
             }
 
+            _shutdownCts.Dispose();
             _queue.Dispose();
             _ready.Dispose();
         }

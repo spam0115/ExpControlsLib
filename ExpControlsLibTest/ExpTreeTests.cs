@@ -293,6 +293,221 @@ namespace ExpControlsLibTest
             }
         }
 
+        [Test]
+        public async Task TestShellUpdate_CreatedUnderExpandedParent()
+        {
+            string tempPath = Path.Combine(Path.GetTempPath(), "ExpTreeCrExp_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "A"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "B"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "C"));
+
+            try
+            {
+                EnsurePathInHierarchy(tempPath);
+                var expTree = new ExpTree(tempPath);
+                expTree.Initialize(ShellController.Instance);
+                using var form = new Form();
+                form.Controls.Add(expTree);
+                form.Show();
+
+                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+
+                var rootNode = expTree.Nodes[0];
+                // Root is expanded after SetRootItemAsync — children A, B, C are real nodes
+                Assert.IsTrue(rootNode.IsExpanded, "Root should be expanded after load");
+                Assert.That(rootNode.Nodes.Count, Is.EqualTo(3), "Root should have 3 children");
+
+                // Create new directory D on disk and add to hierarchy
+                string pathD = Path.Combine(tempPath, "D");
+                Directory.CreateDirectory(pathD);
+                ShellController.Instance.LoadFolderContents(expTree.Root, SHCONTF.FOLDERS);
+                var itemD = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathD);
+                Assert.IsNotNull(itemD, "D should be in hierarchy");
+
+                // Raise Created event
+                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                    expTree.Root, new ShellItemUpdateEventArgs(itemD, CShItemUpdateType.Created));
+
+                // D should appear in the tree immediately (handler runs synchronously on UI thread)
+                bool foundD = rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "D");
+                Assert.IsTrue(foundD, "D should appear under expanded root after Created event");
+                Assert.That(rootNode.Nodes.Count, Is.EqualTo(4), "Root should now have 4 children");
+            }
+            finally
+            {
+                if (Directory.Exists(tempPath))
+                    Directory.Delete(tempPath, true);
+            }
+        }
+
+        [Test]
+        public async Task TestShellUpdate_DeletedFromExpandedParent()
+        {
+            string tempPath = Path.Combine(Path.GetTempPath(), "ExpTreeDelExp_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "A"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "B"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "C"));
+
+            try
+            {
+                EnsurePathInHierarchy(tempPath);
+                var expTree = new ExpTree(tempPath);
+                expTree.Initialize(ShellController.Instance);
+                using var form = new Form();
+                form.Controls.Add(expTree);
+                form.Show();
+
+                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+
+                var rootNode = expTree.Nodes[0];
+                Assert.IsTrue(rootNode.IsExpanded, "Root should be expanded after load");
+                Assert.That(rootNode.Nodes.Count, Is.EqualTo(3), "Root should have 3 children");
+
+                // Find B in the hierarchy
+                string pathB = Path.Combine(tempPath, "B");
+                var itemB = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathB);
+                Assert.IsNotNull(itemB, "B should be in hierarchy");
+
+                // Verify B is in the tree before the event
+                Assert.IsTrue(rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "B"), "B should be in tree before deletion");
+
+                // Raise Deleted event
+                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                    expTree.Root, new ShellItemUpdateEventArgs(itemB, CShItemUpdateType.Deleted));
+
+                // B should be removed
+                bool foundB = rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "B");
+                Assert.IsFalse(foundB, "B should be removed from expanded root after Deleted event");
+                Assert.That(rootNode.Nodes.Count, Is.EqualTo(2), "Root should now have 2 children");
+
+                // A and C should still be present
+                Assert.IsTrue(rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "A"), "A should remain");
+                Assert.IsTrue(rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "C"), "C should remain");
+            }
+            finally
+            {
+                if (Directory.Exists(tempPath))
+                    Directory.Delete(tempPath, true);
+            }
+        }
+
+        [Test]
+        public async Task TestShellUpdate_CreatedUnderCollapsedParent()
+        {
+            string tempPath = Path.Combine(Path.GetTempPath(), "ExpTreeCrCol_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "A"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "B"));
+
+            try
+            {
+                EnsurePathInHierarchy(tempPath);
+                var expTree = new ExpTree(tempPath);
+                expTree.Initialize(ShellController.Instance);
+                using var form = new Form();
+                form.Controls.Add(expTree);
+                form.Show();
+
+                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+
+                var rootNode = expTree.Nodes[0];
+                Assert.IsTrue(rootNode.IsExpanded, "Root should be expanded after load");
+                Assert.That(rootNode.Nodes.Count, Is.EqualTo(2), "Root should have 2 children");
+
+                // Collapse the root — children are still real nodes, just hidden.
+                // ShowRootLines must be true or Tv1_BeforeCollapse cancels root collapse.
+                expTree.ShowRootLines = true;
+                rootNode.Collapse();
+                Assert.IsFalse(rootNode.IsExpanded, "Root should be collapsed");
+                // Children are still there (just hidden)
+                Assert.That(rootNode.Nodes.Count, Is.EqualTo(2), "Collapsed root should still have 2 children");
+
+                // Create C on disk and add to hierarchy
+                string pathC = Path.Combine(tempPath, "C");
+                Directory.CreateDirectory(pathC);
+                ShellController.Instance.LoadFolderContents(expTree.Root, SHCONTF.FOLDERS);
+                var itemC = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathC);
+                Assert.IsNotNull(itemC, "C should be in hierarchy");
+
+                // Raise Created event
+                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                    expTree.Root, new ShellItemUpdateEventArgs(itemC, CShItemUpdateType.Created));
+
+                // C should be added even though root is collapsed
+                bool foundC = rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "C");
+                Assert.IsTrue(foundC, "C should appear under collapsed root after Created event");
+                Assert.That(rootNode.Nodes.Count, Is.EqualTo(3), "Collapsed root should now have 3 children");
+
+                // Expand and verify C is visible
+                rootNode.Expand();
+                Assert.That(rootNode.Nodes.Count, Is.EqualTo(3), "Expanded root should have 3 children");
+                Assert.IsTrue(rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "C"), "C should be visible after expand");
+            }
+            finally
+            {
+                if (Directory.Exists(tempPath))
+                    Directory.Delete(tempPath, true);
+            }
+        }
+
+        [Test]
+        public async Task TestShellUpdate_DeletedFromCollapsedParent()
+        {
+            string tempPath = Path.Combine(Path.GetTempPath(), "ExpTreeDelCol_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "A"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "B"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "C"));
+
+            try
+            {
+                EnsurePathInHierarchy(tempPath);
+                var expTree = new ExpTree(tempPath);
+                expTree.Initialize(ShellController.Instance);
+                using var form = new Form();
+                form.Controls.Add(expTree);
+                form.Show();
+
+                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+
+                var rootNode = expTree.Nodes[0];
+                Assert.IsTrue(rootNode.IsExpanded, "Root should be expanded after load");
+                Assert.That(rootNode.Nodes.Count, Is.EqualTo(3), "Root should have 3 children");
+
+                // Verify B is present before collapsing
+                Assert.IsTrue(rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "B"), "B should be in tree");
+
+                // Collapse the root — ShowRootLines must be true or collapse is cancelled
+                expTree.ShowRootLines = true;
+                rootNode.Collapse();
+                Assert.IsFalse(rootNode.IsExpanded, "Root should be collapsed");
+
+                // Find B in the hierarchy
+                string pathB = Path.Combine(tempPath, "B");
+                var itemB = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathB);
+                Assert.IsNotNull(itemB, "B should be in hierarchy");
+
+                // Raise Deleted event while collapsed
+                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                    expTree.Root, new ShellItemUpdateEventArgs(itemB, CShItemUpdateType.Deleted));
+
+                // B should be removed even though root is collapsed
+                bool foundB = rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "B");
+                Assert.IsFalse(foundB, "B should be removed from collapsed root after Deleted event");
+                Assert.That(rootNode.Nodes.Count, Is.EqualTo(2), "Collapsed root should now have 2 children");
+
+                // Expand and verify only A and C remain
+                rootNode.Expand();
+                Assert.That(rootNode.Nodes.Count, Is.EqualTo(2), "Expanded root should have 2 children");
+                Assert.IsTrue(rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "A"), "A should remain");
+                Assert.IsTrue(rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "C"), "C should remain");
+                Assert.IsFalse(rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "B"), "B should not reappear after expand");
+            }
+            finally
+            {
+                if (Directory.Exists(tempPath))
+                    Directory.Delete(tempPath, true);
+            }
+        }
+
         private async Task WaitForCondition(Func<bool> condition, string message, int timeoutMs = 10000)
         {
             var start = DateTime.Now;

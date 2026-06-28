@@ -1810,7 +1810,7 @@ namespace ExpControlsLib
                     {
                         case CShItemUpdateType.Created:
                             {
-                                if (!isTargetFolder) return;
+                                if (!isTargetFolder && !isTargetItem) return;
                                 if (IsExcluded(e.Item)) return;
                                 if (_filter != null && !_filter(e.Item)) return; // pre-filter new items
 

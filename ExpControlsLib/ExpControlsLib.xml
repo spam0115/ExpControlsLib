@@ -2575,6 +2575,12 @@
             many COM scenarios.
             </remarks>
         </member>
+        <member name="P:ExpControlsLib.StaThreadRunner.ShutdownToken">
+            <summary>
+            Token that is canceled when <see cref="M:ExpControlsLib.StaThreadRunner.Dispose"/> is called. Work items can
+            check this to cooperatively abort long-running operations during shutdown.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.StaThreadRunner.InvokeAsync``1(System.Func{``0})">
             <summary>
             Queues work to run on the dedicated STA thread and returns a Task for its result.

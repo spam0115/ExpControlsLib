@@ -400,6 +400,279 @@ namespace ExpControlsLibTest
             Assert.That(selectedItems[0].FullPath, Is.EqualTo(expList.GetItem(0).FullPath));
             Assert.That(selectedItems[1].FullPath, Is.EqualTo(expList.GetItem(1).FullPath));
         }
+
+        /// <summary>
+        /// Ensures the hierarchy knows about a directory by loading its parent's contents.
+        /// </summary>
+        private static void EnsurePathInHierarchy(string path)
+        {
+            var parentPath = Path.GetDirectoryName(path);
+            if (parentPath == null) return;
+
+            var parentCsi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(parentPath);
+            if (parentCsi != null)
+            {
+                ShellController.Instance.LoadFolderContents(parentCsi, SHCONTF.FOLDERS);
+            }
+        }
+
+        [Test]
+        public async Task TestShellUpdate_CreatedInCurrentFolder()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "ExpListCrIn_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            Directory.CreateDirectory(Path.Combine(tempDir, "A"));
+            Directory.CreateDirectory(Path.Combine(tempDir, "B"));
+
+            try
+            {
+                EnsurePathInHierarchy(tempDir);
+                var expList = new ExpList();
+                expList.Initialize(ShellController.Instance);
+                using var form = new Form();
+                form.Controls.Add(expList);
+                form.Show();
+
+                await expList.LoadDirectoryAsync(tempDir);
+
+                // Wait for items to load
+                for (int i = 0; i < 200; i++)
+                {
+                    if (expList.Count >= 2) break;
+                    await Task.Delay(50);
+                    Application.DoEvents();
+                }
+
+                Assert.That(expList.Count, Is.EqualTo(2), "Should have A and B");
+
+                // Create C on disk and add to hierarchy
+                string pathC = Path.Combine(tempDir, "C");
+                Directory.CreateDirectory(pathC);
+                var rootCsi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempDir);
+                ShellController.Instance.LoadFolderContents(rootCsi, SHCONTF.FOLDERS);
+                var itemC = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathC);
+                Assert.IsNotNull(itemC, "C should be in hierarchy");
+
+                // Raise Created event — sender is the parent folder, e.Item is the new child
+                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                    rootCsi, new ShellItemUpdateEventArgs(itemC, CShItemUpdateType.Created));
+
+                // Wait for item to appear
+                for (int i = 0; i < 100; i++)
+                {
+                    bool found = false;
+                    for (int j = 0; j < expList.Count; j++)
+                    {
+                        if (expList.GetItem(j).DisplayName == "C") { found = true; break; }
+                    }
+                    if (found) break;
+                    await Task.Delay(50);
+                    Application.DoEvents();
+                }
+
+                bool foundC = false;
+                for (int j = 0; j < expList.Count; j++)
+                {
+                    if (expList.GetItem(j).DisplayName == "C") { foundC = true; break; }
+                }
+                Assert.IsTrue(foundC, "C should appear in the list after Created event");
+                Assert.That(expList.Count, Is.EqualTo(3), "Should now have A, B, C");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                    Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Test]
+        public async Task TestShellUpdate_DeletedFromCurrentFolder()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "ExpListDelIn_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            Directory.CreateDirectory(Path.Combine(tempDir, "A"));
+            Directory.CreateDirectory(Path.Combine(tempDir, "B"));
+            Directory.CreateDirectory(Path.Combine(tempDir, "C"));
+
+            try
+            {
+                EnsurePathInHierarchy(tempDir);
+                var expList = new ExpList();
+                expList.Initialize(ShellController.Instance);
+                using var form = new Form();
+                form.Controls.Add(expList);
+                form.Show();
+
+                await expList.LoadDirectoryAsync(tempDir);
+
+                for (int i = 0; i < 200; i++)
+                {
+                    if (expList.Count >= 3) break;
+                    await Task.Delay(50);
+                    Application.DoEvents();
+                }
+
+                Assert.That(expList.Count, Is.EqualTo(3), "Should have A, B, C");
+
+                // Find B in the list
+                CShellItem itemB = null;
+                for (int j = 0; j < expList.Count; j++)
+                {
+                    if (expList.GetItem(j).DisplayName == "B") { itemB = expList.GetItem(j); break; }
+                }
+                Assert.IsNotNull(itemB, "B should be in the list");
+
+                var rootCsi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempDir);
+
+                // Raise Deleted event
+                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                    rootCsi, new ShellItemUpdateEventArgs(itemB, CShItemUpdateType.Deleted));
+
+                // Wait for item to be removed
+                for (int i = 0; i < 100; i++)
+                {
+                    bool found = false;
+                    for (int j = 0; j < expList.Count; j++)
+                    {
+                        if (expList.GetItem(j).DisplayName == "B") { found = true; break; }
+                    }
+                    if (!found) break;
+                    await Task.Delay(50);
+                    Application.DoEvents();
+                }
+
+                bool foundB = false;
+                for (int j = 0; j < expList.Count; j++)
+                {
+                    if (expList.GetItem(j).DisplayName == "B") { foundB = true; break; }
+                }
+                Assert.IsFalse(foundB, "B should be removed from the list after Deleted event");
+                Assert.That(expList.Count, Is.EqualTo(2), "Should now have A and C");
+
+                // Verify A and C remain
+                var names = new List<string>();
+                for (int j = 0; j < expList.Count; j++) names.Add(expList.GetItem(j).DisplayName);
+                Assert.That(names, Does.Contain("A"), "A should remain");
+                Assert.That(names, Does.Contain("C"), "C should remain");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                    Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Test]
+        public async Task TestShellUpdate_CreatedInDifferentFolder()
+        {
+            var tempDir1 = Path.Combine(Path.GetTempPath(), "ExpListCrDiff1_" + Guid.NewGuid().ToString("N"));
+            var tempDir2 = Path.Combine(Path.GetTempPath(), "ExpListCrDiff2_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir1);
+            Directory.CreateDirectory(tempDir2);
+            Directory.CreateDirectory(Path.Combine(tempDir1, "A"));
+
+            try
+            {
+                EnsurePathInHierarchy(tempDir1);
+                EnsurePathInHierarchy(tempDir2);
+                var expList = new ExpList();
+                expList.Initialize(ShellController.Instance);
+                using var form = new Form();
+                form.Controls.Add(expList);
+                form.Show();
+
+                // Load tempDir1 — the list shows tempDir1's contents
+                await expList.LoadDirectoryAsync(tempDir1);
+
+                for (int i = 0; i < 200; i++)
+                {
+                    if (expList.Count >= 1) break;
+                    await Task.Delay(50);
+                    Application.DoEvents();
+                }
+
+                Assert.That(expList.Count, Is.EqualTo(1), "Should have A in tempDir1");
+                int countBefore = expList.Count;
+
+                // Create B in tempDir2 (a DIFFERENT folder)
+                string pathB = Path.Combine(tempDir2, "B");
+                Directory.CreateDirectory(pathB);
+                var dir2Csi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempDir2);
+                ShellController.Instance.LoadFolderContents(dir2Csi, SHCONTF.FOLDERS);
+                var itemB = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathB);
+                Assert.IsNotNull(itemB, "B should be in hierarchy");
+
+                // Raise Created event for item in tempDir2 — should be ignored by the list
+                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                    dir2Csi, new ShellItemUpdateEventArgs(itemB, CShItemUpdateType.Created));
+
+                await Task.Delay(500);
+                Application.DoEvents();
+
+                // List should be unchanged — we're viewing tempDir1, not tempDir2
+                Assert.That(expList.Count, Is.EqualTo(countBefore), "List should be unchanged — event was for a different folder");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir1)) Directory.Delete(tempDir1, true);
+                if (Directory.Exists(tempDir2)) Directory.Delete(tempDir2, true);
+            }
+        }
+
+        [Test]
+        public async Task TestShellUpdate_DeletedFromDifferentFolder()
+        {
+            var tempDir1 = Path.Combine(Path.GetTempPath(), "ExpListDelDiff1_" + Guid.NewGuid().ToString("N"));
+            var tempDir2 = Path.Combine(Path.GetTempPath(), "ExpListDelDiff2_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir1);
+            Directory.CreateDirectory(tempDir2);
+            Directory.CreateDirectory(Path.Combine(tempDir1, "A"));
+            Directory.CreateDirectory(Path.Combine(tempDir2, "B"));
+
+            try
+            {
+                EnsurePathInHierarchy(tempDir1);
+                EnsurePathInHierarchy(tempDir2);
+                var expList = new ExpList();
+                expList.Initialize(ShellController.Instance);
+                using var form = new Form();
+                form.Controls.Add(expList);
+                form.Show();
+
+                // Load tempDir1
+                await expList.LoadDirectoryAsync(tempDir1);
+
+                for (int i = 0; i < 200; i++)
+                {
+                    if (expList.Count >= 1) break;
+                    await Task.Delay(50);
+                    Application.DoEvents();
+                }
+
+                Assert.That(expList.Count, Is.EqualTo(1), "Should have A in tempDir1");
+                int countBefore = expList.Count;
+
+                // Find B in tempDir2's hierarchy
+                var dir2Csi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempDir2);
+                var itemB = ShellController.Instance.HierachyManager.FindAndAllowExpansion(Path.Combine(tempDir2, "B"));
+                Assert.IsNotNull(itemB, "B should be in hierarchy");
+
+                // Raise Deleted event for item in tempDir2 — should be ignored
+                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                    dir2Csi, new ShellItemUpdateEventArgs(itemB, CShItemUpdateType.Deleted));
+
+                await Task.Delay(500);
+                Application.DoEvents();
+
+                // List should be unchanged
+                Assert.That(expList.Count, Is.EqualTo(countBefore), "List should be unchanged — event was for a different folder");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir1)) Directory.Delete(tempDir1, true);
+                if (Directory.Exists(tempDir2)) Directory.Delete(tempDir2, true);
+            }
+        }
     }
 }
 

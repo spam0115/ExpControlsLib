@@ -2168,8 +2168,12 @@ namespace ExpControlsLib
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Begin for '{csi?.DisplayName}'");
             _rootLoadCts?.Cancel();
-            _rootLoadCts = new CancellationTokenSource();
-            var token = _rootLoadCts.Token;
+            _rootLoadCts?.Dispose();
+            // Link with the runner's shutdown token so disposal can abort in-progress work.
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                _staRunner?.ShutdownToken ?? CancellationToken.None);
+            _rootLoadCts = linkedCts;
+            var token = linkedCts.Token;
 
             try
             {
@@ -2367,21 +2371,24 @@ namespace ExpControlsLib
             else
                 selnode = _TreeView.SelectedNode;
 
-            try
+            CShellItem selCSI = (CShellItem)selnode.Tag;
+            Task task;
+            if (rootCSI == null)
+            {
+                task = SetRootItemAsync(Root);
+            }
+            else
+            {
+                task = SetRootItemAsync(rootCSI);
+            }
+
+            // Use the UI thread's SynchronizationContext so the continuation runs on the
+            // UI thread, not the thread pool. This avoids cross-thread TreeView access.
+            var uiScheduler = TaskScheduler.FromCurrentSynchronizationContext();
+            task.ContinueWith(antecedent =>
             {
                 _TreeView.BeginUpdate();
-                CShellItem selCSI = (CShellItem)selnode.Tag;
-                Task task;
-                if (rootCSI == null)
-                {
-                    task = SetRootItemAsync(Root);
-                }
-                else
-                {
-                    task = SetRootItemAsync(rootCSI);
-                }
-
-                task.ContinueWith(antecedent =>
+                try
                 {
                     if (!ExpandANode(selCSI))
                     {
@@ -2399,15 +2406,14 @@ namespace ExpControlsLib
                                 break;
                         }
                     }
-                });
-
-            }
-            finally
-            {
-                _TreeView.EndUpdate();
-            }
-            EnableEventPost = true;
-            Tv1_AfterSelect(this, new TreeViewEventArgs(_TreeView.SelectedNode));
+                }
+                finally
+                {
+                    _TreeView.EndUpdate();
+                }
+                EnableEventPost = true;
+                Tv1_AfterSelect(this, new TreeViewEventArgs(_TreeView.SelectedNode));
+            }, CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion, uiScheduler);
         }
 
         /// <summary>
@@ -2569,6 +2575,8 @@ namespace ExpControlsLib
             _rootLoadCts?.Cancel();
             _rootLoadCts?.Dispose();
             _rootLoadCts = null;
+            _staRunner?.Dispose();
+            _staRunner = null;
             if (_shellController?.ShellUpdater != null)
                 _shellController.ShellUpdater.UpdateEvent -= ShellController_UpdateEventHandler;
         }
