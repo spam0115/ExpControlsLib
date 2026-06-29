@@ -18,12 +18,13 @@ namespace WindowsApiLibTest
         {
             await Runner.EnqueueWork(() =>
             {
+                CShellItemFactory.Initialize();
                 // Assert that Instance is correctly initialized
                 Assert.IsNotNull(CShellItemFactory.Instance, "Instance should not be null after initialization.");
 
                 // Verify basic properties are populated
-                Assert.IsNotNull(CShellItemFactory.DesktopPidl, "DesktopPidl should not be null.");
-                Assert.AreNotEqual(IntPtr.Zero, CShellItemFactory.DesktopPidl, "DesktopPidl should not be zero.");
+                Assert.IsNotNull(CShellItemFactory.DesktopCSI.PIDL, "DesktopPidl should not be null.");
+                Assert.AreNotEqual(IntPtr.Zero, CShellItemFactory.DesktopCSI.PIDL, "DesktopPidl should not be zero.");
 
                 Assert.IsNotNull(CShellItemFactory.EmptyPidl, "EmptyPidl should not be null.");
                 Assert.AreNotEqual(IntPtr.Zero, CShellItemFactory.EmptyPidl, "EmptyPidl should not be zero.");

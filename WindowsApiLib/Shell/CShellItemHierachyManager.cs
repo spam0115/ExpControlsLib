@@ -31,7 +31,14 @@ namespace WindowsApiLib.Shell
                 return CPidl.ToString(CurrentFolder.PIDL);
             } }
 
-        public CShellItem DesktopCSI { get; internal set; }
+        public CShellItem DesktopCSI { 
+            get {
+                if (field == null)
+                    field = CShellItemFactory.DesktopCSI;
+
+                return field;
+            }
+            internal set; }
 
         /// <summary>
         /// A case-insensitive set of paths representing Shell items that should be excluded from
@@ -86,7 +93,7 @@ namespace WindowsApiLib.Shell
         public CShellItemHierachyManager(CShellItem? root = null) {
             this.Root = root;
 
-            //todo: move the item hierarchy code from cshellitem to over here.
+
         }
 
         /// <summary>

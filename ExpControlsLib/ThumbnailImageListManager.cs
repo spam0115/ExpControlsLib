@@ -321,6 +321,46 @@ namespace ExpControlsLib
 
 
         /// <summary>
+        /// Disposes all existing ImageLists and creates a fresh one for the current active size.
+        /// Called when navigating to a new folder to prevent GDI handle exhaustion from
+        /// accumulated thumbnails across many folder navigations.
+        /// </summary>
+        public void ResetForNewFolder()
+        {
+            _generation++;
+            CancelPendingRequests();
+
+            foreach (var imageList in _imageLists.Values)
+            {
+                lock (imageList)
+                {
+                    imageList?.Dispose();
+                }
+            }
+            _imageLists.Clear();
+            _lruKeys.Clear();
+            _slotByKey.Clear();
+
+            if (_expList != null && _expList._listView != null)
+            {
+                _expList._listView.LargeImageList = null;
+                _expList._listView.SmallImageList = null;
+            }
+
+            if (_activeSize > 0)
+            {
+                var freshList = new ImageList
+                {
+                    ImageSize = new Size(_activeSize, _activeSize),
+                    ColorDepth = ColorDepth.Depth32Bit
+                };
+                _imageLists[_activeSize] = freshList;
+                if (_expList?._listView != null)
+                    _expList._listView.LargeImageList = freshList;
+            }
+        }
+
+        /// <summary>
         /// Clears all ImageLists and resets the ListView
         /// </summary>
         public void Clear()

@@ -1148,6 +1148,8 @@ namespace WindowsApiLib.Shell
             // only the following code is executed. 
             if (!m_Pidl.Equals(IntPtr.Zero))
             {
+                if (m_Pidl.Equals(CShellItemFactory.DesktopCSI.m_Pidl))
+                    Debugger.Break();
                 Marshal.FreeCoTaskMem(m_Pidl);
                 m_Pidl = IntPtr.Zero;
             }

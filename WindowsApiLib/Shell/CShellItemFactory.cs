@@ -18,9 +18,12 @@ namespace WindowsApiLib.Shell
 
 
         /// <summary>
-        /// 
+        /// The very important root of the shell namespace
         /// </summary>
-        internal static CShellItem? DesktopCSI { get; set; }
+        public static CShellItem? DesktopCSI { get; set; }
+        public static CShellItem RecycleBin { get; private set; }
+        public static CShellItem DeskTopDirectory { get; private set; }
+        public static CShellItem MyDocuments { get; private set; }
 
         private static readonly ConcurrentDictionary<string, string> s_typeNameCache = new(StringComparer.OrdinalIgnoreCase);
 #if DEBUG
@@ -58,27 +61,23 @@ namespace WindowsApiLib.Shell
 
 
         public static IntPtr EmptyPidl { get; private set; }
-        public static IntPtr DesktopPidl { get; private set; }
+        //public static IntPtr DesktopPidl { get; private set; }
 
         public static string SystemName { get; private set; }
-        public static CShellItem RecycleBin { get; private set; }
-        public static CShellItem DeskTopDirectory { get; private set; }
 
-        public static CShellItem MyDocuments { get; private set; }
 
-        public static CShellItemHierachyManager? HierachyManager { get; internal set; }
+        //public static CShellItemHierachyManager? HierachyManager { get; internal set; }
 
         private CShellItemFactory(CShellItemHierachyManager? hierachyManager = null) 
         {
-            HierachyManager = hierachyManager;
+            //HierachyManager = hierachyManager;
             EmptyPidl = CreateEmptyPidl();
-            DesktopPidl = GetShellNamespacePidl(ShellNamespaceGuids.DesktopFileSystem);
 
             // Get the SystemName for Remote item testing
             SystemName = Environment.MachineName;
 
-            CShellItemFactory.DesktopCSI = GetDesktopRoot();
-            DeskTopDirectory = Create(CSIDL.DESKTOPDIRECTORY);
+            CShellItemFactory.DesktopCSI = Create(CSIDL.DESKTOP);
+            DeskTopDirectory = Create(CSIDL.DESKTOPDIRECTORY); //this is the file system part of the desktop
 
             RecycleBin = Create(CSIDL.BITBUCKET);
             StrRecycleBin = RecycleBin.DisplayName;
@@ -91,27 +90,14 @@ namespace WindowsApiLib.Shell
         }
 
         // Call once at startup
-        public static void Initialize(CShellItemHierachyManager? hierachyManager = null)
+        public static void Initialize()
         {
             lock (_lock)
             {
                 if (Instance is not null) return;
 
-                Instance = new CShellItemFactory(hierachyManager);
+                Instance = new CShellItemFactory();
             }
-        }
-
-        /// <summary>
-        /// Gets the existing Desktop item if it exists otherwise creates a new one.
-        /// </summary>
-        /// <returns></returns>
-        public static CShellItem GetDesktopRoot()
-        {
-            if (DesktopCSI != null) return DesktopCSI;
-
-            var csi = new CShellItem();
-
-            return PopulateDesktopCShellItem(csi);
         }
 
         /// <summary>
@@ -138,7 +124,7 @@ namespace WindowsApiLib.Shell
             IntPtr pidl = ShellAPI.ILCreateFromPathW(path);
             if (pidl == IntPtr.Zero) return null;
 
-            return FindAndAllowExpansion(pidl);
+            return Create(pidl);
         }
 
         /// <summary>Given a CSIDL,
@@ -211,14 +197,7 @@ namespace WindowsApiLib.Shell
                 handle2.Free();
             }
 
-            csi = FindAndAllowExpansion(fullPidl);
-
-            if (csi is null && fullPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(fullPidl);
-            if (csi is not null && csi.PIDL == IntPtr.Zero)
-            {
-                csi.Dispose(); // last minute failsafe
-                csi = null;
-            }
+            PopulateCsi(csi, fullPidl);
 
             return csi;
         }
@@ -242,7 +221,7 @@ namespace WindowsApiLib.Shell
             }
             else if (segments == 1) //relative pidl or desktop root
             {   
-                if (CPidl.IsShellNamespaceRoot(pidl))
+                if (CPidl.IsShellNamespaceRoot(pidl)) //desktop root
                 {
                     PopulateCsi(csi, pidl);
                     csi.Parent = null;
@@ -251,8 +230,6 @@ namespace WindowsApiLib.Shell
                 else
                 {
                     if (parent is null) throw new ArgumentException("parent can't be null when pidl is not absolute.");
-                    
-
                     fullPidl = CPidl.Concatenate(parent.PIDL, pidl);
                 }
             }
@@ -276,30 +253,30 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <param name="pidl">Absolute (Full) Pidl of item to be Found or Created</param>
         /// <returns>A CShellItem or, in case of error, Nothing</returns>
-        public static CShellItem? FindAndAllowExpansion(IntPtr pidl)
-        {
-            CShellItem? csi = default;
-            CShellItem? Parent = null;
+        //public static CShellItem? FindAndAllowExpansion(IntPtr pidl)
+        //{
+        //    CShellItem? csi = default;
+        //    CShellItem? Parent = null;
 
-            if (HierachyManager is null)
-            {
-                csi = new CShellItem();
-                PopulateCsi(csi, pidl);
-            }
-            else
-            {
-                csi = HierachyManager.FindAndAllowExpansion(pidl, out Parent);
-                if (csi == null)
-                {
-                    if (!(Parent == null))
-                        csi = Create(pidl, Parent);
-                    else
-                        csi = Create(pidl);
-                }
-            }
+        //    if (HierachyManager is null)
+        //    {
+        //        csi = new CShellItem();
+        //        PopulateCsi(csi, pidl);
+        //    }
+        //    else
+        //    {
+        //        csi = HierachyManager.FindAndAllowExpansion(pidl, out Parent);
+        //        if (csi == null)
+        //        {
+        //            if (!(Parent == null))
+        //                csi = Create(pidl, Parent);
+        //            else
+        //                csi = Create(pidl);
+        //        }
+        //    }
 
-            return csi;
-        }
+        //    return csi;
+        //}
 
         /// <summary>
         /// 
@@ -528,10 +505,10 @@ namespace WindowsApiLib.Shell
                 }
                 else
                 {
-                    //var tmpCsi = CShellItemFactory.Create(pidl, csi);
                     var tmpCsi = CShellItemFactory.Create(pidl, csi);
                     items.Add(tmpCsi);
-                    Marshal.FreeCoTaskMem(pidl);
+                    if (!CPidl.IsShellNamespaceRoot(pidl))
+                        Marshal.FreeCoTaskMem(pidl);
                 }
             }
 
@@ -632,6 +609,7 @@ namespace WindowsApiLib.Shell
             var shfi = new SHFILEINFO();
             var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
             int dwAttr = 0;
+            var DesktopPidl = GetShellNamespacePidl(ShellNamespaceGuids.DesktopFileSystem);
             SHGetFileInfo(DesktopPidl, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
 
             IShellFolder iShellFolder = null;
@@ -690,7 +668,7 @@ namespace WindowsApiLib.Shell
             csiOutput.m_CanMove = (attrFlag & SFGAO.CANMOVE) != 0;
             csiOutput.IsDropTarget = (attrFlag & SFGAO.DROPTARGET) != 0;
             csiOutput.m_CanRename = (attrFlag & SFGAO.CANRENAME) != 0;
-            if (pidl == DesktopPidl)
+            if (CPidl.IsShellNamespaceRoot(pidl))
             {
                 csiOutput.m_IsFileSystem = false;
                 csiOutput.m_FullPath = "::{" + DesktopGUID.ToString() + "}";

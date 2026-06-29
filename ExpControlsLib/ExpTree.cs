@@ -1256,16 +1256,16 @@ namespace ExpControlsLib
         /// Hidden items are filtered according to <see cref="ShowHiddenFolders"/>, and
         /// excluded items are filtered via <see cref="IsExcluded"/>.
         /// </summary>
-        /// <param name="L1">
+        /// <param name="itemsList">
         /// The array of first-level child <see cref="CShellItem"/> folders to add as root children.
         /// </param>
-        private void BuildTree(IEnumerable<CShellItem> L1)
+        private void BuildTree(IEnumerable<CShellItem> itemsList)
         {
-            foreach (var CSI in L1)
+            foreach (var csi in itemsList)
             {
-                if (!(CSI.IsHidden & !m_showHiddenFolders) && !IsExcluded(CSI))
+                if (!(csi.IsHidden & !m_showHiddenFolders) && !IsExcluded(csi))
                 {
-                    _Root.Nodes.Add(MakeNode(CSI));
+                    _Root.Nodes.Add(MakeNode(csi));
                 }
             }
         }
@@ -2023,7 +2023,7 @@ namespace ExpControlsLib
                 if (relPidl == IntPtr.Zero) return;
 
                 var capturedRelPidl = CPidl.Clone(relPidl);
-                var capturedParentPidl = parentPidl; //not sure if we need to copy this
+                var capturedParentPidl = CPidl.Clone(parentPidl);
 
                 // Offload shell interaction to background STA thread to make dialog non-blocking (non-modal to UI thread)
                 Task task = _staRunner.EnqueueWork(_ =>
@@ -2109,6 +2109,8 @@ namespace ExpControlsLib
                             if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
                             if (desktop != null) Marshal.ReleaseComObject(desktop);
                             Marshal.FreeCoTaskMem(capturedRelPidl);
+                            if (capturedParentPidl != IntPtr.Zero) 
+                                Marshal.FreeCoTaskMem(capturedParentPidl);
                         }
                     }
                 });

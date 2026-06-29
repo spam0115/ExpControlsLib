@@ -16,12 +16,9 @@ namespace WindowsApiLib.Shell
         public static CShellItem? DesktopCSI { get; internal set; }
 
         private ShellController() {
-
-            HierachyManager = new CShellItemHierachyManager();
-            CShellItemFactory.Initialize(HierachyManager); //force the constructor to run
-            DesktopCSI = CShellItemFactory.GetDesktopRoot();
-
-            HierachyManager.Root = DesktopCSI;
+            CShellItemFactory.Initialize(); //force the constructor to run
+            DesktopCSI = CShellItemFactory.DesktopCSI;
+            HierachyManager = new CShellItemHierachyManager(DesktopCSI);
             HierachyManager.DesktopCSI = DesktopCSI;
             ShellUpdater = new CShellItemUpdater(HierachyManager, (uint)SHCNE.DISKEVENTS);
         }

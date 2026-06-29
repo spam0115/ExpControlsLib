@@ -1867,7 +1867,7 @@
             Hidden items are filtered according to <see cref="P:ExpControlsLib.ExpTree.ShowHiddenFolders"/>, and
             excluded items are filtered via <see cref="M:ExpControlsLib.ExpTree.IsExcluded(WindowsApiLib.Shell.CShellItem)"/>.
             </summary>
-            <param name="L1">
+            <param name="itemsList">
             The array of first-level child <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders to add as root children.
             </param>
         </member>
@@ -2677,6 +2677,13 @@
             <param name="reqArgs">The thumbnail ready arguments.</param>
             <param name="square">The square thumbnail bitmap.</param>
             <returns>The index of the thumbnail in the ImageList, or -1 if it could not be added.</returns>
+        </member>
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.ResetForNewFolder">
+            <summary>
+            Disposes all existing ImageLists and creates a fresh one for the current active size.
+            Called when navigating to a new folder to prevent GDI handle exhaustion from
+            accumulated thumbnails across many folder navigations.
+            </summary>
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.Clear">
             <summary>

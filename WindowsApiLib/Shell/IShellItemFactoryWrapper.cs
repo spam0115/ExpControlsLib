@@ -8,7 +8,6 @@ namespace WindowsApiLib.Shell
     {
         List<IntPtr> GetPidlsOfFolder(CShellItem csi, SHCONTF flags);
         CShellItem Create(IntPtr pidl, CShellItem parent = null);
-        CShellItem FindOrAdd(IntPtr pidl);
         string GetFullPath(CShellItem csi);
     }
 
@@ -24,10 +23,6 @@ namespace WindowsApiLib.Shell
             return CShellItemFactory.Create(pidl, parent);
         }
 
-        public CShellItem FindOrAdd(IntPtr pidl)
-        {
-            return CShellItemFactory.FindAndAllowExpansion(pidl);
-        }
 
         public string GetFullPath(CShellItem csi)
         {

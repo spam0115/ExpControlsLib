@@ -1168,8 +1168,8 @@ namespace WindowsApiLib
         public static bool IsShellNamespaceRoot(nint pidl)
         {
             // Some code paths treat null like "desktop/root"; adjust if you prefer strict behavior.
-            if (pidl == 0)
-                return true;
+            //if (pidl == 0)
+            //    return true;
 
             // ITEMIDLIST starts with SHITEMID.cb (USHORT).
             // Root PIDL is "empty": first cb == 0.

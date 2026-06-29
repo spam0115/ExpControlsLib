@@ -711,7 +711,7 @@ namespace WindowsApiLib.Shell
             if (attrFlag == SHCONTF.INCLUDEHIDDEN)
                 return 0;
 
-            var newPidls = _shellItemFactory.GetPidlsOfFolder(csi, attrFlag);
+            var newRelPidls = _shellItemFactory.GetPidlsOfFolder(csi, attrFlag);
 
             List<(CShellItem, CShItemUpdateType)> operations;
             bool lockTaken = false;
@@ -721,7 +721,7 @@ namespace WindowsApiLib.Shell
                 if (!lockTaken)
                     return 0;
 
-                operations = CrossCheckOldAndNewFolderContents(csi, updateFiles, updateFolders, newPidls);
+                operations = CrossCheckOldAndNewFolderContents(csi, updateFiles, updateFolders, newRelPidls);
             }
             finally
             {
@@ -740,14 +740,14 @@ namespace WindowsApiLib.Shell
             return operations.Count;
         }
 
-        private List<(CShellItem, CShItemUpdateType)> CrossCheckOldAndNewFolderContents(CShellItem csi, bool UpdateFiles, bool UpdateFolders, List<IntPtr> newPidls)
+        private List<(CShellItem, CShItemUpdateType)> CrossCheckOldAndNewFolderContents(CShellItem csi, bool UpdateFiles, bool UpdateFolders, List<IntPtr> newRelPidls)
         {
             Debug.WriteLine("CrossCheckOldAndNewFolderContents begin");
             var operations = new List<(CShellItem Item, CShItemUpdateType Type)>();
 
             lock (_hierarchyManager.Lock)
             {
-                if (newPidls.Count < 1)
+                if (newRelPidls.Count < 1)
                 {
                     var invalidItems = new List<CShellItem>();
 
@@ -787,15 +787,15 @@ namespace WindowsApiLib.Shell
                         fileInfos = _fileSystem.GetFiles(csi.FullPath).ToDictionary(file => file.Name, file => file);
                     }
 
-                    for (int i = 0; i < newPidls.Count; i++)
+                    for (int i = 0; i < newRelPidls.Count; i++)
                     {
-                        IntPtr newPidl = newPidls[i];
-                        if (newPidl == IntPtr.Zero) continue;
+                        IntPtr newRelPidl = newRelPidls[i];
+                        if (newRelPidl == IntPtr.Zero) continue;
 
-                        string newFileName = TPidl.ToString(newPidl, false) ?? string.Empty;
+                        string newFileName = TPidl.ToString(newRelPidl, false) ?? string.Empty;
                         if (oldCsiDic.TryGetValue(newFileName, out CShellItem? oldCsi))
                         {
-                            if (oldCsi != null && TPidl.ResolvesToSamePathOrName(oldCsi.LastPIDL, newPidl))
+                            if (oldCsi != null && TPidl.ResolvesToSamePathOrName(oldCsi.LastPIDL, newRelPidl))
                             {
                                 if (!ReferenceEquals(csi, CShellItemFactory.RecycleBin))
                                 {
@@ -819,18 +819,18 @@ namespace WindowsApiLib.Shell
                                     }
                                 }
 
-                                Marshal.FreeCoTaskMem(newPidl);
-                                newPidls[i] = IntPtr.Zero;
+                                Marshal.FreeCoTaskMem(newRelPidl);
+                                newRelPidls[i] = IntPtr.Zero;
                                 oldCsiDic.Remove(newFileName);
                                 continue;
                             }
                         }
                         
-                        var newItem = _shellItemFactory.Create(newPidl, csi);
+                        var newItem = _shellItemFactory.Create(newRelPidl, csi);
+                        Marshal.FreeCoTaskMem(newRelPidl);
                         if (newItem is null)
                         {
-                            Marshal.FreeCoTaskMem(newPidl);
-                            newPidls[i] = IntPtr.Zero;
+                            newRelPidls[i] = IntPtr.Zero;
                             continue;
                         }
                         var result = _hierarchyManager.Add(newItem);

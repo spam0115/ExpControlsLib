@@ -1,6 +1,4 @@
 using System;
-using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -15,7 +13,6 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
-using static System.Windows.Forms.ListView;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.Shell.ShellHelper;
 using MethodInvoker = System.Windows.Forms.MethodInvoker;
@@ -578,6 +575,8 @@ namespace ExpControlsLib
                 return null;
             }
         }
+
+        public string? LastMoveFolder { get; set; }
 
         private CShellItem? _currentFolderCsi; //todo: get rid of this and just use _listViewWrapper.currentFolderCsi everywhere instead.
 
@@ -1192,7 +1191,7 @@ namespace ExpControlsLib
                 }
 
                 // Capture for background thread
-                var capturedParentPidl = _currentFolderCsi.PIDL;
+                var capturedParentPidl = CPidl.Clone(_currentFolderCsi.PIDL);
                 var capturedRelPidls = relPidls;
 
                 // Offload shell interaction to background STA thread. 
@@ -2207,9 +2206,8 @@ namespace ExpControlsLib
         {
             if (_currentFolderCsi == null) return;
 
-            // Invalidate thumbnails
-            _thumbnailManager.Clear();
-            SetImageListForMode(DisplayMode);
+            // Invalidate thumbnails and create a fresh ImageList
+            _thumbnailManager.ResetForNewFolder();
 
             // Invalidate cached data in shell items
             if (VirtualMode)
@@ -2449,6 +2447,11 @@ namespace ExpControlsLib
                     try
                     {
                         _listViewWrapper.Clear();
+
+                        // Dispose old ImageLists and create a fresh one to prevent
+                        // GDI handle exhaustion from accumulated thumbnails across navigations.
+                        _thumbnailManager.ResetForNewFolder();
+
                         _listViewWrapper.AddRange(result.Items);
 
                         // Apply pre-load filter if set. All items are in the master list;
@@ -3481,7 +3484,7 @@ namespace ExpControlsLib
                                         : itms[0].Parent.PIDL;
                                     
                                     var capturedRelPidls = itms.Select(i => CPidl.Clone(i.LastPIDL)).ToArray();
-                                    var capturedParentPidl = parentPidl;
+                                    var capturedParentPidl = CPidl.Clone(parentPidl);
 
                                     await _staRunner.EnqueueWork(_ =>
                                     {
@@ -3539,7 +3542,8 @@ namespace ExpControlsLib
                                                 if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
                                                 if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
                                                 if (desktop != null) Marshal.ReleaseComObject(desktop);
-                                                foreach (var p in capturedRelPidls) Marshal.FreeCoTaskMem(p);
+                                                foreach (var pidl in capturedRelPidls) Marshal.FreeCoTaskMem(pidl);
+                                                if (capturedParentPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(capturedParentPidl);
                                             }
                                         }
                                     });
@@ -3677,7 +3681,7 @@ namespace ExpControlsLib
                     e.SuppressKeyPress = true;
                 }
 
-                if (e.KeyCode == Keys.Enter && _listView.SelectedIndices.Count > 0)
+                if (e.KeyCode == Keys.Enter && !e.Control && _listView.SelectedIndices.Count > 0)
                 {
                     var csi = GetItem(_listView.SelectedIndices[0]);
                     if (csi == null) return;
