@@ -3120,34 +3120,38 @@ namespace ExpControlsLib
 
         private void DW_DragEnd(object? sender, DragEndEventArgs e)
         {
-            // Remove items that were dragged away from this folder.
-            // Only remove on an explicit Move effect — the "optimized move" case
-            // (same-volume, Effect == None) is already handled by the Moved shell
-            // notification handler, which fires during the DoDragDrop modal loop
-            // and removes items before we get here.
-            if (e.DropCompleted && e.Effect == DragDropEffects.Move
-                && _shellController != null)
+            if (_shellController is null) { _pendingDragItems = null; return; }
+
+            // Case 1: Explicit Move effect (cross-volume moves, or shells that return
+            // DROPEFFECT_MOVE for same-volume moves). Unconditionally remove items.
+            if (e.DropCompleted && e.Effect == DragDropEffects.Move)
             {
-                bool useUpdate = e.Items.Length > BatchThreshold;
-                if (useUpdate) _listView.BeginUpdate();
-                try
+                RemoveItemsFromList(e.Items);
+            }
+            // Case 2: Optimized same-volume move. The shell returns DROPEFFECT_NONE even
+            // though the move succeeded. The Moved shell notification handler may also
+            // handle this during the DoDragDrop modal loop, but it's not guaranteed to
+            // fire in time (it's dispatched via BeginInvoke from a background thread).
+            // Verify the files were actually moved by checking that they no longer exist
+            // at the source path. This prevents false removal when dropping on empty space
+            // or a target that returns DROPEFFECT_NONE without doing anything.
+            else if (e.DropCompleted && e.Effect == DragDropEffects.None)
+            {
+                var movedItems = new List<CShellItem>(e.Items.Length);
+                foreach (var item in e.Items)
                 {
-                    // Batch remove from list view wrapper
-                    _listViewWrapper.RemoveItems(e.Items);
-
-                    if (e.Items.Length > this._listViewWrapper.GetApproxVisibleCount()) //if new items are brought into view
-                        OnScroll();
-
-                    // Fire single update event for the folder
-                    if (_currentFolderCsi != null)
+                    if (item is null) continue;
+                    string path = item.FullPath;
+                    if (!string.IsNullOrEmpty(path)
+                        && !System.IO.File.Exists(path)
+                        && !System.IO.Directory.Exists(path))
                     {
-                        ExpListItemsChanged?.Invoke(_currentFolderCsi.FullPath, _currentFolderCsi);
+                        movedItems.Add(item);
                     }
                 }
-                finally
-                {
-                    if (useUpdate) _listView.EndUpdate();
-                }
+
+                if (movedItems.Count > 0)
+                    RemoveItemsFromList(movedItems.ToArray());
             }
 
             // Fire ExpListDragCompleted for copy operations (move is handled by the shell notification
@@ -3159,16 +3163,36 @@ namespace ExpControlsLib
 
             // If the shell notification didn't fire for a move (e.g. cross-volume DELETE+CREATE
             // which doesn't go through DoRenameOrMove), fire DragCompleted here as fallback.
-            // Only fire for explicit Move — optimized moves (Effect == None) are handled
-            // by the Moved shell notification handler.
             if (e.DropCompleted && _pendingDragItems is not null && _pendingDragItems.Length > 0
-                && e.Effect == DragDropEffects.Move)
+                && (e.Effect == DragDropEffects.Move || e.Effect == DragDropEffects.None))
             {
                 ExpListDragCompleted?.Invoke(this,
                     new ExpListDragCompletedEventArgs(e.Effect, _pendingDragItems));
             }
 
             _pendingDragItems = null;
+        }
+
+        private void RemoveItemsFromList(CShellItem[] items)
+        {
+            bool useUpdate = items.Length > BatchThreshold;
+            if (useUpdate) _listView.BeginUpdate();
+            try
+            {
+                _listViewWrapper.RemoveItems(items);
+
+                if (items.Length > this._listViewWrapper.GetApproxVisibleCount())
+                    OnScroll();
+
+                if (_currentFolderCsi != null)
+                {
+                    ExpListItemsChanged?.Invoke(_currentFolderCsi.FullPath, _currentFolderCsi);
+                }
+            }
+            finally
+            {
+                if (useUpdate) _listView.EndUpdate();
+            }
         }
 
         /// <summary>

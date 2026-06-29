@@ -21,9 +21,9 @@ namespace ExpControlsLib
         public CShellItem[] Items { get; }
 
         /// <summary>
-        /// Gets whether the drag was a move operation.
+        /// Gets whether the drag was a move operation (explicit Move or optimized same-volume move returning None).
         /// </summary>
-        public bool IsMove => Effect == DragDropEffects.Move;
+        public bool IsMove => Effect == DragDropEffects.Move || Effect == DragDropEffects.None;
 
         /// <summary>
         /// Gets whether the drag was a copy operation.

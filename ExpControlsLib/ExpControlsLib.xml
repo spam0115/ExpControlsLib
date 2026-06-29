@@ -1387,7 +1387,7 @@
         </member>
         <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.IsMove">
             <summary>
-            Gets whether the drag was a move operation.
+            Gets whether the drag was a move operation (explicit Move or optimized same-volume move returning None).
             </summary>
         </member>
         <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.IsCopy">
