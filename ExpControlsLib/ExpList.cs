@@ -3330,10 +3330,12 @@ namespace ExpControlsLib
                 EnterImageListMutation();
                 if (e.Thumbnail != null)
                 {
-                    using (var bitmap = (Bitmap)e.Thumbnail)
-                    {
-                        image_index = _thumbnailManager.AddThumbnail(e, bitmap);
-                    }
+                    //using (var bitmap = (Bitmap)e.Thumbnail)
+                    //{
+                    //    image_index = _thumbnailManager.AddThumbnail(e, bitmap);
+                    //}
+                    image_index = _thumbnailManager.AddThumbnail(e, (Bitmap)e.Thumbnail);
+                    e.Thumbnail.Dispose();
                 }
                 else
                 {
@@ -3365,6 +3367,10 @@ namespace ExpControlsLib
                     }
                     _listViewWrapper.GetItem(index).ImageIndex = image_index;
                     //Debug.WriteLine("Redrawing: " + e.Item.DisplayName);
+
+                    //thumbnails that are provided for items that are offscreen will be drawn by the ListView when
+                    //they are brought on screen.  Items that are already onscreen are not redrawn unless done so 
+                    //manually here.
                     _listViewWrapper._ListView.RedrawItems(index, index, false);
                 }
             }

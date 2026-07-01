@@ -46,7 +46,7 @@ namespace ExpControlsLib
 
         public event EventHandler<ThumbnailReadyEventArgs> ThumbnailReady;
 
-        public ThumbnailImageListManager(ExpList expList, int capacity = 2000)
+        public ThumbnailImageListManager(ExpList expList, int capacity = 800) //the limit is ~1658 for 256px thumbnails.  Going beyond this causes blank thumbnails to be drawn.
         {
             _expList = expList;
             _maxThumbnails = capacity;
@@ -197,13 +197,13 @@ namespace ExpControlsLib
         /// This method must be called on the UI thread as it accesses the ImageList.
         /// </summary>
         /// <param name="reqArgs">The thumbnail ready arguments.</param>
-        /// <param name="square">The square thumbnail bitmap.</param>
+        /// <param name="thumbnail">The square thumbnail bitmap.</param>
         /// <returns>The index of the thumbnail in the ImageList, or -1 if it could not be added.</returns>
-        public int AddThumbnail(ThumbnailReadyEventArgs reqArgs, Bitmap square)
+        public int AddThumbnail(ThumbnailReadyEventArgs reqArgs, Bitmap thumbnail)
         {
             Debug.WriteLine("ThumbnailImageListManager: AddThumbnail begin");
 
-            if (square == null)
+            if (thumbnail == null)
             {
                 if (reqArgs.Item != null) reqArgs.Item.ImageIndex = -1;
                 return -1;
@@ -232,7 +232,7 @@ namespace ExpControlsLib
 
                     lock(imageList)
                     {
-                        imageList.Images[index] = square;
+                        imageList.Images[index] = thumbnail;
                     }
                 }
                 else //new thumbnail
@@ -284,7 +284,7 @@ namespace ExpControlsLib
 
                             lock (imageList)
                             {
-                                imageList.Images[index] = square;
+                                imageList.Images[index] = thumbnail;
                                 _lruKeys.Add(key);
                                 _slotByKey[key] = evictedSlot;
                             }
@@ -296,7 +296,7 @@ namespace ExpControlsLib
                     {
                         lock (imageList)
                         {
-                            imageList.Images.Add(square);
+                            imageList.Images.Add(thumbnail);
                             index = imageList.Images.Count - 1;
                             var newSlot = new ThumbnailSlot(index, reqArgs.Item, key);
                             _lruKeys.Add(key);

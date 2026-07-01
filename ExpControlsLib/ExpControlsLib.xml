@@ -2675,7 +2675,7 @@
             This method must be called on the UI thread as it accesses the ImageList.
             </summary>
             <param name="reqArgs">The thumbnail ready arguments.</param>
-            <param name="square">The square thumbnail bitmap.</param>
+            <param name="thumbnail">The square thumbnail bitmap.</param>
             <returns>The index of the thumbnail in the ImageList, or -1 if it could not be added.</returns>
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.ResetForNewFolder">
