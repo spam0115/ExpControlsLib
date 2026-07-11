@@ -36,7 +36,7 @@ namespace WindowsApiLib
         }
 
 
-        public static string EnsureTrailingDirectorySeparator(string? path)
+        public static string EnsureTrailingSlash(string? path)
         {
             if (string.IsNullOrEmpty(path))
                 return Path.DirectorySeparatorChar.ToString();
@@ -67,7 +67,7 @@ namespace WindowsApiLib
             int split = fullFileName.LastIndexOf('\\');
 
             var fileName = fullFileName.Substring(split + 1);
-            var path = Utils.EnsureTrailingDirectorySeparator(fullFileName.Substring(0, split + 1));
+            var path = Utils.EnsureTrailingSlash(fullFileName.Substring(0, split + 1));
 
             return (path, fileName);
         }

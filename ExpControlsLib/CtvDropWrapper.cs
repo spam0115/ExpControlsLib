@@ -34,61 +34,61 @@ namespace ExpControlsLib
 
         #region    Private Fields
  
-        private TreeView m_TreeView;                  // The Tree if m_treeview is a TreeView, else nothing
-        private IntPtr m_DataObj;                     // The COM interface to IDragData - saved in DragEnter
-        private int m_Original_Effect;            // Save it
-        private WindowsApiLib.Shell.IDropTarget m_LastTarget;    // IDropTarget of most recent Folder dragged over
-        private TreeNode m_LastNode;                  // Most recent node dragged over
-        private TreeNode? m_PendingNode;                      // Node under cursor awaiting dwell resolution
+        private TreeView m_TreeView;                            // The Tree if m_treeview is a TreeView, else nothing
+        private IntPtr m_DataObj;                               // The COM interface to IDragData - saved in DragEnter
+        private int m_Original_Effect;                          // Save it
+        private WindowsApiLib.Shell.IDropTarget m_LastTarget;   // IDropTarget of most recent Folder dragged over
+        private TreeNode m_LastNode;                            // Most recent node dragged over
+        private TreeNode? m_PendingNode;                        // Node under cursor awaiting dwell resolution
         private readonly System.Windows.Forms.Timer m_DwellTimer; // Debounce timer: defer shell IDropTarget resolution
-        private POINT m_LastPt;                       // Last DragOver position (for use in dwell tick)
-        private MK m_LastKeyState;                    // Last DragOver key state (for use in dwell tick)
+        private POINT m_LastPt;                                 // Last DragOver position (for use in dwell tick)
+        private MK m_LastKeyState;                              // Last DragOver key state (for use in dwell tick)
         // Dwell threshold: cursor must linger this long before the shell IDropTarget is resolved.
         // Prevents calling GetDropTargetOf (and the underlying IShellFolder BindToObject) for every
         // virtual shell namespace item the cursor sweeps over during a drag.
         private static readonly TimeSpan DwellingThreshold = TimeSpan.FromMilliseconds(250);
-        private readonly IDropTargetHelper m_DropHelper;       // IDropTargetHelper interface for this control
-        private bool m_disposed = false;           // To detect redundant Dispose calls
+        private readonly IDropTargetHelper m_DropHelper;        // IDropTargetHelper interface for this control
+        private bool m_disposed = false;                        // To detect redundant Dispose calls
  
         #endregion
 
         #region    Public Events
         /// <summary>
-    /// The Event Raised by this Class to inform the TreeView that a Drag has entered the TreeView
-    /// </summary>
-    /// <param name="pDataObj">Pointer to the DataObject being Dragged.</param>
-    /// <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
-    /// <param name="pdwEffect">The type of Drop actions permitted by the Drag Source</param>
+        /// The Event Raised by this Class to inform the TreeView that a Drag has entered the TreeView
+        /// </summary>
+        /// <param name="pDataObj">Pointer to the DataObject being Dragged.</param>
+        /// <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
+        /// <param name="pdwEffect">The type of Drop actions permitted by the Drag Source</param>
         public event ShDragEnterEventHandler ShDragEnter;
 
         public delegate void ShDragEnterEventHandler(IntPtr pDataObj, int grfKeyState, int pdwEffect);
 
 
         /// <summary>
-    /// The Event Raised by this Class to inform the TreeView that a Drag has moved over the TreeView
-    /// </summary>
-    /// <param name="Node">The TreeNode that the Drag is over</param>
-    /// <param name="ClientPoint">Location, in Client coordinates, of the mouse.</param>
-    /// <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
-    /// <param name="pdwEffect">The type of Drop actions permitted by the Drag Source</param>
+        /// The Event Raised by this Class to inform the TreeView that a Drag has moved over the TreeView
+        /// </summary>
+        /// <param name="Node">The TreeNode that the Drag is over</param>
+        /// <param name="ClientPoint">Location, in Client coordinates, of the mouse.</param>
+        /// <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
+        /// <param name="pdwEffect">The type of Drop actions permitted by the Drag Source</param>
         public event ShDragOverEventHandler ShDragOver;
 
         public delegate void ShDragOverEventHandler(TreeNode Node, Point ClientPoint, int grfKeyState, int pdwEffect);
 
 
         /// <summary>
-    /// The Event Raised by this Class to inform the TreeView that a Drag has left the TreeView
-    /// </summary>
+        /// The Event Raised by this Class to inform the TreeView that a Drag has left the TreeView
+        /// </summary>
         public event ShDragLeaveEventHandler ShDragLeave;
 
         public delegate void ShDragLeaveEventHandler();
 
         /// <summary>
-    /// The Event Raised by this Class to inform the TreeView that a Drop has occured on the TreeView
-    /// </summary>
-    /// <param name="Node">The TreeNode that the Drop occured on</param>
-    /// <param name="grfKeyState"></param>
-    /// <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
+        /// The Event Raised by this Class to inform the TreeView that a Drop has occured on the TreeView
+        /// </summary>
+        /// <param name="Node">The TreeNode that the Drop occured on</param>
+        /// <param name="grfKeyState"></param>
+        /// <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
         public event ShDragDropEventHandler ShDragDrop;
 
         public delegate void ShDragDropEventHandler(TreeNode Node, int grfKeyState, int pdwEffect);
@@ -403,20 +403,16 @@ namespace ExpControlsLib
 
         #region    DragDrop
         /// <summary>
-    /// For internal use only
-    /// Entered when a DragDrop has occurred on the associated Control.
-    /// </summary>
-    /// <param name="pDataObj">Pointer to the IDataObject</param>
-    /// <param name="grfKeyState">State of the keyboard Keys and Mouse Buttons</param>
-    /// <param name="pt">Where the Drop occurred on the Control</param>
-    /// <param name="pdwEffect">Result of the Drop - unreliable in case of Move</param>
-    /// <returns>S_OK</returns>
+        /// For internal use only
+        /// Entered when a DragDrop has occurred on the associated Control.
+        /// </summary>
+        /// <param name="pDataObj">Pointer to the IDataObject</param>
+        /// <param name="grfKeyState">State of the keyboard Keys and Mouse Buttons</param>
+        /// <param name="pt">Where the Drop occurred on the Control</param>
+        /// <param name="pdwEffect">Result of the Drop - unreliable in case of Move</param>
+        /// <returns>S_OK</returns>
         public int DragDrop(IntPtr pDataObj, MK grfKeyState, POINT pt, ref DragDropEffects pdwEffect)
-
-
-
         {
-
             // Debug.WriteLine("In DragDrop: Effect = " & pdwEffect & " Keystate = " & grfKeyState)
             int res;
 
@@ -438,6 +434,13 @@ namespace ExpControlsLib
                     Debug.WriteLine("Error in dropping on DropTarget. res = " + res.ToString("X"));
                 } // No error on drop
                   // The documented norm for Optimized Moves is pdwEffect=None, so leave it
+
+                // Record the in-app destination so CDragWrapper can stamp it onto
+                // DragEndEventArgs. m_LastNode.Tag holds the CShellItem of the folder the
+                // drop landed on. The slot is consumed on the same STA thread once
+                // DoDragDrop returns.
+                DragDropContext.RecordDestination(m_LastNode?.Tag as CShellItem, pdwEffect);
+
                 ShDragDrop?.Invoke(m_LastNode, (int)grfKeyState, (int)pdwEffect);
             }
             ResetPrevTarget();

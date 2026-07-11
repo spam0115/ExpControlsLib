@@ -216,10 +216,12 @@ namespace ExpControlsLib
                 AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, copyToFolderCmdId, "Copy to Folder");
                 uint newFolderCmdId = (uint)(max + 3);
                 AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, newFolderCmdId, "New Folder");
+                uint refreshCmdId = (uint)(max + 4);
+                AppendMenu(comContextMenu, (uint)MFT.BYCOMMAND, refreshCmdId, "Refresh");
 
                 int cmd = TrackPopupMenuEx(comContextMenu, (int)TPM.RETURNCMD, pt.X, pt.Y, hwnd, IntPtr.Zero);
 
-                if (cmd == (int)moveCmdId || cmd == (int)copyToFolderCmdId || cmd == (int)newFolderCmdId)
+                if (cmd == (int)moveCmdId || cmd == (int)copyToFolderCmdId || cmd == (int)newFolderCmdId || cmd == (int)refreshCmdId)
                 {
                     return new ContextMenuResult
                     {
@@ -228,8 +230,8 @@ namespace ExpControlsLib
                         CommandInfo = new CMInvokeCommandInfoEx
                         {
                             cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                            lpVerb = (IntPtr)(cmd == (int)moveCmdId ? 99999 : cmd == (int)copyToFolderCmdId ? 99998 : 99997),
-                            lpVerbW = (IntPtr)(cmd == (int)moveCmdId ? 99999 : cmd == (int)copyToFolderCmdId ? 99998 : 99997),
+                            lpVerb = (IntPtr)(cmd == (int)moveCmdId ? 99999 : cmd == (int)copyToFolderCmdId ? 99998 : cmd == (int)newFolderCmdId ? 99997 : 99996),
+                            lpVerbW = (IntPtr)(cmd == (int)moveCmdId ? 99999 : cmd == (int)copyToFolderCmdId ? 99998 : cmd == (int)newFolderCmdId ? 99997 : 99996),
                             nShow = (int)SW.SHOWNORMAL,
                             fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE),
                             ptInvoke = new Point(pt.X, pt.Y)

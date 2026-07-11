@@ -8,6 +8,15 @@ using System.Windows.Forms;
 namespace ExpControlsLib
 {
 
+    /// <summary>
+    /// A wrapper for handling drag operations from a ListView or TreeView.
+    /// CDragWrapper does not identify the destination target itself. It only implements the 
+    /// source side of OLE drag-drop (IDropSource), supplying the IDataObject and drag-feedback. 
+    /// The destination drop target is resolved by the shell/OLE layer when ShellAPI.DoDragDrop 
+    /// is called at CDragWrapper.cs:240 — OLE walks the registered IDropTarget objects under 
+    /// the cursor and invokes the matching one. So target identification happens outside this 
+    /// class, inside the Win32 DoDragDrop COM call.
+    /// </summary>
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
     public class CDragWrapper : IDropSource, IDisposable
     {
@@ -113,7 +122,7 @@ namespace ExpControlsLib
                 return;
             }
 
-            StartDragInternal(sender, e.Item, e.Button);
+            DoDragInternal(sender, e.Item, e.Button);
         }
 
         private void OnMouseMoveDeferred(object? sender, MouseEventArgs e)
@@ -132,7 +141,7 @@ namespace ExpControlsLib
                 // before starting the modal DoDragDrop loop.
                 m_Client.BeginInvoke(new Action(() =>
                 {
-                    StartDragInternal(m_Client, item, button);
+                    DoDragInternal(m_Client, item, button);
                 }));
             }
         }
@@ -152,7 +161,7 @@ namespace ExpControlsLib
             }
         }
 
-        private void StartDragInternal(object? sender, object? itemToDrag, MouseButtons button)
+        private void DoDragInternal(object? sender, object? itemToDrag, MouseButtons button)
         {
             if (m_IsDragging) return;          // block reentrancy while DoDragDrop pumps messages
             m_IsDragging = true;
@@ -237,14 +246,37 @@ namespace ExpControlsLib
                     // Keep the same allowed effects so the user gets both Move and Copy.
 
                     DragStart?.Invoke(sender, new DragStartEventArgs(parent, m_Client, itemsToReport));
+
+                    // Clear any stale destination recorded by a previous in-app drop on
+                    // this STA thread. The slot is single-use per drag.
+                    DragDropContext.Clear();
+
+                    // Record the source items so an in-app drop target (e.g. ExpTree) can
+                    // PeekSource() during the drop and include them in its DragCompleted
+                    // event. Cleared together with the destination by TryConsume/Clear.
+                    DragDropContext.RecordSource(itemsToReport);
+
                     int hr = ShellAPI.DoDragDrop(dataObjectPtr, this, allowedEffects, out effects);
                     bool dropCompleted = hr != ShellAPI.DRAGDROP_S_CANCEL;
-                    DragEnd?.Invoke(m_Client, new DragEndEventArgs(effects, itemsToReport, dropCompleted));
+
+                    // The in-app drop wrapper (if any) recorded the resolved destination
+                    // onto this thread's slot before DoDragDrop returned. Consume it now so
+                    // it can be surfaced on DragEndEventArgs. External drops leave the slot
+                    // empty (DestinationItem == null).
+                    CShellItem? destination = null;
+                    if (dropCompleted)
+                        DragDropContext.TryConsume(out destination, out _);
+
+                    DragEnd?.Invoke(m_Client,
+                        new DragEndEventArgs(effects, itemsToReport, dropCompleted, destination));
                 }
             }
             finally
             {
                 m_IsDragging = false;
+                // Defensive: ensure a stale slot from an in-app drop cannot leak into the
+                // next drag on this STA thread. TryConsume already clears on the happy path.
+                DragDropContext.Clear();
             }
         }
 
@@ -386,11 +418,14 @@ namespace ExpControlsLib
         /// <param name="effect">The final effect of the drag-and-drop operation.</param>
         /// <param name="items">The items that were dragged.</param>
         /// <param name="dropCompleted">True if the drop was performed (DoDragDrop returned DRAGDROP_S_DROP or S_OK); false if the drag was cancelled.</param>
-        public DragEndEventArgs(DragDropEffects effect, CShellItem[] items, bool dropCompleted)
+        /// <param name="destination">The in-app destination shell item the drop landed on, or null for external drops or drops on empty areas.</param>
+        public DragEndEventArgs(DragDropEffects effect, CShellItem[] items, bool dropCompleted,
+            CShellItem? destination = null)
         {
             Effect = effect;
             Items = items;
             DropCompleted = dropCompleted;
+            DestinationItem = destination;
         }
 
         /// <summary>
@@ -410,5 +445,16 @@ namespace ExpControlsLib
         /// When true and Effect is None, the shell performed an optimized move.
         /// </summary>
         public bool DropCompleted { get; }
+
+        /// <summary>
+        /// Gets the in-app destination shell item the drop landed on, when the drop was
+        /// received by an in-process drop wrapper (CtvDropWrapper / ClvDropWrapper).
+        /// Null when the drop landed on an external target (Explorer, desktop), when the
+        /// drop was cancelled, or when it landed on an empty area with no resolvable
+        /// destination folder. For moves, the shell change-notification path remains the
+        /// authoritative source of <c>SourcePath</c>/<c>DestinationPath</c>; this property
+        /// supplements it for copies and for in-app drops generally.
+        /// </summary>
+        public CShellItem? DestinationItem { get; }
     }
 }

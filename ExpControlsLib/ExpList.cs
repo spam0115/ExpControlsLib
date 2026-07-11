@@ -63,8 +63,8 @@ namespace ExpControlsLib
 
         #region Private fields
 
-        private const int BatchThreshold = 20;
-
+        private const int _batchThreshold = 5;
+        private int _approxCountPerPage = 0;
         // InitialLoadLimit is the number of ExpFileList.Items whose IconIndex will be fetched on initial load
         // the balance will be fetched AFTER ExpFileList.EndUpdate
         private const int InitialLoadLimit = 128;
@@ -261,17 +261,13 @@ namespace ExpControlsLib
         public event ExpListCopyEventHandler ExpListCopy;
 
         /// <summary>
-        /// Delegate for the <see cref="ExpListDragCompleted"/> event.
-        /// </summary>
-        public delegate void ExpListDragCompletedEventHandler(object? sender, ExpListDragCompletedEventArgs e);
-        /// <summary>
         /// Occurs when a drag-and-drop operation completes (move or copy).
         /// Unlike <see cref="ExpListMove"/> and <see cref="ExpListCopy"/>, this fires for
         /// shell drag-and-drop operations where the move/copy was already performed by the shell.
         /// </summary>
         [Category("Action")]
         [Description("Fires when a drag-and-drop operation completes (move or copy)")]
-        public event ExpListDragCompletedEventHandler ExpListDragCompleted;
+        public event EventHandler<DragCompletedEventArgs>? ExpListDragCompleted;
 
         /// <summary>
         /// Delegate for the <see cref="ExpListDeleted"/> event.
@@ -1048,7 +1044,7 @@ namespace ExpControlsLib
                     }
                 }
 
-                if (topItemIndex >= 0 && deleteCount > 10)
+                if (topItemIndex >= 0 && deleteCount > _approxCountPerPage)
                 {
                     int count = VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
                     topItemIndex = topItemIndex >= count ? count : topItemIndex;
@@ -1916,7 +1912,7 @@ namespace ExpControlsLib
                                         if (_pendingDragItems.Length == 0) _pendingDragItems = null;
 
                                         ExpListDragCompleted?.Invoke(this,
-                                            new ExpListDragCompletedEventArgs(DragDropEffects.Move,
+                                            new DragCompletedEventArgs(DragDropEffects.Move,
                                                 new[] { csi }, e.OldPath, e.NewPath));
                                     }
                                 }
@@ -2309,7 +2305,6 @@ namespace ExpControlsLib
             var hierarchyCsi = _shellController.HierachyManager.FindAndAllowExpansion(csi);
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(CShellItem): hierarchyCsi='{hierarchyCsi?.DisplayName}', calling LoadDirectoryBaseAsync...");
 
-            CurrentFolderCsi = hierarchyCsi;
             await LoadDirectoryBaseAsync(hierarchyCsi, includeFolder);
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryAsync(CShellItem): End for '{csi?.DisplayName}'");
         }
@@ -2327,7 +2322,7 @@ namespace ExpControlsLib
                 ClearListView();
                 return;
             }
-            _displayFilesCts?.Cancel();
+            _displayFilesCts?.Cancel(); //cancel any prior invokations
             _displayFilesCts = new CancellationTokenSource();
             var token = _displayFilesCts.Token;
 
@@ -2343,35 +2338,44 @@ namespace ExpControlsLib
                 comparer = new CShellItemComparer(this, sortCol, sortOrder, colHeader);
             }
 
-            //CurrentPath = csi.FullPath; // Update immediately for UI/Settings consistency
-
             try
             {
                 bool samePath = false;
-                CShellItem oldCsi = null;
-                if (_backHistory.Count == 0)
+                if (_currentFolderCsi == null && csi == null)
+                    samePath = true;
+                else if (_currentFolderCsi == null || csi == null)
                     samePath = false;
                 else
-                {
-                    oldCsi = _backHistory.Peek();
-                    if (oldCsi == null && csi == null)
-                        samePath = true;
-                    else if (oldCsi == null || csi == null)
-                        samePath = false;
-                    else
-                        samePath = CPidl.ResolvesToSamePathOrName(oldCsi.PIDL, csi.PIDL);
-                }
+                    samePath = CPidl.ResolvesToSamePathOrName(_currentFolderCsi.PIDL, csi.PIDL);
 
-                if (csi == null)
-                {
-                    ClearListView();
-                    return;
-                }
+                //CShellItem oldCsi = null;
+                //if (_backHistory.Count == 0)
+                //    samePath = false;
+                //else
+                //{
+                //    oldCsi = _backHistory.Peek();
+                //    if (oldCsi == null && csi == null)
+                //        samePath = true;
+                //    else if (oldCsi == null || csi == null)
+                //        samePath = false;
+                //    else
+                //        samePath = CPidl.ResolvesToSamePathOrName(oldCsi.PIDL, csi.PIDL);
+                //}
+
+                //if (csi == null)
+                //{
+                //    ClearListView();
+                //    return;
+                //}
 
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: Enqueueing STA work for '{csi.DisplayName}'...");
+
+                //is this _staRunner even needed?  The current thread has to be in an sta thread since it is interacting with the ui
                 var result = await _staRunner.EnqueueWork(t =>
                 {
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: Begin loading folder contents for '{csi.DisplayName}'");
+
+                    if (token.IsCancellationRequested) return null;
 
                     var flags = SHCONTF.NONFOLDERS | (includeFolder ? SHCONTF.FOLDERS : 0);
                     _shellController.EnsureChildrenPopulated(csi, flags);
@@ -2379,6 +2383,7 @@ namespace ExpControlsLib
                     var dirList = new List<CShellItem>();
                     var fileList = new List<CShellItem>();
 
+                    if (token.IsCancellationRequested) return null;
                     if (includeFolder)
                     {
                         foreach (var dir in csi.Directories)
@@ -2387,12 +2392,17 @@ namespace ExpControlsLib
                         }
                     }
 
+                    if (token.IsCancellationRequested) return null;
+
                     foreach (var file in csi.Files)
                     {
                         if (!IsExcluded(file)) fileList.Add(file);
                     }
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: {dirList.Count} dirs, {fileList.Count} files");
 
+
+                    if (token.IsCancellationRequested) return null;
+                    
                     var combined = new List<CShellItem>(dirList.Count + fileList.Count);
                     if (includeFolder) combined.AddRange(dirList);
                     combined.AddRange(fileList);
@@ -2400,16 +2410,20 @@ namespace ExpControlsLib
                     // Warming up
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: Warming up {combined.Count} items...");
 
+                    if (token.IsCancellationRequested) return null;
+
                     // Fire bulk column data event so external handlers can do a single
                     // DB query for all items instead of one query per item.
                     ExpListBulkColumnDataRequested?.Invoke(this, new ExpListBulkColumnDataEventArgs(combined));
 
+                    if (token.IsCancellationRequested) return null;
+
                     bool isLarge = (_listViewWrapper.DisplayMode == ListViewDisplayMode.LargeIcon);
                     foreach (var item in combined)
                     {
-                        if (t.IsCancellationRequested) return null;
+                        if (token.IsCancellationRequested) return null;
                         
-                        EnsureCustomColumnDataFetched(item); // Pre-fetch custom column data (e.g. NSFW scores)
+                        //EnsureCustomColumnDataFetched(item); // Pre-fetch custom column data (e.g. NSFW scores)
                         
                         // Icon index
                         if (!IsThumbnailViewMode())
@@ -2419,6 +2433,7 @@ namespace ExpControlsLib
                     }
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: Warmup complete");
 
+                    
                     // Sort according to current settings after data is fetched
                     if (comparer != null)
                     {
@@ -2427,6 +2442,8 @@ namespace ExpControlsLib
                     }
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: Complete, returning {combined.Count} items");
 
+                    if (token.IsCancellationRequested) return null;
+                    
                     return new
                     {
                         Items = combined,
@@ -2462,6 +2479,8 @@ namespace ExpControlsLib
                         }
 
                         _listView.Tag = csi;
+
+                        CurrentFolderCsi = csi;
 
                         OnScroll();
                         Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: ListView update complete");
@@ -3161,7 +3180,10 @@ namespace ExpControlsLib
             // handler which provides source/destination paths via OldPath/NewPath).
             if (e.DropCompleted && e.Items.Length > 0 && e.Effect == DragDropEffects.Copy)
             {
-                ExpListDragCompleted?.Invoke(this, new ExpListDragCompletedEventArgs(e.Effect, e.Items));
+                ExpListDragCompleted?.Invoke(this, new DragCompletedEventArgs(
+                    e.Effect, e.Items,
+                    destinationPath: e.DestinationItem?.FullPath,
+                    destination: e.DestinationItem));
             }
 
             // If the shell notification didn't fire for a move (e.g. cross-volume DELETE+CREATE
@@ -3170,7 +3192,7 @@ namespace ExpControlsLib
                 && (e.Effect == DragDropEffects.Move || e.Effect == DragDropEffects.None))
             {
                 ExpListDragCompleted?.Invoke(this,
-                    new ExpListDragCompletedEventArgs(e.Effect, _pendingDragItems));
+                    new DragCompletedEventArgs(e.Effect, _pendingDragItems));
             }
 
             _pendingDragItems = null;
@@ -3178,7 +3200,7 @@ namespace ExpControlsLib
 
         private void RemoveItemsFromList(CShellItem[] items)
         {
-            bool useUpdate = items.Length > BatchThreshold;
+            bool useUpdate = items.Length > _batchThreshold;
             if (useUpdate) _listView.BeginUpdate();
             try
             {
@@ -3879,10 +3901,10 @@ namespace ExpControlsLib
                         if (onlyVisible)
                         {
                             int topIndex = _listViewWrapper.GetTopIndex();
-                            int countPerPage = _listViewWrapper.GetApproxVisibleCount();
+                            _approxCountPerPage = _listViewWrapper.GetApproxVisibleCount();
                             // Use a reasonable buffer (1 page above/below) for smoother scrolling
-                            startIndex = Math.Max(0, topIndex - countPerPage);
-                            endIndex = Math.Min(_listViewWrapper.Count - 1, topIndex + countPerPage * 2);
+                            startIndex = Math.Max(0, topIndex - _approxCountPerPage);
+                            endIndex = Math.Min(_listViewWrapper.Count - 1, topIndex + _approxCountPerPage * 2);
                         }
 
                         for (int i = startIndex; i <= endIndex; i++)
@@ -4054,11 +4076,11 @@ namespace ExpControlsLib
                         if (onlyVisible)
                         {
                             int topIndex = _listViewWrapper.GetTopIndex();
-                            int countPerPage = _listViewWrapper.GetApproxVisibleCount();
+                            _approxCountPerPage = _listViewWrapper.GetApproxVisibleCount();
                             // Use a reasonable buffer (1 page above/below) for smoother scrolling
                             startIndex = Math.Max(0, topIndex);
-                            endIndex = Math.Min(_listViewWrapper.Count - 1, topIndex + countPerPage * 2);
-                            backFill = startIndex - countPerPage/2; // if user scrolls up, we want to have thumbnails ready for the previous page
+                            endIndex = Math.Min(_listViewWrapper.Count - 1, topIndex + _approxCountPerPage * 2);
+                            backFill = startIndex - _approxCountPerPage / 2; // if user scrolls up, we want to have thumbnails ready for the previous page
                         }
 
                         for (int i = startIndex; i <= endIndex; i++)
@@ -4338,6 +4360,15 @@ namespace ExpControlsLib
         {
             int index = _listViewWrapper.GetIndex(csi);
             _listViewWrapper.RedrawItem(index);
+        }
+
+        public void Remove(CShellItem item)
+        {
+            var index = _listViewWrapper.GetIndex(item);
+            if (index >= 0)
+            {
+                _listViewWrapper.RemoveAt(index);
+            }
         }
     }
 

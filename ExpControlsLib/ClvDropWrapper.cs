@@ -446,6 +446,13 @@ namespace ExpControlsLib
                     {
                         Debug.WriteLine("Error in dropping on DropTarget. res = " + res.ToString("X"));
                     } // No error on drop
+
+                    // Record the in-app destination so CDragWrapper can stamp it onto
+                    // DragEndEventArgs. Prefer the ListViewItem's CShellItem (the folder the
+                    // cursor was over); fall back to the list's parent item for drops on the
+                    // item's row that resolved to the item's own folder.
+                    DragDropContext.RecordDestination(
+                        (m_LastItem?.Tag as CShellItem) ?? m_ParentItem, pdwEffect);
                 }
                 // The documented norm for Optimized Moves is pdwEffect=None, so leave it
                 // RaiseEvent ShDragDrop(m_LastItem, grfKeyState, pdwEffect)
@@ -456,6 +463,10 @@ namespace ExpControlsLib
                     {
                         Debug.WriteLine("Error in dropping on DropTarget. res = " + res.ToString("X"));
                     } // No error on drop
+
+                    // Dropped on empty area / non-folder item: destination is the list's
+                    // parent folder (the folder the ListView is currently displaying).
+                    DragDropContext.RecordDestination(m_ParentItem, pdwEffect);
                 }
                 m_Original_Effect = DragDropEffects.None;
                 ResetPrevTarget();

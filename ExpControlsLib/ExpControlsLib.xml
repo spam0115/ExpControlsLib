@@ -18,6 +18,17 @@
             <param name="hbm">Handle to the GDI bitmap to convert. Ownership is not transferred.</param>
             <returns>A MagickImage, or <c>null</c> if the conversion fails.</returns>
         </member>
+        <member name="T:ExpControlsLib.CDragWrapper">
+            <summary>
+            A wrapper for handling drag operations from a ListView or TreeView.
+            CDragWrapper does not identify the destination target itself. It only implements the 
+            source side of OLE drag-drop (IDropSource), supplying the IDataObject and drag-feedback. 
+            The destination drop target is resolved by the shell/OLE layer when ShellAPI.DoDragDrop 
+            is called at CDragWrapper.cs:240 — OLE walks the registered IDropTarget objects under 
+            the cursor and invokes the matching one. So target identification happens outside this 
+            class, inside the Win32 DoDragDrop COM call.
+            </summary>
+        </member>
         <member name="E:ExpControlsLib.CDragWrapper.DragStart">
             <summary>
             Event Raised when a Drag is started from the associated Control
@@ -119,13 +130,14 @@
             An EventArgs which provides information about the completion of a Drag operation.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.DragEndEventArgs.#ctor(System.Windows.Forms.DragDropEffects,WindowsApiLib.Shell.CShellItem[],System.Boolean)">
+        <member name="M:ExpControlsLib.DragEndEventArgs.#ctor(System.Windows.Forms.DragDropEffects,WindowsApiLib.Shell.CShellItem[],System.Boolean,WindowsApiLib.Shell.CShellItem)">
             <summary>
             Constructs a new instance of DragEndEventArgs.
             </summary>
             <param name="effect">The final effect of the drag-and-drop operation.</param>
             <param name="items">The items that were dragged.</param>
             <param name="dropCompleted">True if the drop was performed (DoDragDrop returned DRAGDROP_S_DROP or S_OK); false if the drag was cancelled.</param>
+            <param name="destination">The in-app destination shell item the drop landed on, or null for external drops or drops on empty areas.</param>
         </member>
         <member name="P:ExpControlsLib.DragEndEventArgs.Effect">
             <summary>
@@ -143,6 +155,17 @@
             True if the drop was actually performed (DoDragDrop returned DRAGDROP_S_DROP or S_OK).
             False if the drag was cancelled (DRAGDROP_S_CANCEL).
             When true and Effect is None, the shell performed an optimized move.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DragEndEventArgs.DestinationItem">
+            <summary>
+            Gets the in-app destination shell item the drop landed on, when the drop was
+            received by an in-process drop wrapper (CtvDropWrapper / ClvDropWrapper).
+            Null when the drop landed on an external target (Explorer, desktop), when the
+            drop was cancelled, or when it landed on an empty area with no resolvable
+            destination folder. For moves, the shell change-notification path remains the
+            authoritative source of <c>SourcePath</c>/<c>DestinationPath</c>; this property
+            supplements it for copies and for in-app drops generally.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ClvDropWrapper">
@@ -553,6 +576,195 @@
             Release the IDropTarget and free's the allocated memory
             </summary>
         </member>
+        <member name="T:ExpControlsLib.DragCompletedEventArgs">
+            <summary>
+            Event arguments for drag-and-drop completion events
+            (<see cref="E:ExpControlsLib.ExpList.ExpListDragCompleted"/> and
+            <see cref="E:ExpControlsLib.ExpTree.ExpTreeDragCompleted"/>).
+            Fired when a drag-and-drop operation completes, providing the effect, the items
+            involved, and (for in-app drops) the resolved destination.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DragCompletedEventArgs.Effect">
+            <summary>
+            Gets the effect of the completed drag operation (Move, Copy, Link, or None for optimized moves).
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DragCompletedEventArgs.Items">
+            <summary>
+            Gets the items that were dragged.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DragCompletedEventArgs.IsMove">
+            <summary>
+            Gets whether the drag was a move operation (explicit Move or optimized same-volume move returning None).
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DragCompletedEventArgs.IsCopy">
+            <summary>
+            Gets whether the drag was a copy operation.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DragCompletedEventArgs.SourcePath">
+            <summary>
+            For move operations resolved via shell notifications: the original path of the first item before the move.
+            Null when the source path is not available (e.g. copy operations, tree-target drops, or when fired
+            from <c>DW_DragEnd</c> before the shell notification arrives).
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DragCompletedEventArgs.DestinationPath">
+            <summary>
+            For move operations resolved via shell notifications: the destination path of the first item after the move.
+            For copy operations to an in-app target: the destination folder path.
+            Null when the destination path is not available.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DragCompletedEventArgs.DestinationItem">
+            <summary>
+            The in-app destination shell item the drop landed on, when the drop was received
+            by an in-process drop wrapper (CtvDropWrapper / ClvDropWrapper). Null for
+            external drops, cancelled drops, or drops on empty areas with no resolvable
+            destination folder. For moves resolved via shell notifications, this is the
+            destination folder; for copies to an in-app target, the same.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.DragDropContext">
+            <summary>
+            Thread-static bridge that lets an in-app <see cref="T:System.Windows.Forms.IDropTarget"/> implementation
+            (CtvDropWrapper / ClvDropWrapper) report the resolved destination shell item back
+            to the drag source (<see cref="T:ExpControlsLib.CDragWrapper"/>) before
+            <see cref="M:WindowsApiLib.Shell.ShellAPI.DoDragDrop(System.IntPtr,WindowsApiLib.Shell.IDropSource,System.Windows.Forms.DragDropEffects,System.Windows.Forms.DragDropEffects@)"/> returns on the same STA thread.
+            </summary>
+            <remarks>
+            <para>
+            OLE <c>DoDragDrop</c> runs a modal message loop on the STA thread that started the
+            drag. Any in-process drop handler that participates in that drag runs its
+            <c>IDropTarget.DragDrop</c> on that same thread before <c>DoDragDrop</c> returns.
+            This makes a single <see cref="T:System.ThreadStaticAttribute"/> slot sufficient to carry
+            the destination from the drop side back to the source side — no marshaling, no
+            races. The slot is single-use: <see cref="T:ExpControlsLib.CDragWrapper"/> clears it before each drag
+            and consumes it immediately after <c>DoDragDrop</c> returns.
+            </para>
+            <para>
+            The slot also carries the <see cref="T:WindowsApiLib.Shell.CShellItem"/>[] being dragged (the source
+            items), recorded by <see cref="T:ExpControlsLib.CDragWrapper"/> before <c>DoDragDrop</c> starts and
+            peekable (non-consuming) by an in-app drop target such as <see cref="T:ExpControlsLib.ExpTree"/>
+            while the drop is in progress. This lets a tree-target drop raise a
+            <c>DragCompleted</c>-style event that includes both the destination and the source
+            items without a separate correlation channel.
+            </para>
+            <para>
+            External drops (Explorer, desktop) never enter an in-process drop handler, so the
+            slot remains empty and <see cref="M:ExpControlsLib.DragDropContext.TryConsume(WindowsApiLib.Shell.CShellItem@,System.Windows.Forms.DragDropEffects@)"/> reports no destination — callers
+            fall back to the existing shell change-notification path for moves.
+            </para>
+            <para>
+            This type is <see langword="internal"/>; it is an implementation detail of the
+            drag-and-drop plumbing and not part of the public surface.
+            </para>
+            </remarks>
+        </member>
+        <member name="M:ExpControlsLib.DragDropContext.RecordSource(WindowsApiLib.Shell.CShellItem[])">
+            <summary>
+            Records the source items being dragged. Called by
+            <see cref="M:ExpControlsLib.CDragWrapper.DoDragInternal(System.Object,System.Object,System.Windows.Forms.MouseButtons)"/> before
+            <see cref="M:WindowsApiLib.Shell.ShellAPI.DoDragDrop(System.IntPtr,WindowsApiLib.Shell.IDropSource,System.Windows.Forms.DragDropEffects,System.Windows.Forms.DragDropEffects@)"/> starts, so an in-app drop target that fires
+            during the modal loop can <see cref="M:ExpControlsLib.DragDropContext.PeekSource"/> to obtain them. The items
+            persist for the duration of the drag and are cleared together with the
+            destination by <see cref="M:ExpControlsLib.DragDropContext.TryConsume(WindowsApiLib.Shell.CShellItem@,System.Windows.Forms.DragDropEffects@)"/> / <see cref="M:ExpControlsLib.DragDropContext.Clear"/>.
+            </summary>
+            <param name="items">The shell items being dragged. Never null.</param>
+        </member>
+        <member name="M:ExpControlsLib.DragDropContext.PeekSource">
+            <summary>
+            Returns the recorded source items without clearing the slot. Called by an
+            in-app drop target (e.g. <see cref="M:ExpControlsLib.ExpTree.DragWrapper_ShDragDrop(System.Windows.Forms.TreeNode,System.Int32,System.Int32)"/>) while the
+            drop is still in progress so it can include them in a <c>DragCompleted</c>
+            event. Returns <see langword="null"/> when no drag is active on this thread.
+            </summary>
+            <returns>The recorded source items, or <see langword="null"/>.</returns>
+        </member>
+        <member name="M:ExpControlsLib.DragDropContext.RecordDestination(WindowsApiLib.Shell.CShellItem,System.Windows.Forms.DragDropEffects)">
+            <summary>
+            Called by an in-app drop wrapper once the shell <c>IDropTarget</c> for the drop
+            has been invoked. Stamps the resolved destination shell item and the final effect
+            onto the current thread's slot so the drag source can read them when
+            <c>DoDragDrop</c> returns.
+            </summary>
+            <param name="item">
+            The <see cref="T:WindowsApiLib.Shell.CShellItem"/> of the folder the drop landed on (the drop
+            target). Pass <see langword="null"/> if the drop resolved to no in-app target
+            (e.g. dropped on empty area of the control with no parent target).
+            </param>
+            <param name="effect">
+            The final <see cref="T:System.Windows.Forms.DragDropEffects"/> reported by the shell drop target.
+            </param>
+        </member>
+        <member name="M:ExpControlsLib.DragDropContext.TryConsume(WindowsApiLib.Shell.CShellItem@,System.Windows.Forms.DragDropEffects@)">
+            <summary>
+            Atomically reads and clears the recorded destination (and the source items).
+            Called by <see cref="T:ExpControlsLib.CDragWrapper"/> immediately after
+            <see cref="M:WindowsApiLib.Shell.ShellAPI.DoDragDrop(System.IntPtr,WindowsApiLib.Shell.IDropSource,System.Windows.Forms.DragDropEffects,System.Windows.Forms.DragDropEffects@)"/> returns.
+            </summary>
+            <param name="destination">
+            The recorded destination <see cref="T:WindowsApiLib.Shell.CShellItem"/>, or <see langword="null"/>
+            if the drop did not land on an in-app target (or landed on an empty area).
+            </param>
+            <param name="effect">
+            The final <see cref="T:System.Windows.Forms.DragDropEffects"/> reported by the shell drop target, or
+            <see cref="F:System.Windows.Forms.DragDropEffects.None"/> if no record was made.
+            </param>
+            <returns>
+            <see langword="true"/> if a record was made for this drag; otherwise
+            <see langword="false"/> (external drop, or dropped on an empty area).
+            </returns>
+        </member>
+        <member name="M:ExpControlsLib.DragDropContext.Clear">
+            <summary>
+            Clears any recorded destination and source items without reading them. Called by
+            <see cref="T:ExpControlsLib.CDragWrapper"/> before starting a drag (defensive — ensures a
+            stale slot from a previous in-app drop cannot leak into the next drag on the
+            same thread) and in its <see langword="finally"/> block.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.DropRecord">
+            <summary>
+            Immutable record of a single completed drop operation received by an
+            <see cref="T:ExpControlsLib.ExpTree"/> (or other drop target). Stored in the drop history ring
+            buffer and surfaced for undo / audit / "recent drop target" UI.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DropRecord.CompletedAt">
+            <summary>
+            When the drop completed (local time).
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DropRecord.Effect">
+            <summary>
+            The drag-and-drop effect reported by the shell drop target (Move, Copy, Link,
+            or None for optimized same-volume moves).
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DropRecord.DestinationItem">
+            <summary>
+            The in-app destination shell item the drop landed on (the folder the
+            <see cref="T:ExpControlsLib.ExpTree"/> node represents). Null when the drop resolved to no
+            in-app target (e.g. dropped on empty area of the control).
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DropRecord.DestinationPath">
+            <summary>
+            Convenience accessor for <see cref="P:ExpControlsLib.DropRecord.DestinationItem"/>'s file system path,
+            or null when <see cref="P:ExpControlsLib.DropRecord.DestinationItem"/> is null.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.DropRecord.SourceItems">
+            <summary>
+            The source items that were dragged (captured from the drag source via
+            <see cref="T:ExpControlsLib.DragDropContext"/> at drop time). Empty when the source items were
+            not available (e.g. drag originated outside this process).
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.ExpList">
             <summary>
                 This Form is a fully working start point for any form which requires an ExplorerTree and
@@ -676,11 +888,6 @@
         <member name="E:ExpControlsLib.ExpList.ExpListCopy">
             <summary>
             Occurs when Copy to Folder is selected from the context menu.
-            </summary>
-        </member>
-        <member name="T:ExpControlsLib.ExpList.ExpListDragCompletedEventHandler">
-            <summary>
-            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListDragCompleted"/> event.
             </summary>
         </member>
         <member name="E:ExpControlsLib.ExpList.ExpListDragCompleted">
@@ -1038,7 +1245,7 @@
         </member>
         <member name="M:ExpControlsLib.ExpList.UpdateListviewItemCallback(System.Windows.Forms.ListViewItem,WindowsApiLib.Shell.CShellItem)">
             <summary>
-            Refreshes the display of a single item whose underlying filesystem data has changed.
+            Refreshes the display of a single item whose underlying filesystem or scoring data has changed.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.GetColumnData(WindowsApiLib.Shell.CShellItem,System.Windows.Forms.ColumnHeader)">
@@ -1369,45 +1576,6 @@
             Gets the indices the deleted items occupied before removal.
             </summary>
         </member>
-        <member name="T:ExpControlsLib.ExpListDragCompletedEventArgs">
-            <summary>
-            Event arguments for the <see cref="E:ExpControlsLib.ExpList.ExpListDragCompleted"/> event.
-            Fired when a drag-and-drop operation completes, providing the effect and the items involved.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.Effect">
-            <summary>
-            Gets the effect of the completed drag operation (Move, Copy, Link, or None for optimized moves).
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.Items">
-            <summary>
-            Gets the items that were dragged.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.IsMove">
-            <summary>
-            Gets whether the drag was a move operation (explicit Move or optimized same-volume move returning None).
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.IsCopy">
-            <summary>
-            Gets whether the drag was a copy operation.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.SourcePath">
-            <summary>
-            For move operations resolved via shell notifications: the original path of the first item before the move.
-            Null when the source path is not available (e.g. copy operations or when fired from <c>DW_DragEnd</c>
-            before the shell notification arrives).
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpListDragCompletedEventArgs.DestinationPath">
-            <summary>
-            For move operations resolved via shell notifications: the destination path of the first item after the move.
-            Null when the destination path is not available.
-            </summary>
-        </member>
         <member name="T:ExpControlsLib.ExpListGetColumnDataEventArgs">
             <summary>
             Event arguments for the <see cref="E:ExpControlsLib.ExpList.ExpListGetColumnData"/> event.
@@ -1598,10 +1766,57 @@
             <param name="SelPath">The file system path or display name of the selected Shell item.</param>
             <param name="Item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> associated with the selected TreeNode.</param>
         </member>
+        <member name="E:ExpControlsLib.ExpTree.ExpTreeDragCompleted">
+            <summary>
+            Occurs when a drag-and-drop operation completes with the tree as the drop target.
+            Provides the effect, the source items (when the drag originated in-process), and
+            the destination shell item the drop landed on. Fires for Move, Copy, Link, and
+            optimized-move (None) effects. For moves, the shell change-notification path on
+            the source control (<see cref="E:ExpControlsLib.ExpList.ExpListDragCompleted"/>) remains the
+            authoritative source of <c>SourcePath</c>/<c>DestinationPath</c>; this event
+            supplements it with the resolved destination folder.
+            </summary>
+        </member>
+        <member name="E:ExpControlsLib.ExpTree.DropHistoryChanged">
+            <summary>
+            Occurs after a drop record is appended to <see cref="P:ExpControlsLib.ExpTree.DropHistory"/>. Subscribe to
+            react to new drops (e.g. to refresh an undo/recent-drops UI). Raised on the UI
+            thread, inside the drop handler, before <c>DoDragDrop</c> returns to the source.
+            </summary>
+        </member>
         <member name="F:ExpControlsLib.ExpTree.m_AllowDrop">
             <summary>
             Backing field for <see cref="P:ExpControlsLib.ExpTree.AllowDrop"/>. Stores the last value assigned to the property
             so that the drop handler can be re-created when the TreeView handle is (re-)created.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.DropHistory">
+            <summary>
+            Gets a snapshot of the recent drops received by this tree, oldest-first. The
+            snapshot is a copy, so callers may iterate it safely while future drops mutate
+            the internal ring buffer. See <see cref="P:ExpControlsLib.ExpTree.LastDrop"/> for the most recent entry
+            and <see cref="P:ExpControlsLib.ExpTree.DropHistoryCapacity"/> to control the cap.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.LastDrop">
+            <summary>
+            Gets the most recent drop received by this tree, or <see langword="null"/> when
+            no drop has been received yet. Equivalent to
+            <c>DropHistory.Count &gt; 0 ? DropHistory[DropHistory.Count - 1] : null</c>.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.DropHistoryCapacity">
+            <summary>
+            Gets or sets the maximum number of drop records retained in
+            <see cref="P:ExpControlsLib.ExpTree.DropHistory"/>. Default 50. Reducing the value trims the oldest
+            entries immediately. Values less than 1 are clamped to 1.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.EnqueueDrop(ExpControlsLib.DropRecord)">
+            <summary>
+            Appends a <see cref="T:ExpControlsLib.DropRecord"/> to the internal ring buffer, evicting the
+            oldest entry when at capacity, and raises <see cref="E:ExpControlsLib.ExpTree.DropHistoryChanged"/>.
+            Called from <see cref="M:ExpControlsLib.ExpTree.DragWrapper_ShDragDrop(System.Windows.Forms.TreeNode,System.Int32,System.Int32)"/> on the UI thread.
             </summary>
         </member>
         <member name="P:ExpControlsLib.ExpTree.AllowDrop">
@@ -2066,6 +2281,19 @@
             <summary>
             The TreeNode most recently dragged over or dropped onto. Used to track highlight
             state and drive the auto-expand timer.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._dropHistory">
+            <summary>
+            Ring buffer of recent drops received by this tree. Capped at
+            <see cref="P:ExpControlsLib.ExpTree.DropHistoryCapacity"/> entries; oldest evicted first. Read via
+            <see cref="P:ExpControlsLib.ExpTree.DropHistory"/> (snapshot) or <see cref="P:ExpControlsLib.ExpTree.LastDrop"/>.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._dropHistoryCapacity">
+            <summary>
+            Backing field for <see cref="P:ExpControlsLib.ExpTree.DropHistoryCapacity"/>. Default 50. Reducing the
+            value trims the oldest entries from <see cref="F:ExpControlsLib.ExpTree._dropHistory"/>.
             </summary>
         </member>
         <member name="F:ExpControlsLib.ExpTree.NodePoint">
@@ -2633,6 +2861,25 @@
             Creates and maintains separate ImageLists for different thumbnail sizes.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.#ctor(ExpControlsLib.ExpList,System.Int32,System.Int32)">
+            <summary>
+            Initializes a new instance of the ThumbnailImageListManager class.
+            </summary>
+            <remarks>
+            The limit for capacity is ~1658 for 256px thumbnails.  Viewing more images than this causes blank images to be drawn.
+            The windows image list is stored within a contiguous section of non-virtual memory in a special region of memory
+            which is also accessible by the gpu.
+            The list is stored as a horizontal strip (should be vertical but isn't).  Many gpus have a texture size limit of 16384px
+            due to this being the limit for DirectX 12.  Opengl supports 32768.
+            The Nvidia 1080 has a limit of 131,072 × 65,536 but only inside cuda code.  Non-cuda code is limited to 16384px.
+            Although things still kinda work even if you exceed this limit, you will eventually start displaying blank images
+            once you view more than 1658 thumbnails at 256px.  The limit is higher for smaller thumbnails in a non-linear relationship..
+            </remarks>
+            <param name="expList"></param>
+            <param name="capacity">The capacity of the list
+            
+            </param>
+        </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.GetThumbnailIndex(WindowsApiLib.Shell.CShellItem,System.Int32)">
             <summary>
             Gets the thumbnail index for a given CShellItem and requested size. 
@@ -2835,6 +3082,13 @@
             Virtual and Regular modes. Provides a unified interface for data manipulation.
             </summary>
         </member>
+        <member name="F:ExpControlsLib.VirtualListViewWrapper._itemCache">
+            <summary>
+            Cache of ListViewItems for virtual mode, keyed by index.  
+            Note: it is important to update a given ListViewItems if the associated CShellItem changes, 
+            otherwise the ListView will display stale data.
+            </summary>
+        </member>
         <member name="F:ExpControlsLib.VirtualListViewWrapper._indexPathToLvi">
             <summary>
             Provides a mapping from file name to ListViewItems in the listview.  
@@ -2968,6 +3222,21 @@
             </summary>
             <param name="column">The column index.</param>
             <param name="order">The sort order.</param>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.RedrawItem(System.Int32)">
+            <summary>
+            Redraws the item at the specified index in the ListView. In virtual mode, this triggers 
+            a call to RetrieveVirtualItem for that index.
+            </summary>
+            <param name="index"></param>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.RefreshItem(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Refreshes the ListViewItem corresponding to the given CShellItem whose data has changed. 
+            In virtual mode, this updates the cached ListViewItem and triggers a redraw. 
+            In non-virtual mode, it updates the existing ListViewItem directly.
+            </summary>
+            <param name="csi"></param>
         </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.IsItemVisible(System.Int32)">
             <summary>

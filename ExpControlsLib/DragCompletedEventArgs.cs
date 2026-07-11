@@ -5,10 +5,13 @@ using WindowsApiLib.Shell;
 namespace ExpControlsLib
 {
     /// <summary>
-    /// Event arguments for the <see cref="ExpList.ExpListDragCompleted"/> event.
-    /// Fired when a drag-and-drop operation completes, providing the effect and the items involved.
+    /// Event arguments for drag-and-drop completion events
+    /// (<see cref="ExpList.ExpListDragCompleted"/> and
+    /// <see cref="ExpTree.ExpTreeDragCompleted"/>).
+    /// Fired when a drag-and-drop operation completes, providing the effect, the items
+    /// involved, and (for in-app drops) the resolved destination.
     /// </summary>
-    public class ExpListDragCompletedEventArgs : EventArgs
+    public class DragCompletedEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the effect of the completed drag operation (Move, Copy, Link, or None for optimized moves).
@@ -32,24 +35,35 @@ namespace ExpControlsLib
 
         /// <summary>
         /// For move operations resolved via shell notifications: the original path of the first item before the move.
-        /// Null when the source path is not available (e.g. copy operations or when fired from <c>DW_DragEnd</c>
-        /// before the shell notification arrives).
+        /// Null when the source path is not available (e.g. copy operations, tree-target drops, or when fired
+        /// from <c>DW_DragEnd</c> before the shell notification arrives).
         /// </summary>
         public string? SourcePath { get; }
 
         /// <summary>
         /// For move operations resolved via shell notifications: the destination path of the first item after the move.
+        /// For copy operations to an in-app target: the destination folder path.
         /// Null when the destination path is not available.
         /// </summary>
         public string? DestinationPath { get; }
 
-        public ExpListDragCompletedEventArgs(DragDropEffects effect, CShellItem[] items,
-            string? sourcePath = null, string? destinationPath = null)
+        /// <summary>
+        /// The in-app destination shell item the drop landed on, when the drop was received
+        /// by an in-process drop wrapper (CtvDropWrapper / ClvDropWrapper). Null for
+        /// external drops, cancelled drops, or drops on empty areas with no resolvable
+        /// destination folder. For moves resolved via shell notifications, this is the
+        /// destination folder; for copies to an in-app target, the same.
+        /// </summary>
+        public CShellItem? DestinationItem { get; }
+
+        public DragCompletedEventArgs(DragDropEffects effect, CShellItem[] items,
+            string? sourcePath = null, string? destinationPath = null, CShellItem? destination = null)
         {
             Effect = effect;
             Items = items;
             SourcePath = sourcePath;
             DestinationPath = destinationPath;
+            DestinationItem = destination;
         }
     }
 }

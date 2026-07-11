@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -224,6 +225,28 @@ namespace ExpControlsLib
         /// <param name="Item">The <see cref="CShellItem"/> associated with the selected TreeNode.</param>
         public delegate void ExpTreeNodeSelectedEventHandler(string SelPath, CShellItem Item);
 
+        /// <summary>
+        /// Occurs when a drag-and-drop operation completes with the tree as the drop target.
+        /// Provides the effect, the source items (when the drag originated in-process), and
+        /// the destination shell item the drop landed on. Fires for Move, Copy, Link, and
+        /// optimized-move (None) effects. For moves, the shell change-notification path on
+        /// the source control (<see cref="ExpList.ExpListDragCompleted"/>) remains the
+        /// authoritative source of <c>SourcePath</c>/<c>DestinationPath</c>; this event
+        /// supplements it with the resolved destination folder.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires when a drag-and-drop operation completes with the tree as the drop target")]
+        public event EventHandler<DragCompletedEventArgs>? ExpTreeDragCompleted;
+
+        /// <summary>
+        /// Occurs after a drop record is appended to <see cref="DropHistory"/>. Subscribe to
+        /// react to new drops (e.g. to refresh an undo/recent-drops UI). Raised on the UI
+        /// thread, inside the drop handler, before <c>DoDragDrop</c> returns to the source.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires after a drop is appended to DropHistory")]
+        public event EventHandler? DropHistoryChanged;
+
         #endregion region
 
         #region Public Properties
@@ -236,6 +259,82 @@ namespace ExpControlsLib
         /// so that the drop handler can be re-created when the TreeView handle is (re-)created.
         /// </summary>
         private bool m_AllowDrop = false;
+
+        /// <summary>
+        /// Gets a snapshot of the recent drops received by this tree, oldest-first. The
+        /// snapshot is a copy, so callers may iterate it safely while future drops mutate
+        /// the internal ring buffer. See <see cref="LastDrop"/> for the most recent entry
+        /// and <see cref="DropHistoryCapacity"/> to control the cap.
+        /// </summary>
+        [Browsable(false)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public IReadOnlyList<DropRecord> DropHistory
+        {
+            get
+            {
+                lock (_dropHistory)
+                {
+                    return _dropHistory.ToList();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the most recent drop received by this tree, or <see langword="null"/> when
+        /// no drop has been received yet. Equivalent to
+        /// <c>DropHistory.Count &gt; 0 ? DropHistory[DropHistory.Count - 1] : null</c>.
+        /// </summary>
+        [Browsable(false)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public DropRecord? LastDrop
+        {
+            get
+            {
+                lock (_dropHistory)
+                {
+                    return _dropHistory.Count > 0 ? _dropHistory.Last() : null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the maximum number of drop records retained in
+        /// <see cref="DropHistory"/>. Default 50. Reducing the value trims the oldest
+        /// entries immediately. Values less than 1 are clamped to 1.
+        /// </summary>
+        [Category("Behavior")]
+        [DefaultValue(50)]
+        [Description("Maximum number of recent drop records retained in DropHistory")]
+        public int DropHistoryCapacity
+        {
+            get => _dropHistoryCapacity;
+            set
+            {
+                if (value < 1) value = 1;
+                _dropHistoryCapacity = value;
+                lock (_dropHistory)
+                {
+                    while (_dropHistory.Count > _dropHistoryCapacity)
+                        _dropHistory.Dequeue();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Appends a <see cref="DropRecord"/> to the internal ring buffer, evicting the
+        /// oldest entry when at capacity, and raises <see cref="DropHistoryChanged"/>.
+        /// Called from <see cref="DragWrapper_ShDragDrop"/> on the UI thread.
+        /// </summary>
+        private void EnqueueDrop(DropRecord record)
+        {
+            lock (_dropHistory)
+            {
+                while (_dropHistory.Count >= _dropHistoryCapacity)
+                    _dropHistory.Dequeue();
+                _dropHistory.Enqueue(record);
+            }
+            DropHistoryChanged?.Invoke(this, EventArgs.Empty);
+        }
 
         /// <summary>
         /// Turns this ExpTree Control's ability to accept Drops on or Off.<br />
@@ -1519,6 +1618,19 @@ namespace ExpControlsLib
                                 if (!tn.IsExpanded) tn.Expand();
                             }
                         }
+                        else if (verbId == 99996)
+                        {
+                            CShellItem item = (CShellItem)tn.Tag;
+                            bool wasExpanded = tn.IsExpanded;
+                            tn.Collapse(false);
+                            tn.Nodes.Clear();
+                            if (ShouldHaveDummy(item))
+                            {
+                                tn.Nodes.Add(new TreeNode(DummyText));
+                            }
+                            if (wasExpanded)
+                                tn.Expand();
+                        }
                         // All other shell verbs (delete, cut, copy, paste, etc.) are already
                         // invoked by ShowMenu on the original IContextMenu — no further action needed.
                     }
@@ -1773,6 +1885,19 @@ namespace ExpControlsLib
         private TreeNode? dropNode;
 
         /// <summary>
+        /// Ring buffer of recent drops received by this tree. Capped at
+        /// <see cref="DropHistoryCapacity"/> entries; oldest evicted first. Read via
+        /// <see cref="DropHistory"/> (snapshot) or <see cref="LastDrop"/>.
+        /// </summary>
+        private readonly Queue<DropRecord> _dropHistory = new Queue<DropRecord>();
+
+        /// <summary>
+        /// Backing field for <see cref="DropHistoryCapacity"/>. Default 50. Reducing the
+        /// value trims the oldest entries from <see cref="_dropHistory"/>.
+        /// </summary>
+        private int _dropHistoryCapacity = 50;
+
+        /// <summary>
         /// The client-coordinate position of the most recent drag-over event, used by the
         /// auto-expand timer to scroll the TreeView when dragging near its edges.
         /// </summary>
@@ -1912,6 +2037,26 @@ namespace ExpControlsLib
                 ResetTreeviewNodeColor(_TreeView.Nodes[0]);
             }
             dropNode = null;
+
+            // Resolve the destination shell item (the folder the drop landed on) and the
+            // source items (peeked from the drag source's thread-static slot, populated
+            // by CDragWrapper before DoDragDrop started). Then raise ExpTreeDragCompleted
+            // and append a DropRecord to the history ring buffer.
+            CShellItem? dest = Node?.Tag as CShellItem;
+            DragDropEffects effect = (DragDropEffects)pdwEffect;
+            CShellItem[] srcItems = DragDropContext.PeekSource() ?? Array.Empty<CShellItem>();
+
+            EnqueueDrop(new DropRecord
+            {
+                CompletedAt = DateTime.Now,
+                Effect = effect,
+                DestinationItem = dest,
+                SourceItems = srcItems
+            });
+
+            ExpTreeDragCompleted?.Invoke(this,
+                new DragCompletedEventArgs(effect, srcItems,
+                    destinationPath: dest?.FullPath, destination: dest));
         }
 
         /// <summary>
