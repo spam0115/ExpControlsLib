@@ -20,7 +20,12 @@ namespace ExpControlsLib
     {
         private const int BatchThreshold = 20;
         private readonly ExpList _expList;
-        private readonly Dictionary<int, ListViewItem> _itemCache = new();
+        /// <summary>
+        /// Cache of ListViewItems for virtual mode, keyed by index.  
+        /// Note: it is important to update a given ListViewItems if the associated CShellItem changes, 
+        /// otherwise the ListView will display stale data.
+        /// </summary>
+        private readonly Dictionary<int, ListViewItem> _itemCache = new(); 
         private readonly Dictionary<string, int> _pathToIndex = new(StringComparer.OrdinalIgnoreCase);
         /// <summary>
         /// Provides a mapping from file name to ListViewItems in the listview.  
@@ -742,6 +747,11 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Redraws the item at the specified index in the ListView. In virtual mode, this triggers 
+        /// a call to RetrieveVirtualItem for that index.
+        /// </summary>
+        /// <param name="index"></param>
         public void RedrawItem(int index)
         {
             if (VirtualMode)
@@ -760,30 +770,45 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Refreshes the ListViewItem corresponding to the given CShellItem whose data has changed. 
+        /// In virtual mode, this updates the cached ListViewItem and triggers a redraw. 
+        /// In non-virtual mode, it updates the existing ListViewItem directly.
+        /// </summary>
+        /// <param name="csi"></param>
         public void RefreshItem(CShellItem? csi)
         {
             if (csi is null) return;
 
             Debug.WriteLine("ExpList: RefreshItem Begin");
 
-            csi.NeedsRefresh = true;
-
             try
             {
+                ListViewItem lvi = null;
                 int index = GetIndexFromFullPath(csi.FullPath);
                 if (VirtualMode)
                 {
+                    if (_itemCache.ContainsKey(index)) {
+                        lvi = _itemCache[index];
+                        UpdateListviewItemCallback?.Invoke(lvi, csi);
+                    }
+                    else
+                    {
+                        lvi = CreateLviFromCsi(csi);
+                        _itemCache[index] = lvi;
+                    }
                 }
                 else
                 {
                     if (index >= 0 && index < _ListView.Items.Count)
                     {
-                        var lvi = _ListView.Items[index];
+                        lvi = _ListView.Items[index];
                         UpdateListviewItemCallback?.Invoke(lvi, csi);
                     }
                 }
 
                 RedrawItem(index);
+                csi.NeedsRefresh = false;
             }
             finally
             {

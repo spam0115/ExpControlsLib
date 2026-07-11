@@ -780,7 +780,7 @@ namespace ExpControlsLib
 
                 // Initialize Thumbnail Manager
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Initializing thumbnail manager...");
-                _thumbnailManager = new ThumbnailImageListManager(this);
+                _thumbnailManager = new ThumbnailImageListManager(this, this.GetThumbnailSizeForMode());
                 _thumbnailManager.ThumbnailReady += ThumbnailManager_ThumbnailReady;
 
                 //set up sorter
@@ -2000,7 +2000,7 @@ namespace ExpControlsLib
 
 
         /// <summary>
-        /// Refreshes the display of a single item whose underlying filesystem data has changed.
+        /// Refreshes the display of a single item whose underlying filesystem or scoring data has changed.
         /// </summary>
         public void UpdateListviewItemCallback(ListViewItem lvi, CShellItem csi)
         {

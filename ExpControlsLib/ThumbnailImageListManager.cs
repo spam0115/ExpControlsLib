@@ -46,8 +46,31 @@ namespace ExpControlsLib
 
         public event EventHandler<ThumbnailReadyEventArgs> ThumbnailReady;
 
-        public ThumbnailImageListManager(ExpList expList, int capacity = 800) //the limit is ~1658 for 256px thumbnails.  Going beyond this causes blank thumbnails to be drawn.
+        /// <summary>
+        /// Initializes a new instance of the ThumbnailImageListManager class.
+        /// </summary>
+        /// <remarks>
+        /// The limit for capacity is ~1658 for 256px thumbnails.  Viewing more images than this causes blank images to be drawn.
+        /// The windows image list is stored within a contiguous section of non-virtual memory in a special region of memory
+        /// which is also accessible by the gpu.
+        /// The list is stored as a horizontal strip (should be vertical but isn't).  Many gpus have a texture size limit of 16384px
+        /// due to this being the limit for DirectX 12.  Opengl supports 32768.
+        /// The Nvidia 1080 has a limit of 131,072 × 65,536 but only inside cuda code.  Non-cuda code is limited to 16384px.
+        /// Although things still kinda work even if you exceed this limit, you will eventually start displaying blank images
+        /// once you view more than 1658 thumbnails at 256px.  The limit is higher for smaller thumbnails in a non-linear relationship..
+        /// </remarks>
+        /// <param name="expList"></param>
+        /// <param name="capacity">The capacity of the list
+        /// 
+        /// </param>
+        public ThumbnailImageListManager(ExpList expList, int size, int capacity = -1)
         {
+            _activeSize = size;
+            if (capacity == -1)
+            {
+                capacity = 16384/this._activeSize*2; // default capacity based on 16k texture limit 
+            }
+
             _expList = expList;
             _maxThumbnails = capacity;
             _thumbnailProvider = new ThumbnailProvider();
