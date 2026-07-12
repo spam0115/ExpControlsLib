@@ -16,7 +16,6 @@ namespace WindowsApiLib
         #region        Private Fields
         private readonly byte[] m_bytes;   // The local copy of the PIDL
         private readonly int m_ItemCount;      // the # of ItemIDs in this ItemIDList (PIDL)
-        private string value;
 
         // Private ReadOnly m_OffsetToRelative As Integer 'the index of the start of the last itemID in m_bytes
         #endregion

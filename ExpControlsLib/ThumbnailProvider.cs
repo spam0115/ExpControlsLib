@@ -76,13 +76,12 @@ namespace ExpControlsLib
             _cancellationToken = _cancellationTokenSource.Token;
 
 #if DEBUG
-            _maxThreads = Environment.ProcessorCount;
+            _maxThreads = 1;
 #else
             _maxThreads = Environment.ProcessorCount;
 #endif
             //in testing, moving from 1 to 2 to 4 provided improvements.  Going from 4 to 6 and to 8 both provided a slowdown.
             if (_maxThreads > 4) _maxThreads = 4;
-            _maxThreads = 1;
             _requestQueueRunner = new StaThreadRunner(staThreadCount: _maxThreads, threadNamePrefix: "StaThreadRunner_");
         }
 

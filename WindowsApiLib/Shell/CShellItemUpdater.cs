@@ -208,7 +208,7 @@ namespace WindowsApiLib.Shell
 
         #endregion
 
-        public new void Dispose()
+        public void Dispose()
         {
             if (m_notifyId > 0)
             {

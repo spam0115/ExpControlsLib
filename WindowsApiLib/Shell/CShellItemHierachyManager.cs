@@ -24,7 +24,7 @@ namespace WindowsApiLib.Shell
     {
         public object Lock = new object();
 
-        public CShellItem Root { get; set; }
+        public CShellItem? Root { get; set; }
         public CShellItem? CurrentFolder { get; set; }
         public string? CurrentPath { get {
                 if (CurrentFolder?.PIDL == null) return string.Empty;

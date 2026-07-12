@@ -458,7 +458,7 @@ namespace WindowsApiLib
             {
                 hIcon = ImageList_GetIcon(m_lgImgList, Index, 0);
             }
-            if (!(hIcon == null))
+            if (hIcon != IntPtr.Zero)
             {
                 icon = Icon.FromHandle(hIcon);
             }
@@ -480,7 +480,7 @@ namespace WindowsApiLib
             {
                 IntPtr hIcon;
                 hIcon = ImageList_GetIcon(m_xlgImgList, index, 0);
-                if (!(hIcon == null))
+                if (hIcon != IntPtr.Zero)
                 {
                     icon = Icon.FromHandle(hIcon);
                 }
@@ -503,7 +503,7 @@ namespace WindowsApiLib
             {
                 IntPtr hIcon;
                 hIcon = ImageList_GetIcon(m_jumboImgList, index, 0);
-                if (!(hIcon == null))
+                if (hIcon != IntPtr.Zero)
                 {
                     icon = Icon.FromHandle(hIcon);
                 }

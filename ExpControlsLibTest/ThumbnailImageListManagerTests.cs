@@ -226,8 +226,8 @@ namespace ExpControlsLibTest
         public void TestAddThumbnail_Success()
         {
             // Verify that adding a valid bitmap returns a valid index and updates the CShellItem.ImageIndex.
-            var manager = new ThumbnailImageListManager(_expList);
             int size = 64;
+            var manager = new ThumbnailImageListManager(_expList, size);
             manager.SetImageListForSize(size);
 
             var csi = CShellItemFactory.Create(_testImagePath);
@@ -251,12 +251,12 @@ namespace ExpControlsLibTest
         public void TestThumbnailCaching_IsolationBySize()
         {
             // Verify that thumbnails of different sizes for the same file are cached independently.
-            var manager = new ThumbnailImageListManager(_expList);
             var csi = CShellItemFactory.Create(_testImagePath);
             
             int size1 = 64;
             int size2 = 128;
 
+            var manager = new ThumbnailImageListManager(_expList, size1);
             manager.SetImageListForSize(size1);
             using var bmp1 = new Bitmap(size1, size1);
             int idx1 = manager.AddThumbnail(new ThumbnailReadyEventArgs(csi, bmp1, size1), bmp1);
@@ -277,8 +277,8 @@ namespace ExpControlsLibTest
         public void TestAddThumbnail_MultipleFiles()
         {
             // Verify that multiple files (using different source images) are handled correctly.
-            var manager = new ThumbnailImageListManager(_expList);
             int size = 96;
+            var manager = new ThumbnailImageListManager(_expList, size);
             manager.SetImageListForSize(size);
 
             string path1 = _testImagePath; // Lena

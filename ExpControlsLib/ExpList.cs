@@ -125,14 +125,14 @@ namespace ExpControlsLib
         }
 
 
-        private CancellationTokenSource? _displayFilesCts;
+        private CancellationTokenSource? _loadDirectoryCancelTs;
         private static readonly StaThreadRunner _staRunner = new StaThreadRunner(5, "ExpListStaRunner"); //todo: i think we might be limited to one sta thread becuase com objects have thread affinity and COM tries to marshal com calls to different threads and post messages onto the other thread's message queue.
 
         private void Cleanup()
         {
-            _displayFilesCts?.Cancel();
-            _displayFilesCts?.Dispose();
-            _displayFilesCts = null;
+            _loadDirectoryCancelTs?.Cancel();
+            _loadDirectoryCancelTs?.Dispose();
+            _loadDirectoryCancelTs = null;
             if (_shellController?.ShellUpdater != null)
                 _shellController.ShellUpdater.UpdateEvent -= ShellUpdater_UpdateEventInvoker;
         }
@@ -2322,9 +2322,9 @@ namespace ExpControlsLib
                 ClearListView();
                 return;
             }
-            _displayFilesCts?.Cancel(); //cancel any prior invokations
-            _displayFilesCts = new CancellationTokenSource();
-            var token = _displayFilesCts.Token;
+            _loadDirectoryCancelTs?.Cancel(); //cancel any prior invokations
+            _loadDirectoryCancelTs = new CancellationTokenSource();
+            var token = _loadDirectoryCancelTs.Token;
 
             ExpListDirectoryLoading?.Invoke(this, EventArgs.Empty);
 

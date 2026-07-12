@@ -19,7 +19,7 @@ namespace WindowsApiLib.Shell
         private readonly LruConcurrentDictionary<string, bool> _activeDeletes = new(1000);
         private bool _isUpdatingDir = false;
 
-        public event CShellItemUpdater.CShItemUpdateEventHandler UpdateEvent;
+        public event CShellItemUpdater.CShItemUpdateEventHandler? UpdateEvent;
 
         public bool AllowUpdates { get; set; }
 
@@ -171,16 +171,15 @@ namespace WindowsApiLib.Shell
                             try
                             {
                                 _activeDeletes.Add(pidlName, true);
-#if DEBUG
-                                string? name = TPidl.GetDisplayName(userPidl1);
-#endif
                                 splitPidl = TPidl.Split(userPidl1);
                                 parentItem = _hierarchyManager.Find(splitPidl.ParentPidl);
 
                                 if (parentItem != null)
                                 {
                                     Debug.WriteLine("  [DELETE] Parent found: " + parentItem.ItemPath);
-                                    
+
+                                    string? name = TPidl.GetDisplayName(splitPidl.ChildPidl);
+
                                     if (name != null) 
                                     {
                                         CShellItem childItem = null;

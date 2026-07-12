@@ -145,7 +145,7 @@ namespace WindowsApiLib.Shell
         internal bool m_UpdateFolder;
 
         // Holds a byte() representation of m_PIDL -- filled when needed
-        internal CPidl m_cPidl;
+        internal CPidl? _cPidl;
 
         // Flags for Dispose state
         // Private m_IsDisposing As Boolean
@@ -225,7 +225,7 @@ namespace WindowsApiLib.Shell
                 }
                 return m_IconIndexOpen;
             }
-            set;
+            set { m_IconIndexOpen = value; }
         }
 
         /// <summary>
@@ -382,7 +382,7 @@ namespace WindowsApiLib.Shell
             {
                 return m_TypeName;
             }
-            set;
+            set { m_TypeName = value; }
         }
 
         /// <summary>
@@ -752,7 +752,7 @@ namespace WindowsApiLib.Shell
                 }
                 return m_HasSubFolders.Value;
             }
-            set;
+            set { m_HasSubFolders = value; }
         }
 
         /// <summary>
@@ -802,7 +802,6 @@ namespace WindowsApiLib.Shell
         public bool CanRename => m_CanRename;
 
         private string m_size = "[]";
-        private string currentPath;
 
         /// <summary>
         /// A Formatted String representation of the Item's FileSize
@@ -972,11 +971,11 @@ namespace WindowsApiLib.Shell
         {
             get
             {
-                if (m_cPidl == null)
+                if (_cPidl == null)
                 {
-                    m_cPidl = new CPidl(m_Pidl);
+                    _cPidl = new CPidl(m_Pidl);
                 }
-                return m_cPidl;
+                return _cPidl;
             }
         }
 
@@ -1725,7 +1724,7 @@ namespace WindowsApiLib.Shell
             copy.m_DisplayName = m_DisplayName;
             copy.m_FullPath = m_FullPath;
             copy.m_TypeName = m_TypeName;
-            copy.m_cPidl = m_cPidl;
+            copy._cPidl = _cPidl;
             copy.m_columnDic = m_columnDic;
             copy.LVItem = LVItem;
             copy.TNode = TNode;
@@ -1733,7 +1732,6 @@ namespace WindowsApiLib.Shell
             copy._directories = _directories;
             copy._files = _files;
             copy.m_size = m_size;
-            copy.currentPath = currentPath;
 
             return copy;
         }
