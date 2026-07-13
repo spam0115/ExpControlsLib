@@ -178,7 +178,7 @@ namespace WindowsApiLib.Shell
                                 {
                                     Debug.WriteLine("  [DELETE] Parent found: " + parentItem.ItemPath);
 
-                                    string? name = TPidl.GetDisplayName(splitPidl.ChildPidl);
+                                    string? name = TPidl.GetDisplayName(userPidl1);
 
                                     if (name != null) 
                                     {
