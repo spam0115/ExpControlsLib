@@ -1615,7 +1615,33 @@ namespace ExpControlsLib
                                 }
                                 System.IO.Directory.CreateDirectory(newFolderPath);
 
-                                if (!tn.IsExpanded) tn.Expand();
+                                CShellItem parentCsi = (CShellItem)tn.Tag;
+                                var flags = SHCONTF.FOLDERS;
+                                if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
+                                _shellController.LoadFolderContents(parentCsi, flags);
+
+                                tn.Collapse(false);
+                                tn.Nodes.Clear();
+                                var dirs = parentCsi.Directories;
+                                dirs.Sort();
+                                TreeNode? newNode = null;
+                                foreach (CShellItem child in dirs)
+                                {
+                                    if (!(child.IsHidden & !m_showHiddenFolders) && !IsExcluded(child))
+                                    {
+                                        var node = MakeNode(child);
+                                        tn.Nodes.Add(node);
+                                        if (string.Equals(child.FullPath, newFolderPath, StringComparison.OrdinalIgnoreCase))
+                                            newNode = node;
+                                    }
+                                }
+
+                                if (newNode is not null)
+                                {
+                                    _TreeView.SelectedNode = newNode;
+                                    _TreeView.LabelEdit = true;
+                                    newNode.BeginEdit();
+                                }
                             }
                         }
                         else if (verbId == 99996)
