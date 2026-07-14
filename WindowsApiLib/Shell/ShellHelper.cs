@@ -449,7 +449,10 @@ namespace WindowsApiLib.Shell
             int i = 0;
             foreach (CShellItem CSI in CSIList)
             {
-                bArrays[i] = new CPidl(CSI.PIDL).PidlBytes;
+                // Clone CSI.PIDL so the CPidlLocal constructor does not consume (free) the
+                // CShellItem's owned PIDL. CPidlLocal takes ownership of the clone.
+                using var cp = new CPidlLocal(CPidl.Clone(CSI.PIDL));
+                bArrays[i] = cp.PidlBytes;
                 i += 1;
             }
 
@@ -563,7 +566,9 @@ namespace WindowsApiLib.Shell
             for (i = 0; i <= loopTo1; i++)
             {
                 var ipt = new IntPtr(ptr.ToInt32() + offsets[i]);
-                var cp = new CPidl(ipt);
+                // ipt points INTO the CIDA memory block, not a standalone CoTaskMem PIDL,
+                // so it must NOT be freed directly. Clone it so CPidlLocal owns a freeable copy.
+                using var cp = new CPidlLocal(CPidl.Clone(ipt));
                 pidlobjs[i] = cp.PidlBytes;
                 pidlLen += pidlobjs[i].Length;
             }

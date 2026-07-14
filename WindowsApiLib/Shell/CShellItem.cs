@@ -973,7 +973,8 @@ namespace WindowsApiLib.Shell
             {
                 if (_cPidl == null)
                 {
-                    _cPidl = new CPidl(m_Pidl);
+                    // Clone m_Pidl so CPidlLocal takes ownership of the clone (not CShellItem's PIDL).
+                    _cPidl = new CPidlLocal(CPidl.Clone(m_Pidl));
                 }
                 return _cPidl;
             }
