@@ -224,7 +224,7 @@ namespace ExpControlsLib
         /// <returns>The index of the thumbnail in the ImageList, or -1 if it could not be added.</returns>
         public int AddThumbnail(ThumbnailReadyEventArgs reqArgs, Bitmap thumbnail)
         {
-            Debug.WriteLine("ThumbnailImageListManager: AddThumbnail begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ThumbnailImageListManager: AddThumbnail begin");
 
             if (thumbnail == null)
             {

@@ -732,7 +732,7 @@ namespace WindowsApiLib.Shell
         /// That is, any Remote Folder is reported as HasSubFolders = True. Local Folders are tested with the API call.
         /// On Vista/Win7, Compressed files (eg - .Zip, .Cab, etc) are considered sub Folders by this Property.
         /// This behavior is NOT modified to behave like XP.</remarks>
-        public bool HasSubFolders
+        public bool? HasSubFolders
         {
             get
             {

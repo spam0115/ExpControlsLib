@@ -126,7 +126,7 @@ namespace ExpControlsLib
 
 
         private CancellationTokenSource? _loadDirectoryCancelTs;
-        private static readonly StaThreadRunner _staRunner = new StaThreadRunner(5, "ExpListStaRunner"); //todo: i think we might be limited to one sta thread becuase com objects have thread affinity and COM tries to marshal com calls to different threads and post messages onto the other thread's message queue.
+        private StaThreadRunner? _staRunner;
 
         private void Cleanup()
         {
@@ -380,7 +380,6 @@ namespace ExpControlsLib
             }
         }
 
-
         /// <summary>
         /// Gets the collection of all column headers that appear in the list view.
         /// </summary>
@@ -630,7 +629,6 @@ namespace ExpControlsLib
             }
         }
 
-
         /// <summary>
         /// Gets the number of items in the list view.
         /// </summary>
@@ -656,46 +654,6 @@ namespace ExpControlsLib
         /// </summary>
         [Browsable(false)]
         public IEnumerable<CShellItem> SelectedCShellItems => _listViewWrapper.SelectedCShellItems;
-
-        /// <summary>
-        /// Gets the CShellItem at the specified index.
-        /// </summary>
-        public CShellItem? GetItem(int index) => _listViewWrapper.GetItem(index);
-
-        /// <summary>
-        /// Removes the item at the specified index.
-        /// </summary>
-        public void RemoveAt(int index) => _listViewWrapper.RemoveAt(index);
-
-        /// <summary>
-        /// Sets the sort column and order without triggering an actual sort.
-        /// This is useful to set at startup before the first location is loaded.
-        /// </summary>
-        /// <param name="column">The column index.</param>
-        /// <param name="order">The sort order.</param>
-        public void SetSortState(int column, SortOrder order)
-        {
-            _listViewWrapper.SetSortState(column, order);
-        }
-
-        /// <summary>
-        /// Sets the sort column and order.
-        /// </summary>
-        /// <param name="column">The column index.</param>
-        /// <param name="order">The sort order.</param>
-        public void Sort(int column, SortOrder order)
-        {
-            Debug.WriteLine("ExpList: SetSort Begin");
-            try
-            {
-                _listViewWrapper.Sort(column, order);
-            }
-            finally
-            {
-                Debug.WriteLine("ExpList: SetSort End");
-            }
-        }
-
 
         #endregion
 
@@ -767,6 +725,8 @@ namespace ExpControlsLib
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Begin");
             try
             {
+                _staRunner = new StaThreadRunner(5, "ExpListStaRunner"); //todo: i think we might be limited to one sta thread becuase com objects have thread affinity and COM tries to marshal com calls to different threads and post messages onto the other thread's message queue.
+
                 // Setup Drag and Drop Wrappers
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Setting up drag/drop...");
                 DW = new CDragWrapper(_listView);
@@ -2259,6 +2219,46 @@ namespace ExpControlsLib
 
         #region Public Methods
 
+
+        /// <summary>
+        /// Gets the CShellItem at the specified index.
+        /// </summary>
+        public CShellItem? GetItem(int index) => _listViewWrapper.GetItem(index);
+
+        /// <summary>
+        /// Removes the item at the specified index.
+        /// </summary>
+        public void RemoveAt(int index) => _listViewWrapper.RemoveAt(index);
+
+        /// <summary>
+        /// Sets the sort column and order without triggering an actual sort.
+        /// This is useful to set at startup before the first location is loaded.
+        /// </summary>
+        /// <param name="column">The column index.</param>
+        /// <param name="order">The sort order.</param>
+        public void SetSortState(int column, SortOrder order)
+        {
+            _listViewWrapper.SetSortState(column, order);
+        }
+
+        /// <summary>
+        /// Sets the sort column and order.
+        /// </summary>
+        /// <param name="column">The column index.</param>
+        /// <param name="order">The sort order.</param>
+        public void Sort(int column, SortOrder order)
+        {
+            Debug.WriteLine("ExpList: SetSort Begin");
+            try
+            {
+                _listViewWrapper.Sort(column, order);
+            }
+            finally
+            {
+                Debug.WriteLine("ExpList: SetSort End");
+            }
+        }
+
         /// <summary>
         /// Populates the list view with files and directories from the specified <see cref="CShellItem"/>.
         /// </summary>
@@ -2616,9 +2616,9 @@ namespace ExpControlsLib
         {
             try
             {
-                if (item == null) return new ListViewItem("Error: no CShellItem provided to MakeLVItem()");
+                if (item == null) return new ListViewItem("Error: no CShellItem provided to CreateListviewItemCallback()");
 
-                Debug.WriteLine("ExpList: MakeLVItem Begin - " + item.DisplayName);
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: CreateListviewItemCallback Begin - " + item.DisplayName);
 
                 ListViewItem lvi = new ListViewItem(item.DisplayName);
 
@@ -2631,7 +2631,7 @@ namespace ExpControlsLib
                 //Debug.WriteLine("ExpList: MakeLVItem End");
             }
         }
-
+        
         private bool _refreshing = false; //This variable is prevent reentrancy problems on the ui thread
         private bool _refreshPending = false;
         private bool _refetchImages = false;

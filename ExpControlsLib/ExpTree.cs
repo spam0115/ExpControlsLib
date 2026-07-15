@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Xml.Linq;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
@@ -38,7 +39,7 @@ namespace ExpControlsLib
         /// The root <see cref="TreeNode"/> of the TreeView. Represents the top-level Shell item
         /// from which the entire tree is built.
         /// </summary>
-        private TreeNode? _Root;
+        private TreeNode? _RootNode;
 
         /// <summary>
         /// Flag used to suppress the raising of <see cref="ExpTreeNodeSelected"/> during
@@ -446,13 +447,13 @@ namespace ExpControlsLib
         {
             get
             {
-                if (_Root is null || _Root.Tag is null)
+                if (_RootNode is null || _RootNode.Tag is null)
                 {
                     return null;
                 }
                 else
                 {
-                    return (CShellItem)_Root.Tag;
+                    return (CShellItem)_RootNode.Tag;
                 }
             }
             set
@@ -523,7 +524,7 @@ namespace ExpControlsLib
                 if (m_showHiddenFolders ^ value)
                 {
                     m_showHiddenFolders = value;
-                    if (_Root is not null)
+                    if (_RootNode is not null)
                         RefreshTree();
                 }
             }
@@ -569,7 +570,7 @@ namespace ExpControlsLib
         /// Backing field for <see cref="StartUpDirectory"/>. Stores the currently active
         /// <see cref="StartDir"/> value.
         /// </summary>
-        private StartDir m_StartUpDirectory = StartDir.None;
+        private StartDir _StartUpDirectory = StartDir.None;
 
         /// <summary>
         /// Sets the initial Root directory of ExpTree.
@@ -586,7 +587,7 @@ namespace ExpControlsLib
         {
             get
             {
-                return m_StartUpDirectory;
+                return _StartUpDirectory;
             }
             set
             {
@@ -595,7 +596,7 @@ namespace ExpControlsLib
                     Debug.WriteLine("ExpTree.StartUpDirectory: cannot change startup directory after startup.");
                     return;
                 }
-                m_StartUpDirectory = value;
+                _StartUpDirectory = value;
 
                 //if (Array.IndexOf(Enum.GetValues(value.GetType()), value) >= 0)
                 //{
@@ -646,7 +647,7 @@ namespace ExpControlsLib
 
             expandNodeTimer = new System.Windows.Forms.Timer();
 
-            _staRunner = new StaThreadRunner(5, "ExpTreeStaRunner");
+            _staRunner = new StaThreadRunner(1, "ExpTreeStaRunner");
 
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Setting image list...");
             SetTreeViewImageList(_TreeView, false);
@@ -658,7 +659,7 @@ namespace ExpControlsLib
             if (_rootPath is not null)
             {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Custom root path '{_rootPath}' - starting SetRootItemAsync...");
-                m_StartUpDirectory = StartDir.Custom;
+                _StartUpDirectory = StartDir.Custom;
                 var csi = _shellController.HierachyManager.FindAndAllowExpansion(_rootPath.Trim());
                 if (csi is null) 
                     throw new ArgumentException("ExpTree: root path could not be found.");
@@ -788,51 +789,6 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Asynchronously expands TreeNodes from the tree root through the node identified by
-        /// <paramref name="newPath"/>. This is the async counterpart of
-        /// <see cref="ExpandANode(string, bool)"/>.
-        /// </summary>
-        /// <param name="newPath">The file-system path of the node to expand.</param>
-        /// <param name="SelectExpandedNode">
-        /// If <c>true</c> (the default), the expanded node is selected and an
-        /// <see cref="ExpTreeNodeSelected"/> event is raised. If <c>false</c>, the current
-        /// selection is unchanged and no event is raised.
-        /// </param>
-        /// <returns>
-        /// A <see cref="Task{Boolean}"/> that resolves to <c>true</c> if the expansion succeeded,
-        /// or <c>false</c> if the path could not be resolved or the item is not a folder.
-        /// </returns>
-        public async Task<bool> ExpandANodeAsync(string newPath, bool SelectExpandedNode = true)
-        {
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): Begin for '{newPath}'");
-
-            //await Task.Delay(5000);
-            
-            CShellItem csi;
-            try
-            {
-                csi = _shellController.HierachyManager.FindAndAllowExpansion(newPath);
-                if (csi is null)
-                {
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): csi is null for '{newPath}'");
-                    return false;
-                }
-                if (!csi.IsFolder)
-                {
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): csi is not a folder for '{newPath}'");
-                    return false;
-                }
-
-                return await ExpandANodeAsync(csi, SelectExpandedNode);
-            }
-            catch(Exception ex)
-            {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): ERROR - {ex}");
-                return false;
-            }
-        }
-
-        /// <summary>
         /// Expands TreeNodes from the tree root through the input CShellItem. All intermediate nodes between the
         /// Tree Root and the input CShellItem are Expanded. If the Optional Property SelectExpandedNode is True (the Default),
         /// the Expanded Node will be Selected, Raising a ExpNodeSelected Event. If False, the current Selected Node is unchanged
@@ -850,7 +806,7 @@ namespace ExpControlsLib
         {
             bool ExpandANodeRet = default;
             ExpandANodeRet = false;
-            var baseNode = _Root;
+            var baseNode = _RootNode;
             if (baseNode == null)
             {
                 if (_rootLoadCts != null && !_rootLoadCts.IsCancellationRequested)
@@ -915,6 +871,52 @@ namespace ExpControlsLib
         }
 
         /// <summary>
+        /// Asynchronously expands TreeNodes from the tree root through the node identified by
+        /// <paramref name="newPath"/>. This is the async counterpart of
+        /// <see cref="ExpandANode(string, bool)"/>.
+        /// </summary>
+        /// <param name="newPath">The file-system path of the node to expand.</param>
+        /// <param name="SelectExpandedNode">
+        /// If <c>true</c> (the default), the expanded node is selected and an
+        /// <see cref="ExpTreeNodeSelected"/> event is raised. If <c>false</c>, the current
+        /// selection is unchanged and no event is raised.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Task{Boolean}"/> that resolves to <c>true</c> if the expansion succeeded,
+        /// or <c>false</c> if the path could not be resolved or the item is not a folder.
+        /// </returns>
+        public async Task<bool> ExpandANodeAsync(string newPath, bool SelectExpandedNode = true)
+        {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): Begin for '{newPath}'");
+
+            //await Task.Delay(5000);
+
+            CShellItem csi;
+            try
+            {
+                csi = _shellController.HierachyManager.FindAndAllowExpansion(newPath);
+                if (csi is null)
+                {
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): csi is null for '{newPath}'");
+                    return false;
+                }
+                if (!csi.IsFolder)
+                {
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): csi is not a folder for '{newPath}'");
+                    return false;
+                }
+
+                await _loadingRootTask;
+                return await ExpandANodeBaseAsync(csi, SelectExpandedNode);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): ERROR - {ex}");
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Asynchronously expands TreeNodes from the tree root through the node represented by
         /// <paramref name="target"/>, populating lazy-loaded (dummy) nodes on demand.
         /// This is the preferred async counterpart of <see cref="ExpandANode(CShellItem, bool)"/>.
@@ -935,16 +937,16 @@ namespace ExpControlsLib
         public async Task<bool> ExpandANodeAsync(CShellItem target, bool SelectExpandedNode = true)
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(CShellItem): Begin for '{target.DisplayName}', awaiting _loadingRootTask...");
+
             await _loadingRootTask;
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(CShellItem): _loadingRootTask complete, calling ExpandANodeBaseAsync...");
 
             return await ExpandANodeBaseAsync(target, SelectExpandedNode);
         }
 
-        public async Task<bool> ExpandANodeBaseAsync(CShellItem target, bool SelectExpandedNode = true)
+        private async Task<bool> ExpandANodeBaseAsync(CShellItem target, bool SelectExpandedNode = true)
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: Begin for '{target.DisplayName}'");
-            var baseNode = _Root;
+            var baseNode = _RootNode;
             if (baseNode == null)
             {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: _Root is null");
@@ -1330,26 +1332,6 @@ namespace ExpControlsLib
         #region Initial Dir Set Handler
 
         /// <summary>
-        /// Responds to a change in <see cref="StartUpDirectory"/> by clearing the tree (when
-        /// <see cref="StartDir.None"/> is selected) or asynchronously reloading it rooted at
-        /// the newly specified special folder.
-        /// </summary>
-        /// <param name="newVal">The new <see cref="StartDir"/> value that was applied.</param>
-        //private void OnStartUpDirectoryChanged(StartDir newVal)
-        //{
-        //    if (newVal == StartDir.None)
-        //    {
-        //        _TreeView.BeginUpdate();
-        //        ClearTree();
-        //        _TreeView.EndUpdate();
-        //        return;
-        //    }
-
-        //    var csi = CShellItemFactory.Create((CSIDL)newVal);
-        //    _ = SetRootItemAsync(csi);
-        //}
-
-        /// <summary>
         /// Populates the root TreeNode's <see cref="TreeNode.Nodes"/> collection from the
         /// sorted array of first-level child <see cref="CShellItem"/> folders.
         /// Hidden items are filtered according to <see cref="ShowHiddenFolders"/>, and
@@ -1358,13 +1340,13 @@ namespace ExpControlsLib
         /// <param name="itemsList">
         /// The array of first-level child <see cref="CShellItem"/> folders to add as root children.
         /// </param>
-        private void BuildTree(IEnumerable<CShellItem> itemsList)
+        private void BuildTree(TreeNode rootNode, IEnumerable<CShellItem> itemsList)
         {
             foreach (var csi in itemsList)
             {
                 if (!(csi.IsHidden & !m_showHiddenFolders) && !IsExcluded(csi))
                 {
-                    _Root.Nodes.Add(MakeNode(csi));
+                    rootNode.Nodes.Add(MakeNode(csi));
                 }
             }
         }
@@ -1429,17 +1411,17 @@ namespace ExpControlsLib
             if (!item.IsFolder) return false;
 
             // Fast-path: rely on shell hints (warmed up in background) to maintain responsiveness.
-            return item.HasSubFolders || (item.IsHidden && item.DirCount > 0);
+            return (item.HasSubFolders ?? false) || (item.IsHidden && item.DirCount > 0);
         }
 
         /// <summary>
-        /// Removes all nodes from the TreeView and resets <see cref="_Root"/> to <c>null</c>,
+        /// Removes all nodes from the TreeView and resets <see cref="_RootNode"/> to <c>null</c>,
         /// effectively clearing the entire tree display.
         /// </summary>
         private void ClearTree()
         {
             _TreeView.Nodes.Clear();
-            _Root = null;
+            _RootNode = null;
         }
 
         #endregion
@@ -1793,16 +1775,16 @@ namespace ExpControlsLib
             if (_TreeView.Visible)
             {
                 SetTreeViewImageList(_TreeView, false);
-                if (_Root is not null)
+                if (_RootNode is not null)
                 {
-                    _Root.Expand();
+                    _RootNode.Expand();
                     if (!(_TreeView.SelectedNode == null))
                     {
                         _TreeView.SelectedNode.Expand();
                     }
                     else
                     {
-                        _TreeView.SelectedNode = _Root;
+                        _TreeView.SelectedNode = _RootNode;
                     }
                 }
             }
@@ -1814,7 +1796,7 @@ namespace ExpControlsLib
         /// If it occurs, cancel it</summary>
         private void Tv1_BeforeCollapse(object sender, TreeViewCancelEventArgs e)
         {
-            if (!_TreeView.ShowRootLines && ReferenceEquals(e.Node, _Root))
+            if (!_TreeView.ShowRootLines && ReferenceEquals(e.Node, _RootNode))
             {
                 e.Cancel = true;
             }
@@ -2288,330 +2270,6 @@ namespace ExpControlsLib
             }
         }
 
-
-        /// <summary>
-        /// Called to Populate the TreeNodes of a TreeNode that only contains a Dummy Node.
-        /// </summary>
-        /// <param name="NodeToFill">The unexpanded TreeNode to Fill</param>
-        /// <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
-        /// Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
-        private void PopulateNode(TreeNode NodeToFill)
-        {
-            CShellItem csi = (CShellItem)NodeToFill.Tag;
-
-            var flags = SHCONTF.FOLDERS;
-            if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-            _shellController.EnsureChildrenPopulated(csi, flags);
-
-            var dirs = csi.Directories;
-
-            if (dirs.Count > 0)
-            {
-                dirs.Sort();
-                NodeToFill.Nodes.Clear();
-                foreach (CShellItem item in dirs)
-                {
-                    if (!(item.IsHidden & !m_showHiddenFolders) && !IsExcluded(item))
-                    {
-                        NodeToFill.Nodes.Add(MakeNode(item));
-                    }
-                }
-            }
-            else
-            {
-                NodeToFill.Nodes.Clear();
-            }
-        }
-
-        /// <summary>
-        /// Asynchronously loads and displays the tree rooted at the specified <see cref="CShellItem"/>
-        /// or <see cref="StartDir"/> value. Any in-progress load is cancelled before the new one begins.
-        /// Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
-        /// </summary>
-        /// <param name="csi">
-        /// The <see cref="CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
-        /// should be used to resolve the root instead.
-        /// </param>
-        /// <param name="dir">
-        /// A <see cref="StartDir"/> value used to resolve the root when <paramref name="csi"/> is <c>null</c>.
-        /// Defaults to <see cref="StartDir.None"/>.
-        /// </param>
-        private async Task SetRootItemAsync(CShellItem? csi)
-        {
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Begin for '{csi?.DisplayName}'");
-            _rootLoadCts?.Cancel();
-            _rootLoadCts?.Dispose();
-            // Link with the runner's shutdown token so disposal can abort in-progress work.
-            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                _staRunner?.ShutdownToken ?? CancellationToken.None);
-            _rootLoadCts = linkedCts;
-            var token = linkedCts.Token;
-
-            try
-            {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Enqueueing STA work...");
-                var result = await _staRunner.EnqueueWork(t =>
-                {
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync.STA: Begin background work");
-                    try
-                    {
-                        if (csi == null || !csi.IsFolder) return null;
-                        var target = _shellController.HierachyManager.FindAndAllowExpansion(csi);
-                        if (target == null || !target.IsFolder) return null; //yes, this second copy of this line is needed
-
-                        var flags = SHCONTF.FOLDERS;
-                        if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-                        _shellController.EnsureChildrenPopulated(target, flags);
-
-                        var children = target.Directories;
-                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync.STA: Warming up {children.Count} children...");
-                        foreach (var child in children)
-                        {
-                            if (t.IsCancellationRequested) return null;
-                            _ = child.HasSubFolders; // Populates cache
-                            _ = child.IconIndexNormal;
-                            _ = child.IconIndexOpen;
-                        }
-                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync.STA: Background work complete");
-
-                        return new
-                        {
-                            Children = children,
-                            RootItem = target,
-                            DisplayName = target.DisplayName,
-                            IconIndex = GetIconIndex(target, false)
-                        };
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync.STA: ERROR - {ex}");
-                        return null;
-                    }
-                }, token);
-
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: STA work returned, result={result != null}, cancelled={token.IsCancellationRequested}");
-
-                if (token.IsCancellationRequested || result == null) return;
-
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Building tree UI...");
-                _TreeView.BeginUpdate();
-                try
-                {
-                    ClearTree();
-                    _Root = new TreeNode(result.DisplayName);
-                    result.Children.Sort();
-                    BuildTree(result.Children);
-                    _Root.ImageIndex = result.IconIndex;
-                    _Root.SelectedImageIndex = result.IconIndex;
-                    _Root.Tag = result.RootItem;
-
-                    _TreeView.Nodes.Add(_Root);
-                    _Root.Expand();
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Tree built, root expanded");
-
-                    if (_pendingExpansionItem != null)
-                    {
-                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Processing pending expansion for '{_pendingExpansionItem.DisplayName}'...");
-                        var itemToExpand = _pendingExpansionItem;
-                        var select = _pendingSelectExpandedNode;
-                        _pendingExpansionItem = null;
-                        await ExpandANodeBaseAsync(itemToExpand, select);
-                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Pending expansion complete");
-                    }
-                    else
-                    {
-                        _TreeView.SelectedNode = _Root;
-                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Root selected");
-                    }
-                }
-                finally
-                {
-                    _TreeView.EndUpdate();
-                }
-            }
-            catch (OperationCanceledException) { Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Cancelled"); }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: ERROR - {ex}");
-            }
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: End");
-        }
-
-        /// <summary>
-        /// Asynchronously populates a lazy-loaded TreeNode by fetching its child
-        /// <see cref="CShellItem"/> folders on a background STA thread, then updating
-        /// the TreeView on the UI thread. Icon and sub-folder data are pre-warmed during
-        /// the background pass to keep subsequent expansions responsive.
-        /// </summary>
-        /// <param name="NodeToFill">
-        /// The <see cref="TreeNode"/> containing only a dummy placeholder node that should
-        /// be replaced with its real child nodes.
-        /// </param>
-        private async Task PopulateNodeAsync(TreeNode NodeToFill)
-        {
-            if (NodeToFill.Tag is not CShellItem csi) return;
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Begin for '{csi.DisplayName}'");
-
-            try
-            {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Enqueueing STA work for '{csi.DisplayName}'...");
-                var result = await _staRunner.EnqueueWork(t =>
-                {
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync.STA: Begin for '{csi.DisplayName}'");
-                    var flags = SHCONTF.FOLDERS;
-                    if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-                    _shellController.EnsureChildrenPopulated(csi, flags);
-
-                    var children = csi.Directories;
-                    foreach (var child in children)
-                    {
-                        if (t.IsCancellationRequested) return null;
-                        _ = child.HasSubFolders;
-                        _ = child.IconIndexNormal;
-                        _ = child.IconIndexOpen;
-                    }
-                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync.STA: Complete for '{csi.DisplayName}', {children.Count} children");
-
-                    return new
-                    {
-                        Children = children,
-                        Target = csi
-                    };
-                });
-
-                if (result == null) return;
-
-                var children = result.Children;
-                children.Sort();
-
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Updating TreeView for '{csi.DisplayName}'...");
-                _TreeView.BeginUpdate();
-                try
-                {
-                    if (result.Target != null) NodeToFill.Tag = result.Target;
-                    NodeToFill.Nodes.Clear();
-
-                    foreach (CShellItem child in children)
-                    {
-                        if (!(child.IsHidden & !m_showHiddenFolders) && !IsExcluded(child))
-                        {
-                            NodeToFill.Nodes.Add(MakeNode(child));
-                        }
-                    }
-                }
-                finally
-                {
-                    _TreeView.EndUpdate();
-                }
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: End for '{csi.DisplayName}'");
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Error - {ex}");
-            }
-        }
-
-        /// <summary>
-        /// Determines whether the specified <see cref="CShellItem"/> should be excluded from
-        /// the tree display based on the <see cref="ExcludedItems"/> collection.
-        /// </summary>
-        /// <param name="item">The <see cref="CShellItem"/> to test.</param>
-        /// <returns>
-        /// <c>true</c> if the item's path (stripped of leading/trailing <c>:</c>, <c>{</c>, and <c>}</c>
-        /// characters) is found in <see cref="ExcludedItems"/>; otherwise <c>false</c>.
-        /// </returns>
-        private bool IsExcluded(CShellItem item)
-        {
-            if (_excludedItems.Count == 0 || item == null) return false;
-            // Trim to match the logic used in MainForm's RemoveUselessSpecialLocations
-            var path = (item.FullPath ?? "").Trim(':', '{', '}');
-            return _excludedItems.Contains(path);
-        }
-
-        /// <summary>RefreshTree Method thanks to Calum McLellan</summary>
-        [Description("Refresh the Tree and all nodes through the currently selected item")]
-        private void RefreshTree(CShellItem? rootCSI = null)
-        {
-            if (_TreeView is null) return;
-
-            // Modified to use ExpandANode(CShellItem) rather than ExpandANode(path)
-            // Set refresh variable for BeforeExpand method
-            EnableEventPost = false;
-            TreeNode selnode;
-            if (_TreeView.SelectedNode == null)
-                selnode = _Root;
-            else
-                selnode = _TreeView.SelectedNode;
-
-            CShellItem selCSI = (CShellItem)selnode.Tag;
-            Task task;
-            if (rootCSI == null)
-            {
-                task = SetRootItemAsync(Root);
-            }
-            else
-            {
-                task = SetRootItemAsync(rootCSI);
-            }
-
-            // Use the UI thread's SynchronizationContext so the continuation runs on the
-            // UI thread, not the thread pool. This avoids cross-thread TreeView access.
-            var uiScheduler = TaskScheduler.FromCurrentSynchronizationContext();
-            task.ContinueWith(antecedent =>
-            {
-                _TreeView.BeginUpdate();
-                try
-                {
-                    if (!ExpandANode(selCSI))
-                    {
-                        var nodeList = new List<TreeNode>();
-                        while (!(selnode.Parent == null))
-                        {
-                            nodeList.Add(selnode.Parent);
-                            selnode = selnode.Parent;
-                        }
-
-                        foreach (TreeNode currentSelnode in nodeList)
-                        {
-                            selnode = currentSelnode;
-                            if (ExpandANode((CShellItem)selnode.Tag))
-                                break;
-                        }
-                    }
-                }
-                finally
-                {
-                    _TreeView.EndUpdate();
-                }
-                EnableEventPost = true;
-                Tv1_AfterSelect(this, new TreeViewEventArgs(_TreeView.SelectedNode));
-            }, CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion, uiScheduler);
-        }
-
-        /// <summary>
-        /// NodePath returns the Text version of the full path of a TreeNode.
-        /// </summary>
-        /// <param name="node">The TreeNode to return the full path for.</param>
-        /// <returns>The full path to the input node within a tree</returns>
-        /// <remarks>Used only for some Debug.WriteLine statements.</remarks>
-        private string NodePath(TreeNode node)
-        {
-            var pathlist = new List<TreeNode>() { node };
-            while (node.Parent is not null)
-            {
-                pathlist.Add(node.Parent);
-                node = node.Parent;
-            }
-            pathlist.Reverse();
-            var SB = new StringBuilder();
-            foreach (TreeNode N in pathlist)
-            {
-                SB.Append(N.Text);
-                SB.Append(@"\");
-            }
-            return SB.ToString();
-        }
-
         /// <summary>
         /// Walks the Shell namespace hierarchy of <paramref name="shellItem"/> from the Desktop
         /// downward through the TreeView to locate the corresponding <see cref="TreeNode"/>.
@@ -2736,7 +2394,267 @@ namespace ExpControlsLib
             }
         }
 
-        #endregion
+        /// <summary>
+        /// Called to Populate the TreeNodes of a TreeNode that only contains a Dummy Node.
+        /// </summary>
+        /// <param name="NodeToFill">The unexpanded TreeNode to Fill</param>
+        /// <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
+        /// Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
+        private void PopulateNode(TreeNode NodeToFill)
+        {
+            CShellItem csi = (CShellItem)NodeToFill.Tag;
+
+            var flags = SHCONTF.FOLDERS;
+            if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
+            _shellController.EnsureChildrenPopulated(csi, flags);
+
+            var dirs = csi.Directories;
+
+            if (dirs.Count > 0)
+            {
+                dirs.Sort();
+                NodeToFill.Nodes.Clear();
+                foreach (CShellItem item in dirs)
+                {
+                    if (!(item.IsHidden & !m_showHiddenFolders) && !IsExcluded(item))
+                    {
+                        NodeToFill.Nodes.Add(MakeNode(item));
+                    }
+                }
+            }
+            else
+            {
+                NodeToFill.Nodes.Clear();
+            }
+        }
+
+        /// <summary>
+        /// Asynchronously loads and displays the tree rooted at the specified <see cref="CShellItem"/>
+        /// or <see cref="StartDir"/> value. Any in-progress load is cancelled before the new one begins.
+        /// Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
+        /// </summary>
+        /// <param name="csi">
+        /// The <see cref="CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
+        /// should be used to resolve the root instead.
+        /// </param>
+        /// <param name="dir">
+        /// A <see cref="StartDir"/> value used to resolve the root when <paramref name="csi"/> is <c>null</c>.
+        /// Defaults to <see cref="StartDir.None"/>.
+        /// </param>
+        private async Task SetRootItemAsync(CShellItem? csi)
+        {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Begin for '{csi?.DisplayName}'");
+            _rootLoadCts?.Cancel();
+            _rootLoadCts?.Dispose();
+            // Link with the runner's shutdown token so disposal can abort in-progress work.
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                _staRunner?.ShutdownToken ?? CancellationToken.None);
+            _rootLoadCts = linkedCts;
+            var token = linkedCts.Token;
+
+            try
+            {
+                if (token.IsCancellationRequested) return;
+
+                _RootNode = new TreeNode(csi.DisplayName);
+                _RootNode.ImageIndex = csi.IconIndexNormal;
+                _RootNode.SelectedImageIndex = csi.IconIndexOpen;
+                _RootNode.Tag = csi;
+
+                _TreeView.Nodes.Add(_RootNode);
+                await PopulateNodeAsync(_RootNode, token);
+
+            }
+            catch (OperationCanceledException) { Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Cancelled"); }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: ERROR - {ex}");
+            }
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: End");
+        }
+
+        private CShellItem? PopulateChildFolders(CShellItem? csi, CancellationToken t)
+        {
+            if (csi == null || !csi.IsFolder) return null;
+            var target = _shellController.HierachyManager.FindAndAllowExpansion(csi);
+            if (target == null || !target.IsFolder) return null; //yes, this second copy of this line is needed
+
+            if (t.IsCancellationRequested) return null;
+
+            var flags = SHCONTF.FOLDERS;
+            if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
+            _shellController.EnsureChildrenPopulated(target, flags);
+
+            var children = target.Directories;
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateChildFolders: Warming up {children.Count} children...");
+            foreach (var child in children)
+            {
+                if (t.IsCancellationRequested) return null;
+                if (child.IsFileSystem) {
+                    child.HasSubFolders = null;
+                    _ = child.HasSubFolders; // Populates cache
+                    _ = child.IconIndexNormal;
+                    _ = child.IconIndexOpen;
+                }
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]   ExpTree.PopulateChildFolders: Warming up {child.DisplayName}");
+            }
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateChildFolders: complete");
+
+            return target;
+        }
+
+        /// <summary>
+        /// Asynchronously populates a lazy-loaded TreeNode by fetching its child
+        /// <see cref="CShellItem"/> folders on a background STA thread, then updating
+        /// the TreeView on the UI thread. Icon and sub-folder data are pre-warmed during
+        /// the background pass to keep subsequent expansions responsive.
+        /// </summary>
+        /// <param name="node">
+        /// The <see cref="TreeNode"/> containing only a dummy placeholder node that should
+        /// be replaced with its real child nodes.
+        /// </param>
+        private async Task PopulateNodeAsync(TreeNode node, CancellationToken? token = null)
+        {
+            if (node?.Tag is not CShellItem csi) return;
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Begin for '{csi.DisplayName}'");
+
+            try
+            {
+                if (token is not null && token.Value.IsCancellationRequested) return;
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Enqueueing STA work for '{csi.DisplayName}'...");
+                var result = await _staRunner.EnqueueWork(
+                    t => PopulateChildFolders(csi, t)
+                    , token ?? CancellationToken.None);
+
+                if (result == null) return;
+
+                if (token is not null && token.Value.IsCancellationRequested) return;
+
+                node.Tag = result;
+                result.Directories.Sort();
+
+                if (token is not null && token.Value.IsCancellationRequested) return;
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Updating TreeView for '{csi.DisplayName}'...");
+                _TreeView.BeginUpdate();
+                try
+                {
+                    node.Nodes.Clear();
+                    BuildTree(node, result.Directories);
+                }
+                finally
+                {
+                    _TreeView.EndUpdate();
+                }
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: End for '{csi.DisplayName}'");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Error - {ex}");
+            }
+        }
+
+        /// <summary>RefreshTree Method thanks to Calum McLellan</summary>
+        [Description("Refresh the Tree and all nodes through the currently selected item")]
+        private void RefreshTree(CShellItem? rootCSI = null)
+        {
+            if (_TreeView is null) return;
+
+            // Modified to use ExpandANode(CShellItem) rather than ExpandANode(path)
+            // Set refresh variable for BeforeExpand method
+            EnableEventPost = false;
+            TreeNode selnode;
+            if (_TreeView.SelectedNode == null)
+                selnode = _RootNode;
+            else
+                selnode = _TreeView.SelectedNode;
+
+            CShellItem selCSI = (CShellItem)selnode.Tag;
+            Task task;
+            if (rootCSI == null)
+            {
+                task = SetRootItemAsync(Root);
+            }
+            else
+            {
+                task = SetRootItemAsync(rootCSI);
+            }
+
+            // Use the UI thread's SynchronizationContext so the continuation runs on the
+            // UI thread, not the thread pool. This avoids cross-thread TreeView access.
+            var uiScheduler = TaskScheduler.FromCurrentSynchronizationContext();
+            task.ContinueWith(antecedent =>
+            {
+                _TreeView.BeginUpdate();
+                try
+                {
+                    if (!ExpandANode(selCSI))
+                    {
+                        var nodeList = new List<TreeNode>();
+                        while (!(selnode.Parent == null))
+                        {
+                            nodeList.Add(selnode.Parent);
+                            selnode = selnode.Parent;
+                        }
+
+                        foreach (TreeNode currentSelnode in nodeList)
+                        {
+                            selnode = currentSelnode;
+                            if (ExpandANode((CShellItem)selnode.Tag))
+                                break;
+                        }
+                    }
+                }
+                finally
+                {
+                    _TreeView.EndUpdate();
+                }
+                EnableEventPost = true;
+                Tv1_AfterSelect(this, new TreeViewEventArgs(_TreeView.SelectedNode));
+            }, CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion, uiScheduler);
+        }
+
+        /// <summary>
+        /// NodePath returns the Text version of the full path of a TreeNode.
+        /// </summary>
+        /// <param name="node">The TreeNode to return the full path for.</param>
+        /// <returns>The full path to the input node within a tree</returns>
+        /// <remarks>Used only for some Debug.WriteLine statements.</remarks>
+        private string NodePath(TreeNode node)
+        {
+            var pathlist = new List<TreeNode>() { node };
+            while (node.Parent is not null)
+            {
+                pathlist.Add(node.Parent);
+                node = node.Parent;
+            }
+            pathlist.Reverse();
+            var SB = new StringBuilder();
+            foreach (TreeNode N in pathlist)
+            {
+                SB.Append(N.Text);
+                SB.Append(@"\");
+            }
+            return SB.ToString();
+        }
+
+        /// <summary>
+        /// Determines whether the specified <see cref="CShellItem"/> should be excluded from
+        /// the tree display based on the <see cref="ExcludedItems"/> collection.
+        /// </summary>
+        /// <param name="item">The <see cref="CShellItem"/> to test.</param>
+        /// <returns>
+        /// <c>true</c> if the item's path (stripped of leading/trailing <c>:</c>, <c>{</c>, and <c>}</c>
+        /// characters) is found in <see cref="ExcludedItems"/>; otherwise <c>false</c>.
+        /// </returns>
+        private bool IsExcluded(CShellItem item)
+        {
+            if (_excludedItems.Count == 0 || item == null) return false;
+            // Trim to match the logic used in MainForm's RemoveUselessSpecialLocations
+            var path = (item.FullPath ?? "").Trim(':', '{', '}');
+            return _excludedItems.Contains(path);
+        }
+
+        #endregion Private Methods
 
         /// <summary>
         /// Cancels and disposes any active root-load cancellation token source,

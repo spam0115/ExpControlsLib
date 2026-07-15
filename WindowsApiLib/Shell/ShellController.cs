@@ -87,7 +87,7 @@ namespace WindowsApiLib.Shell
                 if ((flags & SHCONTF.FOLDERS) > 0)
                 {
                     lock (csi._directoriesLock) { 
-                        if (!csi.DirectoriesInitialized)
+                        if (csi.DirectoriesInitialized)
                         {
                             csi.Directories.Clear();
                         }
@@ -100,7 +100,7 @@ namespace WindowsApiLib.Shell
                 {
                     lock (csi._filesLock)
                     {
-                        if (!csi.FilesInitialized)
+                        if (csi.FilesInitialized)
                         {
                             csi.Files.Clear();
                         }

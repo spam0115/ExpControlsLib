@@ -486,9 +486,8 @@ namespace WindowsApiLib.Shell
             if (!csi.IsFolder) return null;
 
 
-            Debug.WriteLine($"CShellItemFactory: Getting contents for folder '{csi.FullPath}'.");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] CShellItemFactory: Getting contents for folder '{csi.FullPath}'.");
 
-            //var pidls = CShellItemFactory.GetChildPidls(csi, flags, true);
             var pidls = CShellItemFactory.GetChildPidls(csi, flags);
             var items = new List<CShellItem>(pidls.Count);
 
@@ -678,8 +677,8 @@ namespace WindowsApiLib.Shell
                 csiOutput.m_IsFileSystem = (attrFlag & SFGAO.FILESYSTEM) != 0;
                 csiOutput.m_FullPath = CShellItemFactory.GetFullPath(csiOutput);
             }
-            // m_IsReadOnly = (attrFlag & SFGAO.RDONLY) != 0;      'made into an on-demand attribute
-            // m_HasSubFolders = (attrFlag & SFGAO.HASSUBFOLDER) != 0;  'made into an on-demand attribute
+            csiOutput.m_IsReadOnly = (attrFlag & SFGAO.READONLY) != 0;
+            csiOutput.m_HasSubFolders = (attrFlag & SFGAO.HASSUBFOLDER) != 0;
 
             // check for zip file = folder on xp, leave it a file
             if (csiOutput.m_IsFolder && csiOutput.m_IsFileSystem)
