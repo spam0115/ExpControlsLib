@@ -1,0 +1,3 @@
+[submodule "extern/TreeLib"]
+	path = extern/TreeLib
+	url = https://github.com/spam0115/TreeLib.git
