@@ -26,17 +26,18 @@ namespace WindowsApiLib.Shell
         public static readonly Guid MyDocuments = new("450D8FBA-AD25-11D0-98A8-0800361B1103");
         public static readonly Guid MyPictures = new("33E28130-4E1E-4676-835A-98395C3BC3BB");
         public static readonly Guid ComputerFolder = new("0AC0837C-BBF8-452A-850D-79D08E667CA7"); //modern My Computer, This PC, FOLDERID_ComputerFolder Known Folder
+        public static readonly Guid UserProfile = new("59031A47-3F72-44A7-89C5-5595FE6B30EE");
         public static readonly Guid RecycleBin = new("645FF040-5081-101B-9F08-00AA002F954E");
         public static readonly Guid ControlPanel_AllItems = new("21EC2020-3AEA-1069-A2DD-08002B30309D");
         public static readonly Guid ControlPanel_Home = new("5399E694-6CE5-4D6C-8FCE-1D8870FDCBA0");
         public static readonly Guid ControlPanel_Category = new("26EE0668-A00A-44D7-9371-BEB064C98683");
         public static readonly Guid Network = new("208D2C60-3AEA-1069-A2D7-08002B30309D");
         public static readonly Guid NetworkFolder = new("F02C1A0D-BE21-4350-88B0-7367FC96EF3C");
+        public static readonly Guid NetworkConnections = new("7007ACC7-3202-11D1-AAD2-00805FC1270E");
         public static readonly Guid Libraries = new("031E4825-7B94-4DC3-B131-E946B44C8DD5");
         public static readonly Guid Printers = new("2227A280-3AEA-1069-A2DE-08002B30309D");
         public static readonly Guid AdministrativeTools = new("D20EA4E1-3957-11D2-A40B-0C5020524153");
         public static readonly Guid Fonts = new("D20EA4E1-3957-11D2-A40B-0C5020524152");
-        public static readonly Guid NetworkConnections = new("7007ACC7-3202-11D1-AAD2-00805FC1270E");
         public static readonly Guid DevicesAndPrinters = new("A8A91A66-3A7D-4424-8D24-04E180695C7A");
         public static readonly Guid ProgramsAndFeatures = new("7B81BE6A-CE2B-4676-A29E-EB907A5126C5");
         public static readonly Guid AllTasks_GodMode = new("ED7BA470-8E54-465E-825C-99712043E01C");
@@ -45,8 +46,7 @@ namespace WindowsApiLib.Shell
         public static readonly Guid DLNAMediaServers = new("289AF617-1CC3-42A6-926C-E6A863F0E3BA");
         public static readonly Guid WindowsSubsystemLinux = new("B155BDF8-02F0-451E-9A26-AE317CFD7779");
         public static readonly Guid Linux = new("B2B4A4D1-2754-4140-A2EB-9A76D9D7CDC6");
-        public static readonly Guid UserProfile = new ("59031A47-3F72-44A7-89C5-5595FE6B30EE");
-
+        
         // convenient lookup table
         public static readonly IReadOnlyDictionary<string, Guid> DicByDisplayName = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase)
         {

@@ -2467,9 +2467,9 @@ namespace ExpControlsLib
                 _RootNode.SelectedImageIndex = csi.IconIndexOpen;
                 _RootNode.Tag = csi;
 
-                _TreeView.Nodes.Add(_RootNode);
                 await PopulateNodeAsync(_RootNode, token);
-
+                _TreeView.Nodes.Add(_RootNode);
+                _RootNode.Expand();
             }
             catch (OperationCanceledException) { Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Cancelled"); }
             catch (Exception ex)

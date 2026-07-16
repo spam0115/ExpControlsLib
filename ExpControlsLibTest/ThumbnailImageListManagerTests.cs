@@ -55,8 +55,8 @@ namespace ExpControlsLibTest
         {
             // 1. Create manager with small capacity
             int capacity = 3;
-            var manager = new ThumbnailImageListManager(_expList, capacity);
             int size = 96;
+            var manager = new ThumbnailImageListManager(_expList, size, capacity);
             manager.SetImageListForSize(size);
 
             // 2. Prepare CShellItems and Dummy Bitmaps
@@ -127,8 +127,8 @@ namespace ExpControlsLibTest
         {
             // 1. Create manager with small capacity
             int capacity = 3;
-            var manager = new ThumbnailImageListManager(_expList, capacity);
             int size = 96;
+            var manager = new ThumbnailImageListManager(_expList, size, capacity);
             manager.SetImageListForSize(size);
 
             var items = new List<CShellItem>();
@@ -186,8 +186,8 @@ namespace ExpControlsLibTest
         public void TestAddThumbnail_ReplacesExisting()
         {
             int capacity = 5;
-            var manager = new ThumbnailImageListManager(_expList, capacity);
             int size = 96;
+            var manager = new ThumbnailImageListManager(_expList, size, capacity);
             manager.SetImageListForSize(size);
 
             string tempFile = Path.Combine(Path.GetTempPath(), "test_thumb_replace.jpg");
@@ -305,8 +305,8 @@ namespace ExpControlsLibTest
         {
             // Verify that the ImageList does not grow beyond the capacity when thumbnails are evicted.
             int capacity = 5;
-            var manager = new ThumbnailImageListManager(_expList, capacity);
             int size = 64;
+            var manager = new ThumbnailImageListManager(_expList, size, capacity);
             manager.SetImageListForSize(size);
             var imageList = manager.GetImageList(size);
 

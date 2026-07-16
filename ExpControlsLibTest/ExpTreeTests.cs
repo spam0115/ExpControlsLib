@@ -194,7 +194,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
-                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+                await WaitForCondition(() => expTree.Nodes != null && expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Count > 0, "Root node to load");
 
                 bool foundExcluded = false;
                 bool foundHidden = false;
@@ -310,7 +310,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
-                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+                await WaitForCondition(() => expTree.Nodes != null && expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Count > 0, "Root node to load");
 
                 var rootNode = expTree.Nodes[0];
                 // Root is expanded after SetRootItemAsync — children A, B, C are real nodes
@@ -357,7 +357,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
-                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+                await WaitForCondition(() => expTree.Nodes != null && expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Count > 0, "Root node to load");
 
                 var rootNode = expTree.Nodes[0];
                 Assert.IsTrue(rootNode.IsExpanded, "Root should be expanded after load");
@@ -407,7 +407,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
-                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+                await WaitForCondition(() => expTree.Nodes != null && expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Count > 0, "Root node to load");
 
                 var rootNode = expTree.Nodes[0];
                 Assert.IsTrue(rootNode.IsExpanded, "Root should be expanded after load");
@@ -466,7 +466,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
-                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+                await WaitForCondition(() => expTree.Nodes != null && expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Count > 0, "Root node to load");
 
                 var rootNode = expTree.Nodes[0];
                 Assert.IsTrue(rootNode.IsExpanded, "Root should be expanded after load");

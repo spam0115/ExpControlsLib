@@ -28,7 +28,7 @@ namespace ExpControlsLib
         
         private readonly HashedLinkedList<string> _lruKeys = new();
         private readonly System.Collections.Generic.Dictionary<string, ThumbnailSlot> _slotByKey = new();
-        private readonly int _maxThumbnails;
+        private readonly int _capacity;
 
         private class ThumbnailSlot
         {
@@ -72,7 +72,7 @@ namespace ExpControlsLib
             }
 
             _expList = expList;
-            _maxThumbnails = capacity;
+            _capacity = capacity;
             _thumbnailProvider = new ThumbnailProvider();
             _thumbnailProvider.ThumbnailReady += OnThumbnailReady;
         }
@@ -261,7 +261,7 @@ namespace ExpControlsLib
                 else //new thumbnail
                 {
                     bool reused = false;
-                    if (_lruKeys.Count >= _maxThumbnails)
+                    if (_lruKeys.Count >= _capacity)
                     {
                         // Evict the least-recently-used slot that is NOT currently visible.
                         // Skipping visible items prevents the user from seeing a thumbnail
