@@ -751,6 +751,74 @@ namespace ExpControlsLib
         [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
         private static extern int SetWindowTheme(IntPtr hWnd, string pszSubAppName, string pszSubIdList);
 
+        private bool TryQueuePendingExpansion(CShellItem target, bool selectExpandedNode)
+        {
+            if (_rootLoadCts == null || _rootLoadCts.IsCancellationRequested)
+            {
+                return false;
+            }
+
+            _pendingExpansionItem = target;
+            _pendingSelectExpandedNode = selectExpandedNode;
+            return true;
+        }
+
+        private bool TryGetRootNodeForExpansion(CShellItem target, bool selectExpandedNode, out TreeNode? baseNode, out bool pendingQueued)
+        {
+            baseNode = _RootNode;
+            pendingQueued = false;
+
+            if (baseNode != null)
+            {
+                return true;
+            }
+
+            pendingQueued = TryQueuePendingExpansion(target, selectExpandedNode);
+            return false;
+        }
+
+        private static int GetExpansionDepthLimit(TreeNode baseNode, CShellItem target)
+        {
+            if (baseNode.Tag == null)
+            {
+                throw new InvalidOperationException("baseNode.Tag cannot be null.");
+            }
+
+            CShellItem baseItem = (CShellItem)baseNode.Tag;
+            return CPidl.SegmentCount(target.PIDL) - CPidl.SegmentCount(baseItem.PIDL);
+        }
+
+        private static bool TryFindAncestorChildNode(TreeNode baseNode, CShellItem target, out TreeNode? match)
+        {
+            foreach (TreeNode childNode in baseNode.Nodes)
+            {
+                if (childNode.Tag is CShellItem childItem && CPidl.IsAncestorOf(childItem, target, false))
+                {
+                    match = childNode;
+                    return true;
+                }
+            }
+
+            match = null;
+            return false;
+        }
+
+        private void FinalizeExpandedNode(TreeNode baseNode, bool selectExpandedNode, bool focusControl)
+        {
+            _TreeView.HideSelection = false;
+            if (focusControl)
+            {
+                Select();
+            }
+
+            if (selectExpandedNode)
+            {
+                _TreeView.SelectedNode = baseNode;
+            }
+
+            baseNode.EnsureVisible();
+        }
+
         #region Public Methods
 
         /// <summary>
@@ -804,28 +872,12 @@ namespace ExpControlsLib
         /// ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
         public bool ExpandANode(CShellItem newItem, bool SelectExpandedNode = true)
         {
-            bool ExpandANodeRet = default;
-            ExpandANodeRet = false;
-            var baseNode = _RootNode;
-            if (baseNode == null)
+            if (!TryGetRootNodeForExpansion(newItem, SelectExpandedNode, out var baseNode, out var pendingQueued))
             {
-                if (_rootLoadCts != null && !_rootLoadCts.IsCancellationRequested)
-                {
-                    _pendingExpansionItem = newItem;
-                    _pendingSelectExpandedNode = SelectExpandedNode;
-                    return true;
-                }
-                return false;
+                return pendingQueued;
             }
 
-            if (baseNode.Tag == null)
-            {
-                throw new InvalidOperationException("baseNode.Tag cannot be null.");
-            }
-
-            CShellItem baseItem = (CShellItem)baseNode.Tag;
-            IntPtr basePidl = baseItem.PIDL;
-            int lim = CPidl.SegmentCount(newItem.PIDL) - CPidl.SegmentCount(basePidl);
+            int lim = GetExpansionDepthLimit(baseNode, newItem);
 
             try
             {
@@ -835,34 +887,20 @@ namespace ExpControlsLib
 
                 while (lim > 0)
                 {
-                    bool continueDo = false;
-                    foreach (TreeNode testNode in baseNode.Nodes)
+                    if (TryFindAncestorChildNode(baseNode, newItem, out var match))
                     {
-                        if (CPidl.IsAncestorOf((CShellItem)testNode.Tag, newItem, false))
-                        {
-                            baseNode = testNode;
-                            baseNode.Expand();
-                            lim -= 1;
-                            continueDo = true;
-                            break;
-                        }
-                    }
-
-                    if (continueDo)
-                    {
+                        baseNode = match!;
+                        baseNode.Expand();
+                        lim -= 1;
                         continue;
                     }
-                    goto XIT;     // on falling thru For, we can't find it, so get out
+
+                    baseNode.EnsureVisible();
+                    return false;
                 }
-                // after falling thru here, we have found & expanded the node
-                _TreeView.HideSelection = false;
-                Select();
-                if (SelectExpandedNode)
-                    _TreeView.SelectedNode = baseNode;
-                ExpandANodeRet = true;
-            XIT:
-                baseNode.EnsureVisible();
-                return ExpandANodeRet;
+
+                FinalizeExpandedNode(baseNode, SelectExpandedNode, focusControl: true);
+                return true;
             }
             finally
             {
@@ -946,30 +984,17 @@ namespace ExpControlsLib
         private async Task<bool> ExpandANodeBaseAsync(CShellItem target, bool SelectExpandedNode = true)
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: Begin for '{target.DisplayName}'");
-            var baseNode = _RootNode;
-            if (baseNode == null)
+            if (!TryGetRootNodeForExpansion(target, SelectExpandedNode, out var baseNode, out var pendingQueued))
             {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: _Root is null");
-                // If a load is in progress, store as pending
-                if (_rootLoadCts != null && !_rootLoadCts.IsCancellationRequested)
+                if (pendingQueued)
                 {
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: Storing as pending expansion");
-                    _pendingExpansionItem = target;
-                    _pendingSelectExpandedNode = SelectExpandedNode;
-                    return true;
                 }
-                return false;
+                return pendingQueued;
             }
 
-            // Get the pidl value from baseNode.Tag by casting to CShellItem
-            if (baseNode.Tag == null)
-            {
-                throw new InvalidOperationException("baseNode.Tag cannot be null.");
-            }
-
-            CShellItem baseItem = (CShellItem)baseNode.Tag;
-            IntPtr basePidl = baseItem.PIDL;
-            int depthLimit = CPidl.SegmentCount(target.PIDL) - CPidl.SegmentCount(basePidl); //drill down limit
+            int depthLimit = GetExpansionDepthLimit(baseNode, target); //drill down limit
 
             try
             {
@@ -984,26 +1009,19 @@ namespace ExpControlsLib
 
                 while (depthLimit > 0)
                 {
-                    bool continueWhile = false;
-                    foreach (TreeNode currentNode in baseNode.Nodes)
+                    if (TryFindAncestorChildNode(baseNode, target, out var match))
                     {
-                        if (CPidl.IsAncestorOf((CShellItem)currentNode.Tag, target, false))
+                        baseNode = match!;
+                        if (baseNode.Nodes.Count == 1 && baseNode.Nodes[0].Text == DummyText) //has a dummy node that needs expansion
                         {
-                            baseNode = currentNode;
-                            if (baseNode.Nodes.Count == 1 && baseNode.Nodes[0].Text == DummyText) //has a dummy node that needs expansion
-                            {
-                                await PopulateNodeAsync(baseNode);
-                            }
-                            _TreeView.BeginUpdate();
-                            baseNode.Expand();
-                            _TreeView.EndUpdate();
-                            depthLimit -= 1;
-                            continueWhile = true;
-                            break;
+                            await PopulateNodeAsync(baseNode);
                         }
+                        _TreeView.BeginUpdate();
+                        baseNode.Expand();
+                        _TreeView.EndUpdate();
+                        depthLimit -= 1;
+                        continue;
                     }
-
-                    if (continueWhile) continue;
 
                     //fall through due to failure to find 
                     baseNode.EnsureVisible(); 
@@ -1011,11 +1029,7 @@ namespace ExpControlsLib
                 }
 
                 _TreeView.BeginUpdate();
-                _TreeView.HideSelection = false;
-                if (SelectExpandedNode)
-                    _TreeView.SelectedNode = baseNode;
-
-                baseNode.EnsureVisible();
+                FinalizeExpandedNode(baseNode, SelectExpandedNode, focusControl: false);
                 _TreeView.EndUpdate();
 
                 //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: End - success");
