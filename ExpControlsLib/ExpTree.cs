@@ -803,6 +803,42 @@ namespace ExpControlsLib
             return false;
         }
 
+        private enum ExpandPathResolutionStatus
+        {
+            Success,
+            NotFound,
+            NotFolder,
+            Error
+        }
+
+        private ExpandPathResolutionStatus TryResolveExpandableItem(string newPath, out CShellItem? item, out Exception? error)
+        {
+            item = null;
+            error = null;
+
+            try
+            {
+                item = _shellController.HierachyManager.FindAndAllowExpansion(newPath);
+                if (item is null)
+                {
+                    return ExpandPathResolutionStatus.NotFound;
+                }
+
+                if (!item.IsFolder)
+                {
+                    item = null;
+                    return ExpandPathResolutionStatus.NotFolder;
+                }
+
+                return ExpandPathResolutionStatus.Success;
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+                return ExpandPathResolutionStatus.Error;
+            }
+        }
+
         private void FinalizeExpandedNode(TreeNode baseNode, bool selectExpandedNode, bool focusControl)
         {
             _TreeView.HideSelection = false;
@@ -838,22 +874,13 @@ namespace ExpControlsLib
         /// ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
         public bool ExpandANode(string newPath, bool SelectExpandedNode = true)
         {
-            bool ExpandANodeRet = default;
-            ExpandANodeRet = false;
-            CShellItem newItem;
-            try
+            var resolution = TryResolveExpandableItem(newPath, out var newItem, out _);
+            if (resolution != ExpandPathResolutionStatus.Success)
             {
-                newItem = _shellController.HierachyManager.FindAndAllowExpansion(newPath);
-                if (newItem is null)
-                    return ExpandANodeRet;
-                if (!newItem.IsFolder)
-                    return ExpandANodeRet;
+                return false;
             }
-            catch
-            {
-                return ExpandANodeRet;
-            }
-            return ExpandANode(newItem, SelectExpandedNode);
+
+            return ExpandANode(newItem!, SelectExpandedNode);
         }
 
         /// <summary>
@@ -929,29 +956,24 @@ namespace ExpControlsLib
 
             //await Task.Delay(5000);
 
-            CShellItem csi;
-            try
+            var resolution = TryResolveExpandableItem(newPath, out var csi, out var error);
+            switch (resolution)
             {
-                csi = _shellController.HierachyManager.FindAndAllowExpansion(newPath);
-                if (csi is null)
-                {
+                case ExpandPathResolutionStatus.NotFound:
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): csi is null for '{newPath}'");
                     return false;
-                }
-                if (!csi.IsFolder)
-                {
+
+                case ExpandPathResolutionStatus.NotFolder:
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): csi is not a folder for '{newPath}'");
                     return false;
-                }
 
-                await _loadingRootTask;
-                return await ExpandANodeBaseAsync(csi, SelectExpandedNode);
+                case ExpandPathResolutionStatus.Error:
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): ERROR - {error}");
+                    return false;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): ERROR - {ex}");
-                return false;
-            }
+
+            await _loadingRootTask;
+            return await ExpandANodeBaseAsync(csi!, SelectExpandedNode);
         }
 
         /// <summary>
