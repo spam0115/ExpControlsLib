@@ -1183,7 +1183,7 @@ namespace ExpControlsLib
                                     bool exitSelect = false;
                                     foreach (TreeNode Node in pNode.Nodes)
                                     {
-                                        if (Node.Tag is not null && (ReferenceEquals(Node.Tag, e.Item) || CPidl.ResolvesToSamePathOrName(((CShellItem)Node.Tag).PIDL, e.Item.PIDL)))
+                                        if (NodeRepresentsItem(Node, e.Item))
                                         {
                                             pNode.Nodes.Remove(Node);
                                             exitSelect = true;
@@ -1207,7 +1207,7 @@ namespace ExpControlsLib
                                     bool exitSelect1 = false;
                                     foreach (TreeNode Node in pNode.Nodes)
                                     {
-                                        if (Node.Tag is not null && (ReferenceEquals(Node.Tag, e.Item) || CPidl.ResolvesToSamePathOrName(((CShellItem)Node.Tag).PIDL, e.Item.PIDL)))
+                                        if (NodeRepresentsItem(Node, e.Item))
                                         {
                                             bool wasSelected = ReferenceEquals(_TreeView.SelectedNode, Node);
                                             Node.Text = e.Item.DisplayName;
@@ -1246,7 +1246,7 @@ namespace ExpControlsLib
                                     for (int indx = 0, loopTo = pNode.Nodes.Count - 1; indx <= loopTo; indx++)
                                     {
                                         var node = pNode.Nodes[indx];
-                                        if (node.Tag is not null && (ReferenceEquals(node.Tag, e.Item) || CPidl.ResolvesToSamePathOrName(((CShellItem)node.Tag).PIDL, e.Item.PIDL)))
+                                        if (NodeRepresentsItem(node, e.Item))
                                         {
                                             CShellItem item = (CShellItem)node.Tag;
                                             bool wasExpanded = node.IsExpanded;
@@ -1269,14 +1269,7 @@ namespace ExpControlsLib
                                             _TreeView.Invalidate();
                                             if (ReferenceEquals(node, _TreeView.SelectedNode))
                                             {
-                                                if (e.Item.FullPath.StartsWith(":"))
-                                                {
-                                                    ExpTreeNodeSelected?.Invoke(e.Item.DisplayName, e.Item);
-                                                }
-                                                else
-                                                {
-                                                    ExpTreeNodeSelected?.Invoke(e.Item.FullPath, e.Item);
-                                                }
+                                                RaiseExpTreeNodeSelected(e.Item);
                                             }
                                             exitSelect2 = true;
                                             break;
@@ -1342,12 +1335,9 @@ namespace ExpControlsLib
         /// </param>
         private void BuildTree(TreeNode rootNode, IEnumerable<CShellItem> itemsList)
         {
-            foreach (var csi in itemsList)
+            foreach (var csi in EnumerateDisplayItems(itemsList))
             {
-                if (!(csi.IsHidden & !m_showHiddenFolders) && !IsExcluded(csi))
-                {
-                    rootNode.Nodes.Add(MakeNode(csi));
-                }
+                rootNode.Nodes.Add(MakeNode(csi));
             }
         }
 
@@ -1539,14 +1529,7 @@ namespace ExpControlsLib
 
             if (EnableEventPost) // turned off during RefreshTree
             {
-                if (csi.FullPath.StartsWith(":"))
-                {
-                    ExpTreeNodeSelected?.Invoke(csi.DisplayName, csi);
-                }
-                else
-                {
-                    ExpTreeNodeSelected?.Invoke(csi.FullPath, csi);
-                }
+                RaiseExpTreeNodeSelected(csi);
             }
         }
 
@@ -1613,15 +1596,12 @@ namespace ExpControlsLib
                                 var dirs = parentCsi.Directories;
                                 dirs.Sort();
                                 TreeNode? newNode = null;
-                                foreach (CShellItem child in dirs)
+                                foreach (CShellItem child in EnumerateDisplayItems(dirs))
                                 {
-                                    if (!(child.IsHidden & !m_showHiddenFolders) && !IsExcluded(child))
-                                    {
-                                        var node = MakeNode(child);
-                                        tn.Nodes.Add(node);
-                                        if (string.Equals(child.FullPath, newFolderPath, StringComparison.OrdinalIgnoreCase))
-                                            newNode = node;
-                                    }
+                                    var node = MakeNode(child);
+                                    tn.Nodes.Add(node);
+                                    if (string.Equals(child.FullPath, newFolderPath, StringComparison.OrdinalIgnoreCase))
+                                        newNode = node;
                                 }
 
                                 if (newNode is not null)
@@ -2420,12 +2400,9 @@ namespace ExpControlsLib
             {
                 dirs.Sort();
                 NodeToFill.Nodes.Clear();
-                foreach (CShellItem item in dirs)
+                foreach (CShellItem item in EnumerateDisplayItems(dirs))
                 {
-                    if (!(item.IsHidden & !m_showHiddenFolders) && !IsExcluded(item))
-                    {
-                        NodeToFill.Nodes.Add(MakeNode(item));
-                    }
+                    NodeToFill.Nodes.Add(MakeNode(item));
                 }
             }
             else
@@ -2641,6 +2618,52 @@ namespace ExpControlsLib
                 SB.Append(@"\");
             }
             return SB.ToString();
+        }
+
+        /// <summary>
+        /// Determines whether the specified <see cref="CShellItem"/> should be shown in the tree.
+        /// </summary>
+        private bool ShouldDisplayItem(CShellItem item)
+        {
+            return !(item.IsHidden && !m_showHiddenFolders) && !IsExcluded(item);
+        }
+
+        /// <summary>
+        /// Enumerates only the items that should be displayed in the tree.
+        /// </summary>
+        private IEnumerable<CShellItem> EnumerateDisplayItems(IEnumerable<CShellItem> items)
+        {
+            foreach (var item in items)
+            {
+                if (ShouldDisplayItem(item))
+                {
+                    yield return item;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Determines whether a <see cref="TreeNode"/> represents the specified <see cref="CShellItem"/>.
+        /// </summary>
+        private bool NodeRepresentsItem(TreeNode node, CShellItem item)
+        {
+            if (node.Tag is not CShellItem nodeItem) return false;
+            return ReferenceEquals(nodeItem, item) || CPidl.ResolvesToSamePathOrName(nodeItem.PIDL, item.PIDL);
+        }
+
+        /// <summary>
+        /// Raises <see cref="ExpTreeNodeSelected"/> with the expected path/display payload.
+        /// </summary>
+        private void RaiseExpTreeNodeSelected(CShellItem item)
+        {
+            if (item.FullPath.StartsWith(":"))
+            {
+                ExpTreeNodeSelected?.Invoke(item.DisplayName, item);
+            }
+            else
+            {
+                ExpTreeNodeSelected?.Invoke(item.FullPath, item);
+            }
         }
 
         /// <summary>

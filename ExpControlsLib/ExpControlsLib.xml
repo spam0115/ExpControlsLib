@@ -2466,6 +2466,26 @@
             <returns>The full path to the input node within a tree</returns>
             <remarks>Used only for some Debug.WriteLine statements.</remarks>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.ShouldDisplayItem(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Determines whether the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/> should be shown in the tree.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.EnumerateDisplayItems(System.Collections.Generic.IEnumerable{WindowsApiLib.Shell.CShellItem})">
+            <summary>
+            Enumerates only the items that should be displayed in the tree.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.NodeRepresentsItem(System.Windows.Forms.TreeNode,WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Determines whether a <see cref="T:System.Windows.Forms.TreeNode"/> represents the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.RaiseExpTreeNodeSelected(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Raises <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/> with the expected path/display payload.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.IsExcluded(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Determines whether the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/> should be excluded from
