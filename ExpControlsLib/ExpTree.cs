@@ -12,7 +12,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Xml.Linq;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
