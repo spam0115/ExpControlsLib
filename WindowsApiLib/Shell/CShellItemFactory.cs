@@ -71,7 +71,7 @@ namespace WindowsApiLib.Shell
         private CShellItemFactory(CShellItemHierachyManager? hierachyManager = null) 
         {
             //HierachyManager = hierachyManager;
-            EmptyPidl = CreateEmptyPidl();
+            EmptyPidl = CPidl.CreateEmptyPidl();
 
             // Get the SystemName for Remote item testing
             SystemName = Environment.MachineName;
@@ -520,18 +520,6 @@ namespace WindowsApiLib.Shell
         {
             int hr = SHGetKnownFolderIDList(shellLocationGuid, 0, IntPtr.Zero, out IntPtr pidl);
             if (hr < 0) Marshal.ThrowExceptionForHR(hr);
-            return pidl;
-        }
-
-        /// <summary>
-        /// Creates an empty PIDL (just the 2-byte terminator: SHITEMID.cb == 0).
-        /// Caller must free with FreeEmptyPidl.
-        /// </summary>
-        public static IntPtr CreateEmptyPidl()
-        {
-            // Empty PIDL is exactly 2 bytes: terminating USHORT 0
-            IntPtr pidl = Marshal.AllocCoTaskMem(2);
-            Marshal.WriteInt16(pidl, 0); // terminator
             return pidl;
         }
 

@@ -43,8 +43,8 @@ namespace WindowsApiLibTest
                 Assert.IsNotNull(root_directories, "Desktop should have child directories");
                 Assert.IsTrue(root_directories.Count > 0, "Desktop should have at least one child (DRIVES)");
 
-                var myComputer = root_directories.FirstOrDefault(d => d.DisplayName.Contains("My Computer"));
-                Assert.IsNotNull(myComputer, "My Computer (DRIVES) should exist under Desktop");
+                var myComputer = root_directories.FirstOrDefault(d => d.DisplayName.Contains("This PC"));
+                Assert.IsNotNull(myComputer, "This PC should exist under Desktop");
 
                 var cDrive = myComputer?.DirectoriesList?.FirstOrDefault(d => d.DisplayName == "C:\\");
                 Assert.IsNotNull(cDrive, "C: drive should exist under My Computer");
@@ -62,11 +62,11 @@ namespace WindowsApiLibTest
                 // Find(string) uses ILCreateFromPathW + CPidl.IsAncestorOf (ILIsParent)
                 // which requires real compound PIDLs. Mock PIDLs are independent per-item,
                 // so we walk the mock hierarchy directly to verify its structure.
-                var drives = manager.Root.DirectoriesList?.FirstOrDefault(d => d.DisplayName.Contains("My Computer"));
-                Assert.IsNotNull(drives, "My Computer (DRIVES) should exist under Desktop");
+                var drives = manager.Root.DirectoriesList?.FirstOrDefault(d => d.DisplayName.Contains("This PC"));
+                Assert.IsNotNull(drives, "This PC (DRIVES) should exist under Desktop");
 
                 var cDrive = drives.DirectoriesList?.FirstOrDefault(d => d.DisplayName == "C:\\");
-                Assert.IsNotNull(cDrive, "C: drive should exist under My Computer");
+                Assert.IsNotNull(cDrive, "C: drive should exist under This PC");
 
                 var windows = cDrive.DirectoriesList?.FirstOrDefault(d => d.DisplayName == "Windows");
                 Assert.IsNotNull(windows, "Windows should exist under C:");

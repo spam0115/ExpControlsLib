@@ -22,7 +22,10 @@ namespace WindowsApiLib.Shell
         // Core shell namespace locations
         public static readonly Guid Desktop = new("00021400-0000-0000-C000-000000000046"); ///<summary>The Desktop namespace, which is the root of the Shell namespace hierarchy. It contains all other Shell objects, including virtual folders, special folders, and file system objects.</summary>
         public static readonly Guid DesktopFileSystem = new("B4BFCC3A-DB2C-424C-B029-7FE99A87C641");
-        public static readonly Guid ThisPC = new("20D04FE0-3AEA-1069-A2D8-08002B30309D");
+        public static readonly Guid MyComputer = new("20D04FE0-3AEA-1069-A2D8-08002B30309D"); //aka CSIDL_DRIVES 0x11
+        public static readonly Guid MyDocuments = new("450D8FBA-AD25-11D0-98A8-0800361B1103");
+        public static readonly Guid MyPictures = new("33E28130-4E1E-4676-835A-98395C3BC3BB");
+        public static readonly Guid ComputerFolder = new("0AC0837C-BBF8-452A-850D-79D08E667CA7"); //modern My Computer, This PC, FOLDERID_ComputerFolder Known Folder
         public static readonly Guid RecycleBin = new("645FF040-5081-101B-9F08-00AA002F954E");
         public static readonly Guid ControlPanel_AllItems = new("21EC2020-3AEA-1069-A2DD-08002B30309D");
         public static readonly Guid ControlPanel_Home = new("5399E694-6CE5-4D6C-8FCE-1D8870FDCBA0");
@@ -30,7 +33,6 @@ namespace WindowsApiLib.Shell
         public static readonly Guid Network = new("208D2C60-3AEA-1069-A2D7-08002B30309D");
         public static readonly Guid NetworkFolder = new("F02C1A0D-BE21-4350-88B0-7367FC96EF3C");
         public static readonly Guid Libraries = new("031E4825-7B94-4DC3-B131-E946B44C8DD5");
-        public static readonly Guid MyDocuments = new("450D8FBA-AD25-11D0-98A8-0800361B1103");
         public static readonly Guid Printers = new("2227A280-3AEA-1069-A2DE-08002B30309D");
         public static readonly Guid AdministrativeTools = new("D20EA4E1-3957-11D2-A40B-0C5020524153");
         public static readonly Guid Fonts = new("D20EA4E1-3957-11D2-A40B-0C5020524152");
@@ -43,12 +45,13 @@ namespace WindowsApiLib.Shell
         public static readonly Guid DLNAMediaServers = new("289AF617-1CC3-42A6-926C-E6A863F0E3BA");
         public static readonly Guid WindowsSubsystemLinux = new("B155BDF8-02F0-451E-9A26-AE317CFD7779");
         public static readonly Guid Linux = new("B2B4A4D1-2754-4140-A2EB-9A76D9D7CDC6");
+        public static readonly Guid UserProfile = new ("59031A47-3F72-44A7-89C5-5595FE6B30EE");
 
         // convenient lookup table
         public static readonly IReadOnlyDictionary<string, Guid> DicByDisplayName = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase)
         {
             ["Desktop"] = Desktop,
-            ["ThisPC"] = ThisPC,
+            ["MyComputer"] = MyComputer,
             ["RecycleBin"] = RecycleBin,
             ["ControlPanel_AllItems"] = ControlPanel_AllItems,
             ["ControlPanel_Home"] = ControlPanel_Home,
@@ -71,7 +74,7 @@ namespace WindowsApiLib.Shell
         {
             ["00021400-0000-0000-C000-000000000046"] = Desktop,
             ["B4BFCC3A-DB2C-424C-B029-7FE99A87C641"] = DesktopFileSystem,
-            ["20D04FE0-3AEA-1069-A2D8-08002B30309D"] = ThisPC,
+            ["20D04FE0-3AEA-1069-A2D8-08002B30309D"] = MyComputer,
             ["645FF040-5081-101B-9F08-00AA002F954E"] = RecycleBin,
             ["21EC2020-3AEA-1069-A2DD-08002B30309D"] = ControlPanel_AllItems,
             ["5399E694-6CE5-4D6C-8FCE-1D8870FDCBA0"] = ControlPanel_Home,

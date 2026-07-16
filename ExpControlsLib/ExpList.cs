@@ -2378,7 +2378,7 @@ namespace ExpControlsLib
                     if (token.IsCancellationRequested) return null;
 
                     var flags = SHCONTF.NONFOLDERS | (includeFolder ? SHCONTF.FOLDERS : 0);
-                    _shellController.EnsureChildrenPopulated(csi, flags);
+                    _shellController.EnsureChildrenPopulatedAndRecent(csi, flags);
 
                     var dirList = new List<CShellItem>();
                     var fileList = new List<CShellItem>();

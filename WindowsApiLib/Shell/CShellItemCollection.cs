@@ -176,6 +176,30 @@ namespace WindowsApiLib.Shell
             return item;
         }
 
+        /// <summary>
+        /// Returns items in this collection filtered by a wildcard pattern.
+        /// </summary>
+        /// <param name="filter">A filter string (for example: *.Doc)</param>
+        /// <returns>A List of CShellItems. May return an empty List if there are none.</returns>
+        public List<CShellItem> Filter(string filter)
+        {
+            var filteredItems = new List<CShellItem>();
+            var normalizedFilter = filter.ToLowerInvariant();
+
+            lock (_items)
+            {
+                foreach (var item in _items)
+                {
+                    if (Utils.WildcardLike(item.DisplayName.ToLowerInvariant(), normalizedFilter))
+                    {
+                        filteredItems.Add(item);
+                    }
+                }
+            }
+
+            return filteredItems;
+        }
+
         public int IndexOf(CShellItem value)
         {
             return _items.IndexOf(value);

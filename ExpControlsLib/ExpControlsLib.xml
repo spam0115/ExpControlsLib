@@ -1109,31 +1109,6 @@
             ListView.SelectedItems can't be used in virtual mode.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.GetItem(System.Int32)">
-            <summary>
-            Gets the CShellItem at the specified index.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.RemoveAt(System.Int32)">
-            <summary>
-            Removes the item at the specified index.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.SetSortState(System.Int32,System.Windows.Forms.SortOrder)">
-            <summary>
-            Sets the sort column and order without triggering an actual sort.
-            This is useful to set at startup before the first location is loaded.
-            </summary>
-            <param name="column">The column index.</param>
-            <param name="order">The sort order.</param>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.Sort(System.Int32,System.Windows.Forms.SortOrder)">
-            <summary>
-            Sets the sort column and order.
-            </summary>
-            <param name="column">The column index.</param>
-            <param name="order">The sort order.</param>
-        </member>
         <member name="M:ExpControlsLib.ExpList.#ctor">
             <summary>
             Initializes a new instance of <see cref="T:ExpControlsLib.ExpList"/>, wires up all event handlers
@@ -1269,6 +1244,31 @@
             <summary>
             Refreshes all items in the current folder, clearing all caches and re-reading from disk.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.GetItem(System.Int32)">
+            <summary>
+            Gets the CShellItem at the specified index.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.RemoveAt(System.Int32)">
+            <summary>
+            Removes the item at the specified index.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.SetSortState(System.Int32,System.Windows.Forms.SortOrder)">
+            <summary>
+            Sets the sort column and order without triggering an actual sort.
+            This is useful to set at startup before the first location is loaded.
+            </summary>
+            <param name="column">The column index.</param>
+            <param name="order">The sort order.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.Sort(System.Int32,System.Windows.Forms.SortOrder)">
+            <summary>
+            Sets the sort column and order.
+            </summary>
+            <param name="column">The column index.</param>
+            <param name="order">The sort order.</param>
         </member>
         <member name="M:ExpControlsLib.ExpList.LoadDirectoryAsync(System.String,System.Boolean,System.Boolean)">
             <summary>
@@ -1611,7 +1611,7 @@
             <remarks>ExpTree raises one major Event, ExpTreeNodeSelected. That event is raised whenever the 
             Selected TreeNode changes because of User Action (i.e. -- clicking on the node)</remarks>
         </member>
-        <member name="F:ExpControlsLib.ExpTree._Root">
+        <member name="F:ExpControlsLib.ExpTree._RootNode">
             <summary>
             The root <see cref="T:System.Windows.Forms.TreeNode"/> of the TreeView. Represents the top-level Shell item
             from which the entire tree is built.
@@ -1899,7 +1899,7 @@
             <returns>The state of the underlying TreeView property.</returns>
             <remarks></remarks>
         </member>
-        <member name="F:ExpControlsLib.ExpTree.m_StartUpDirectory">
+        <member name="F:ExpControlsLib.ExpTree._StartUpDirectory">
             <summary>
             Backing field for <see cref="P:ExpControlsLib.ExpTree.StartUpDirectory"/>. Stores the currently active
             <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value.
@@ -1961,6 +1961,22 @@
             Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
             ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.ExpandANode(WindowsApiLib.Shell.CShellItem,System.Boolean)">
+            <summary>
+            Expands TreeNodes from the tree root through the input CShellItem. All intermediate nodes between the
+            Tree Root and the input CShellItem are Expanded. If the Optional Property SelectExpandedNode is True (the Default),
+            the Expanded Node will be Selected, Raising a ExpNodeSelected Event. If False, the current Selected Node is unchanged
+            and no Event is Raised.
+            </summary>
+            <param name="newItem">The CShellItem representing the Shell Namespace object whose TreeNode is to
+            be expanded.</param>
+            <param name="SelectExpandedNode">If True(the Default) then Select the Expanded Node.<br />
+                                             If False, Do Not Select the Expanded Node.</param>
+            <returns>True if Successful, False otherwise.</returns>
+            <remarks>This is the preferred method of ExpandANode.<br />
+            Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
+            ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.ExpandANodeAsync(System.String,System.Boolean)">
             <summary>
             Asynchronously expands TreeNodes from the tree root through the node identified by
@@ -1977,22 +1993,6 @@
             A <see cref="T:System.Threading.Tasks.Task`1"/> that resolves to <c>true</c> if the expansion succeeded,
             or <c>false</c> if the path could not be resolved or the item is not a folder.
             </returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.ExpandANode(WindowsApiLib.Shell.CShellItem,System.Boolean)">
-            <summary>
-            Expands TreeNodes from the tree root through the input CShellItem. All intermediate nodes between the
-            Tree Root and the input CShellItem are Expanded. If the Optional Property SelectExpandedNode is True (the Default),
-            the Expanded Node will be Selected, Raising a ExpNodeSelected Event. If False, the current Selected Node is unchanged
-            and no Event is Raised.
-            </summary>
-            <param name="newItem">The CShellItem representing the Shell Namespace object whose TreeNode is to
-            be expanded.</param>
-            <param name="SelectExpandedNode">If True(the Default) then Select the Expanded Node.<br />
-                                             If False, Do Not Select the Expanded Node.</param>
-            <returns>True if Successful, False otherwise.</returns>
-            <remarks>This is the preferred method of ExpandANode.<br />
-            Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
-            ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
         </member>
         <member name="M:ExpControlsLib.ExpTree.ExpandANodeAsync(WindowsApiLib.Shell.CShellItem,System.Boolean)">
             <summary>
@@ -2075,7 +2075,7 @@
             and the type of update that occurred.
             </param>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.BuildTree(System.Collections.Generic.IEnumerable{WindowsApiLib.Shell.CShellItem})">
+        <member name="M:ExpControlsLib.ExpTree.BuildTree(System.Windows.Forms.TreeNode,System.Collections.Generic.IEnumerable{WindowsApiLib.Shell.CShellItem})">
             <summary>
             Populates the root TreeNode's <see cref="P:System.Windows.Forms.TreeNode.Nodes"/> collection from the
             sorted array of first-level child <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders.
@@ -2131,7 +2131,7 @@
         </member>
         <member name="M:ExpControlsLib.ExpTree.ClearTree">
             <summary>
-            Removes all nodes from the TreeView and resets <see cref="F:ExpControlsLib.ExpTree._Root"/> to <c>null</c>,
+            Removes all nodes from the TreeView and resets <see cref="F:ExpControlsLib.ExpTree._RootNode"/> to <c>null</c>,
             effectively clearing the entire tree display.
             </summary>
         </member>
@@ -2386,63 +2386,6 @@
             <c>"copy"</c>, or <c>"paste"</c>).
             </param>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.PopulateNode(System.Windows.Forms.TreeNode)">
-            <summary>
-            Called to Populate the TreeNodes of a TreeNode that only contains a Dummy Node.
-            </summary>
-            <param name="NodeToFill">The unexpanded TreeNode to Fill</param>
-            <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
-            Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.SetRootItemAsync(WindowsApiLib.Shell.CShellItem)">
-            <summary>
-            Asynchronously loads and displays the tree rooted at the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>
-            or <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value. Any in-progress load is cancelled before the new one begins.
-            Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
-            </summary>
-            <param name="csi">
-            The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
-            should be used to resolve the root instead.
-            </param>
-            <param name="dir">
-            A <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value used to resolve the root when <paramref name="csi"/> is <c>null</c>.
-            Defaults to <see cref="F:ExpControlsLib.ExpTree.StartDir.None"/>.
-            </param>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.PopulateNodeAsync(System.Windows.Forms.TreeNode)">
-            <summary>
-            Asynchronously populates a lazy-loaded TreeNode by fetching its child
-            <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders on a background STA thread, then updating
-            the TreeView on the UI thread. Icon and sub-folder data are pre-warmed during
-            the background pass to keep subsequent expansions responsive.
-            </summary>
-            <param name="NodeToFill">
-            The <see cref="T:System.Windows.Forms.TreeNode"/> containing only a dummy placeholder node that should
-            be replaced with its real child nodes.
-            </param>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.IsExcluded(WindowsApiLib.Shell.CShellItem)">
-            <summary>
-            Determines whether the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/> should be excluded from
-            the tree display based on the <see cref="P:ExpControlsLib.ExpTree.ExcludedItems"/> collection.
-            </summary>
-            <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to test.</param>
-            <returns>
-            <c>true</c> if the item's path (stripped of leading/trailing <c>:</c>, <c>{</c>, and <c>}</c>
-            characters) is found in <see cref="P:ExpControlsLib.ExpTree.ExcludedItems"/>; otherwise <c>false</c>.
-            </returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.RefreshTree(WindowsApiLib.Shell.CShellItem)">
-            <summary>RefreshTree Method thanks to Calum McLellan</summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.NodePath(System.Windows.Forms.TreeNode)">
-            <summary>
-            NodePath returns the Text version of the full path of a TreeNode.
-            </summary>
-            <param name="node">The TreeNode to return the full path for.</param>
-            <returns>The full path to the input node within a tree</returns>
-            <remarks>Used only for some Debug.WriteLine statements.</remarks>
-        </member>
         <member name="M:ExpControlsLib.ExpTree.GetTreeNode(WindowsApiLib.Shell.CShellItem,System.Windows.Forms.TreeNode@)">
             <summary>
             Walks the Shell namespace hierarchy of <paramref name="shellItem"/> from the Desktop
@@ -2476,6 +2419,63 @@
             </summary>
             <param name="N">The Node whose Nodes.Collection is to be sorted</param>
             <remarks></remarks>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.PopulateNode(System.Windows.Forms.TreeNode)">
+            <summary>
+            Called to Populate the TreeNodes of a TreeNode that only contains a Dummy Node.
+            </summary>
+            <param name="NodeToFill">The unexpanded TreeNode to Fill</param>
+            <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
+            Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.SetRootItemAsync(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Asynchronously loads and displays the tree rooted at the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>
+            or <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value. Any in-progress load is cancelled before the new one begins.
+            Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
+            </summary>
+            <param name="csi">
+            The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
+            should be used to resolve the root instead.
+            </param>
+            <param name="dir">
+            A <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value used to resolve the root when <paramref name="csi"/> is <c>null</c>.
+            Defaults to <see cref="F:ExpControlsLib.ExpTree.StartDir.None"/>.
+            </param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.PopulateNodeAsync(System.Windows.Forms.TreeNode,System.Nullable{System.Threading.CancellationToken})">
+            <summary>
+            Asynchronously populates a lazy-loaded TreeNode by fetching its child
+            <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders on a background STA thread, then updating
+            the TreeView on the UI thread. Icon and sub-folder data are pre-warmed during
+            the background pass to keep subsequent expansions responsive.
+            </summary>
+            <param name="node">
+            The <see cref="T:System.Windows.Forms.TreeNode"/> containing only a dummy placeholder node that should
+            be replaced with its real child nodes.
+            </param>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.RefreshTree(WindowsApiLib.Shell.CShellItem)">
+            <summary>RefreshTree Method thanks to Calum McLellan</summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.NodePath(System.Windows.Forms.TreeNode)">
+            <summary>
+            NodePath returns the Text version of the full path of a TreeNode.
+            </summary>
+            <param name="node">The TreeNode to return the full path for.</param>
+            <returns>The full path to the input node within a tree</returns>
+            <remarks>Used only for some Debug.WriteLine statements.</remarks>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.IsExcluded(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Determines whether the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/> should be excluded from
+            the tree display based on the <see cref="P:ExpControlsLib.ExpTree.ExcludedItems"/> collection.
+            </summary>
+            <param name="item">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to test.</param>
+            <returns>
+            <c>true</c> if the item's path (stripped of leading/trailing <c>:</c>, <c>{</c>, and <c>}</c>
+            characters) is found in <see cref="P:ExpControlsLib.ExpTree.ExcludedItems"/>; otherwise <c>false</c>.
+            </returns>
         </member>
         <member name="M:ExpControlsLib.ExpTree.Cleanup">
             <summary>

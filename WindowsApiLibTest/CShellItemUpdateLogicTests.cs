@@ -10,6 +10,7 @@ using ExpControlsLib;
 using System.IO;
 using System.Linq;
 using static WindowsApiLib.Shell.ShellAPI;
+using System.Net.Http.Headers;
 
 namespace WindowsApiLibTest
 {
@@ -203,7 +204,6 @@ namespace WindowsApiLibTest
             {
                 // DoRenameOrMove calls CShellItemFactory.Exists and ReloadInfo which
                 // require real Shell PIDLs, so we use actual temp files.
-                var manager = MockShellItemFactory.CreateMockHierarchyManager();
 
                 string tempBase = Path.Combine(Path.GetTempPath(), "RenameTest_" + Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(tempBase);
@@ -215,25 +215,8 @@ namespace WindowsApiLibTest
                     IntPtr dirPidl = ShellAPI.ILCreateFromPathW(tempBase);
                     IntPtr oldPidl = ShellAPI.ILCreateFromPathW(oldFilePath);
 
-                    var dirItem = new CShellItem();
-                    dirItem.m_Pidl = dirPidl;
-                    dirItem.m_FullPath = tempBase;
-                    dirItem.m_DisplayName = Path.GetFileName(tempBase);
-                    dirItem.m_IsFolder = true;
-                    dirItem.m_IsFileSystem = true;
-                    dirItem.Directories = new CShellItemCollection(dirItem);
-                    dirItem.Files = new CShellItemCollection(dirItem);
-                    manager.Root.Directories.Add(dirItem);
-                    dirItem.Parent = manager.Root;
-
-                    var child = new CShellItem();
-                    child.m_Pidl = oldPidl;
-                    child.m_FullPath = oldFilePath;
-                    child.m_DisplayName = "oldname.txt";
-                    child.m_IsFolder = false;
-                    child.m_IsFileSystem = true;
-                    child.Parent = dirItem;
-                    dirItem.Files.Add(child);
+                    var manager = new CShellItemHierachyManager();
+                    manager.Add(oldPidl);
 
                     // Rename the actual file to get a real new PIDL
                     string newFilePath = Path.Combine(tempBase, "newname.txt");
@@ -253,7 +236,7 @@ namespace WindowsApiLibTest
                     {
                         pppidl = pNotifyStruct;
                         plEvent = SHCNE.RENAMEITEM;
-                        return new IntPtr(1);
+                        return new IntPtr(1); //dummy handle
                     };
 
                     bool eventRaised = false;
@@ -261,7 +244,7 @@ namespace WindowsApiLibTest
                         if (e.UpdateType == CShItemUpdateType.Renamed) eventRaised = true;
                     };
 
-                    logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
+                    logic.HandleNotification(oldPidl, newPidl); //doesn't actually matter what is passed in
 
                     Assert.IsTrue(eventRaised, "Renamed event should be raised");
 

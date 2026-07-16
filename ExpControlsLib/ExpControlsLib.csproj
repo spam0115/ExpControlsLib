@@ -98,7 +98,7 @@
     <Folder Include="My Project\" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\TreeLib\TreeLib\TreeLibUtil\TreeLibUtil.csproj" />
+    <ProjectReference Include="..\extern\TreeLib\TreeLib\TreeLibUtil\TreeLibUtil.csproj" />
     <ProjectReference Include="..\WindowsApiLib\WindowsApiLib.csproj" />
   </ItemGroup>
   <ItemGroup>

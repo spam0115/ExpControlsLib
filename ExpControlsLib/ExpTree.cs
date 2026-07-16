@@ -1596,11 +1596,17 @@ namespace ExpControlsLib
                                     newFolderPath = System.IO.Path.Combine(parentPath, $"{newFolderName} ({counter})");
                                 }
                                 System.IO.Directory.CreateDirectory(newFolderPath);
+                               
+                                if (tn.Tag is null)
+                                {
+                                    Debug.WriteLine("ExpTree.Tv1_MouseUp: TreeNode tag is null.  Cannot proceed.");
+                                    return;
+                                }
 
                                 CShellItem parentCsi = (CShellItem)tn.Tag;
                                 var flags = SHCONTF.FOLDERS;
                                 if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-                                _shellController.LoadFolderContents(parentCsi, flags);
+                                _shellController.EnsureChildrenPopulatedAndRecent(parentCsi, flags);
 
                                 tn.Collapse(false);
                                 tn.Nodes.Clear();
@@ -2406,7 +2412,7 @@ namespace ExpControlsLib
 
             var flags = SHCONTF.FOLDERS;
             if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-            _shellController.EnsureChildrenPopulated(csi, flags);
+            _shellController.EnsureChildrenPopulatedAndRecent(csi, flags);
 
             var dirs = csi.Directories;
 
@@ -2483,7 +2489,7 @@ namespace ExpControlsLib
 
             var flags = SHCONTF.FOLDERS;
             if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-            _shellController.EnsureChildrenPopulated(target, flags);
+            _shellController.EnsureChildrenPopulatedAndRecent(target, flags);
 
             var children = target.Directories;
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateChildFolders: Warming up {children.Count} children...");
