@@ -75,7 +75,8 @@ namespace ExpControlsLib
         /// <summary>
         /// Stack holding the backward navigation history of visited <see cref="CShellItem"/> folders.
         /// </summary>
-        private readonly ExpTreeNavigation _navigation = new();
+        private readonly ExpNavigationHistory _navigation = new(
+            (left, right) => CPidl.ResolvesToSamePathOrName(left.PIDL, right.PIDL));
 
         /// <summary>
         /// Cancellation token source for the currently active root-load operation.

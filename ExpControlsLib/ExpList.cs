@@ -83,9 +83,8 @@ namespace ExpControlsLib
         private static readonly DateTime EmptyTimeValue = new DateTime(1, 1, 1, 0, 0, 0);
 
 
-        private Stack<CShellItem> _backHistory = new();
-        private Stack<CShellItem> _forwardHistory = new();
-        private bool _isNavigatingHistory = false;
+        private readonly ExpNavigationHistory _navigation = new(
+            (left, right) => CPidl.ResolvesToSamePathOrName(left.PIDL, right.PIDL));
 
         private CDragWrapper DW;         // Wrapper for Drag ops originating in ExpFileList
         private ClvDropWrapper DropWrap; // Wrapper for Drop ops targeting ExpFileList
@@ -591,20 +590,15 @@ namespace ExpControlsLib
                 else if (_currentFolderCsi != null && value != null && string.Equals(_currentFolderCsi.FullPath, value.FullPath, StringComparison.OrdinalIgnoreCase))
                     isDifferent = false;
 
-                if (!_isNavigatingHistory && isDifferent && value != null)
-                {
-                    if ( _currentFolderCsi != null)
-                    {
-                        _backHistory.Push(_currentFolderCsi);
-                        _forwardHistory.Clear();
-                    }
-                }
-
                 var oldCsi = _currentFolderCsi;
                 if (value != null)
                     _currentFolderCsi = _shellController.HierachyManager.Add(value);
                 else
                     _currentFolderCsi = value;
+                if (_currentFolderCsi is not null && isDifferent)
+                {
+                    _navigation.RecordSelection(_currentFolderCsi);
+                }
                 if (_initialized)
                     ExpListCurrentFolderChanged?.Invoke(_currentFolderCsi, oldCsi);
             }
@@ -2315,7 +2309,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Populates the list view with files and directories from the specified <see cref="CShellItem"/> asynchronously.
         /// </summary>
-        private async Task LoadDirectoryBaseAsync(CShellItem? csi, bool includeFolder = true)
+        private async Task<bool> LoadDirectoryBaseAsync(CShellItem? csi, bool includeFolder = true)
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: Begin for '{csi?.FullPath}'");
 
@@ -2323,7 +2317,7 @@ namespace ExpControlsLib
             {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: csi is null, clearing list");
                 ClearListView();
-                return;
+                return true;
             }
             _loadDirectoryCancelTs?.Cancel(); //cancel any prior invokations
             _loadDirectoryCancelTs = new CancellationTokenSource();
@@ -2350,26 +2344,6 @@ namespace ExpControlsLib
                     samePath = false;
                 else
                     samePath = CPidl.ResolvesToSamePathOrName(_currentFolderCsi.PIDL, csi.PIDL);
-
-                //CShellItem oldCsi = null;
-                //if (_backHistory.Count == 0)
-                //    samePath = false;
-                //else
-                //{
-                //    oldCsi = _backHistory.Peek();
-                //    if (oldCsi == null && csi == null)
-                //        samePath = true;
-                //    else if (oldCsi == null || csi == null)
-                //        samePath = false;
-                //    else
-                //        samePath = CPidl.ResolvesToSamePathOrName(oldCsi.PIDL, csi.PIDL);
-                //}
-
-                //if (csi == null)
-                //{
-                //    ClearListView();
-                //    return;
-                //}
 
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: Enqueueing STA work for '{csi.DisplayName}'...");
 
@@ -2457,7 +2431,7 @@ namespace ExpControlsLib
 
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: STA work returned, result={result != null}, cancelled={token.IsCancellationRequested}");
 
-                if (token.IsCancellationRequested) return;
+                if (token.IsCancellationRequested) return false;
 
                 if (result != null)
                 {
@@ -2509,12 +2483,14 @@ namespace ExpControlsLib
                     throw new Exception("ERROR: LoadDirectoryBaseAsync - Failed to load directory contents.");
                 }
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException) { return false; }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: ERROR - {ex}");
+                return false;
             }
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: End for '{csi?.FullPath}'");
+            return true;
         }
 
         private void ClearListView()
@@ -2901,25 +2877,12 @@ namespace ExpControlsLib
         /// <summary>
         /// Navigates back to the previous folder in the history.
         /// </summary>
-        public async void GoBack()
+        public async Task GoBack()
         {
             Debug.WriteLine("ExpList: GoBack Begin");
             try
             {
-                if (_backHistory.Count > 0)
-                {
-                    _forwardHistory.Push(_currentFolderCsi);
-                    var prev = _backHistory.Pop();
-                    _isNavigatingHistory = true;
-                    try
-                    {
-                        await LoadDirectoryAsync(prev, true);
-                    }
-                    finally
-                    {
-                        _isNavigatingHistory = false;
-                    }
-                }
+                await _navigation.GoBackAsync(item => LoadDirectoryBaseAsync(item, true));
             }
             finally
             {
@@ -2930,25 +2893,12 @@ namespace ExpControlsLib
         /// <summary>
         /// Navigates forward to the next folder in the history.
         /// </summary>
-        public async void GoForward()
+        public async Task GoForward()
         {
             Debug.WriteLine("ExpList: GoForward Begin");
             try
             {
-                if (_forwardHistory.Count > 0)
-                {
-                    _backHistory.Push(_currentFolderCsi);
-                    var next = _forwardHistory.Pop();
-                    _isNavigatingHistory = true;
-                    try
-                    {
-                        await LoadDirectoryAsync(next, true);
-                    }
-                    finally
-                    {
-                        _isNavigatingHistory = false;
-                    }
-                }
+                await _navigation.GoForwardAsync(item => LoadDirectoryBaseAsync(item, true));
             }
             finally
             {
@@ -2959,14 +2909,13 @@ namespace ExpControlsLib
         /// <summary>
         /// Navigates to the parent folder of the currently loaded folder.
         /// </summary>
-        public async void GoUp()
+        public async Task GoUp()
         {
             Debug.WriteLine("ExpList: GoUp Begin");
             try
             {
-                if (_currentFolderCsi?.Parent != null)
+                if (_navigation.Current?.Parent is { } parent)
                 {
-                    var parent = _currentFolderCsi.Parent;
                     await LoadDirectoryAsync(parent, true);
                 }
             }
@@ -2979,17 +2928,17 @@ namespace ExpControlsLib
         /// <summary>
         /// Gets a value indicating whether there is a folder to navigate back to.
         /// </summary>
-        public bool CanGoBack => _backHistory.Count > 0;
+        public bool CanGoBack => _navigation.CanGoBack;
 
         /// <summary>
         /// Gets a value indicating whether there is a folder to navigate forward to.
         /// </summary>
-        public bool CanGoForward => _forwardHistory.Count > 0;
+        public bool CanGoForward => _navigation.CanGoForward;
 
         /// <summary>
         /// Gets a value indicating whether the current folder has a parent folder to navigate to.
         /// </summary>
-        public bool CanGoUp => _currentFolderCsi?.Parent != null;
+        public bool CanGoUp => _navigation.CanGoUp;
 
         #endregion
 

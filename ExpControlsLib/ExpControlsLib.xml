@@ -1601,6 +1601,12 @@
             Gets the items to be moved.
             </summary>
         </member>
+        <member name="T:ExpControlsLib.ExpNavigationHistory">
+            <summary>
+            Owns folder navigation history independently from a visual control.
+            Targets are removed from history only after the requested navigation succeeds.
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.ExpTree">
             <summary>
             ExpTree is a UserControl encapsulating a TreeView which will display all or part of the Windows Shell
@@ -2588,12 +2594,6 @@
         </member>
         <member name="T:ExpControlsLib.ExpTreeDragDropState">
             <summary>Owns transient drag-over state and the delayed auto-expansion timer.</summary>
-        </member>
-        <member name="T:ExpControlsLib.ExpTreeNavigation">
-            <summary>
-            Owns folder navigation history independently from the TreeView implementation.
-            Navigation targets are only removed from history after the requested navigation succeeds.
-            </summary>
         </member>
         <member name="T:ExpControlsLib.ListViewDisplayMode">
             <summary>

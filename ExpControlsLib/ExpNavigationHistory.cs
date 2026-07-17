@@ -6,13 +6,19 @@ using WindowsApiLib.Shell;
 namespace ExpControlsLib;
 
 /// <summary>
-/// Owns folder navigation history independently from the TreeView implementation.
-/// Navigation targets are only removed from history after the requested navigation succeeds.
+/// Owns folder navigation history independently from a visual control.
+/// Targets are removed from history only after the requested navigation succeeds.
 /// </summary>
-internal sealed class ExpTreeNavigation
+internal sealed class ExpNavigationHistory
 {
     private readonly Stack<CShellItem> _back = new();
     private readonly Stack<CShellItem> _forward = new();
+    private readonly Func<CShellItem, CShellItem, bool> _areSame;
+
+    public ExpNavigationHistory(Func<CShellItem, CShellItem, bool>? areSame = null)
+    {
+        _areSame = areSame ?? ((left, right) => ReferenceEquals(left, right));
+    }
 
     public CShellItem? Current { get; private set; }
     public bool IsNavigating { get; private set; }
@@ -22,7 +28,7 @@ internal sealed class ExpTreeNavigation
 
     public void RecordSelection(CShellItem item)
     {
-        if (!IsNavigating && Current is not null && !ReferenceEquals(Current, item))
+        if (!IsNavigating && Current is not null && !_areSame(Current, item))
         {
             _back.Push(Current);
             _forward.Clear();
@@ -33,7 +39,9 @@ internal sealed class ExpTreeNavigation
 
     public async Task<bool> GoBackAsync(Func<CShellItem, Task<bool>> navigate)
     {
+        ArgumentNullException.ThrowIfNull(navigate);
         if (_back.Count == 0) return false;
+
         var current = Current;
         var target = _back.Peek();
         IsNavigating = true;
@@ -52,7 +60,9 @@ internal sealed class ExpTreeNavigation
 
     public async Task<bool> GoForwardAsync(Func<CShellItem, Task<bool>> navigate)
     {
+        ArgumentNullException.ThrowIfNull(navigate);
         if (_forward.Count == 0) return false;
+
         var current = Current;
         var target = _forward.Peek();
         IsNavigating = true;
