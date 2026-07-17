@@ -33,6 +33,27 @@ namespace ExpControlsLib
     [SupportedOSPlatform("windows")]
     public partial class ExpTree
     {
+        /// <summary>
+        /// Strongly typed TreeView node. The Tag assignment is retained for compatibility
+        /// with existing consumers while internal code can use Item directly.
+        /// </summary>
+        private sealed class ExpTreeNode : TreeNode
+        {
+            private ExpTreeNode(string text) : base(text) { }
+
+            public ExpTreeNode(CShellItem item) : base(item.DisplayName)
+            {
+                Item = item;
+                Tag = item;
+                ImageIndex = item.IconIndexNormal;
+                SelectedImageIndex = item.IconIndexOpen;
+            }
+
+            public CShellItem? Item { get; }
+            public bool IsPlaceholder => Item is null;
+            public static ExpTreeNode Placeholder() => new ExpTreeNode(DummyText);
+        }
+
         #region Private fields
         /// <summary>
         /// The root <see cref="TreeNode"/> of the TreeView. Represents the top-level Shell item
@@ -80,6 +101,12 @@ namespace ExpControlsLib
         /// Cancelled and replaced whenever a new root load is initiated.
         /// </summary>
         private CancellationTokenSource? _rootLoadCts;
+
+        /// <summary>
+        /// Monotonically increasing identity for root-load requests. A completed load may
+        /// update the control only when its identity is still current.
+        /// </summary>
+        private long _rootLoadVersion;
 
         /// <summary>
         /// Shared STA thread runner used to marshal Shell COM operations onto a dedicated
@@ -461,9 +488,27 @@ namespace ExpControlsLib
 
                 if (value.IsFolder)
                 {
-                    _loadingRootTask = SetRootItemAsync(value);
+                    _loadingRootTask = StartRootLoad(value);
                 }
             }
+        }
+
+        /// <summary>
+        /// Asynchronously replaces the tree root. Only the latest root request is committed;
+        /// an earlier request is cancelled and returns <c>false</c> without changing the tree.
+        /// </summary>
+        /// <param name="root">The folder <see cref="CShellItem"/> to display.</param>
+        /// <param name="cancellationToken">An optional caller cancellation token.</param>
+        /// <returns><c>true</c> when the root was committed; otherwise <c>false</c>.</returns>
+        public Task<bool> SetRootAsync(CShellItem root, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(root);
+            if (!root.IsFolder)
+            {
+                return Task.FromResult(false);
+            }
+
+            return StartRootLoad(root, cancellationToken);
         }
 
         /// <summary>
@@ -778,12 +823,16 @@ namespace ExpControlsLib
 
         private static int GetExpansionDepthLimit(TreeNode baseNode, CShellItem target)
         {
-            if (baseNode.Tag == null)
+            if (baseNode is not ExpTreeNode { Item: CShellItem baseItem })
             {
-                throw new InvalidOperationException("baseNode.Tag cannot be null.");
+                return -1;
             }
 
-            CShellItem baseItem = (CShellItem)baseNode.Tag;
+            if (!NodeRepresentsSameItem(baseItem, target) && !CPidl.IsAncestorOf(baseItem, target, false))
+            {
+                return -1;
+            }
+
             return CPidl.SegmentCount(target.PIDL) - CPidl.SegmentCount(baseItem.PIDL);
         }
 
@@ -791,7 +840,7 @@ namespace ExpControlsLib
         {
             foreach (TreeNode childNode in baseNode.Nodes)
             {
-                if (childNode.Tag is CShellItem childItem && CPidl.IsAncestorOf(childItem, target, false))
+                if (childNode is ExpTreeNode { Item: CShellItem childItem } && CPidl.IsAncestorOf(childItem, target, false))
                 {
                     match = childNode;
                     return true;
@@ -932,6 +981,10 @@ namespace ExpControlsLib
             }
 
             int lim = GetExpansionDepthLimit(baseNode, newItem);
+            if (lim < 0)
+            {
+                return false;
+            }
 
             try
             {
@@ -1044,11 +1097,15 @@ namespace ExpControlsLib
             }
 
             int depthLimit = GetExpansionDepthLimit(baseNode, target); //drill down limit
+            if (depthLimit < 0)
+            {
+                return false;
+            }
 
             try
             {
                 // do the drill down -- Node to expand must be included in tree
-                if (baseNode.Nodes.Count == 1 && baseNode.Nodes[0].Text == DummyText)
+                if (baseNode.Nodes.Count == 1 && baseNode.Nodes[0] is ExpTreeNode { IsPlaceholder: true })
                 {
                     await PopulateNodeAsync(baseNode);
                 }
@@ -1059,7 +1116,7 @@ namespace ExpControlsLib
                     if (TryFindAncestorChildNode(baseNode, target, out var match))
                     {
                         baseNode = match!;
-                        if (baseNode.Nodes.Count == 1 && baseNode.Nodes[0].Text == DummyText) //has a dummy node that needs expansion
+                        if (baseNode.Nodes.Count == 1 && baseNode.Nodes[0] is ExpTreeNode { IsPlaceholder: true }) //has a dummy node that needs expansion
                         {
                             await PopulateNodeAsync(baseNode);
                         }
@@ -1135,12 +1192,19 @@ namespace ExpControlsLib
         {
             if (_backHistory.Count > 0)
             {
-                _forwardHistory.Push(_lastSelectedCSI);
-                var prev = _backHistory.Pop();
+                var current = _lastSelectedCSI;
+                var prev = _backHistory.Peek();
                 _isNavigatingHistory = true;
                 try
                 {
-                    await ExpandANodeBaseAsync(prev, true);
+                    if (await ExpandANodeBaseAsync(prev, true))
+                    {
+                        _backHistory.Pop();
+                        if (current is not null)
+                        {
+                            _forwardHistory.Push(current);
+                        }
+                    }
                 }
                 finally
                 {
@@ -1161,12 +1225,19 @@ namespace ExpControlsLib
         {
             if (_forwardHistory.Count > 0)
             {
-                _backHistory.Push(_lastSelectedCSI);
-                var next = _forwardHistory.Pop();
+                var current = _lastSelectedCSI;
+                var next = _forwardHistory.Peek();
                 _isNavigatingHistory = true;
                 try
                 {
-                    await ExpandANodeBaseAsync(next, true);
+                    if (await ExpandANodeBaseAsync(next, true))
+                    {
+                        _forwardHistory.Pop();
+                        if (current is not null)
+                        {
+                            _backHistory.Push(current);
+                        }
+                    }
                 }
                 finally
                 {
@@ -1336,7 +1407,7 @@ namespace ExpControlsLib
             node.Nodes.Clear();
             if (ShouldHaveDummy(nodeItem))
             {
-                node.Nodes.Add(new TreeNode(DummyText));
+                node.Nodes.Add(ExpTreeNode.Placeholder());
             }
 
             if (wasExpanded)
@@ -1363,13 +1434,13 @@ namespace ExpControlsLib
             {
                 if (ShouldHaveDummy(item))
                 {
-                    updatedNode.Nodes.Add(new TreeNode(DummyText));
+                    updatedNode.Nodes.Add(ExpTreeNode.Placeholder());
                 }
                 updatedNode.Collapse(false);
                 return;
             }
 
-            if (updatedNode.Nodes.Count == 1 && updatedNode.Nodes[0].Text.Equals(DummyText) && !ShouldHaveDummy(item))
+            if (updatedNode.Nodes.Count == 1 && updatedNode.Nodes[0] is ExpTreeNode { IsPlaceholder: true } && !ShouldHaveDummy(item))
             {
                 updatedNode.Nodes.Clear();
             }
@@ -1432,16 +1503,15 @@ namespace ExpControlsLib
         /// </remarks>
         private TreeNode MakeNode(CShellItem item)
         {
-            var newNode = new TreeNode(item.DisplayName)
+            var newNode = new ExpTreeNode(item)
             {
-                Tag = item,
                 ImageIndex = GetIconIndex(item, false),
                 SelectedImageIndex = GetIconIndex(item, true)
             };
 
             if (ShouldHaveDummy(item))
             {
-                newNode.Nodes.Add(new TreeNode(DummyText));
+                newNode.Nodes.Add(ExpTreeNode.Placeholder());
             }
             return newNode;
         }
@@ -1517,13 +1587,24 @@ namespace ExpControlsLib
         private async void Tv1_BeforeExpand(object sender, TreeViewCancelEventArgs e)
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Tv1_BeforeExpand: Begin for '{e.Node?.Text}'");
-            if (e.Node.Nodes.Count == 1 && e.Node.Nodes[0].Text.Equals(DummyText))
+            if (e.Node.Nodes.Count == 1 && e.Node.Nodes[0] is ExpTreeNode { IsPlaceholder: true })
             {
                 var oldCursor = Cursor;
                 Cursor = Cursors.WaitCursor;
                 try
                 {
                     await PopulateNodeAsync(e.Node);
+                }
+                catch (OperationCanceledException)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    e.Cancel = true;
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Tv1_BeforeExpand: Error - {ex}");
+                    return;
                 }
                 finally
                 {
@@ -1675,7 +1756,7 @@ namespace ExpControlsLib
                             tn.Nodes.Clear();
                             if (ShouldHaveDummy(item))
                             {
-                                tn.Nodes.Add(new TreeNode(DummyText));
+                                tn.Nodes.Add(ExpTreeNode.Placeholder());
                             }
                             if (wasExpanded)
                                 tn.Expand();
@@ -1860,7 +1941,7 @@ namespace ExpControlsLib
         {
             if (e?.Node?.Tag is null) return;
 
-            if (e.Node.Text == DummyText)
+            if (e.Node is ExpTreeNode { IsPlaceholder: true })
             {
                 e.CancelEdit = true;
                 return;
@@ -2150,7 +2231,7 @@ namespace ExpControlsLib
         private bool m_minimalContextMenu = false;
         private ShellController? _shellController = null;
         private bool _initialized = false;
-        private Task _loadingRootTask;
+        private Task _loadingRootTask = Task.CompletedTask;
 
         /// <summary>
         /// Sets whether or not the control should use Windows System context menu for TreeNode items.
@@ -2395,7 +2476,7 @@ namespace ExpControlsLib
             // it is necessary to remove that dummy, beforehand. Note that this case cannot occur if all
             // prior references to the ParentNode occur only within ExpTree. In that case, ParentNode.Tag.Directories will not have
             // been Initialized so no Create or Rename messages will be passed to ExpTree - thus no InsertNode call.
-            if (ParentNode.Nodes.Count == 1 && ParentNode.Nodes[0].Text.Equals(DummyText))
+            if (ParentNode.Nodes.Count == 1 && ParentNode.Nodes[0] is ExpTreeNode { IsPlaceholder: true })
             {
                 PopulateNode(ParentNode);
             }
@@ -2463,48 +2544,85 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Asynchronously loads and displays the tree rooted at the specified <see cref="CShellItem"/>
-        /// or <see cref="StartDir"/> value. Any in-progress load is cancelled before the new one begins.
-        /// Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
+        /// Starts a root load and records the task used by asynchronous expansion callers.
+        /// The control owns this task; callers that need to await a root change should await
+        /// the returned task rather than relying on the <see cref="Root"/> property setter.
         /// </summary>
-        /// <param name="csi">
-        /// The <see cref="CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
-        /// should be used to resolve the root instead.
-        /// </param>
-        /// <param name="dir">
-        /// A <see cref="StartDir"/> value used to resolve the root when <paramref name="csi"/> is <c>null</c>.
-        /// Defaults to <see cref="StartDir.None"/>.
-        /// </param>
-        private async Task SetRootItemAsync(CShellItem? csi)
+        private Task<bool> StartRootLoad(CShellItem csi, CancellationToken cancellationToken = default)
         {
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Begin for '{csi?.DisplayName}'");
+            _pendingExpansionItem = null;
+            _pendingSelectExpandedNode = false;
+            var task = SetRootItemAsync(csi, cancellationToken);
+            _loadingRootTask = task;
+            return task;
+        }
+
+        private async Task<bool> SetRootItemAsync(CShellItem csi, CancellationToken cancellationToken)
+        {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Begin for '{csi.DisplayName}'");
+
+            var loadVersion = ++_rootLoadVersion;
             _rootLoadCts?.Cancel();
-            _rootLoadCts?.Dispose();
+
             // Link with the runner's shutdown token so disposal can abort in-progress work.
             var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
                 _staRunner?.ShutdownToken ?? CancellationToken.None);
             _rootLoadCts = linkedCts;
             var token = linkedCts.Token;
+            var candidateRoot = new ExpTreeNode(csi)
+            {
+                ImageIndex = csi.IconIndexNormal,
+                SelectedImageIndex = csi.IconIndexOpen
+            };
 
             try
             {
-                if (token.IsCancellationRequested) return;
+                if (token.IsCancellationRequested) return false;
 
-                _RootNode = new TreeNode(csi.DisplayName);
-                _RootNode.ImageIndex = csi.IconIndexNormal;
-                _RootNode.SelectedImageIndex = csi.IconIndexOpen;
-                _RootNode.Tag = csi;
+                await PopulateNodeAsync(candidateRoot, token);
+                token.ThrowIfCancellationRequested();
 
-                await PopulateNodeAsync(_RootNode, token);
-                _TreeView.Nodes.Add(_RootNode);
-                _RootNode.Expand();
+                // A newer request or disposal wins over this load. In particular, do not
+                // use the shared _RootNode field until the candidate is committed.
+                if (loadVersion != _rootLoadVersion || !ReferenceEquals(_rootLoadCts, linkedCts))
+                {
+                    return false;
+                }
+
+                WithTreeViewUpdate(() =>
+                {
+                    _TreeView.Nodes.Clear();
+                    _RootNode = candidateRoot;
+                    _TreeView.Nodes.Add(candidateRoot);
+                    candidateRoot.Expand();
+
+                    // A root can finish loading after the control's initial VisibleChanged
+                    // event. Select it here so the initial navigation state is initialized
+                    // consistently regardless of load timing.
+                    if (_TreeView.Visible)
+                    {
+                        _TreeView.SelectedNode = candidateRoot;
+                    }
+                });
+                return true;
             }
-            catch (OperationCanceledException) { Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Cancelled"); }
+            catch (OperationCanceledException) { Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Cancelled"); return false; }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: ERROR - {ex}");
+                return false;
             }
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: End");
+            finally
+            {
+                if (ReferenceEquals(_rootLoadCts, linkedCts))
+                {
+                    _rootLoadCts = null;
+                }
+
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: End");
+                linkedCts.Dispose();
+            }
         }
 
         private CShellItem? PopulateChildFolders(CShellItem? csi, CancellationToken t)
@@ -2581,9 +2699,14 @@ namespace ExpControlsLib
                 }
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: End for '{csi.DisplayName}'");
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Error - {ex}");
+                throw;
             }
         }
 
@@ -2606,11 +2729,11 @@ namespace ExpControlsLib
             Task task;
             if (rootCSI == null)
             {
-                task = SetRootItemAsync(Root);
+                task = Root is { } currentRoot ? StartRootLoad(currentRoot) : Task.CompletedTask;
             }
             else
             {
-                task = SetRootItemAsync(rootCSI);
+                task = StartRootLoad(rootCSI);
             }
 
             // Use the UI thread's SynchronizationContext so the continuation runs on the
@@ -2698,7 +2821,11 @@ namespace ExpControlsLib
         /// </summary>
         private bool NodeRepresentsItem(TreeNode node, CShellItem item)
         {
-            if (node.Tag is not CShellItem nodeItem) return false;
+            return node is ExpTreeNode { Item: CShellItem nodeItem } && NodeRepresentsSameItem(nodeItem, item);
+        }
+
+        private static bool NodeRepresentsSameItem(CShellItem nodeItem, CShellItem item)
+        {
             return ReferenceEquals(nodeItem, item) || CPidl.ResolvesToSamePathOrName(nodeItem.PIDL, item.PIDL);
         }
 
@@ -2737,13 +2864,13 @@ namespace ExpControlsLib
         #endregion Private Methods
 
         /// <summary>
-        /// Cancels and disposes any active root-load cancellation token source,
-        /// releasing associated resources.
+        /// Cancels any active root load. The load task owns disposal of its linked
+        /// cancellation source after its background work has observed cancellation.
         /// </summary>
         private void Cleanup()
         {
+            _rootLoadVersion++;
             _rootLoadCts?.Cancel();
-            _rootLoadCts?.Dispose();
             _rootLoadCts = null;
             _staRunner?.Dispose();
             _staRunner = null;

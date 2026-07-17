@@ -1611,6 +1611,12 @@
             <remarks>ExpTree raises one major Event, ExpTreeNodeSelected. That event is raised whenever the 
             Selected TreeNode changes because of User Action (i.e. -- clicking on the node)</remarks>
         </member>
+        <member name="T:ExpControlsLib.ExpTree.ExpTreeNode">
+            <summary>
+            Strongly typed TreeView node. The Tag assignment is retained for compatibility
+            with existing consumers while internal code can use Item directly.
+            </summary>
+        </member>
         <member name="F:ExpControlsLib.ExpTree._RootNode">
             <summary>
             The root <see cref="T:System.Windows.Forms.TreeNode"/> of the TreeView. Represents the top-level Shell item
@@ -1656,6 +1662,12 @@
             <summary>
             Cancellation token source for the currently active root-load operation.
             Cancelled and replaced whenever a new root load is initiated.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._rootLoadVersion">
+            <summary>
+            Monotonically increasing identity for root-load requests. A completed load may
+            update the control only when its identity is still current.
             </summary>
         </member>
         <member name="F:ExpControlsLib.ExpTree._staRunner">
@@ -1861,6 +1873,15 @@
             The new CShellItem must be a valid CShellItem of some kind of Folder (File Folder or System Folder).
             Attempts to set it using a non-Folder CShellItem are ignored.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.SetRootAsync(WindowsApiLib.Shell.CShellItem,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously replaces the tree root. Only the latest root request is committed;
+            an earlier request is cancelled and returns <c>false</c> without changing the tree.
+            </summary>
+            <param name="root">The folder <see cref="T:WindowsApiLib.Shell.CShellItem"/> to display.</param>
+            <param name="cancellationToken">An optional caller cancellation token.</param>
+            <returns><c>true</c> when the root was committed; otherwise <c>false</c>.</returns>
         </member>
         <member name="P:ExpControlsLib.ExpTree.SelectedNode">
             <summary>
@@ -2428,20 +2449,12 @@
             <remarks>Should only be called to populate a TreeNode which only has a Dummy Node.<br />
             Refactored code added 8/26/2012 so that this functionality could be used from more than one method.</remarks>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.SetRootItemAsync(WindowsApiLib.Shell.CShellItem)">
+        <member name="M:ExpControlsLib.ExpTree.StartRootLoad(WindowsApiLib.Shell.CShellItem,System.Threading.CancellationToken)">
             <summary>
-            Asynchronously loads and displays the tree rooted at the specified <see cref="T:WindowsApiLib.Shell.CShellItem"/>
-            or <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value. Any in-progress load is cancelled before the new one begins.
-            Child icon and sub-folder data are pre-warmed on a background STA thread to keep the UI responsive.
+            Starts a root load and records the task used by asynchronous expansion callers.
+            The control owns this task; callers that need to await a root change should await
+            the returned task rather than relying on the <see cref="P:ExpControlsLib.ExpTree.Root"/> property setter.
             </summary>
-            <param name="csi">
-            The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to use as the new tree root, or <c>null</c> if <paramref name="dir"/>
-            should be used to resolve the root instead.
-            </param>
-            <param name="dir">
-            A <see cref="T:ExpControlsLib.ExpTree.StartDir"/> value used to resolve the root when <paramref name="csi"/> is <c>null</c>.
-            Defaults to <see cref="F:ExpControlsLib.ExpTree.StartDir.None"/>.
-            </param>
         </member>
         <member name="M:ExpControlsLib.ExpTree.PopulateNodeAsync(System.Windows.Forms.TreeNode,System.Nullable{System.Threading.CancellationToken})">
             <summary>
@@ -2499,8 +2512,8 @@
         </member>
         <member name="M:ExpControlsLib.ExpTree.Cleanup">
             <summary>
-            Cancels and disposes any active root-load cancellation token source,
-            releasing associated resources.
+            Cancels any active root load. The load task owns disposal of its linked
+            cancellation source after its background work has observed cancellation.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ExpTree.Dispose(System.Boolean)">
