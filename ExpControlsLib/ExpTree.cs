@@ -76,25 +76,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Stack holding the backward navigation history of visited <see cref="CShellItem"/> folders.
         /// </summary>
-        private Stack<CShellItem> _backHistory = new Stack<CShellItem>();
-
-        /// <summary>
-        /// Stack holding the forward navigation history of visited <see cref="CShellItem"/> folders,
-        /// populated when the user navigates back.
-        /// </summary>
-        private Stack<CShellItem> _forwardHistory = new Stack<CShellItem>();
-
-        /// <summary>
-        /// Indicates whether a history navigation (back or forward) is currently in progress,
-        /// used to prevent the navigation from being recorded again as a new history entry.
-        /// </summary>
-        private bool _isNavigatingHistory = false;
-
-        /// <summary>
-        /// The most recently selected <see cref="CShellItem"/>, used as the source entry
-        /// when recording navigation history.
-        /// </summary>
-        private CShellItem? _lastSelectedCSI = null;
+        private readonly ExpTreeNavigation _navigation = new();
 
         /// <summary>
         /// Cancellation token source for the currently active root-load operation.
@@ -172,6 +154,7 @@ namespace ExpControlsLib
         /// allowing items to be dragged out to other Shell targets.
         /// </summary>
         private CDragWrapper? DragHandler;
+        private readonly ExpTreeDragDropState _dragDrop = new();
 
         /// <summary>
         /// Backing field for <see cref="ShowHiddenFolders"/>. When <c>true</c>, folders
@@ -183,7 +166,7 @@ namespace ExpControlsLib
         /// The Windows Shell context menu helper used to display and process the native
         /// right-click context menu for selected TreeNode items.
         /// </summary>
-        private readonly ContextMenu m_WindowsContextMenu = new ContextMenu();
+        private readonly ExpTreeContextMenu _contextMenu = new();
 
         private bool IsInDesignMode => (DesignMode || LicenseManager.UsageMode == LicenseUsageMode.Designtime);
 
@@ -701,8 +684,6 @@ namespace ExpControlsLib
             if (IsInDesignMode)
                 return;
 
-            expandNodeTimer = new System.Windows.Forms.Timer();
-
             _staRunner = new StaThreadRunner(1, "ExpTreeStaRunner");
 
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Setting image list...");
@@ -710,7 +691,7 @@ namespace ExpControlsLib
 
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Wiring shell update and timer events...");
             _shellController.ShellUpdater.UpdateEvent += ShellController_UpdateEventHandler;
-            expandNodeTimer.Tick += ExpandNodeTimer_Tick;
+            _dragDrop.ExpandTimer.Tick += ExpandNodeTimer_Tick;
 
             if (_rootPath is not null)
             {
@@ -747,37 +728,10 @@ namespace ExpControlsLib
         /// <remarks>Only Handles Messages relating to Windows Context Menus</remarks>
         protected override void WndProc(ref Message m)
         {
-            int hr;
-            if (m.Msg == (int)WM.INITMENUPOPUP || m.Msg == (int)WM.MEASUREITEM || m.Msg == (int)WM.DRAWITEM)
+            if (_contextMenu.HandleMessage(m.Msg, m.WParam, m.LParam, out var result))
             {
-                if (m_WindowsContextMenu.cntxMenuExtended is not null)
-                {
-                    hr = m_WindowsContextMenu.cntxMenuExtended.HandleMenuMsg(m.Msg, m.WParam, m.LParam);
-                    if (hr == 0)
-                    {
-                        return;
-                    }
-                }
-            }
-            else if (m.Msg == (int)WM.MENUCHAR)
-            {
-                if (m_WindowsContextMenu.cntxMenuCascading != null)
-                {
-                    IntPtr plResult = Marshal.AllocHGlobal(IntPtr.Size);
-                    try
-                    {
-                        hr = m_WindowsContextMenu.cntxMenuCascading.HandleMenuMsg2(m.Msg, m.WParam, m.LParam, plResult);
-                        if (hr == 0)
-                        {
-                            m.Result = Marshal.ReadIntPtr(plResult);
-                            return;
-                        }
-                    }
-                    finally
-                    {
-                        Marshal.FreeHGlobal(plResult);
-                    }
-                }
+                m.Result = result;
+                return;
             }
             base.WndProc(ref m);
         }
@@ -1190,27 +1144,7 @@ namespace ExpControlsLib
 
         public async Task GoBackAsync()
         {
-            if (_backHistory.Count > 0)
-            {
-                var current = _lastSelectedCSI;
-                var prev = _backHistory.Peek();
-                _isNavigatingHistory = true;
-                try
-                {
-                    if (await ExpandANodeBaseAsync(prev, true))
-                    {
-                        _backHistory.Pop();
-                        if (current is not null)
-                        {
-                            _forwardHistory.Push(current);
-                        }
-                    }
-                }
-                finally
-                {
-                    _isNavigatingHistory = false;
-                }
-            }
+            await _navigation.GoBackAsync(item => ExpandANodeBaseAsync(item, true));
         }
 
         /// <summary>
@@ -1223,27 +1157,7 @@ namespace ExpControlsLib
 
         public async Task GoForwardAsync()
         {
-            if (_forwardHistory.Count > 0)
-            {
-                var current = _lastSelectedCSI;
-                var next = _forwardHistory.Peek();
-                _isNavigatingHistory = true;
-                try
-                {
-                    if (await ExpandANodeBaseAsync(next, true))
-                    {
-                        _forwardHistory.Pop();
-                        if (current is not null)
-                        {
-                            _backHistory.Push(current);
-                        }
-                    }
-                }
-                finally
-                {
-                    _isNavigatingHistory = false;
-                }
-            }
+            await _navigation.GoForwardAsync(item => ExpandANodeBaseAsync(item, true));
         }
 
         /// <summary>
@@ -1256,26 +1170,26 @@ namespace ExpControlsLib
 
         public async Task GoUpAsync()
         {
-            if (_lastSelectedCSI?.Parent != null)
+            if (_navigation.Current?.Parent != null)
             {
-                await ExpandANodeBaseAsync(_lastSelectedCSI.Parent, true);
+                await ExpandANodeBaseAsync(_navigation.Current.Parent, true);
             }
         }
 
         /// <summary>
         /// Gets a value indicating whether there is a folder to navigate back to.
         /// </summary>
-        public bool CanGoBack => _backHistory.Count > 0;
+        public bool CanGoBack => _navigation.CanGoBack;
 
         /// <summary>
         /// Gets a value indicating whether there is a folder to navigate forward to.
         /// </summary>
-        public bool CanGoForward => _forwardHistory.Count > 0;
+        public bool CanGoForward => _navigation.CanGoForward;
 
         /// <summary>
         /// Gets a value indicating whether the current folder has a parent folder to navigate to.
         /// </summary>
-        public bool CanGoUp => _lastSelectedCSI?.Parent != null;
+        public bool CanGoUp => _navigation.CanGoUp;
 
         #endregion
 
@@ -1640,12 +1554,7 @@ namespace ExpControlsLib
             if (csi is null) return;
 
             // record history
-            if (!_isNavigatingHistory && _lastSelectedCSI != null && !ReferenceEquals(_lastSelectedCSI, csi))
-            {
-                _backHistory.Push(_lastSelectedCSI);
-                _forwardHistory.Clear();
-            }
-            _lastSelectedCSI = csi;
+            _navigation.RecordSelection(csi);
 
             // **********Added by Lukai-2021.12.02, If a folder is created by code "My.Computer.FileSystem.CreateDirectory(folderPath)", then this folder can't be shown automatically, I need to refresh it in here manually
             //if (System.IO.Directory.Exists(csi.FullPath))
@@ -1688,7 +1597,7 @@ namespace ExpControlsLib
                 {
                     var itms = new CShellItem[1];
                     itms[0] = (CShellItem)tn.Tag;
-                    var result = m_WindowsContextMenu.ShowMenu(Handle, itms, MousePosition, m_allowFolderRename, m_minimalContextMenu);
+                    var result = _contextMenu.Menu.ShowMenu(Handle, itms, MousePosition, m_allowFolderRename, m_minimalContextMenu);
                     if (result.Success)
                     {
                         int verbId = result.CommandInfo.lpVerb.ToInt32();
@@ -2012,7 +1921,6 @@ namespace ExpControlsLib
         /// The TreeNode most recently dragged over or dropped onto. Used to track highlight
         /// state and drive the auto-expand timer.
         /// </summary>
-        private TreeNode? dropNode;
 
         /// <summary>
         /// Ring buffer of recent drops received by this tree. Capped at
@@ -2031,13 +1939,6 @@ namespace ExpControlsLib
         /// The client-coordinate position of the most recent drag-over event, used by the
         /// auto-expand timer to scroll the TreeView when dragging near its edges.
         /// </summary>
-        private Point NodePoint;
-
-        /// <summary>
-        /// Timer that fires after a short hover delay to auto-expand the node currently being
-        /// dragged over, improving drag-and-drop usability.
-        /// </summary>
-        private System.Windows.Forms.Timer? expandNodeTimer;
 
         /// <summary>
         /// Handles the <see cref="expandNodeTimer"/> <c>Tick</c> event. Expands the node
@@ -2048,31 +1949,31 @@ namespace ExpControlsLib
         /// <param name="e">Event data (unused).</param>
         private void ExpandNodeTimer_Tick(object? sender, EventArgs e)
         {
-            expandNodeTimer.Stop();
-            if (!(dropNode == null))
+            _dragDrop.ExpandTimer.Stop();
+            if (_dragDrop.DropNode is not null)
             {
                 DropHandler.ShDragOver -= DragWrapper_ShDragOver;
                 try
                 {
                     WithTreeViewUpdate(() =>
                     {
-                        dropNode.Expand();
-                        int delta = _TreeView.Height - NodePoint.Y;
+                        _dragDrop.DropNode.Expand();
+                        int delta = _TreeView.Height - _dragDrop.NodePoint.Y;
                         if (delta < _TreeView.Height / 2d && delta > 0)
                         {
-                            if (dropNode.NextVisibleNode is not null)
+                            if (_dragDrop.DropNode.NextVisibleNode is not null)
                             {
-                                dropNode.NextVisibleNode.EnsureVisible();
+                                _dragDrop.DropNode.NextVisibleNode.EnsureVisible();
                             }
                         }
                         if (delta > _TreeView.Height / 2d && delta < _TreeView.Height)
                         {
-                            if (dropNode.PrevVisibleNode is not null)
+                            if (_dragDrop.DropNode.PrevVisibleNode is not null)
                             {
-                                dropNode.PrevVisibleNode.EnsureVisible();
+                                _dragDrop.DropNode.PrevVisibleNode.EnsureVisible();
                             }
                         }
-                        dropNode.EnsureVisible();
+                        _dragDrop.DropNode.EnsureVisible();
                     });
                 }
                 finally
@@ -2091,12 +1992,12 @@ namespace ExpControlsLib
         /// <summary>Drag has left the control. Cleanup what we have to</summary>
         private void DragWrapper_ShDragLeave()
         {
-            expandNodeTimer.Stop();
-            if (!(dropNode == null))
+            _dragDrop.ExpandTimer.Stop();
+            if (_dragDrop.DropNode is not null)
             {
-                ResetTreeviewNodeColor(dropNode);
+                ResetTreeviewNodeColor(_dragDrop.DropNode);
             }
-            dropNode = null;
+            _dragDrop.DropNode = null;
         }
 
         /// <summary>ShDragOver manages the appearance of the TreeView.  Management of
@@ -2109,21 +2010,21 @@ namespace ExpControlsLib
         {
             if (Node == null)
             {
-                expandNodeTimer.Stop();
-                if (dropNode is not null)
+                _dragDrop.ExpandTimer.Stop();
+                if (_dragDrop.DropNode is not null)
                 {
-                    ResetTreeviewNodeColor(dropNode);
-                    dropNode = null;
+                    ResetTreeviewNodeColor(_dragDrop.DropNode);
+                    _dragDrop.DropNode = null;
                 }
             }
             else  // Drag is Over a node - fix color & DragDropEffects
             {
-                if (ReferenceEquals(Node, dropNode))
+                if (ReferenceEquals(Node, _dragDrop.DropNode))
                 {
                     return;    // we've already done it all
                 }
 
-                expandNodeTimer.Stop(); // not over previous node anymore
+                _dragDrop.ExpandTimer.Stop(); // not over previous node anymore
                 WithTreeViewUpdate(() =>
                 {
                     if (!Node.BackColor.Equals(SystemColors.Highlight))
@@ -2133,12 +2034,12 @@ namespace ExpControlsLib
                         Node.ForeColor = SystemColors.HighlightText;
                     }
                 });
-                dropNode = Node;     // dropNode is the Saved Global version of Node
-                NodePoint = pt;      // 7/12/2012 NodePoint is the Saved, Form Global Mouse Location (in client coordinates)
-                if (!dropNode.IsExpanded)
+                _dragDrop.DropNode = Node;
+                _dragDrop.NodePoint = pt;
+                if (!_dragDrop.DropNode.IsExpanded)
                 {
-                    expandNodeTimer.Interval = 500;
-                    expandNodeTimer.Start();
+                    _dragDrop.ExpandTimer.Interval = 500;
+                    _dragDrop.ExpandTimer.Start();
                 }
             }
         }
@@ -2152,17 +2053,17 @@ namespace ExpControlsLib
         /// <param name="pdwEffect">The drag-and-drop effect that was applied.</param>
         private void DragWrapper_ShDragDrop(TreeNode Node, int grfKeyState, int pdwEffect)
         {
-            expandNodeTimer.Stop();
+            _dragDrop.ExpandTimer.Stop();
 
-            if (!(dropNode == null))
+            if (_dragDrop.DropNode is not null)
             {
-                ResetTreeviewNodeColor(dropNode);
+                ResetTreeviewNodeColor(_dragDrop.DropNode);
             }
             else
             {
                 ResetTreeviewNodeColor(_TreeView.Nodes[0]);
             }
-            dropNode = null;
+            _dragDrop.DropNode = null;
 
             // Resolve the destination shell item (the folder the drop landed on) and the
             // source items (peeked from the drag source's thread-static slot, populated
@@ -2872,6 +2773,12 @@ namespace ExpControlsLib
             _rootLoadVersion++;
             _rootLoadCts?.Cancel();
             _rootLoadCts = null;
+            _dragDrop.Dispose();
+            DragHandler?.Dispose();
+            DragHandler = null;
+            DropHandler?.Dispose();
+            DropHandler = null;
+            _contextMenu.Dispose();
             _staRunner?.Dispose();
             _staRunner = null;
             if (_shellController?.ShellUpdater != null)

@@ -1635,27 +1635,9 @@
             excluded from display in the tree.
             </summary>
         </member>
-        <member name="F:ExpControlsLib.ExpTree._backHistory">
+        <member name="F:ExpControlsLib.ExpTree._navigation">
             <summary>
             Stack holding the backward navigation history of visited <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders.
-            </summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree._forwardHistory">
-            <summary>
-            Stack holding the forward navigation history of visited <see cref="T:WindowsApiLib.Shell.CShellItem"/> folders,
-            populated when the user navigates back.
-            </summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree._isNavigatingHistory">
-            <summary>
-            Indicates whether a history navigation (back or forward) is currently in progress,
-            used to prevent the navigation from being recorded again as a new history entry.
-            </summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree._lastSelectedCSI">
-            <summary>
-            The most recently selected <see cref="T:WindowsApiLib.Shell.CShellItem"/>, used as the source entry
-            when recording navigation history.
             </summary>
         </member>
         <member name="F:ExpControlsLib.ExpTree._rootLoadCts">
@@ -1713,7 +1695,7 @@
             with the Hidden attribute are included in the tree display.
             </summary>
         </member>
-        <member name="F:ExpControlsLib.ExpTree.m_WindowsContextMenu">
+        <member name="F:ExpControlsLib.ExpTree._contextMenu">
             <summary>
             The Windows Shell context menu helper used to display and process the native
             right-click context menu for selected TreeNode items.
@@ -2298,13 +2280,11 @@
             A <see cref="T:System.Windows.Forms.NodeLabelEditEventArgs"/> containing the new label text.
             </param>
         </member>
-        <member name="F:ExpControlsLib.ExpTree.dropNode">
+        <member name="F:ExpControlsLib.ExpTree._dropHistory">
             <summary>
             The TreeNode most recently dragged over or dropped onto. Used to track highlight
             state and drive the auto-expand timer.
             </summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree._dropHistory">
             <summary>
             Ring buffer of recent drops received by this tree. Capped at
             <see cref="P:ExpControlsLib.ExpTree.DropHistoryCapacity"/> entries; oldest evicted first. Read via
@@ -2317,22 +2297,14 @@
             value trims the oldest entries from <see cref="F:ExpControlsLib.ExpTree._dropHistory"/>.
             </summary>
         </member>
-        <member name="F:ExpControlsLib.ExpTree.NodePoint">
+        <member name="M:ExpControlsLib.ExpTree.ExpandNodeTimer_Tick(System.Object,System.EventArgs)">
             <summary>
             The client-coordinate position of the most recent drag-over event, used by the
             auto-expand timer to scroll the TreeView when dragging near its edges.
             </summary>
-        </member>
-        <member name="F:ExpControlsLib.ExpTree.expandNodeTimer">
             <summary>
-            Timer that fires after a short hover delay to auto-expand the node currently being
-            dragged over, improving drag-and-drop usability.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.ExpandNodeTimer_Tick(System.Object,System.EventArgs)">
-            <summary>
-            Handles the <see cref="F:ExpControlsLib.ExpTree.expandNodeTimer"/> <c>Tick</c> event. Expands the node
-            currently being dragged over (<see cref="F:ExpControlsLib.ExpTree.dropNode"/>) and scrolls the TreeView
+            Handles the <see cref="!:expandNodeTimer"/> <c>Tick</c> event. Expands the node
+            currently being dragged over (<see cref="!:dropNode"/>) and scrolls the TreeView
             if the drag position is near the top or bottom edge.
             </summary>
             <param name="sender">The timer raising the event.</param>
@@ -2616,6 +2588,18 @@
             <summary> 
             Required method for Designer support - do not modify 
             the contents of this method with the code editor.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ExpTreeContextMenu">
+            <summary>Owns the native context-menu instance and forwards owner-draw window messages.</summary>
+        </member>
+        <member name="T:ExpControlsLib.ExpTreeDragDropState">
+            <summary>Owns transient drag-over state and the delayed auto-expansion timer.</summary>
+        </member>
+        <member name="T:ExpControlsLib.ExpTreeNavigation">
+            <summary>
+            Owns folder navigation history independently from the TreeView implementation.
+            Navigation targets are only removed from history after the requested navigation succeeds.
             </summary>
         </member>
         <member name="T:ExpControlsLib.ListViewDisplayMode">
