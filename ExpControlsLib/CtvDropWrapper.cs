@@ -287,17 +287,15 @@ namespace ExpControlsLib
 
         #region    DragOver
         /// <summary>
-    /// For internal use only
-    /// Entered when a Drag moves over the surface of the associated Control.<br />
-    /// </summary>
-    /// <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
-    /// <param name="pt">Location, in screen coordinates, of the mouse.</param>
-    /// <param name="pdwEffect">Permitted Drop actions as set by the DragSource and modified by
-    /// candidate DropTargets.</param>
-    /// <returns>Always returns S_OK (0)</returns>
+        /// For internal use only
+        /// Entered when a Drag moves over the surface of the associated Control.<br />
+        /// </summary>
+        /// <param name="grfKeyState">State of the Control Keys and Mouse Buttons</param>
+        /// <param name="pt">Location, in screen coordinates, of the mouse.</param>
+        /// <param name="pdwEffect">Permitted Drop actions as set by the DragSource and modified by
+        /// candidate DropTargets.</param>
+        /// <returns>Always returns S_OK (0)</returns>
         internal int DragOver(MK grfKeyState, POINT pt, ref DragDropEffects pdwEffect)
-
-
         {
 
             TreeNode tn;
