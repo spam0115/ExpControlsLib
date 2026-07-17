@@ -90,9 +90,9 @@ namespace WindowsApiLib.Shell
             return _excludedItems.Contains(trimmed);
         }
 
-        public CShellItemHierachyManager(CShellItem? root = null) {
-            this.Root = root ?? DesktopCSI;
-
+        public CShellItemHierachyManager(CShellItem desktop, CShellItem ? root = null) {
+            this.DesktopCSI = desktop;
+            this.Root = root ?? desktop;
         }
 
         /// <summary>

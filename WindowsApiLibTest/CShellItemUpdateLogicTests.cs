@@ -215,7 +215,7 @@ namespace WindowsApiLibTest
                     IntPtr dirPidl = ShellAPI.ILCreateFromPathW(tempBase);
                     IntPtr oldPidl = ShellAPI.ILCreateFromPathW(oldFilePath);
 
-                    var manager = new CShellItemHierachyManager();
+                    var manager = new CShellItemHierachyManager(CShellItemFactory.DesktopCSI);
                     manager.Add(oldPidl);
 
                     // Rename the actual file to get a real new PIDL

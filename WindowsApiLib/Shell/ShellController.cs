@@ -31,8 +31,7 @@ namespace WindowsApiLib.Shell
         private ShellController() {
             CShellItemFactory.Initialize(); //force the constructor to run
             DesktopCSI = CShellItemFactory.DesktopCSI;
-            HierachyManager = new CShellItemHierachyManager(DesktopCSI);
-            HierachyManager.DesktopCSI = DesktopCSI;
+            HierachyManager = new CShellItemHierachyManager(DesktopCSI, DesktopCSI);
             ShellUpdater = new CShellItemUpdater(HierachyManager, (uint)SHCNE.DISKEVENTS);
         }
 
