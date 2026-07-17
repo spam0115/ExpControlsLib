@@ -22,6 +22,7 @@ namespace WindowsApiLib
         static abstract void Dump(nint pidl);
         static abstract void DumpHex(byte[] b, int sPos = 0, int ePos = 0);
         static abstract string? GetDisplayName(nint pidl);
+        static abstract string? GetDisplayNameFull(nint pidl);
         static abstract string? GetFileSystemPath(nint pidl);
         static abstract string? GetFileSystemPathFromShellParsingName(string parsingName);
         static abstract string? GetFullName(nint pidl1);

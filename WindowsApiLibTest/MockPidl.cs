@@ -122,6 +122,37 @@ namespace WindowsApiLibTest
 
         public static string? GetDisplayName(nint pidl)
         {
+            var name = GetDisplayNameFull(pidl);
+            if (string.IsNullOrEmpty(name))
+            {
+                return name;
+            }
+
+            int periodIndex = name.LastIndexOf('.');
+            if (periodIndex < 0)
+            {
+                return name;
+            }
+
+            int extensionLength = name.Length - periodIndex - 1;
+            if (extensionLength < 3 || extensionLength > 4)
+            {
+                return name;
+            }
+
+            for (int i = periodIndex + 1; i < name.Length; i++)
+            {
+                if (!char.IsLetterOrDigit(name[i]))
+                {
+                    return name;
+                }
+            }
+
+            return name.Substring(0, periodIndex);
+        }
+
+        public static string? GetDisplayNameFull(nint pidl)
+        {
             var bytes = PidlToBytes(pidl);
             var last = MockPidlFactory.GetLastItem(bytes);
             return MockPidlFactory.GetDisplayPathFromPidl(last);

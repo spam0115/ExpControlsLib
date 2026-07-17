@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.VisualBasic;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -1069,7 +1070,6 @@ namespace WindowsApiLib.Shell
         #endregion
 
 
-
         #region Public Properties
 
 
@@ -1348,6 +1348,7 @@ namespace WindowsApiLib.Shell
                 {
                     _files.Clear();
                     _files = null;
+                    FilesCollectionTimestamp = null;
                 }
             }
 
@@ -1357,33 +1358,72 @@ namespace WindowsApiLib.Shell
                 {
                     _directories.Clear();
                     _directories = null;
+                    DirsCollectionTimestamp = null;
                 }
             }
         }
 
         /// <summary>
-        /// Returns the Files of this sub-folder, filtered by a filtering string, as a
-        ///   List of CShitems
+        /// Loads folder contents for the given CShellItem.  IE, it populates the directories and files
+        /// members.
         /// </summary>
-        /// <param name="Filter">A filter string (for example: *.Doc)</param>
-        /// <returns>A List of CShItems. May return an empty List if there are none.</returns>
-        /// <remarks>Added 8/22/2012</remarks>
-        public List<CShellItem> GetFiles(string Filter) //todo: mave this into CShellItemCollection
+        /// <remarks>
+        /// the reason this function has a return value is because the CShellItem passed in may be a duplicate of
+        /// one that already exists in the hierarchy.  In that case, the original hierarchy version will be returned.
+        /// </remarks>
+        /// <param name="csi"></param>
+        /// <returns>A CShellItem from the hierarchy manager.  It may or may not be the original CShellItem passed in.</returns>
+
+        public void LoadFolderContents(bool files = true, bool directories = true)
         {
-            var GetFilesRet = new List<CShellItem>();
-            if (m_IsFolder)
+            if (!m_IsFolder)
             {
-                Filter = Filter.ToLower();
-                foreach (CShellItem CSI in Files)
+                return;
+            }
+
+            SHCONTF flags = 0;
+            flags |= SHCONTF.INCLUDEHIDDEN; //todo: change the hidden handling
+            if (files) flags |= SHCONTF.NONFOLDERS;
+            if (directories) flags |= SHCONTF.FOLDERS;
+
+            var contents = CShellItemFactory.GetContents(this, flags);
+
+            if (directories)
+            {
+                lock (_directoriesLock)
                 {
-                    if (Utils.WildcardLike(CSI.DisplayName.ToLowerInvariant(), Filter))
+                    var folders = contents.Where(o => o.IsFolder == true).ToList();
+                    if (DirectoriesInitialized)
                     {
-                        GetFilesRet.Add(CSI);
+                        _directories.Clear();
+                        _directories.AddRange(folders);
                     }
+                    else
+                    {
+                        _directories = new CShellItemCollection(this, folders);
+                    }
+                    DirsCollectionTimestamp = DateTime.Now;
                 }
             }
 
-            return GetFilesRet;
+            if (files)
+            {
+                lock (_filesLock)
+                {
+                    var filess = contents.Where(o => o.IsFolder == false).ToList();
+                    if (FilesInitialized)
+                    {
+                        _files.Clear();
+                        _files.AddRange(filess);
+                    }
+                    else
+                    {
+                        _files = new CShellItemCollection(this, filess);
+                    }
+                    FilesCollectionTimestamp = DateTime.Now;
+                }
+            }
+
         }
 
         /// <summary>GetFileName returns the Full file name of this item.

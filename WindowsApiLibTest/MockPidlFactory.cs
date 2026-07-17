@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 using static WindowsApiLib.Shell.ShellAPI;
+using WindowsApiLib.Shell;
 
 namespace WindowsApiLibTest
 {
@@ -46,8 +47,14 @@ namespace WindowsApiLibTest
                 // ------------------------------------------------------------------
                 case CSIDL.DRIVES:
                     return BuildPidl(
-                        MakeVirtualFolderItem(0x1F, 0x50,
-                            new Guid("20D04FE0-3AEA-1069-A2D7-08002B30309D")));
+                        MakeVirtualFolderItem(0x1F, 0x50, ShellNamespaceGuids.MyComputer));
+
+                // ------------------------------------------------------------------
+                // The new version of "My Computer" is called "This PC" in Windows 8.1/10/11.
+                // ------------------------------------------------------------------
+                case CSIDL.THISPC:
+                    return BuildPidl(
+                        MakeVirtualFolderItem(0x1F, 0x50, ShellNamespaceGuids.ComputerFolder));
 
                 // ------------------------------------------------------------------
                 // MY DOCUMENTS  →  virtual-folder SHITEMID
@@ -55,16 +62,14 @@ namespace WindowsApiLibTest
                 // ------------------------------------------------------------------
                 case CSIDL.MYDOCUMENTS:
                     return BuildPidl(
-                        MakeVirtualFolderItem(0x1F, 0x50,
-                            new Guid("450D8FBA-AD25-11D0-98A8-0800361B1103")));
+                        MakeVirtualFolderItem(0x1F, 0x50, ShellNamespaceGuids.MyDocuments));
 
                 // ------------------------------------------------------------------
                 // MY PICTURES  →  virtual-folder SHITEMID
                 // ------------------------------------------------------------------
                 case CSIDL.MYPICTURES:
                     return BuildPidl(
-                        MakeVirtualFolderItem(0x1F, 0x50,
-                            new Guid("33E28130-4E1E-4676-835A-98395C3BC3BB")));
+                        MakeVirtualFolderItem(0x1F, 0x50, ShellNamespaceGuids.MyPictures));
 
                 // ------------------------------------------------------------------
                 // C_DRIVE (C:\)
@@ -247,8 +252,7 @@ namespace WindowsApiLibTest
                 if (first.Length == 2 && first[1] == ':')
                 {
                     // Prepend My Computer virtual folder, then the drive item
-                    items.Add(MakeVirtualFolderItem(0x1F, 0x50,
-                        new Guid("20D04FE0-3AEA-1069-A2D7-08002B30309D")));
+                    items.Add(MakeVirtualFolderItem(0x1F, 0x50, ShellNamespaceGuids.MyComputer));
                     items.Add(MakeDriveItem(first + "\\"));
                     startSegment = 1;
                 }
@@ -561,6 +565,7 @@ namespace WindowsApiLibTest
             var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 { "{20D04FE0-3AEA-1069-A2D7-08002B30309D}", "My Computer" },
+                { "{0AC0837C-BBF8-452A-850D-79D08E667CA7}", "This PC" },
                 { "{450D8FBA-AD25-11D0-98A8-0800361B1103}", "My Documents" },
                 { "{33E28130-4E1E-4676-835A-98395C3BC3BB}", "My Pictures" },
                 { "{59031A47-3F72-44A7-89C5-5595FE6B30EE}", "User Profile" },

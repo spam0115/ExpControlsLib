@@ -22,10 +22,10 @@ namespace Demo_CS
         }
 
         //Load files to ExpFileList
-        private void expTree1_ExpTreeNodeSelected(string SelPath, CShellItem Item)
+        private async void expTree1_ExpTreeNodeSelected(string SelPath, CShellItem Item)
         {
             bool includeFolder = true;
-            this.expList1.DisplayFiles(SelPath, Item, includeFolder);
+            await this.expList1.LoadDirectoryAsync(Item, includeFolder);
         }
 
         private void expList1_ExpListItemDoubleClick(string SelPath, CShellItem Item)

@@ -91,8 +91,7 @@ namespace WindowsApiLib.Shell
         }
 
         public CShellItemHierachyManager(CShellItem? root = null) {
-            this.Root = root;
-
+            this.Root = root ?? DesktopCSI;
 
         }
 
@@ -213,7 +212,7 @@ namespace WindowsApiLib.Shell
 
             if (rootItem.FilesInitialized && CPidl.IsAncestorOf(rootItem.PIDL, pidlAndName.Pidl, true))
             {
-                var displayName = CPidl.GetDisplayName(pidlAndName.Pidl);
+                var displayName = CPidl.GetDisplayNameFull(pidlAndName.Pidl);
                 if (rootItem.Files.Dictionary.TryGetValue(displayName, out CShellItem? fileItem))
                 {
                     return fileItem;
@@ -264,11 +263,61 @@ namespace WindowsApiLib.Shell
             return FindCShItemRet;
         }
 
+        /// <summary>
+        /// Note that Add doesn't update data in the CShellItem.  It only adds the item to the internal tree.
+        /// If the item already exists, it will return the existing item and not add a new one.
+        /// </summary>
+        /// <param name="csi"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentNullException"></exception>
         public CShellItem Add(CShellItem csi)
         {
             if (csi == null) throw new ArgumentNullException(nameof(csi));
-            var result = FindAndAllowExpansion(csi.PIDL, out CShellItem parent);
+            var result = FindAndAllowExpansion(csi.PIDL, out CShellItem parentCsi);
+            if (result == null)
+            {
+                var split = CPidl.Split(csi.PIDL);
+                parentCsi = FindAndAllowExpansion(split.ParentPidl, out _);
+                if (result == null)
+                {
+                    return result;
+                }
+
+                if (csi.IsFolder)
+                {
+                    lock (parentCsi)
+                    {
+                        parentCsi.Directories.Add(csi);
+                    }
+                }
+                else
+                {
+                    lock (parentCsi)
+                    {
+                        parentCsi.Files.Add(csi);
+                    }
+                } 
+                
+                return csi;
+            }
             return result;
+        }
+
+        public CShellItem Add(IntPtr pidl)
+        {
+            if (pidl == IntPtr.Zero) throw new ArgumentNullException(nameof(pidl));
+
+            var csi = CShellItemFactory.Create(CPidl.Clone(pidl));
+            return Add(csi);
+        }
+
+        public CShellItem Add(string path)
+        {
+            if (string.IsNullOrEmpty(path)) throw new ArgumentNullException(nameof(path));
+
+            IntPtr pidl = ShellAPI.ILCreateFromPathW(path);
+
+            return Add(pidl);
         }
 
         public CShellItem? FindAndAllowExpansion(string path)
@@ -353,14 +402,15 @@ namespace WindowsApiLib.Shell
                 CShellItem nextFolder = null;
                 lock (currentFolder)
                 {
-                    bool areFoldersOld = currentFolder.DirsCollectionTimestamp is null || (DateTime.Now - currentFolder.DirsCollectionTimestamp > new TimeSpan(0, 0, ShellController.FolderTimeout));
+                    bool areFoldersOld = currentFolder.DirsCollectionTimestamp != null && (DateTime.Now - currentFolder.DirsCollectionTimestamp > new TimeSpan(0, 0, ShellController.FolderTimeout));
                     if (areFoldersOld)
                     {
+                        currentFolder.ReloadInfo();
                         var directories = CShellItemFactory.GetContents(currentFolder, SHCONTF.FOLDERS | SHCONTF.INCLUDEHIDDEN); //todo: change the hidden handling
                         currentFolder.Directories = new CShellItemCollection(currentFolder, directories);
                     }
 
-                    foreach (var currentCSI in currentFolder.Directories) 
+                    foreach (var currentCSI in currentFolder.Directories) //accessing Directories causes expansion as a side effect
                     {
                         if (IsAncestorOf(currentCSI.PIDL, absPidl))
                         {
@@ -381,7 +431,7 @@ namespace WindowsApiLib.Shell
                     }
                 }
 
-                foundFinalExtantParentDirectory = true; //can't delve any deeper.  currentFolder is the parent folder
+                foundFinalExtantParentDirectory = true; //can't delve any deeper.  currentFolder is the final existing ancestor folder
             NEXTWHILE:;
                 currentFolder = nextFolder == null ? currentFolder : nextFolder;
             }
@@ -395,7 +445,7 @@ namespace WindowsApiLib.Shell
                 return null;
             }
 
-            var name = CPidl.GetDisplayName(absPidl);
+            var name = CPidl.GetDisplayNameFull(absPidl);
 
             // Check for files in the current folder
             lock (currentFolder)

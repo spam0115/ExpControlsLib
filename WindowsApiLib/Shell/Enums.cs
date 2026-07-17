@@ -247,7 +247,7 @@ namespace WindowsApiLib.Shell
             MYMUSIC = 0xD,
             MYVIDEO = 0xE,
             DESKTOPDIRECTORY = 0x10,
-            DRIVES = 0x11,
+            DRIVES = 0x11, //my computer
             NETWORK = 0x12,
             NETHOOD = 0x13,
             FONTS = 0x14,
@@ -288,12 +288,14 @@ namespace WindowsApiLib.Shell
             COMMON_OEM_LINKS = 0x3A,
             CDBURN_AREA = 0x3B,
             COMPUTERSNEARME = 0x3D,
-            C_DRIVE = 0x70000000, //this isn't one of the standard csidl locations.  I added it to facilitate unit testing.
             FLAG_PER_USER_INIT = 0x800,
             FLAG_NO_ALIAS = 0x1000,
             FLAG_DONT_VERIFY = 0x4000,
             FLAG_CREATE = 0x8000,
-            FLAG_MASK = 0xFF00
+            FLAG_MASK = 0xFF00,
+            //the following aren't standard csidl locations.  I added it to facilitate unit testing.
+            THISPC = 0x70000000,
+            C_DRIVE = 0x70000001,
         }
         #endregion
 

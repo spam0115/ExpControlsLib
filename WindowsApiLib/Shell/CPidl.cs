@@ -852,12 +852,31 @@ namespace WindowsApiLib
 
         /// <summary>
         /// Get's the display name for a pidl.
+        /// Note that this changes depending on whether or not the user has selected "Show file extensions" in Explorer, so it is not a stable name.
         /// </summary>
         /// <param name="pidl">must be an absolute pidl, not a relative pidl</param>
         /// <returns></returns>
         public static string? GetDisplayName(nint pidl)
         {
             return GetShellNameBase(pidl, (uint)SIGDN.PARENTRELATIVEEDITING); //note, this get's the displ
+        }
+
+        /// <summary>
+        /// Returns a stable "full name" for a PIDL.
+        /// For filesystem items, returns filename including extension.
+        /// For virtual/non-filesystem items, returns a shell parsing name.
+        /// </summary>
+        public static string? GetDisplayNameFull(nint pidl)
+        {
+            if (pidl == IntPtr.Zero)
+                return null;
+
+            string? fileSystemPath = GetFileSystemPath(pidl);
+            if (!string.IsNullOrWhiteSpace(fileSystemPath))
+                return Path.GetFileName(fileSystemPath);
+
+            return GetShellNameBase(pidl, (uint)SIGDN.PARENTRELATIVEPARSING)
+                   ?? GetShellNameBase(pidl, (uint)SIGDN.PARENTRELATIVEEDITING);
         }
 
         public static string? GetParsingName(IntPtr pidl)
@@ -1174,17 +1193,20 @@ namespace WindowsApiLib
             return cb == 0;
         }
 
-        private static bool IsDefinitelyVirtualNamespace(string parsingName)
+
+        /// <summary>
+        /// Creates an empty PIDL (just the 2-byte terminator: SHITEMID.cb == 0).
+        /// Caller must free with FreeEmptyPidl.
+        /// </summary>
+        public static IntPtr CreateEmptyPidl()
         {
-            // Common virtual forms
-            if (parsingName.StartsWith("::", StringComparison.Ordinal))
-                return true;
-
-            if (parsingName.StartsWith("shell:::", StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            return false;
+            // Empty PIDL is exactly 2 bytes: terminating USHORT 0
+            IntPtr pidl = Marshal.AllocCoTaskMem(2);
+            Marshal.WriteInt16(pidl, 0); // terminator
+            return pidl;
         }
+
+
 
         #region    DumpPidl Routines
         /// <summary>
@@ -1444,15 +1466,15 @@ namespace WindowsApiLib
 
         #endregion
 
-            #region Private methods
+        #region Private methods
 
-            /// <summary>
-            /// Get Size in bytes of the first (possibly only)
-            /// SHItem in an ID list.  Note: the full size of
-            ///   the item is the sum of the sizes of all SHItems
-            ///   in the list!!
-            /// </summary>
-            /// <param name="pidl">A pointer to a PIDL.</param>
+        /// <summary>
+        /// Get Size in bytes of the first (possibly only)
+        /// SHItem in an ID list.  Note: the full size of
+        ///   the item is the sum of the sizes of all SHItems
+        ///   in the list!!
+        /// </summary>
+        /// <param name="pidl">A pointer to a PIDL.</param>
         private static int ItemIDSize(IntPtr pidl)
         {
             if (!pidl.Equals(IntPtr.Zero))
@@ -1497,6 +1519,18 @@ namespace WindowsApiLib
             {
                 Marshal.FreeCoTaskMem(pidl);
             }
+        }
+
+        private static bool IsDefinitelyVirtualNamespace(string parsingName)
+        {
+            // Common virtual forms
+            if (parsingName.StartsWith("::", StringComparison.Ordinal))
+                return true;
+
+            if (parsingName.StartsWith("shell:::", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return false;
         }
 
         /*

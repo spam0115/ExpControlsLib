@@ -412,7 +412,7 @@ namespace ExpControlsLibTest
             var parentCsi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(parentPath);
             if (parentCsi != null)
             {
-                ShellController.Instance.LoadFolderContents(parentCsi, SHCONTF.FOLDERS);
+                parentCsi.LoadFolderContents(false, true);
             }
         }
 
@@ -449,7 +449,7 @@ namespace ExpControlsLibTest
                 string pathC = Path.Combine(tempDir, "C");
                 Directory.CreateDirectory(pathC);
                 var rootCsi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempDir);
-                ShellController.Instance.LoadFolderContents(rootCsi, SHCONTF.FOLDERS);
+                rootCsi.LoadFolderContents(false, true);
                 var itemC = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathC);
                 Assert.IsNotNull(itemC, "C should be in hierarchy");
 
@@ -598,7 +598,7 @@ namespace ExpControlsLibTest
                 string pathB = Path.Combine(tempDir2, "B");
                 Directory.CreateDirectory(pathB);
                 var dir2Csi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempDir2);
-                ShellController.Instance.LoadFolderContents(dir2Csi, SHCONTF.FOLDERS);
+                dir2Csi.LoadFolderContents(false, true);
                 var itemB = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathB);
                 Assert.IsNotNull(itemB, "B should be in hierarchy");
 

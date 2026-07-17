@@ -62,7 +62,7 @@ namespace ExpControlsLibTest
             var parentCsi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(parentPath);
             if (parentCsi != null)
             {
-                ShellController.Instance.LoadFolderContents(parentCsi, SHCONTF.FOLDERS);
+                parentCsi.LoadFolderContents(false, true);
             }
         }
 
@@ -194,7 +194,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
-                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+                await WaitForCondition(() => expTree.Nodes != null && expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Count > 0, "Root node to load");
 
                 bool foundExcluded = false;
                 bool foundHidden = false;
@@ -242,7 +242,7 @@ namespace ExpControlsLibTest
                 string newFolderPath = Path.Combine(tempPath, "NewFolder");
                 Directory.CreateDirectory(newFolderPath);
 
-                ShellController.Instance.LoadFolderContents(expTree.Root, SHCONTF.FOLDERS);
+                expTree.Root.LoadFolderContents(false, true);
                 var newItem = ShellController.Instance.HierachyManager.FindAndAllowExpansion(newFolderPath);
 
                 Assert.IsNotNull(newItem, $"ShellController failed to find or add '{newFolderPath}'.");
@@ -310,7 +310,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
-                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+                await WaitForCondition(() => expTree.Nodes != null && expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Count > 0, "Root node to load");
 
                 var rootNode = expTree.Nodes[0];
                 // Root is expanded after SetRootItemAsync — children A, B, C are real nodes
@@ -320,7 +320,7 @@ namespace ExpControlsLibTest
                 // Create new directory D on disk and add to hierarchy
                 string pathD = Path.Combine(tempPath, "D");
                 Directory.CreateDirectory(pathD);
-                ShellController.Instance.LoadFolderContents(expTree.Root, SHCONTF.FOLDERS);
+                expTree.Root.LoadFolderContents(false, true);
                 var itemD = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathD);
                 Assert.IsNotNull(itemD, "D should be in hierarchy");
 
@@ -357,7 +357,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
-                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+                await WaitForCondition(() => expTree.Nodes != null && expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Count > 0, "Root node to load");
 
                 var rootNode = expTree.Nodes[0];
                 Assert.IsTrue(rootNode.IsExpanded, "Root should be expanded after load");
@@ -407,7 +407,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
-                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+                await WaitForCondition(() => expTree.Nodes != null && expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Count > 0, "Root node to load");
 
                 var rootNode = expTree.Nodes[0];
                 Assert.IsTrue(rootNode.IsExpanded, "Root should be expanded after load");
@@ -424,7 +424,7 @@ namespace ExpControlsLibTest
                 // Create C on disk and add to hierarchy
                 string pathC = Path.Combine(tempPath, "C");
                 Directory.CreateDirectory(pathC);
-                ShellController.Instance.LoadFolderContents(expTree.Root, SHCONTF.FOLDERS);
+                expTree.Root.LoadFolderContents(false, true);
                 var itemC = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathC);
                 Assert.IsNotNull(itemC, "C should be in hierarchy");
 
@@ -466,7 +466,7 @@ namespace ExpControlsLibTest
                 form.Controls.Add(expTree);
                 form.Show();
 
-                await WaitForCondition(() => expTree.Nodes.Count > 0, "Root node to load");
+                await WaitForCondition(() => expTree.Nodes != null && expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Count > 0, "Root node to load");
 
                 var rootNode = expTree.Nodes[0];
                 Assert.IsTrue(rootNode.IsExpanded, "Root should be expanded after load");

@@ -22,7 +22,10 @@ namespace ExpControlsLib
         private readonly BlockingCollection<IWorkItem> _queue = new();
         private readonly Thread[] _threads;
         private readonly CountdownEvent _ready;
+        private readonly string _threadNamePrefix;
+        private readonly object _threadStartGate = new();
         private readonly CancellationTokenSource _shutdownCts = new();
+        private volatile bool _threadsStarted;
         private volatile bool _disposed;
 
         public int StaThreadCount => _threads.Length;
@@ -40,27 +43,7 @@ namespace ExpControlsLib
 
             _threads = new Thread[staThreadCount];
             _ready = new CountdownEvent(staThreadCount);
-
-            string prefix = string.IsNullOrWhiteSpace(threadNamePrefix) ? "STA Runner" : threadNamePrefix;
-
-            Debug.WriteLine("Starting StaThreadRunner...");
-
-            for (int i = 0; i < staThreadCount; i++)
-            {
-                int workerIndex = i;
-                var thread = new Thread(() => ThreadMain(workerIndex))
-                {
-                    IsBackground = true,
-                    Name = $"{prefix} #{workerIndex}"
-                };
-
-                thread.SetApartmentState(ApartmentState.STA);
-                _threads[i] = thread;
-                thread.Start();
-                Debug.WriteLine("\tthread started." + DateTime.Now.ToString("HH:mm:ss.fff"));
-            }
-
-            _ready.Wait();
+            _threadNamePrefix = string.IsNullOrWhiteSpace(threadNamePrefix) ? "STA Runner" : threadNamePrefix;
         }
 
         /// <summary>
@@ -119,6 +102,8 @@ namespace ExpControlsLib
             if (cancellationToken.IsCancellationRequested)
                 return Task.FromCanceled<T>(cancellationToken);
 
+            EnsureThreadsStarted();
+
             var item = new WorkItem<T>(work, cancellationToken);
 
             try
@@ -161,6 +146,39 @@ namespace ExpControlsLib
             }
 
             return canceled;
+        }
+
+        private void EnsureThreadsStarted()
+        {
+            if (_threadsStarted)
+                return;
+
+            lock (_threadStartGate)
+            {
+                if (_threadsStarted)
+                    return;
+
+                ThrowIfDisposed();
+                Debug.WriteLine("Starting StaThreadRunner...");
+
+                for (int i = 0; i < _threads.Length; i++)
+                {
+                    int workerIndex = i;
+                    var thread = new Thread(() => ThreadMain(workerIndex))
+                    {
+                        IsBackground = true,
+                        Name = $"{_threadNamePrefix} #{workerIndex}"
+                    };
+
+                    thread.SetApartmentState(ApartmentState.STA);
+                    _threads[i] = thread;
+                    thread.Start();
+                    Debug.WriteLine("\tthread started." + DateTime.Now.ToString("HH:mm:ss.fff"));
+                }
+
+                _ready.Wait();
+                _threadsStarted = true;
+            }
         }
 
         private void ThreadMain(int workerIndex)
@@ -212,6 +230,9 @@ namespace ExpControlsLib
 
             foreach (var thread in _threads)
             {
+                if (thread == null)
+                    continue;
+
                 // Use a timeout instead of indefinite Join. If a thread is stuck in
                 // COM work that needs to marshal to the UI thread (which called Dispose),
                 // Join would deadlock. The timeout lets us bail out — the thread is a

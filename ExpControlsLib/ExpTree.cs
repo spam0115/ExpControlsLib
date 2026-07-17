@@ -751,6 +751,138 @@ namespace ExpControlsLib
         [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
         private static extern int SetWindowTheme(IntPtr hWnd, string pszSubAppName, string pszSubIdList);
 
+        private bool TryQueuePendingExpansion(CShellItem target, bool selectExpandedNode)
+        {
+            if (_rootLoadCts == null || _rootLoadCts.IsCancellationRequested)
+            {
+                return false;
+            }
+
+            _pendingExpansionItem = target;
+            _pendingSelectExpandedNode = selectExpandedNode;
+            return true;
+        }
+
+        private bool TryGetRootNodeForExpansion(CShellItem target, bool selectExpandedNode, out TreeNode? baseNode, out bool pendingQueued)
+        {
+            baseNode = _RootNode;
+            pendingQueued = false;
+
+            if (baseNode != null)
+            {
+                return true;
+            }
+
+            pendingQueued = TryQueuePendingExpansion(target, selectExpandedNode);
+            return false;
+        }
+
+        private static int GetExpansionDepthLimit(TreeNode baseNode, CShellItem target)
+        {
+            if (baseNode.Tag == null)
+            {
+                throw new InvalidOperationException("baseNode.Tag cannot be null.");
+            }
+
+            CShellItem baseItem = (CShellItem)baseNode.Tag;
+            return CPidl.SegmentCount(target.PIDL) - CPidl.SegmentCount(baseItem.PIDL);
+        }
+
+        private static bool TryFindAncestorChildNode(TreeNode baseNode, CShellItem target, out TreeNode? match)
+        {
+            foreach (TreeNode childNode in baseNode.Nodes)
+            {
+                if (childNode.Tag is CShellItem childItem && CPidl.IsAncestorOf(childItem, target, false))
+                {
+                    match = childNode;
+                    return true;
+                }
+            }
+
+            match = null;
+            return false;
+        }
+
+        private enum ExpandPathResolutionStatus
+        {
+            Success,
+            NotFound,
+            NotFolder,
+            Error
+        }
+
+        private ExpandPathResolutionStatus TryResolveExpandableItem(string newPath, out CShellItem? item, out Exception? error)
+        {
+            item = null;
+            error = null;
+
+            try
+            {
+                item = _shellController.HierachyManager.FindAndAllowExpansion(newPath);
+                if (item is null)
+                {
+                    return ExpandPathResolutionStatus.NotFound;
+                }
+
+                if (!item.IsFolder)
+                {
+                    item = null;
+                    return ExpandPathResolutionStatus.NotFolder;
+                }
+
+                return ExpandPathResolutionStatus.Success;
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+                return ExpandPathResolutionStatus.Error;
+            }
+        }
+
+        private void FinalizeExpandedNode(TreeNode baseNode, bool selectExpandedNode, bool focusControl)
+        {
+            _TreeView.HideSelection = false;
+            if (focusControl)
+            {
+                Select();
+            }
+
+            if (selectExpandedNode)
+            {
+                _TreeView.SelectedNode = baseNode;
+            }
+
+            baseNode.EnsureVisible();
+        }
+
+        private void WithTreeViewUpdate(Action action)
+        {
+            _TreeView.BeginUpdate();
+            try
+            {
+                action();
+            }
+            finally
+            {
+                _TreeView.EndUpdate();
+            }
+        }
+
+        private bool TryFindMatchingChildNode(TreeNode parentNode, CShellItem item, out TreeNode? matchNode)
+        {
+            foreach (TreeNode childNode in parentNode.Nodes)
+            {
+                if (NodeRepresentsItem(childNode, item))
+                {
+                    matchNode = childNode;
+                    return true;
+                }
+            }
+
+            matchNode = null;
+            return false;
+        }
+
         #region Public Methods
 
         /// <summary>
@@ -770,22 +902,13 @@ namespace ExpControlsLib
         /// ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
         public bool ExpandANode(string newPath, bool SelectExpandedNode = true)
         {
-            bool ExpandANodeRet = default;
-            ExpandANodeRet = false;
-            CShellItem newItem;
-            try
+            var resolution = TryResolveExpandableItem(newPath, out var newItem, out _);
+            if (resolution != ExpandPathResolutionStatus.Success)
             {
-                newItem = _shellController.HierachyManager.FindAndAllowExpansion(newPath);
-                if (newItem is null)
-                    return ExpandANodeRet;
-                if (!newItem.IsFolder)
-                    return ExpandANodeRet;
+                return false;
             }
-            catch
-            {
-                return ExpandANodeRet;
-            }
-            return ExpandANode(newItem, SelectExpandedNode);
+
+            return ExpandANode(newItem!, SelectExpandedNode);
         }
 
         /// <summary>
@@ -804,28 +927,12 @@ namespace ExpControlsLib
         /// ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
         public bool ExpandANode(CShellItem newItem, bool SelectExpandedNode = true)
         {
-            bool ExpandANodeRet = default;
-            ExpandANodeRet = false;
-            var baseNode = _RootNode;
-            if (baseNode == null)
+            if (!TryGetRootNodeForExpansion(newItem, SelectExpandedNode, out var baseNode, out var pendingQueued))
             {
-                if (_rootLoadCts != null && !_rootLoadCts.IsCancellationRequested)
-                {
-                    _pendingExpansionItem = newItem;
-                    _pendingSelectExpandedNode = SelectExpandedNode;
-                    return true;
-                }
-                return false;
+                return pendingQueued;
             }
 
-            if (baseNode.Tag == null)
-            {
-                throw new InvalidOperationException("baseNode.Tag cannot be null.");
-            }
-
-            CShellItem baseItem = (CShellItem)baseNode.Tag;
-            IntPtr basePidl = baseItem.PIDL;
-            int lim = CPidl.SegmentCount(newItem.PIDL) - CPidl.SegmentCount(basePidl);
+            int lim = GetExpansionDepthLimit(baseNode, newItem);
 
             try
             {
@@ -835,34 +942,20 @@ namespace ExpControlsLib
 
                 while (lim > 0)
                 {
-                    bool continueDo = false;
-                    foreach (TreeNode testNode in baseNode.Nodes)
+                    if (TryFindAncestorChildNode(baseNode, newItem, out var match))
                     {
-                        if (CPidl.IsAncestorOf((CShellItem)testNode.Tag, newItem, false))
-                        {
-                            baseNode = testNode;
-                            baseNode.Expand();
-                            lim -= 1;
-                            continueDo = true;
-                            break;
-                        }
-                    }
-
-                    if (continueDo)
-                    {
+                        baseNode = match!;
+                        baseNode.Expand();
+                        lim -= 1;
                         continue;
                     }
-                    goto XIT;     // on falling thru For, we can't find it, so get out
+
+                    baseNode.EnsureVisible();
+                    return false;
                 }
-                // after falling thru here, we have found & expanded the node
-                _TreeView.HideSelection = false;
-                Select();
-                if (SelectExpandedNode)
-                    _TreeView.SelectedNode = baseNode;
-                ExpandANodeRet = true;
-            XIT:
-                baseNode.EnsureVisible();
-                return ExpandANodeRet;
+
+                FinalizeExpandedNode(baseNode, SelectExpandedNode, focusControl: true);
+                return true;
             }
             finally
             {
@@ -891,29 +984,24 @@ namespace ExpControlsLib
 
             //await Task.Delay(5000);
 
-            CShellItem csi;
-            try
+            var resolution = TryResolveExpandableItem(newPath, out var csi, out var error);
+            switch (resolution)
             {
-                csi = _shellController.HierachyManager.FindAndAllowExpansion(newPath);
-                if (csi is null)
-                {
+                case ExpandPathResolutionStatus.NotFound:
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): csi is null for '{newPath}'");
                     return false;
-                }
-                if (!csi.IsFolder)
-                {
+
+                case ExpandPathResolutionStatus.NotFolder:
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): csi is not a folder for '{newPath}'");
                     return false;
-                }
 
-                await _loadingRootTask;
-                return await ExpandANodeBaseAsync(csi, SelectExpandedNode);
+                case ExpandPathResolutionStatus.Error:
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): ERROR - {error}");
+                    return false;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeAsync(string): ERROR - {ex}");
-                return false;
-            }
+
+            await _loadingRootTask;
+            return await ExpandANodeBaseAsync(csi!, SelectExpandedNode);
         }
 
         /// <summary>
@@ -946,30 +1034,17 @@ namespace ExpControlsLib
         private async Task<bool> ExpandANodeBaseAsync(CShellItem target, bool SelectExpandedNode = true)
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: Begin for '{target.DisplayName}'");
-            var baseNode = _RootNode;
-            if (baseNode == null)
+            if (!TryGetRootNodeForExpansion(target, SelectExpandedNode, out var baseNode, out var pendingQueued))
             {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: _Root is null");
-                // If a load is in progress, store as pending
-                if (_rootLoadCts != null && !_rootLoadCts.IsCancellationRequested)
+                if (pendingQueued)
                 {
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: Storing as pending expansion");
-                    _pendingExpansionItem = target;
-                    _pendingSelectExpandedNode = SelectExpandedNode;
-                    return true;
                 }
-                return false;
+                return pendingQueued;
             }
 
-            // Get the pidl value from baseNode.Tag by casting to CShellItem
-            if (baseNode.Tag == null)
-            {
-                throw new InvalidOperationException("baseNode.Tag cannot be null.");
-            }
-
-            CShellItem baseItem = (CShellItem)baseNode.Tag;
-            IntPtr basePidl = baseItem.PIDL;
-            int depthLimit = CPidl.SegmentCount(target.PIDL) - CPidl.SegmentCount(basePidl); //drill down limit
+            int depthLimit = GetExpansionDepthLimit(baseNode, target); //drill down limit
 
             try
             {
@@ -978,45 +1053,28 @@ namespace ExpControlsLib
                 {
                     await PopulateNodeAsync(baseNode);
                 }
-                _TreeView.BeginUpdate();
-                baseNode.Expand();
-                _TreeView.EndUpdate();
+                WithTreeViewUpdate(() => baseNode.Expand());
 
                 while (depthLimit > 0)
                 {
-                    bool continueWhile = false;
-                    foreach (TreeNode currentNode in baseNode.Nodes)
+                    if (TryFindAncestorChildNode(baseNode, target, out var match))
                     {
-                        if (CPidl.IsAncestorOf((CShellItem)currentNode.Tag, target, false))
+                        baseNode = match!;
+                        if (baseNode.Nodes.Count == 1 && baseNode.Nodes[0].Text == DummyText) //has a dummy node that needs expansion
                         {
-                            baseNode = currentNode;
-                            if (baseNode.Nodes.Count == 1 && baseNode.Nodes[0].Text == DummyText) //has a dummy node that needs expansion
-                            {
-                                await PopulateNodeAsync(baseNode);
-                            }
-                            _TreeView.BeginUpdate();
-                            baseNode.Expand();
-                            _TreeView.EndUpdate();
-                            depthLimit -= 1;
-                            continueWhile = true;
-                            break;
+                            await PopulateNodeAsync(baseNode);
                         }
+                        WithTreeViewUpdate(() => baseNode.Expand());
+                        depthLimit -= 1;
+                        continue;
                     }
-
-                    if (continueWhile) continue;
 
                     //fall through due to failure to find 
                     baseNode.EnsureVisible(); 
                     return false;
                 }
 
-                _TreeView.BeginUpdate();
-                _TreeView.HideSelection = false;
-                if (SelectExpandedNode)
-                    _TreeView.SelectedNode = baseNode;
-
-                baseNode.EnsureVisible();
-                _TreeView.EndUpdate();
+                WithTreeViewUpdate(() => FinalizeExpandedNode(baseNode, SelectExpandedNode, focusControl: false));
 
                 //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: End - success");
                 return true;
@@ -1069,7 +1127,12 @@ namespace ExpControlsLib
         /// <summary>
         /// Navigates back to the previous folder in the history.
         /// </summary>
-        public async void GoBack()
+        public void GoBack()
+        {
+            _ = GoBackAsync();
+        }
+
+        public async Task GoBackAsync()
         {
             if (_backHistory.Count > 0)
             {
@@ -1090,7 +1153,12 @@ namespace ExpControlsLib
         /// <summary>
         /// Navigates forward to the next folder in the history.
         /// </summary>
-        public async void GoForward()
+        public void GoForward()
+        {
+            _ = GoForwardAsync();
+        }
+
+        public async Task GoForwardAsync()
         {
             if (_forwardHistory.Count > 0)
             {
@@ -1111,7 +1179,12 @@ namespace ExpControlsLib
         /// <summary>
         /// Navigates to the parent folder of the currently loaded folder.
         /// </summary>
-        public async void GoUp()
+        public void GoUp()
+        {
+            _ = GoUpAsync();
+        }
+
+        public async Task GoUpAsync()
         {
             if (_lastSelectedCSI?.Parent != null)
             {
@@ -1167,163 +1240,139 @@ namespace ExpControlsLib
                 {
                     CShellItem parent = e.Item.Parent;
                     TreeNode? pNode = default(TreeNode);
-                    if (GetTreeNode(parent, ref pNode))
+                    if (!GetTreeNode(parent, ref pNode))
                     {
-                        switch (e.UpdateType)
-                        {
-                            case CShItemUpdateType.Created:  // A new Dir has been created under Parent/pNode
-                                {
-                                    if (IsExcluded(e.Item)) break;
-                                    var Node = MakeNode(e.Item);
-                                    InsertNode(Node, pNode);
-                                    break;
-                                }
-                            case CShItemUpdateType.Deleted:  // An old Dir has been deleted from Parent/pNode
-                                {
-                                    bool exitSelect = false;
-                                    foreach (TreeNode Node in pNode.Nodes)
-                                    {
-                                        if (Node.Tag is not null && (ReferenceEquals(Node.Tag, e.Item) || CPidl.ResolvesToSamePathOrName(((CShellItem)Node.Tag).PIDL, e.Item.PIDL)))
-                                        {
-                                            pNode.Nodes.Remove(Node);
-                                            exitSelect = true;
-                                            break;
-                                        }
-                                    }
+                        return;
+                    }
 
-                                    if (exitSelect)
-                                    {
-                                        ExpTreeDeleted?.Invoke(e.Item);
-                                        break;
-                                    }
-
-                                    break;
-                                }
-                            // In the Renamed case, pnode is the Parent CShellItem Before the rename,
-                            // get the current Parent CShellItem from the renamed CShellItem(e.Item)
-                            case CShItemUpdateType.Renamed:  // A directory has been renamed under Parent/pNode
-                                {
-                                    var curPNode = default(TreeNode);
-                                    bool exitSelect1 = false;
-                                    foreach (TreeNode Node in pNode.Nodes)
-                                    {
-                                        if (Node.Tag is not null && (ReferenceEquals(Node.Tag, e.Item) || CPidl.ResolvesToSamePathOrName(((CShellItem)Node.Tag).PIDL, e.Item.PIDL)))
-                                        {
-                                            bool wasSelected = ReferenceEquals(_TreeView.SelectedNode, Node);
-                                            Node.Text = e.Item.DisplayName;
-                                            pNode.Nodes.Remove(Node);
-
-                                            if (IsExcluded(e.Item))
-                                            {
-                                                exitSelect1 = true;
-                                                break;
-                                            }
-
-                                            if (GetTreeNode(e.Item.Parent, ref curPNode))
-                                            {
-                                                InsertNode(Node, curPNode);
-                                                if (wasSelected)
-                                                {
-                                                    _TreeView.SelectedNode = Node;
-                                                    Node.EnsureVisible();
-                                                }
-                                            }
-                                            exitSelect1 = true;
-                                            break;
-                                        }
-                                    }
-
-                                    if (exitSelect1)
-                                    {
-                                        break;
-                                    }
-
-                                    break;
-                                }
-                            case CShItemUpdateType.MediaChange:
-                                {
-                                    bool exitSelect2 = false;
-                                    for (int indx = 0, loopTo = pNode.Nodes.Count - 1; indx <= loopTo; indx++)
-                                    {
-                                        var node = pNode.Nodes[indx];
-                                        if (node.Tag is not null && (ReferenceEquals(node.Tag, e.Item) || CPidl.ResolvesToSamePathOrName(((CShellItem)node.Tag).PIDL, e.Item.PIDL)))
-                                        {
-                                            CShellItem item = (CShellItem)node.Tag;
-                                            bool wasExpanded = node.IsExpanded;
-                                            if (wasExpanded)
-                                            {
-                                                node.ImageIndex = item.IconIndexOpen;
-                                            }
-                                            else
-                                            {
-                                                node.ImageIndex = item.IconIndexNormal;
-                                            }
-                                            node.Collapse(false);
-                                            node.Nodes.Clear();
-                                            if (ShouldHaveDummy(item))
-                                            {
-                                                node.Nodes.Add(new TreeNode(DummyText));
-                                            }
-                                            if (wasExpanded)
-                                                node.Expand();
-                                            _TreeView.Invalidate();
-                                            if (ReferenceEquals(node, _TreeView.SelectedNode))
-                                            {
-                                                if (e.Item.FullPath.StartsWith(":"))
-                                                {
-                                                    ExpTreeNodeSelected?.Invoke(e.Item.DisplayName, e.Item);
-                                                }
-                                                else
-                                                {
-                                                    ExpTreeNodeSelected?.Invoke(e.Item.FullPath, e.Item);
-                                                }
-                                            }
-                                            exitSelect2 = true;
-                                            break;
-                                        }
-                                    }
-
-                                    if (exitSelect2)
-                                    {
-                                        break;
-                                    }
-
-                                    break;
-                                }
-                            case CShItemUpdateType.Updated:
-                                {
-                                    var UNode = default(TreeNode);
-                                    if (GetTreeNode(e.Item, ref UNode))
-                                    {
-                                        if (UNode.Nodes.Count == 0)
-                                        {
-                                            if (ShouldHaveDummy(e.Item))
-                                            {
-                                                UNode.Nodes.Add(new TreeNode(DummyText));
-                                            }
-                                            UNode.Collapse(false);
-                                        }
-                                        else if (UNode.Nodes.Count == 1 && UNode.Nodes[0].Text.Equals(DummyText))
-                                        {
-                                            if (!ShouldHaveDummy(e.Item))
-                                            {
-                                                UNode.Nodes.Clear();
-                                            }
-                                        }
-                                    }
-
-                                    break;
-                                }
-
-                            default:
-                                break;
-                        }
+                    switch (e.UpdateType)
+                    {
+                        case CShItemUpdateType.Created:
+                            HandleCreatedUpdate(e.Item, pNode);
+                            break;
+                        case CShItemUpdateType.Deleted:
+                            HandleDeletedUpdate(e.Item, pNode);
+                            break;
+                        case CShItemUpdateType.Renamed:
+                            HandleRenamedUpdate(e.Item, pNode);
+                            break;
+                        case CShItemUpdateType.MediaChange:
+                            HandleMediaChangeUpdate(e.Item, pNode);
+                            break;
+                        case CShItemUpdateType.Updated:
+                            HandleUpdatedUpdate(e.Item);
+                            break;
+                        default:
+                            break;
                     }
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine("ExpTree Update Error -- " + ex.ToString());
                 }
+            }
+        }
+
+        private void HandleCreatedUpdate(CShellItem item, TreeNode parentNode)
+        {
+            if (IsExcluded(item))
+            {
+                return;
+            }
+
+            var node = MakeNode(item);
+            InsertNode(node, parentNode);
+        }
+
+        private void HandleDeletedUpdate(CShellItem item, TreeNode parentNode)
+        {
+            if (!TryFindMatchingChildNode(parentNode, item, out var nodeToDelete))
+            {
+                return;
+            }
+
+            parentNode.Nodes.Remove(nodeToDelete);
+            ExpTreeDeleted?.Invoke(item);
+        }
+
+        private void HandleRenamedUpdate(CShellItem item, TreeNode parentNode)
+        {
+            if (!TryFindMatchingChildNode(parentNode, item, out var renamedNode))
+            {
+                return;
+            }
+
+            bool wasSelected = ReferenceEquals(_TreeView.SelectedNode, renamedNode);
+            renamedNode.Text = item.DisplayName;
+            parentNode.Nodes.Remove(renamedNode);
+
+            if (IsExcluded(item))
+            {
+                return;
+            }
+
+            TreeNode? currentParentNode = default;
+            if (GetTreeNode(item.Parent, ref currentParentNode))
+            {
+                InsertNode(renamedNode, currentParentNode);
+                if (wasSelected)
+                {
+                    _TreeView.SelectedNode = renamedNode;
+                    renamedNode.EnsureVisible();
+                }
+            }
+        }
+
+        private void HandleMediaChangeUpdate(CShellItem item, TreeNode parentNode)
+        {
+            if (!TryFindMatchingChildNode(parentNode, item, out var node))
+            {
+                return;
+            }
+
+            CShellItem nodeItem = (CShellItem)node.Tag;
+            bool wasExpanded = node.IsExpanded;
+            node.ImageIndex = wasExpanded ? nodeItem.IconIndexOpen : nodeItem.IconIndexNormal;
+            node.Collapse(false);
+            node.Nodes.Clear();
+            if (ShouldHaveDummy(nodeItem))
+            {
+                node.Nodes.Add(new TreeNode(DummyText));
+            }
+
+            if (wasExpanded)
+            {
+                node.Expand();
+            }
+
+            _TreeView.Invalidate();
+            if (ReferenceEquals(node, _TreeView.SelectedNode))
+            {
+                RaiseExpTreeNodeSelected(item);
+            }
+        }
+
+        private void HandleUpdatedUpdate(CShellItem item)
+        {
+            TreeNode? updatedNode = default;
+            if (!GetTreeNode(item, ref updatedNode))
+            {
+                return;
+            }
+
+            if (updatedNode.Nodes.Count == 0)
+            {
+                if (ShouldHaveDummy(item))
+                {
+                    updatedNode.Nodes.Add(new TreeNode(DummyText));
+                }
+                updatedNode.Collapse(false);
+                return;
+            }
+
+            if (updatedNode.Nodes.Count == 1 && updatedNode.Nodes[0].Text.Equals(DummyText) && !ShouldHaveDummy(item))
+            {
+                updatedNode.Nodes.Clear();
             }
         }
 
@@ -1342,12 +1391,9 @@ namespace ExpControlsLib
         /// </param>
         private void BuildTree(TreeNode rootNode, IEnumerable<CShellItem> itemsList)
         {
-            foreach (var csi in itemsList)
+            foreach (var csi in EnumerateDisplayItems(itemsList))
             {
-                if (!(csi.IsHidden & !m_showHiddenFolders) && !IsExcluded(csi))
-                {
-                    rootNode.Nodes.Add(MakeNode(csi));
-                }
+                rootNode.Nodes.Add(MakeNode(csi));
             }
         }
 
@@ -1539,14 +1585,7 @@ namespace ExpControlsLib
 
             if (EnableEventPost) // turned off during RefreshTree
             {
-                if (csi.FullPath.StartsWith(":"))
-                {
-                    ExpTreeNodeSelected?.Invoke(csi.DisplayName, csi);
-                }
-                else
-                {
-                    ExpTreeNodeSelected?.Invoke(csi.FullPath, csi);
-                }
+                RaiseExpTreeNodeSelected(csi);
             }
         }
 
@@ -1565,7 +1604,7 @@ namespace ExpControlsLib
                 TreeNode tn;
                 var pt = PointToClient(MousePosition);
                 tn = _TreeView.GetNodeAt(pt);
-                if (m_useWindowsContextMenu & !(tn == null))
+                if (m_useWindowsContextMenu && tn != null)
                 {
                     var itms = new CShellItem[1];
                     itms[0] = (CShellItem)tn.Tag;
@@ -1596,26 +1635,29 @@ namespace ExpControlsLib
                                     newFolderPath = System.IO.Path.Combine(parentPath, $"{newFolderName} ({counter})");
                                 }
                                 System.IO.Directory.CreateDirectory(newFolderPath);
+                               
+                                if (tn.Tag is null)
+                                {
+                                    Debug.WriteLine("ExpTree.Tv1_MouseUp: TreeNode tag is null.  Cannot proceed.");
+                                    return;
+                                }
 
                                 CShellItem parentCsi = (CShellItem)tn.Tag;
                                 var flags = SHCONTF.FOLDERS;
                                 if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-                                _shellController.LoadFolderContents(parentCsi, flags);
+                                _shellController.EnsureChildrenPopulatedAndRecent(parentCsi, flags);
 
                                 tn.Collapse(false);
                                 tn.Nodes.Clear();
                                 var dirs = parentCsi.Directories;
                                 dirs.Sort();
                                 TreeNode? newNode = null;
-                                foreach (CShellItem child in dirs)
+                                foreach (CShellItem child in EnumerateDisplayItems(dirs))
                                 {
-                                    if (!(child.IsHidden & !m_showHiddenFolders) && !IsExcluded(child))
-                                    {
-                                        var node = MakeNode(child);
-                                        tn.Nodes.Add(node);
-                                        if (string.Equals(child.FullPath, newFolderPath, StringComparison.OrdinalIgnoreCase))
-                                            newNode = node;
-                                    }
+                                    var node = MakeNode(child);
+                                    tn.Nodes.Add(node);
+                                    if (string.Equals(child.FullPath, newFolderPath, StringComparison.OrdinalIgnoreCase))
+                                        newNode = node;
                                 }
 
                                 if (newNode is not null)
@@ -1932,28 +1974,29 @@ namespace ExpControlsLib
                 DropHandler.ShDragOver -= DragWrapper_ShDragOver;
                 try
                 {
-                    _TreeView.BeginUpdate();
-                    dropNode.Expand();
-                    int delta = _TreeView.Height - NodePoint.Y;
-                    if (delta < _TreeView.Height / 2d & delta > 0)
+                    WithTreeViewUpdate(() =>
                     {
-                        if (!(dropNode == null) && dropNode.NextVisibleNode is not null)
+                        dropNode.Expand();
+                        int delta = _TreeView.Height - NodePoint.Y;
+                        if (delta < _TreeView.Height / 2d && delta > 0)
                         {
-                            dropNode.NextVisibleNode.EnsureVisible();
+                            if (dropNode.NextVisibleNode is not null)
+                            {
+                                dropNode.NextVisibleNode.EnsureVisible();
+                            }
                         }
-                    }
-                    if (delta > _TreeView.Height / 2d & delta < _TreeView.Height)
-                    {
-                        if (!(dropNode == null) && dropNode.PrevVisibleNode is not null)
+                        if (delta > _TreeView.Height / 2d && delta < _TreeView.Height)
                         {
-                            dropNode.PrevVisibleNode.EnsureVisible();
+                            if (dropNode.PrevVisibleNode is not null)
+                            {
+                                dropNode.PrevVisibleNode.EnsureVisible();
+                            }
                         }
-                    }
-                    dropNode.EnsureVisible();
+                        dropNode.EnsureVisible();
+                    });
                 }
                 finally
                 {
-                    _TreeView.EndUpdate();
                     DropHandler.ShDragOver += DragWrapper_ShDragOver;
                 }
             }
@@ -2001,20 +2044,15 @@ namespace ExpControlsLib
                 }
 
                 expandNodeTimer.Stop(); // not over previous node anymore
-                try
+                WithTreeViewUpdate(() =>
                 {
-                    _TreeView.BeginUpdate();
                     if (!Node.BackColor.Equals(SystemColors.Highlight))
                     {
                         ResetTreeviewNodeColor(_TreeView.Nodes[0]);
                         Node.BackColor = SystemColors.Highlight;
                         Node.ForeColor = SystemColors.HighlightText;
                     }
-                }
-                finally
-                {
-                    _TreeView.EndUpdate();
-                }
+                });
                 dropNode = Node;     // dropNode is the Saved Global version of Node
                 NodePoint = pt;      // 7/12/2012 NodePoint is the Saved, Form Global Mouse Location (in client coordinates)
                 if (!dropNode.IsExpanded)
@@ -2406,7 +2444,7 @@ namespace ExpControlsLib
 
             var flags = SHCONTF.FOLDERS;
             if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-            _shellController.EnsureChildrenPopulated(csi, flags);
+            _shellController.EnsureChildrenPopulatedAndRecent(csi, flags);
 
             var dirs = csi.Directories;
 
@@ -2414,12 +2452,9 @@ namespace ExpControlsLib
             {
                 dirs.Sort();
                 NodeToFill.Nodes.Clear();
-                foreach (CShellItem item in dirs)
+                foreach (CShellItem item in EnumerateDisplayItems(dirs))
                 {
-                    if (!(item.IsHidden & !m_showHiddenFolders) && !IsExcluded(item))
-                    {
-                        NodeToFill.Nodes.Add(MakeNode(item));
-                    }
+                    NodeToFill.Nodes.Add(MakeNode(item));
                 }
             }
             else
@@ -2461,9 +2496,9 @@ namespace ExpControlsLib
                 _RootNode.SelectedImageIndex = csi.IconIndexOpen;
                 _RootNode.Tag = csi;
 
-                _TreeView.Nodes.Add(_RootNode);
                 await PopulateNodeAsync(_RootNode, token);
-
+                _TreeView.Nodes.Add(_RootNode);
+                _RootNode.Expand();
             }
             catch (OperationCanceledException) { Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.SetRootItemAsync: Cancelled"); }
             catch (Exception ex)
@@ -2483,7 +2518,7 @@ namespace ExpControlsLib
 
             var flags = SHCONTF.FOLDERS;
             if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-            _shellController.EnsureChildrenPopulated(target, flags);
+            _shellController.EnsureChildrenPopulatedAndRecent(target, flags);
 
             var children = target.Directories;
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateChildFolders: Warming up {children.Count} children...");
@@ -2635,6 +2670,52 @@ namespace ExpControlsLib
                 SB.Append(@"\");
             }
             return SB.ToString();
+        }
+
+        /// <summary>
+        /// Determines whether the specified <see cref="CShellItem"/> should be shown in the tree.
+        /// </summary>
+        private bool ShouldDisplayItem(CShellItem item)
+        {
+            return !(item.IsHidden && !m_showHiddenFolders) && !IsExcluded(item);
+        }
+
+        /// <summary>
+        /// Enumerates only the items that should be displayed in the tree.
+        /// </summary>
+        private IEnumerable<CShellItem> EnumerateDisplayItems(IEnumerable<CShellItem> items)
+        {
+            foreach (var item in items)
+            {
+                if (ShouldDisplayItem(item))
+                {
+                    yield return item;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Determines whether a <see cref="TreeNode"/> represents the specified <see cref="CShellItem"/>.
+        /// </summary>
+        private bool NodeRepresentsItem(TreeNode node, CShellItem item)
+        {
+            if (node.Tag is not CShellItem nodeItem) return false;
+            return ReferenceEquals(nodeItem, item) || CPidl.ResolvesToSamePathOrName(nodeItem.PIDL, item.PIDL);
+        }
+
+        /// <summary>
+        /// Raises <see cref="ExpTreeNodeSelected"/> with the expected path/display payload.
+        /// </summary>
+        private void RaiseExpTreeNodeSelected(CShellItem item)
+        {
+            if (item.FullPath.StartsWith(":"))
+            {
+                ExpTreeNodeSelected?.Invoke(item.DisplayName, item);
+            }
+            else
+            {
+                ExpTreeNodeSelected?.Invoke(item.FullPath, item);
+            }
         }
 
         /// <summary>

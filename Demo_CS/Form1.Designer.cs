@@ -69,7 +69,6 @@
             // 
             // expList1
             // 
-            this.expList1.CurrentPath = "Desktop";
             this.expList1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.expList1.Location = new System.Drawing.Point(0, 0);
             this.expList1.Name = "expList1";
