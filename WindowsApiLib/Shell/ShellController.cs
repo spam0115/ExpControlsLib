@@ -2,9 +2,10 @@
 
 namespace WindowsApiLib.Shell
 {
-    public class ShellController
+    public class ShellController : IDisposable
     {
         private static ShellController _instance = null;
+        private bool _disposed;
 
         public static ShellController Instance
         {
@@ -12,7 +13,7 @@ namespace WindowsApiLib.Shell
             {
                 if (_instance is null)
                 {
-                    _instance = new ShellController();
+                    _instance = new ShellController(useSharedDesktopRoot: true);
                 }
                 
                 return _instance;
@@ -28,10 +29,21 @@ namespace WindowsApiLib.Shell
         /// </summary>
         public static CShellItem? DesktopCSI { get; internal set; }
 
-        private ShellController() {
+        /// <summary>
+        /// Creates a controller with its own shell hierarchy and update service.
+        /// Callers that construct a controller are responsible for disposing it.
+        /// </summary>
+        public ShellController() : this(useSharedDesktopRoot: false)
+        {
+        }
+
+        private ShellController(bool useSharedDesktopRoot) {
             CShellItemFactory.Initialize(); //force the constructor to run
             DesktopCSI = CShellItemFactory.DesktopCSI;
-            HierachyManager = new CShellItemHierachyManager(DesktopCSI, DesktopCSI);
+            var hierarchyDesktop = useSharedDesktopRoot
+                ? DesktopCSI
+                : CShellItemFactory.Create(CSIDL.DESKTOP);
+            HierachyManager = new CShellItemHierachyManager(hierarchyDesktop, hierarchyDesktop);
             ShellUpdater = new CShellItemUpdater(HierachyManager, (uint)SHCNE.DISKEVENTS);
         }
 
@@ -39,7 +51,7 @@ namespace WindowsApiLib.Shell
         { 
             if (_instance == null)
             {
-                _instance = new ShellController();
+                _instance = new ShellController(useSharedDesktopRoot: true);
             }
             return _instance;
         }
@@ -65,6 +77,13 @@ namespace WindowsApiLib.Shell
             if (!wantFiles && !wantFolders) return;
 
             csi.LoadFolderContents(wantFiles, wantFolders);
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            ShellUpdater.Dispose();
         }
 
     }

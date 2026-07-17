@@ -2,6 +2,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WindowsApiLib.Shell;
 using WindowsApiLib;
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using ExpControlsLib;
 using static WindowsApiLib.Shell.ShellAPI;
@@ -23,34 +24,33 @@ namespace WindowsApiLibTest
             await Runner.EnqueueWork(() =>
             {
                 var controller = ShellController.Instance;
-                var windowsDir = CShellItemFactory.Create(CSIDL.WINDOWS);
-                Assert.IsNotNull(windowsDir, "windowsDir should not be null.");
+                string tempDir = Path.Combine(Path.GetTempPath(), "ShellControllerCache_" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(tempDir);
+                File.WriteAllText(Path.Combine(tempDir, "known-file.txt"), "test");
+                try
+                {
+                    var folder = CShellItemFactory.Create(tempDir);
+                    Assert.IsNotNull(folder, "The temporary folder item should not be null.");
 
-                controller.EnsureChildrenPopulatedAndRecent(windowsDir, SHCONTF.NONFOLDERS);
+                    controller.EnsureChildrenPopulatedAndRecent(folder, SHCONTF.NONFOLDERS);
+                    var firstItem = folder.Files.FirstOrDefault(o => string.Equals(o.DisplayName, "known-file.txt", StringComparison.OrdinalIgnoreCase));
+                    Assert.IsNotNull(firstItem, "The known file should exist after the first load.");
 
-                Assert.IsTrue(windowsDir.FilesInitialized, "Files should be initialized after first call.");
-                Assert.IsTrue(windowsDir.Files?.Count > 0, "Windows directory should contain some items.");
+                    controller.EnsureChildrenPopulatedAndRecent(folder, SHCONTF.NONFOLDERS);
+                    var secondItem = folder.Files.FirstOrDefault(o => string.Equals(o.DisplayName, "known-file.txt", StringComparison.OrdinalIgnoreCase));
+                    Assert.AreSame(firstItem, secondItem, "Within the timeout, cached item references should be reused.");
 
-                CShellItem? firstNotepad = null;
-                firstNotepad = windowsDir.Files.Where(o => string.Equals(o.DisplayName, "notepad.exe", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-                Assert.IsNotNull(firstNotepad, "notepad.exe should exist in C:\\Windows.");
+                    Thread.Sleep(ShellController.FolderTimeout * 1000);
+                    controller.EnsureChildrenPopulatedAndRecent(folder, SHCONTF.NONFOLDERS);
+                    var thirdItem = folder.Files.FirstOrDefault(o => string.Equals(o.DisplayName, "known-file.txt", StringComparison.OrdinalIgnoreCase));
 
-                controller.EnsureChildrenPopulatedAndRecent(windowsDir, SHCONTF.NONFOLDERS);
-
-                CShellItem? secondNotepad = null;
-                secondNotepad = windowsDir.Files.Where(o => string.Equals(o.DisplayName, "notepad.exe", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-                Assert.IsNotNull(secondNotepad, "notepad.exe should still exist after second call.");
-                Assert.AreSame(firstNotepad, secondNotepad, "Within timeout, EnsureChildrenPopulated should return the same cached item references.");
-
-                Thread.Sleep(ShellController.FolderTimeout * 1000);
-
-                controller.EnsureChildrenPopulatedAndRecent(windowsDir, SHCONTF.NONFOLDERS);
-
-                CShellItem? thirdNotepad = null;
-                thirdNotepad = windowsDir.Files.Where(o => string.Equals(o.DisplayName, "notepad.exe", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-
-                Assert.IsNotNull(thirdNotepad, "notepad.exe should still exist after third call.");
-                Assert.AreNotSame(firstNotepad, thirdNotepad, "After cache expiry, EnsureChildrenPopulated should reload and produce new item references.");
+                    Assert.IsNotNull(thirdItem, "The known file should still exist after cache expiry.");
+                    Assert.AreNotSame(firstItem, thirdItem, "After cache expiry, loading should produce new item references.");
+                }
+                finally
+                {
+                    if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+                }
             });
         }
 

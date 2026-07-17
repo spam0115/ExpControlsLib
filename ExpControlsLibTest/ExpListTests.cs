@@ -1,12 +1,4 @@
 using ExpControlsLib;
-using NUnit.Framework;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
 
@@ -16,27 +8,47 @@ namespace ExpControlsLibTest
     [Apartment(ApartmentState.STA)]
     public class ExpListTests
     {
+        private ShellController _shellController = null!;
 
         [SetUp]
         public void SetUp()
         {
+            _shellController = new ShellController();
             TestContext.Progress.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Test Started : {TestContext.CurrentContext.Test.Name}");
         }
 
         [TearDown]
         public void TearDown()
         {
+            _shellController.Dispose();
             TestContext.Progress.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Test Finished: {TestContext.CurrentContext.Test.Name}");
         }
 
+        [Test]
+        public void ExpListInitializeTwiceThrows()
+        {
+            using var expList = new ExpList();
+            expList.Initialize(_shellController);
 
-        [TestCase(ExpTree.StartDir.Desktop)]
-        [TestCase(ExpTree.StartDir.MyComputer)]
-        [TestCase(ExpTree.StartDir.Windows)]
+            Assert.Throws<InvalidOperationException>(() => expList.Initialize(_shellController));
+        }
+
+        [Test]
+        public void ExpTreeInitializeTwiceThrows()
+        {
+            using var expTree = new ExpTree();
+            expTree.Initialize(_shellController);
+
+            Assert.Throws<InvalidOperationException>(() => expTree.Initialize(_shellController));
+        }
+
+
+        [TestCase(ExpTree.StartDir.Profile)]
+        [TestCase(ExpTree.StartDir.ApplicatationData)]
         public async Task TestInitialLoad(ExpTree.StartDir startDir)
         {
             var expList = new ExpList();
-            expList.Initialize(ShellController.Instance);
+            expList.Initialize(_shellController);
             
             // Host it in a form to ensure handle is created
             using var form = new Form();
@@ -61,6 +73,7 @@ namespace ExpControlsLibTest
                 Application.DoEvents(); 
             }
 
+            Assert.That(expList.CurrentFolderCsi, Is.Not.Null, $"{startDir} should be loaded.");
             Assert.IsTrue(loaded, $"Items should be loaded for {startDir}.");
             Assert.That(expList.Count, Is.GreaterThan(0), "Items should be present.");
         }
@@ -69,7 +82,7 @@ namespace ExpControlsLibTest
         public async Task TestNavigationHistory()
         {
             var expList = new ExpList();
-            expList.Initialize(ShellController.Instance);
+            expList.Initialize(_shellController);
 
             // Host it in a form to ensure handle is created
             using var form = new Form();
@@ -77,18 +90,18 @@ namespace ExpControlsLibTest
             form.Show();
 
             // 1. Load first folder
-            var windowsCsi = CShellItemFactory.Create(CSIDL.WINDOWS);
-            await expList.LoadDirectoryAsync(windowsCsi);
+            var userProfileCsi = CShellItemFactory.Create(CSIDL.PROFILE);
+            await expList.LoadDirectoryAsync(userProfileCsi);
             
-            Assert.That(expList.CurrentPath, Is.EqualTo(windowsCsi.FullPath), "First folder should be loaded.");
+            Assert.That(expList.CurrentPath, Is.EqualTo(userProfileCsi.FullPath), "First folder should be loaded.");
             Assert.IsFalse(expList.CanGoBack, "CanGoBack should be false after first load.");
             Assert.IsFalse(expList.CanGoForward, "CanGoForward should be false after first load.");
 
             // 2. Load second folder
-            var systemCsi = CShellItemFactory.Create(CSIDL.SYSTEM);
-            await expList.LoadDirectoryAsync(systemCsi);
+            var myDocumentsCsi = CShellItemFactory.Create(CSIDL.MYDOCUMENTS);
+            await expList.LoadDirectoryAsync(myDocumentsCsi);
 
-            Assert.That(expList.CurrentPath, Is.EqualTo(systemCsi.FullPath), "Second folder should be loaded.");
+            Assert.That(expList.CurrentPath, Is.EqualTo(myDocumentsCsi.FullPath), "Second folder should be loaded.");
             Assert.IsTrue(expList.CanGoBack, "CanGoBack should be true after second load.");
             Assert.IsFalse(expList.CanGoForward, "CanGoForward should be false after second load.");
 
@@ -107,7 +120,7 @@ namespace ExpControlsLibTest
             }
 
             Assert.IsTrue(folderChanged, "Folder should have changed back.");
-            Assert.That(expList.CurrentPath, Is.EqualTo(windowsCsi.FullPath), "Should be back in the first folder.");
+            Assert.That(expList.CurrentPath, Is.EqualTo(userProfileCsi.FullPath), "Should be back in the first folder.");
             Assert.IsFalse(expList.CanGoBack, "CanGoBack should be false after going back.");
             Assert.IsTrue(expList.CanGoForward, "CanGoForward should be true after going back.");
 
@@ -124,7 +137,7 @@ namespace ExpControlsLibTest
             }
 
             Assert.IsTrue(folderChanged, "Folder should have changed forward.");
-            Assert.That(expList.CurrentPath, Is.EqualTo(systemCsi.FullPath), "Should be back in the second folder.");
+            Assert.That(expList.CurrentPath, Is.EqualTo(myDocumentsCsi.FullPath), "Should be back in the second folder.");
             Assert.IsTrue(expList.CanGoBack, "CanGoBack should be true after going forward.");
             Assert.IsFalse(expList.CanGoForward, "CanGoForward should be false after going forward.");
         }
@@ -132,52 +145,42 @@ namespace ExpControlsLibTest
         [Test]
         public async Task TestExclusionFilter()
         {
-            var expList = new ExpList();
-            expList.Initialize(ShellController.Instance);
-            using var form = new Form();
-            form.Controls.Add(expList);
-            form.Show();
-
-            var windowsCsi = CShellItemFactory.Create(CSIDL.WINDOWS);
-            await expList.LoadDirectoryAsync(windowsCsi);
-
-            // Wait for load
-            for (int i = 0; i < 200; i++)
+            var tempDir = Path.Combine(Path.GetTempPath(), "ExpListExclude_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            try
             {
-                if (expList.Count > 10) break;
-                await Task.Delay(50);
-                Application.DoEvents();
-            }
-
-            Assert.That(expList.Count, Is.GreaterThan(10), "Windows folder should load.");
-
-            var itemToExclude = expList.GetItem(0);
-            Assert.IsNotNull(itemToExclude, "itemToExclude is null.");
-
-            var pathToExclude = itemToExclude.FullPath;
-
-            expList.ExcludedItems.Add(pathToExclude.Trim(':', '{', '}'));
-            
-            // Reload
-            await expList.LoadDirectoryAsync(windowsCsi, reload: true);
-            
-            // Wait for load
-            for (int i = 0; i < 100; i++)
-            {
-                bool found = false;
-                for (int j = 0; j < expList.Count; j++)
+                for (int i = 0; i < 12; i++)
                 {
-                    if (expList.GetItem(j).FullPath == pathToExclude) { found = true; break; }
+                    File.WriteAllText(Path.Combine(tempDir, $"item-{i:D2}.txt"), "test");
                 }
-                if (!found && expList.Count > 0) break;
-                await Task.Delay(50);
-                Application.DoEvents();
+
+                using var expList = new ExpList();
+                expList.Initialize(_shellController);
+                using var form = new Form();
+                form.Controls.Add(expList);
+                form.Show();
+
+                await expList.LoadDirectoryAsync(tempDir);
+                Assert.That(expList.Count, Is.EqualTo(12));
+
+                var itemToExclude = expList.GetItem(0);
+                Assert.That(itemToExclude, Is.Not.Null);
+                var pathToExclude = itemToExclude!.FullPath;
+
+                expList.ExcludedItems.Add(pathToExclude.Trim(':', '{', '}'));
+                await expList.LoadDirectoryAsync(tempDir, reload: true);
+
+                var paths = Enumerable.Range(0, expList.Count)
+                    .Select(i => expList.GetItem(i).FullPath)
+                    .ToArray();
+
+                Assert.That(paths, Does.Not.Contain(pathToExclude));
+                Assert.That(expList.Count, Is.EqualTo(11));
             }
-
-            var paths = new List<string>();
-            for (int i = 0; i < expList.Count; i++) paths.Add(expList.GetItem(i).FullPath);
-
-            Assert.IsFalse(paths.Contains(pathToExclude), "Item should be excluded.");
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
         }
 
         [Test]
@@ -192,7 +195,7 @@ namespace ExpControlsLibTest
                 File.WriteAllText(Path.Combine(tempDir, "B.txt"), "test");
 
                 var expList = new ExpList();
-                expList.Initialize(ShellController.Instance);
+                expList.Initialize(_shellController);
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -240,7 +243,7 @@ namespace ExpControlsLibTest
         public async Task TestCustomColumnData()
         {
             var expList = new ExpList();
-            expList.Initialize(ShellController.Instance);
+            expList.Initialize(_shellController);
             using var form = new Form();
             form.Controls.Add(expList);
             form.Show();
@@ -251,8 +254,8 @@ namespace ExpControlsLibTest
                 e.Item.ColumnDic["Score"] = new ListViewSubitemData("99.5", 99.5f);
             };
 
-            var windowsCsi = CShellItemFactory.Create(CSIDL.WINDOWS);
-            await expList.LoadDirectoryAsync(windowsCsi);
+            var userProfileCsi = CShellItemFactory.Create(CSIDL.PROFILE);
+            await expList.LoadDirectoryAsync(userProfileCsi);
 
             // Wait for load
             for (int i = 0; i < 200; i++)
@@ -262,7 +265,7 @@ namespace ExpControlsLibTest
                 Application.DoEvents();
             }
 
-            Assert.That(expList.Count, Is.GreaterThan(0), "Should have loaded some items from Windows folder.");
+            Assert.That(expList.Count, Is.GreaterThan(0), "Should have loaded some items from the user profile folder.");
 
             var item = expList.GetItem(0);
             Assert.IsNotNull(item);
@@ -271,37 +274,88 @@ namespace ExpControlsLibTest
             Assert.That(item.ColumnDic["Score"].Tag, Is.EqualTo(99.5f));
         }
 
+        [Test]
+        public async Task TestLoadDirectoryFetchesCustomColumnDataForEveryItem()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "ExpListColumns_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+
+            try
+            {
+                const int fileCount = 40;
+                var expectedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < fileCount; i++)
+                {
+                    string path = Path.Combine(tempDir, $"item-{i:D2}.txt");
+                    File.WriteAllText(path, "test");
+                    expectedPaths.Add(path);
+                }
+
+                using var expList = new ExpList { VirtualMode = true };
+                expList.Initialize(_shellController);
+                using var form = new Form { Height = 100 };
+                form.Controls.Add(expList);
+                form.Show();
+
+                expList.Columns.Add("Score", "Score");
+                var requestedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                expList.ExpListGetColumnData += (_, e) =>
+                {
+                    requestedPaths.Add(e.Item.FullPath);
+                    e.Item.ColumnDic["Score"] = new ListViewSubitemData("1", 1);
+                };
+
+                await expList.LoadDirectoryAsync(tempDir);
+
+                Assert.That(expList.Count, Is.EqualTo(fileCount));
+                Assert.That(requestedPaths, Is.EquivalentTo(expectedPaths),
+                    "Custom column data should be requested for every loaded item, including virtualized off-screen items.");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
 
         [Test]
         public async Task TestGoUpNavigation()
         {
-            var expList = new ExpList();
-            expList.Initialize(ShellController.Instance);
-            using var form = new Form();
-            form.Controls.Add(expList);
-            form.Show();
+            var parentDir = Path.Combine(Path.GetTempPath(), "ExpListGoUp_" + Guid.NewGuid().ToString("N"));
+            var childDir = Path.Combine(parentDir, "Child");
+            Directory.CreateDirectory(childDir);
+            File.WriteAllText(Path.Combine(parentDir, "parent.txt"), "test");
+            File.WriteAllText(Path.Combine(childDir, "child.txt"), "test");
 
-            var systemDir = CShellItemFactory.Create(CSIDL.SYSTEM);
-            await expList.LoadDirectoryAsync(systemDir);
-
-            Assert.IsTrue(expList.CanGoUp, "Should be able to go up from System folder.");
-            
-            bool folderChanged = false;
-            expList.ExpListCurrentFolderChanged += (newCsi, oldCsi) => folderChanged = true;
-
-            expList.GoUp();
-
-            // Wait for GoUp (async void) to complete
-            for (int i = 0; i < 100; i++)
+            try
             {
-                if (folderChanged) break;
-                await Task.Delay(50);
-                Application.DoEvents();
-            }
+                using var expList = new ExpList();
+                expList.Initialize(_shellController);
+                using var form = new Form();
+                form.Controls.Add(expList);
+                form.Show();
 
-            Assert.IsTrue(folderChanged, "Folder should have changed up.");
-            var windowsDir = CShellItemFactory.Create(CSIDL.WINDOWS);
-            Assert.That(expList.CurrentPath, Is.EqualTo(windowsDir.FullPath), "Should be in Windows folder.");
+                await expList.LoadDirectoryAsync(childDir);
+                Assert.That(expList.CanGoUp, Is.True);
+
+                bool folderChanged = false;
+                expList.ExpListCurrentFolderChanged += (_, _) => folderChanged = true;
+                expList.GoUp();
+
+                for (int i = 0; i < 100; i++)
+                {
+                    if (folderChanged && string.Equals(expList.CurrentPath, parentDir, StringComparison.OrdinalIgnoreCase)) break;
+                    await Task.Delay(50);
+                    Application.DoEvents();
+                }
+
+                Assert.That(folderChanged, Is.True, "Folder should have changed up.");
+                Assert.That(expList.CurrentPath, Is.EqualTo(parentDir).IgnoreCase);
+            }
+            finally
+            {
+                if (Directory.Exists(parentDir)) Directory.Delete(parentDir, true);
+            }
         }
 
         [Test]
@@ -315,7 +369,7 @@ namespace ExpControlsLibTest
                 File.WriteAllText(file1, "test");
 
                 var expList = new ExpList();
-                expList.Initialize(ShellController.Instance);
+                expList.Initialize(_shellController);
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -332,21 +386,11 @@ namespace ExpControlsLibTest
 
                 Assert.That(expList.Count, Is.EqualTo(1));
                 var item = expList.GetItem(0);
+                Assert.That(item, Is.Not.Null);
+                Assert.That(expList.CurrentFolderCsi, Is.Not.Null);
 
-                // Simulate deletion event
-                // Need to use reflection or just access the public static event
-                var eventArgs = new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted);
-                
-                // Trigger the event. Since it's static on CShellItemUpdater, 
-                // we can't easily fire it if we don't have access to the delegate.
-                // But wait, CShellItemUpdater.UpdateEvent is public static.
-                // We can't fire it directly because it's an event (only the class can fire it).
-                
-                // However, ExpList subscribes to it. If I can't fire it, I might need to 
-                // invoke the private method DoItemUpdate via reflection for this test.
-                
-                var method = typeof(ExpList).GetMethod("DoItemUpdate", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                method.Invoke(expList, new object[] { ShellController.Instance, eventArgs });
+                var eventArgs = new ShellItemUpdateEventArgs(item!, CShItemUpdateType.Deleted);
+                _shellController.ShellUpdater.RaiseUpdateEvent(expList.CurrentFolderCsi!, eventArgs);
 
                 // Wait for update
                 for (int i = 0; i < 100; i++)
@@ -365,51 +409,99 @@ namespace ExpControlsLibTest
         }
 
         [Test]
+        public async Task TestLatestDirectoryLoadWinsWhenPreviousLoadIsCancelled()
+        {
+            var firstDir = Path.Combine(Path.GetTempPath(), "ExpListCancelFirst_" + Guid.NewGuid().ToString("N"));
+            var finalDir = Path.Combine(Path.GetTempPath(), "ExpListCancelFinal_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(firstDir);
+            Directory.CreateDirectory(finalDir);
+
+            try
+            {
+                for (int i = 0; i < 100; i++)
+                {
+                    File.WriteAllText(Path.Combine(firstDir, $"stale-{i:D3}.txt"), "stale");
+                }
+
+                var expectedNames = new[] { "winner-1.txt", "winner-2.txt", "winner-3.txt" };
+                foreach (string name in expectedNames)
+                {
+                    File.WriteAllText(Path.Combine(finalDir, name), "winner");
+                }
+
+                using var expList = new ExpList();
+                expList.Initialize(_shellController);
+                using var form = new Form();
+                form.Controls.Add(expList);
+                form.Show();
+
+                Task firstLoad = expList.LoadDirectoryAsync(firstDir);
+                Task finalLoad = expList.LoadDirectoryAsync(finalDir);
+                await Task.WhenAll(firstLoad, finalLoad);
+
+                var actualNames = Enumerable.Range(0, expList.Count)
+                    .Select(i => expList.GetItem(i).DisplayName)
+                    .ToArray();
+
+                Assert.That(expList.CurrentPath, Is.EqualTo(finalDir));
+                Assert.That(actualNames, Is.EquivalentTo(expectedNames));
+                Assert.That(actualNames, Has.None.StartsWith("stale-"),
+                    "A cancelled load must not overwrite the final directory's items.");
+            }
+            finally
+            {
+                if (Directory.Exists(firstDir)) Directory.Delete(firstDir, true);
+                if (Directory.Exists(finalDir)) Directory.Delete(finalDir, true);
+            }
+        }
+
+        [Test]
         public async Task TestVirtualModeSelection()
         {
-            var expList = new ExpList();
-            expList.Initialize(ShellController.Instance);
-            using var form = new Form();
-            form.Controls.Add(expList);
-            form.Show();
-
-            expList.VirtualMode = true;
-            var windowsCsi = CShellItemFactory.Create(CSIDL.WINDOWS);
-            await expList.LoadDirectoryAsync(windowsCsi);
-
-            // Wait for load
-            for (int i = 0; i < 200; i++)
+            var tempDir = Path.Combine(Path.GetTempPath(), "ExpListVirtual_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            try
             {
-                if (expList.Count > 2) break;
-                await Task.Delay(50);
-                Application.DoEvents();
+                for (int i = 0; i < 3; i++)
+                    File.WriteAllText(Path.Combine(tempDir, $"item-{i}.txt"), "test");
+
+                using var expList = new ExpList { VirtualMode = true };
+                expList.Initialize(_shellController);
+                using var form = new Form();
+                form.Controls.Add(expList);
+                form.Show();
+
+                await expList.LoadDirectoryAsync(tempDir);
+                Assert.That(expList.Count, Is.EqualTo(3));
+
+                // Access the internal ListView via reflection to simulate selection
+                var listViewField = typeof(ExpList).GetField("_listView", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var listView = (ListView)listViewField.GetValue(expList);
+
+                listView.SelectedIndices.Add(0);
+                listView.SelectedIndices.Add(1);
+
+                Assert.That(expList.SelectedCount, Is.EqualTo(2));
+                var selectedItems = expList.SelectedCShellItems.ToList();
+                Assert.That(selectedItems.Count, Is.EqualTo(2));
+                Assert.That(selectedItems[0].FullPath, Is.EqualTo(expList.GetItem(0).FullPath));
+                Assert.That(selectedItems[1].FullPath, Is.EqualTo(expList.GetItem(1).FullPath));
             }
-
-            Assert.That(expList.Count, Is.GreaterThan(2), "Should have items in virtual mode.");
-
-            // Access the internal ListView via reflection to simulate selection
-            var listViewField = typeof(ExpList).GetField("_listView", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var listView = (ListView)listViewField.GetValue(expList);
-
-            listView.SelectedIndices.Add(0);
-            listView.SelectedIndices.Add(1);
-
-            Assert.That(expList.SelectedCount, Is.EqualTo(2));
-            var selectedItems = expList.SelectedCShellItems.ToList();
-            Assert.That(selectedItems.Count, Is.EqualTo(2));
-            Assert.That(selectedItems[0].FullPath, Is.EqualTo(expList.GetItem(0).FullPath));
-            Assert.That(selectedItems[1].FullPath, Is.EqualTo(expList.GetItem(1).FullPath));
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
         }
 
         /// <summary>
         /// Ensures the hierarchy knows about a directory by loading its parent's contents.
         /// </summary>
-        private static void EnsurePathInHierarchy(string path)
+        private void EnsurePathInHierarchy(string path)
         {
             var parentPath = Path.GetDirectoryName(path);
             if (parentPath == null) return;
 
-            var parentCsi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(parentPath);
+            var parentCsi = _shellController.HierachyManager.FindAndAllowExpansion(parentPath);
             if (parentCsi != null)
             {
                 parentCsi.LoadFolderContents(false, true);
@@ -428,7 +520,7 @@ namespace ExpControlsLibTest
             {
                 EnsurePathInHierarchy(tempDir);
                 var expList = new ExpList();
-                expList.Initialize(ShellController.Instance);
+                expList.Initialize(_shellController);
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -448,13 +540,13 @@ namespace ExpControlsLibTest
                 // Create C on disk and add to hierarchy
                 string pathC = Path.Combine(tempDir, "C");
                 Directory.CreateDirectory(pathC);
-                var rootCsi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempDir);
+                var rootCsi = _shellController.HierachyManager.FindAndAllowExpansion(tempDir);
                 rootCsi.LoadFolderContents(false, true);
-                var itemC = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathC);
+                var itemC = _shellController.HierachyManager.FindAndAllowExpansion(pathC);
                 Assert.IsNotNull(itemC, "C should be in hierarchy");
 
                 // Raise Created event — sender is the parent folder, e.Item is the new child
-                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                _shellController.ShellUpdater.RaiseUpdateEvent(
                     rootCsi, new ShellItemUpdateEventArgs(itemC, CShItemUpdateType.Created));
 
                 // Wait for item to appear
@@ -498,7 +590,7 @@ namespace ExpControlsLibTest
             {
                 EnsurePathInHierarchy(tempDir);
                 var expList = new ExpList();
-                expList.Initialize(ShellController.Instance);
+                expList.Initialize(_shellController);
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -522,10 +614,10 @@ namespace ExpControlsLibTest
                 }
                 Assert.IsNotNull(itemB, "B should be in the list");
 
-                var rootCsi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempDir);
+                var rootCsi = _shellController.HierachyManager.FindAndAllowExpansion(tempDir);
 
                 // Raise Deleted event
-                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                _shellController.ShellUpdater.RaiseUpdateEvent(
                     rootCsi, new ShellItemUpdateEventArgs(itemB, CShItemUpdateType.Deleted));
 
                 // Wait for item to be removed
@@ -576,7 +668,7 @@ namespace ExpControlsLibTest
                 EnsurePathInHierarchy(tempDir1);
                 EnsurePathInHierarchy(tempDir2);
                 var expList = new ExpList();
-                expList.Initialize(ShellController.Instance);
+                expList.Initialize(_shellController);
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -597,13 +689,13 @@ namespace ExpControlsLibTest
                 // Create B in tempDir2 (a DIFFERENT folder)
                 string pathB = Path.Combine(tempDir2, "B");
                 Directory.CreateDirectory(pathB);
-                var dir2Csi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempDir2);
+                var dir2Csi = _shellController.HierachyManager.FindAndAllowExpansion(tempDir2);
                 dir2Csi.LoadFolderContents(false, true);
-                var itemB = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathB);
+                var itemB = _shellController.HierachyManager.FindAndAllowExpansion(pathB);
                 Assert.IsNotNull(itemB, "B should be in hierarchy");
 
                 // Raise Created event for item in tempDir2 — should be ignored by the list
-                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                _shellController.ShellUpdater.RaiseUpdateEvent(
                     dir2Csi, new ShellItemUpdateEventArgs(itemB, CShItemUpdateType.Created));
 
                 await Task.Delay(500);
@@ -634,7 +726,7 @@ namespace ExpControlsLibTest
                 EnsurePathInHierarchy(tempDir1);
                 EnsurePathInHierarchy(tempDir2);
                 var expList = new ExpList();
-                expList.Initialize(ShellController.Instance);
+                expList.Initialize(_shellController);
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -653,12 +745,12 @@ namespace ExpControlsLibTest
                 int countBefore = expList.Count;
 
                 // Find B in tempDir2's hierarchy
-                var dir2Csi = ShellController.Instance.HierachyManager.FindAndAllowExpansion(tempDir2);
-                var itemB = ShellController.Instance.HierachyManager.FindAndAllowExpansion(Path.Combine(tempDir2, "B"));
+                var dir2Csi = _shellController.HierachyManager.FindAndAllowExpansion(tempDir2);
+                var itemB = _shellController.HierachyManager.FindAndAllowExpansion(Path.Combine(tempDir2, "B"));
                 Assert.IsNotNull(itemB, "B should be in hierarchy");
 
                 // Raise Deleted event for item in tempDir2 — should be ignored
-                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                _shellController.ShellUpdater.RaiseUpdateEvent(
                     dir2Csi, new ShellItemUpdateEventArgs(itemB, CShItemUpdateType.Deleted));
 
                 await Task.Delay(500);

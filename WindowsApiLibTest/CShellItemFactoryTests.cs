@@ -50,9 +50,9 @@ namespace WindowsApiLibTest
                 Assert.IsNotNull(myComputer, "Should be able to create CShellItem for My Computer (DRIVES).");
                 Assert.AreNotEqual(IntPtr.Zero, myComputer.PIDL, "PIDL should not be zero.");
 
-                var windows = CShellItemFactory.Create(CSIDL.WINDOWS);
-                Assert.IsNotNull(windows, "Should be able to create CShellItem for Windows folder.");
-                Assert.IsTrue(windows.IsFolder, "Windows item should be a folder.");
+                var profile = CShellItemFactory.Create(CSIDL.PROFILE);
+                Assert.IsNotNull(profile, "Should be able to create a CShellItem for the user profile.");
+                Assert.IsTrue(profile.IsFolder, "The user profile item should be a folder.");
             });
         }
 
@@ -62,12 +62,12 @@ namespace WindowsApiLibTest
             await Runner.EnqueueWork(() =>
             {
                 // Test creation from a common path
-                string windir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-                var csi = CShellItemFactory.Create(windir);
+                string profilePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                var csi = CShellItemFactory.Create(profilePath);
 
-                Assert.IsNotNull(csi, $"Should be able to create CShellItem for {windir}.");
-                Assert.AreEqual(windir, csi.FullPath, true, "FullPath should match the input path.");
-                Assert.IsTrue(csi.IsFolder, "Windows directory should be marked as a folder.");
+                Assert.IsNotNull(csi, $"Should be able to create CShellItem for {profilePath}.");
+                Assert.AreEqual(profilePath, csi.FullPath, true, "FullPath should match the input path.");
+                Assert.IsTrue(csi.IsFolder, "The user profile should be marked as a folder.");
             });
         }
 

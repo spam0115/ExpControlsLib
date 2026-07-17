@@ -708,7 +708,10 @@ namespace ExpControlsLib
         public void Initialize(ShellController shellController)
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.Initialize: Begin");
-            _shellController = shellController;
+            if (_initialized)
+                throw new InvalidOperationException("ExpList has already been initialized.");
+
+            _shellController = shellController ?? throw new ArgumentNullException(nameof(shellController));
             _initialized = true;
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.Initialize: End");
         }
@@ -766,7 +769,7 @@ namespace ExpControlsLib
 
                 // Setup Change Notification
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Wiring shell update events...");
-                ShellController.Instance.ShellUpdater.UpdateEvent += ShellUpdater_UpdateEventInvoker;
+                _shellController.ShellUpdater.UpdateEvent += ShellUpdater_UpdateEventInvoker;
 
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: End");
             }
@@ -2468,6 +2471,15 @@ namespace ExpControlsLib
                         // Dispose old ImageLists and create a fresh one to prevent
                         // GDI handle exhaustion from accumulated thumbnails across navigations.
                         _thumbnailManager.ResetForNewFolder();
+
+                        // Populate externally supplied custom-column values while the loaded
+                        // items are on the UI thread. This ensures callers can inspect column
+                        // data immediately after LoadDirectoryAsync completes, even for items
+                        // that have not yet been materialized by the ListView.
+                        foreach (var item in result.Items)
+                        {
+                            EnsureCustomColumnDataFetched(item);
+                        }
 
                         _listViewWrapper.AddRange(result.Items);
 

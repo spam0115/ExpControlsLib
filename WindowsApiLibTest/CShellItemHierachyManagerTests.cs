@@ -82,20 +82,24 @@ namespace WindowsApiLibTest
         {
             await Runner.EnqueueWork(() =>
             {
-                string windir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-                string sys32 = Path.Combine(windir, "System32");
+                string parentPath = Path.Combine(Path.GetTempPath(), "HierarchyAncestor_" + Guid.NewGuid().ToString("N"));
+                string childPath = Path.Combine(parentPath, "Child");
+                Directory.CreateDirectory(childPath);
+                try
+                {
+                    using var parent = CShellItemFactory.Create(parentPath);
+                    using var child = CShellItemFactory.Create(childPath);
 
-                using var csiWin = CShellItemFactory.Create(windir);
-                using var csiSys32 = CShellItemFactory.Create(sys32);
-
-                // Test static methods
-                Assert.IsTrue(CShellItemHierachyManager.IsAncestorOf(csiWin, csiSys32, false), "Windows should be ancestor of System32");
-                Assert.IsTrue(CShellItemHierachyManager.IsAncestorOf(csiWin, csiSys32, true), "Windows should be immediate parent of System32");
-                Assert.IsTrue(CShellItemHierachyManager.IsAncestorOf(csiWin, csiWin, false), "Item should be ancestor of itself (fParent=false)");
-                Assert.IsFalse(CShellItemHierachyManager.IsAncestorOf(csiWin, csiWin, true), "Item should NOT be parent of itself");
-
-                // Test cross-ancestry
-                Assert.IsFalse(CShellItemHierachyManager.IsAncestorOf(csiSys32, csiWin, false), "System32 should not be ancestor of Windows");
+                    Assert.IsTrue(CShellItemHierachyManager.IsAncestorOf(parent, child, false), "Parent should be an ancestor of Child.");
+                    Assert.IsTrue(CShellItemHierachyManager.IsAncestorOf(parent, child, true), "Parent should be the immediate parent of Child.");
+                    Assert.IsTrue(CShellItemHierachyManager.IsAncestorOf(parent, parent, false), "An item should be an ancestor of itself when fParent is false.");
+                    Assert.IsFalse(CShellItemHierachyManager.IsAncestorOf(parent, parent, true), "An item should not be its own parent.");
+                    Assert.IsFalse(CShellItemHierachyManager.IsAncestorOf(child, parent, false), "Child should not be an ancestor of Parent.");
+                }
+                finally
+                {
+                    if (Directory.Exists(parentPath)) Directory.Delete(parentPath, true);
+                }
             });
         }
 
@@ -124,25 +128,25 @@ namespace WindowsApiLibTest
             {
                 var desktop = CShellItemFactory.Create(CSIDL.DESKTOP);
                 var manager = new CShellItemHierachyManager(desktop);
-
-                string windir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-                string[] files = Directory.GetFiles(windir);
-                if (files.Length == 0)
+                string tempDir = Path.Combine(Path.GetTempPath(), "HierarchyFind_" + Guid.NewGuid().ToString("N"));
+                string filePath = Path.Combine(tempDir, "known-file.txt");
+                Directory.CreateDirectory(tempDir);
+                File.WriteAllText(filePath, "test");
+                try
                 {
-                    Assert.Fail("Unable to read the windows directory.  probably a privileges problem.");
+                    var foundFolder = manager.FindAndAllowExpansion(tempDir);
+                    Assert.IsNotNull(foundFolder, "Should find the temporary folder by path.");
+
+                    var foundByPidl = manager.Find(foundFolder.PIDL);
+                    Assert.IsNotNull(foundByPidl, "Should find the temporary folder by PIDL.");
+
+                    var foundFile = manager.FindAndAllowExpansion(filePath);
+                    Assert.IsNotNull(foundFile, "Should find the known temporary file by path.");
                 }
-
-                // Find by path
-                var foundByPath = manager.FindAndAllowExpansion(windir);
-                Assert.IsNotNull(foundByPath, "Should find item by path");
-
-                // Find by PIDL
-                var foundByPidl = manager.Find(foundByPath.PIDL);
-                Assert.IsNotNull(foundByPidl, "Should find item by PIDL");
-
-                // Find by path
-                foundByPath = manager.FindAndAllowExpansion("C:\\Windows\\notepad.exe");
-                Assert.IsNotNull(foundByPath, "Should find notepad by path");
+                finally
+                {
+                    if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+                }
             });
         }
 

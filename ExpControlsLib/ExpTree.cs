@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -667,7 +666,10 @@ namespace ExpControlsLib
         public void Initialize(ShellController shellController)
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Initialize: Begin");
-            _shellController = shellController;
+            if (_initialized)
+                throw new InvalidOperationException("ExpTree has already been initialized.");
+
+            _shellController = shellController ?? throw new ArgumentNullException(nameof(shellController));
             _initialized = true;
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Initialize: End");
         }
@@ -920,7 +922,10 @@ namespace ExpControlsLib
         /// <returns>True if Successful, False otherwise.</returns>
         /// <remarks>This is the preferred method of ExpandANode.<br />
         /// Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
-        /// ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
+        /// ExpTreeNodeSelected Event as a result of ExpandaNode.<br />
+        /// This synchronous compatibility API intentionally remains separate from
+        /// <see cref="ExpandANodeBaseAsync"/>: blocking on the asynchronous implementation
+        /// on the UI thread can deadlock while lazy shell data is being loaded.</remarks>
         public bool ExpandANode(CShellItem newItem, bool SelectExpandedNode = true)
         {
             if (!TryGetRootNodeForExpansion(newItem, SelectExpandedNode, out var baseNode, out var pendingQueued))
@@ -1074,7 +1079,7 @@ namespace ExpControlsLib
                     }
 
                     //fall through due to failure to find 
-                    baseNode.EnsureVisible(); 
+                    //baseNode.EnsureVisible(); done in finalizeexpandednode
                     return false;
                 }
 

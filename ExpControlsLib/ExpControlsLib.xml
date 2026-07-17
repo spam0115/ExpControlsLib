@@ -1973,7 +1973,10 @@
             <returns>True if Successful, False otherwise.</returns>
             <remarks>This is the preferred method of ExpandANode.<br />
             Calling with SelectExpandedNode = False is useful when it is not desired to Raise an
-            ExpTreeNodeSelected Event as a result of ExpandaNode.</remarks>
+            ExpTreeNodeSelected Event as a result of ExpandaNode.<br />
+            This synchronous compatibility API intentionally remains separate from
+            <see cref="M:ExpControlsLib.ExpTree.ExpandANodeBaseAsync(WindowsApiLib.Shell.CShellItem,System.Boolean)"/>: blocking on the asynchronous implementation
+            on the UI thread can deadlock while lazy shell data is being loaded.</remarks>
         </member>
         <member name="M:ExpControlsLib.ExpTree.ExpandANodeAsync(System.String,System.Boolean)">
             <summary>

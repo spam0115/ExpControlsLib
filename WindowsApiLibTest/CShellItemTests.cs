@@ -2,6 +2,7 @@ using ExpControlsLib;
 using Microsoft.VisualBasic.Devices;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
@@ -68,27 +69,28 @@ namespace WindowsApiLibTest
         {
             await Runner.EnqueueWork(() =>
             {
-                var controller = ShellController.Instance;
-                var windowsDir = CShellItemFactory.Create(CSIDL.WINDOWS);
-                Assert.IsNotNull(windowsDir, "Failed to create windowsDir");
+                string tempDir = Path.Combine(Path.GetTempPath(), "ShellItemReload_" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(tempDir);
+                File.WriteAllText(Path.Combine(tempDir, "known-file.txt"), "test");
+                try
+                {
+                    var folder = CShellItemFactory.Create(tempDir);
+                    Assert.IsNotNull(folder, "Failed to create the temporary folder item.");
 
-                //first load
-                windowsDir.LoadFolderContents(true, false);
-                Assert.IsTrue(windowsDir.FileCount > 0, "First load should find items");
-                CShellItem? firstNotepad = null;
-                firstNotepad = windowsDir.Files?.Where(o => string.Equals(o.DisplayName, "notepad.exe", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-                Assert.IsNotNull(firstNotepad, "notepad.exe should exist in C:\\Windows.");
+                    folder.LoadFolderContents(true, false);
+                    var firstItem = folder.Files?.FirstOrDefault(o => string.Equals(o.DisplayName, "known-file.txt", StringComparison.OrdinalIgnoreCase));
+                    Assert.IsNotNull(firstItem, "The first load should find the known file.");
 
-                //second load
-                windowsDir.LoadFolderContents(true, false);
-                Assert.IsTrue(windowsDir.FileCount > 0, "Second load should find items");
-                CShellItem? secondNotepad = null;
-                secondNotepad = windowsDir.Files?.Where(o => string.Equals(o.DisplayName, "notepad.exe", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-                Assert.IsNotNull(secondNotepad, "notepad.exe should exist in C:\\Windows.");
+                    folder.LoadFolderContents(true, false);
+                    var secondItem = folder.Files?.FirstOrDefault(o => string.Equals(o.DisplayName, "known-file.txt", StringComparison.OrdinalIgnoreCase));
+                    Assert.IsNotNull(secondItem, "The second load should find the known file.");
 
-                //compared loads
-                Assert.AreNotEqual(firstNotepad, secondNotepad, "First and second fetches of notepad.exe should be different.");
-
+                    Assert.AreNotEqual(firstItem, secondItem, "Reloading should produce a new shell-item instance.");
+                }
+                finally
+                {
+                    if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+                }
             });
         }
 
@@ -97,19 +99,18 @@ namespace WindowsApiLibTest
         {
             await Runner.EnqueueWork(() =>
             {
-                var controller = ShellController.Instance;
-                var myComputer = CShellItemFactory.Create(CSIDL.WINDOWS);
+                var profile = CShellItemFactory.Create(CSIDL.PROFILE);
 
-                myComputer.LoadFolderContents(true, true);
+                profile.LoadFolderContents(true, true);
 
-                Assert.IsNotNull(myComputer.DirectoriesList, "Failed to fetch directories list.");
-                foreach (CShellItem item in myComputer.Directories)
+                Assert.IsNotNull(profile.DirectoriesList, "Failed to fetch directories list.");
+                foreach (CShellItem item in profile.Directories)
                 {
                     Assert.IsTrue(item.IsFolder, "All items in DirectoryList should be folders.");
                 }
 
-                Assert.IsNotNull(myComputer.FilesList, "Failed to fetch files list.");
-                foreach (CShellItem item in myComputer.FilesList)
+                Assert.IsNotNull(profile.FilesList, "Failed to fetch files list.");
+                foreach (CShellItem item in profile.FilesList)
                 {
                     Assert.IsFalse(item.IsFolder, "All items in FilesList should be files.");
                 }
