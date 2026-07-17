@@ -1876,11 +1876,6 @@
             </summary>
             <returns>The underlying CShellItem of the TreeView.SelectedNode. If none Selected, returns Nothing.</returns>
         </member>
-        <member name="P:ExpControlsLib.ExpTree.Nodes">
-            <summary>
-            Gets the collection of tree nodes that are assigned to the tree view control.
-            </summary>
-        </member>
         <member name="P:ExpControlsLib.ExpTree.ShowHiddenFolders">
             <summary>
             ShowHiddenFolders sets or gets a Boolean indicating whether or not to Display Folders with the Hidden Attribute.
@@ -2016,54 +2011,6 @@
             A <see cref="T:System.Threading.Tasks.Task`1"/> that resolves to <c>true</c> if the node was found
             and expanded successfully, or <c>false</c> otherwise.
             </returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.ExpCollapseAll(System.Boolean)">
-            <summary>
-            Collapses all nodes in the TreeView.
-            </summary>
-            <param name="collapse">
-            When <c>true</c> (the default), all nodes are collapsed.
-            Passing <c>false</c> is a no-op (reserved for future expansion).
-            </param>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.SelectNodeSilentlyAsync(WindowsApiLib.Shell.CShellItem)">
-            <summary>
-            Expands and selects the node for the given <paramref name="target"/> in the tree
-            without raising the <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/> event. Intermediate nodes
-            are expanded as needed to make the target visible.
-            </summary>
-            <param name="target">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> whose node should be selected.</param>
-            <returns><c>true</c> if the node was found and selected; <c>false</c> otherwise.</returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.GoBack">
-            <summary>
-            Navigates back to the previous folder in the history.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.GoForward">
-            <summary>
-            Navigates forward to the next folder in the history.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.GoUp">
-            <summary>
-            Navigates to the parent folder of the currently loaded folder.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpTree.CanGoBack">
-            <summary>
-            Gets a value indicating whether there is a folder to navigate back to.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpTree.CanGoForward">
-            <summary>
-            Gets a value indicating whether there is a folder to navigate forward to.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ExpTree.CanGoUp">
-            <summary>
-            Gets a value indicating whether the current folder has a parent folder to navigate to.
-            </summary>
         </member>
         <member name="M:ExpControlsLib.ExpTree.ShellController_UpdateEventHandler(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
             <summary>
@@ -2589,6 +2536,49 @@
             Required method for Designer support - do not modify 
             the contents of this method with the code editor.
             </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.GoBack">
+            <summary>Navigates back to the previous successfully displayed folder.</summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.GoBackAsync">
+            <summary>Asynchronously navigates back to the previous successfully displayed folder.</summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.GoForward">
+            <summary>Navigates forward to the next successfully displayed folder.</summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.GoForwardAsync">
+            <summary>Asynchronously navigates forward to the next successfully displayed folder.</summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.GoUp">
+            <summary>Navigates to the parent folder of the current selection, when available.</summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.GoUpAsync">
+            <summary>Asynchronously navigates to the parent folder of the current selection.</summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.CanGoBack">
+            <summary>Gets whether a previous successfully displayed folder is available.</summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.CanGoForward">
+            <summary>Gets whether a forward navigation target is available.</summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.CanGoUp">
+            <summary>Gets whether the current selection has a parent folder.</summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.CollapseAll">
+            <summary>Collapses every node currently displayed by the control.</summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.ExpCollapseAll(System.Boolean)">
+            <summary>
+            Legacy name retained for source compatibility. Use <see cref="M:ExpControlsLib.ExpTree.CollapseAll"/>.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.SelectNodeSilentlyAsync(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Expands and selects a node without raising <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/>.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpTree.Nodes">
+            <summary>Returns the TreeView's current node collection.</summary>
         </member>
         <member name="T:ExpControlsLib.ExpTreeContextMenu">
             <summary>Owns the native context-menu instance and forwards owner-draw window messages.</summary>

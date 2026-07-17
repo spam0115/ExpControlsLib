@@ -525,12 +525,6 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Gets the collection of tree nodes that are assigned to the tree view control.
-        /// </summary>
-        [Browsable(false)]
-        public TreeNodeCollection? Nodes => _TreeView?.Nodes;
-
-        /// <summary>
         /// ShowHiddenFolders sets or gets a Boolean indicating whether or not to Display Folders with the Hidden Attribute.
         /// </summary>
         /// <value></value>
@@ -1096,102 +1090,6 @@ namespace ExpControlsLib
             }
         }
 
-
-        /// <summary>
-        /// Collapses all nodes in the TreeView.
-        /// </summary>
-        /// <param name="collapse">
-        /// When <c>true</c> (the default), all nodes are collapsed.
-        /// Passing <c>false</c> is a no-op (reserved for future expansion).
-        /// </param>
-        public void ExpCollapseAll(bool collapse = true)
-        {
-            if (collapse == true)
-            {
-                _TreeView.CollapseAll();
-            }
-        }
-
-        /// <summary>
-        /// Expands and selects the node for the given <paramref name="target"/> in the tree
-        /// without raising the <see cref="ExpTreeNodeSelected"/> event. Intermediate nodes
-        /// are expanded as needed to make the target visible.
-        /// </summary>
-        /// <param name="target">The <see cref="CShellItem"/> whose node should be selected.</param>
-        /// <returns><c>true</c> if the node was found and selected; <c>false</c> otherwise.</returns>
-        public async Task<bool> SelectNodeSilentlyAsync(CShellItem target)
-        {
-            EnableEventPost = false;
-            try
-            {
-                return await ExpandANodeAsync(target, SelectExpandedNode: true);
-            }
-            finally
-            {
-                EnableEventPost = true;
-            }
-        }
-
-        #region Navigation
-
-        /// <summary>
-        /// Navigates back to the previous folder in the history.
-        /// </summary>
-        public void GoBack()
-        {
-            _ = GoBackAsync();
-        }
-
-        public async Task GoBackAsync()
-        {
-            await _navigation.GoBackAsync(item => ExpandANodeBaseAsync(item, true));
-        }
-
-        /// <summary>
-        /// Navigates forward to the next folder in the history.
-        /// </summary>
-        public void GoForward()
-        {
-            _ = GoForwardAsync();
-        }
-
-        public async Task GoForwardAsync()
-        {
-            await _navigation.GoForwardAsync(item => ExpandANodeBaseAsync(item, true));
-        }
-
-        /// <summary>
-        /// Navigates to the parent folder of the currently loaded folder.
-        /// </summary>
-        public void GoUp()
-        {
-            _ = GoUpAsync();
-        }
-
-        public async Task GoUpAsync()
-        {
-            if (_navigation.Current?.Parent != null)
-            {
-                await ExpandANodeBaseAsync(_navigation.Current.Parent, true);
-            }
-        }
-
-        /// <summary>
-        /// Gets a value indicating whether there is a folder to navigate back to.
-        /// </summary>
-        public bool CanGoBack => _navigation.CanGoBack;
-
-        /// <summary>
-        /// Gets a value indicating whether there is a folder to navigate forward to.
-        /// </summary>
-        public bool CanGoForward => _navigation.CanGoForward;
-
-        /// <summary>
-        /// Gets a value indicating whether the current folder has a parent folder to navigate to.
-        /// </summary>
-        public bool CanGoUp => _navigation.CanGoUp;
-
-        #endregion
 
         #endregion
 
