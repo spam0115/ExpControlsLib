@@ -2312,7 +2312,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Populates the list view with files and directories from the specified <see cref="CShellItem"/> asynchronously.
         /// </summary>
-        public async Task LoadDirectoryBaseAsync(CShellItem? csi, bool includeFolder = true)
+        private async Task LoadDirectoryBaseAsync(CShellItem? csi, bool includeFolder = true)
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: Begin for '{csi?.FullPath}'");
 
