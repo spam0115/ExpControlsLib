@@ -1083,6 +1083,21 @@ namespace ExpControlsLib
             if (order == SortOrder.None || ActiveViewCount == 0) return;
 
             if (column < 0 || column >= _ListView.Columns.Count) return;
+
+            // Save selection and focused item before sort so we can restore after
+            var selectedPaths = new List<string>();
+            foreach (int idx in _ListView.SelectedIndices)
+            {
+                var item = GetItem(idx);
+                if (item != null) selectedPaths.Add(item.FullPath);
+            }
+            string? focusedPath = null;
+            if (_ListView.FocusedItem != null)
+            {
+                var focused = GetItem(_ListView.FocusedItem.Index);
+                if (focused != null) focusedPath = focused.FullPath;
+            }
+
             var colHeader = _ListView.Columns[column];
             var secondaryComparer = GetSecondaryComparer(column);
             var comparer = new CShellItemComparer(_expList, column, order, colHeader, secondaryComparer);
@@ -1112,6 +1127,32 @@ namespace ExpControlsLib
             RecreateIndexMapping();
             _itemCache.Clear();
             _ListView.Refresh();
+
+            // Restore selection by finding the new indices of the previously selected items
+            if (selectedPaths.Count > 0)
+            {
+                _ListView.SelectedIndices.Clear();
+                int firstRestored = -1;
+                foreach (var path in selectedPaths)
+                {
+                    if (_pathToIndex.TryGetValue(path, out int newIndex))
+                    {
+                        _ListView.SelectedIndices.Add(newIndex);
+                        if (firstRestored < 0) firstRestored = newIndex;
+                    }
+                }
+
+                // Restore focused item and ensure it's visible
+                if (focusedPath != null && _pathToIndex.TryGetValue(focusedPath, out int focusedIndex))
+                {
+                    _ListView.FocusedItem = _ListView.Items[focusedIndex];
+                    _ListView.EnsureVisible(focusedIndex);
+                }
+                else if (firstRestored >= 0)
+                {
+                    _ListView.EnsureVisible(firstRestored);
+                }
+            }
         }
 
         /// <summary>
