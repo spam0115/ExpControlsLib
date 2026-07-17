@@ -638,6 +638,18 @@ namespace ExpControlsLib
 
         }
 
+        /// <summary>
+        /// This initializes some fields in this user control.  This should be called before the Load event.
+        /// </summary>
+        /// <param name="shellController"></param>
+        public void Initialize(ShellController shellController)
+        {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Initialize: Begin");
+            _shellController = shellController;
+            _initialized = true;
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Initialize: End");
+        }
+
         private void ExpTree_Load(object sender, EventArgs e)
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: Begin");
@@ -680,18 +692,6 @@ namespace ExpControlsLib
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: No root path or StartUpDirectory set.");
             }
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: End");
-        }
-
-        /// <summary>
-        /// This initializes some fields in this user control.  This should be called before the Load event.
-        /// </summary>
-        /// <param name="shellController"></param>
-        public void Initialize(ShellController shellController)
-        {
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Initialize: Begin");
-            _shellController = shellController;
-            _initialized = true;
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Initialize: End");
         }
 
         /// <summary>

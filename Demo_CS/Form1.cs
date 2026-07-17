@@ -12,6 +12,9 @@ namespace Demo_CS
         public Form1()
         {
             InitializeComponent();
+
+            expTree1.Initialize(ShellController.Instance);
+            expList1.Initialize(ShellController.Instance);
         }
 
         private void Form1_Load(object sender, EventArgs e)

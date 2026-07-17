@@ -4,7 +4,20 @@ namespace WindowsApiLib.Shell
 {
     public class ShellController
     {
-        public static ShellController Instance = null!;
+        private static ShellController _instance = null;
+
+        public static ShellController Instance
+        {
+            get
+            {
+                if (_instance is null)
+                {
+                    _instance = new ShellController();
+                }
+                
+                return _instance;
+            }
+        }
 
         public CShellItemHierachyManager HierachyManager { get; private set; }
         public CShellItemUpdater ShellUpdater { get; private set; }
@@ -25,11 +38,11 @@ namespace WindowsApiLib.Shell
 
         public static ShellController Initialize() 
         { 
-            if (Instance == null)
+            if (_instance == null)
             {
-                Instance = new ShellController();
+                _instance = new ShellController();
             }
-            return Instance;
+            return _instance;
         }
 
         /// <summary>
