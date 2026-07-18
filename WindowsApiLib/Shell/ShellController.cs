@@ -22,7 +22,7 @@ namespace WindowsApiLib.Shell
 
         public CShellItemHierachyManager HierachyManager { get; private set; }
         public CShellItemUpdater ShellUpdater { get; private set; }
-        public readonly static int FolderTimeout = 5; //seconds
+        public readonly static int FolderTimeout = 10; //seconds
    
         /// <summary>
         /// the desktop cShellIitem
@@ -61,7 +61,7 @@ namespace WindowsApiLib.Shell
         /// </summary>
         /// <param name="csi"></param>
         /// <param name="flags"></param>
-        public void EnsureChildrenPopulatedAndRecent(CShellItem csi, SHCONTF flags)
+        public void EnsureChildrenPopulatedAndRecent(CShellItem csi, SHCONTF flags = SHCONTF.FOLDERS | SHCONTF.NONFOLDERS)
         {
             bool wantFolders = (flags & SHCONTF.FOLDERS) > 0;
             bool wantFiles = (flags & SHCONTF.NONFOLDERS) > 0;

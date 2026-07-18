@@ -478,8 +478,8 @@ namespace WindowsApiLib.Shell
         /// <summary>
         /// Whether or not the child folders collection is populated.
         /// </summary>
-        public bool DirectoriesInitialized => (_directories is not null); 
-        internal DateTime? DirsCollectionTimestamp;
+        public bool DirectoriesInitialized => (_directories is not null);
+        public DateTime? DirsCollectionTimestamp;
 
         /// <summary>
         /// Returns the number of Folders currently known to this instance. If not
@@ -568,7 +568,7 @@ namespace WindowsApiLib.Shell
         /// initialized, return 0</returns>
         /// <remarks>Property added 02/10/2014 to avoid UpdateRefresh</remarks>
         public int FileCount => FilesInitialized ? _files.Count : 0;
-        internal DateTime? FilesCollectionTimestamp;
+        public DateTime? FilesCollectionTimestamp;
 
         public CShellItemCollection? Files
         {
@@ -1149,7 +1149,6 @@ namespace WindowsApiLib.Shell
             if (!m_Pidl.Equals(IntPtr.Zero))
             {
                 if (m_Pidl.Equals(CShellItemFactory.DesktopCSI.m_Pidl))
-                    Debugger.Break();
                 Marshal.FreeCoTaskMem(m_Pidl);
                 m_Pidl = IntPtr.Zero;
             }

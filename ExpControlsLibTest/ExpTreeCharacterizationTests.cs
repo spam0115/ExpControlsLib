@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Windows.Forms;
 using ExpControlsLib;
-using NUnit.Framework;
 using WindowsApiLib.Shell;
 
 namespace ExpControlsLibTest;

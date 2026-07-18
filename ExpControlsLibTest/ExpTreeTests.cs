@@ -1,5 +1,4 @@
 using ExpControlsLib;
-using NUnit.Framework;
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;

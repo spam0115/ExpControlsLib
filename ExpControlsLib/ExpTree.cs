@@ -109,6 +109,12 @@ namespace ExpControlsLib
         private bool _pendingSelectExpandedNode;
 
         /// <summary>
+        /// Suppresses <see cref="Tv1_BeforeExpand"/> lazy-load behavior while internal code
+        /// performs programmatic node expansion.
+        /// </summary>
+        private int _programmaticExpandSuppressionDepth;
+
+        /// <summary>
         /// Backing field for the <see cref="DropHandler"/> property.
         /// Holds the current <see cref="CtvDropWrapper"/> instance managing Shell drop operations.
         /// </summary>
@@ -789,6 +795,9 @@ namespace ExpControlsLib
 
         private static bool TryFindAncestorChildNode(TreeNode baseNode, CShellItem target, out TreeNode? match)
         {
+#if DEBUG
+            var nodes = baseNode.Nodes.Cast<TreeNode>().ToList();
+#endif
             foreach (TreeNode childNode in baseNode.Nodes)
             {
                 if (childNode is ExpTreeNode { Item: CShellItem childItem } && CPidl.IsAncestorOf(childItem, target, false))
@@ -864,6 +873,27 @@ namespace ExpControlsLib
             finally
             {
                 _TreeView.EndUpdate();
+            }
+        }
+
+        private void ExpandProgrammatically(TreeNode node, bool suppressEventsBeforeExpand = true)
+        {
+            ArgumentNullException.ThrowIfNull(node);
+
+            if (!suppressEventsBeforeExpand)
+            {
+                node.Expand();
+                return;
+            }
+
+            _programmaticExpandSuppressionDepth++;
+            try
+            {
+                node.Expand();
+            }
+            finally
+            {
+                _programmaticExpandSuppressionDepth--;
             }
         }
 
@@ -944,14 +974,14 @@ namespace ExpControlsLib
             {
                 _TreeView.BeginUpdate();
 
-                baseNode.Expand();
+                ExpandProgrammatically(baseNode);
 
                 while (lim > 0)
                 {
                     if (TryFindAncestorChildNode(baseNode, newItem, out var match))
                     {
                         baseNode = match!;
-                        baseNode.Expand();
+                        ExpandProgrammatically(baseNode);
                         lim -= 1;
                         continue;
                     }
@@ -1012,7 +1042,9 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Asynchronously expands TreeNodes from the tree root through the node represented by
-        /// <paramref name="target"/>, populating lazy-loaded (dummy) nodes on demand.
+        /// <paramref name="target"/>.  Expands the tree to the target node, selecting it if 
+        /// <paramref name="SelectExpandedNode"/> is true.  Populates lazy-loaded (dummy) nodes 
+        /// on demand and reloads folder contents if they are older than a set timeout.  
         /// This is the preferred async counterpart of <see cref="ExpandANode(CShellItem, bool)"/>.
         /// </summary>
         /// <param name="target">
@@ -1059,22 +1091,58 @@ namespace ExpControlsLib
             try
             {
                 // do the drill down -- Node to expand must be included in tree
-                if (baseNode.Nodes.Count == 1 && baseNode.Nodes[0] is ExpTreeNode { IsPlaceholder: true })
+                if (NodeNeedsPopulating(baseNode))
                 {
-                    await PopulateNodeAsync(baseNode);
+                    var result = await PopulateNodeAsync(baseNode);
+                    if (result == false)
+                    {
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: PopulateNodeAsync failed for '{baseNode.Text}'");
+                        Debugger.Break();
+                        return false;
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: PopulateNodeAsync succeeded for '{baseNode.Text}'");
+                    }
                 }
-                WithTreeViewUpdate(() => baseNode.Expand());
+                WithTreeViewUpdate(() => ExpandProgrammatically(baseNode));
 
                 while (depthLimit > 0)
                 {
+                    if (baseNode.Tag is null)
+                        throw new Exception("Base node tag is null");
+                    //load child items is empty or old
+                    if (NodeNeedsPopulating(baseNode))
+                    {
+                        var result = await PopulateNodeAsync(baseNode);
+                        if (result == false)
+                        {
+                            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: PopulateNodeAsync failed for '{baseNode.Text}'");
+                            Debugger.Break();
+                            return false;
+                        }
+                        else
+                        {
+                            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: PopulateNodeAsync succeeded for '{baseNode.Text}'");
+                        }
+                    }
+                    //if (baseNode.Nodes.Count == 0)
+                    //{
+                    //    await Task.Delay(500);
+                    //}
+                    if (baseNode.Nodes.Count == 0)
+                    {
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: Nodes failed to populate for '{baseNode.Text}'");
+                        Debugger.Break();
+                        return false;
+                    }
+
+                    //sometimes, the csi child folders will be populated but the corresponding tree nodes will empty for unknown reasons
                     if (TryFindAncestorChildNode(baseNode, target, out var match))
                     {
                         baseNode = match!;
-                        if (baseNode.Nodes.Count == 1 && baseNode.Nodes[0] is ExpTreeNode { IsPlaceholder: true }) //has a dummy node that needs expansion
-                        {
-                            await PopulateNodeAsync(baseNode);
-                        }
-                        WithTreeViewUpdate(() => baseNode.Expand());
+
+                        WithTreeViewUpdate(() => ExpandProgrammatically(baseNode));
                         depthLimit -= 1;
                         continue;
                     }
@@ -1096,6 +1164,32 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Test to see if the node needs populating.
+        /// A node needs populating if it has a dummy child node or if its contents are older than the set timeout
+        /// or if it has never been populated before.
+        /// </summary>
+        /// <param name="node"></param>
+        /// <returns></returns>
+        private bool NodeNeedsPopulating(TreeNode node)
+        {
+            var csi = node.Tag as CShellItem;
+            bool NoDataOrOldData = csi.DirsCollectionTimestamp is null //never loaded before
+                || (DateTime.Now - csi.DirsCollectionTimestamp > new TimeSpan(0, 0, ShellController.FolderTimeout)); //old data
+
+            if (
+                NoDataOrOldData
+                || (node.Nodes.Count == 1 && node.Nodes[0] is ExpTreeNode { IsPlaceholder: true }) //dummy node which is just a placeholder to use before the first expansion of the node
+                || (node.Nodes.Count == 0 && !NoDataOrOldData)
+                )
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
 
         #endregion
 
@@ -1230,7 +1324,7 @@ namespace ExpControlsLib
 
             if (wasExpanded)
             {
-                node.Expand();
+                ExpandProgrammatically(node);
             }
 
             _TreeView.Invalidate();
@@ -1572,7 +1666,7 @@ namespace ExpControlsLib
                                 tn.Nodes.Add(ExpTreeNode.Placeholder());
                             }
                             if (wasExpanded)
-                                tn.Expand();
+                                ExpandProgrammatically(tn);
                         }
                         // All other shell verbs (delete, cut, copy, paste, etc.) are already
                         // invoked by ShowMenu on the original IContextMenu — no further action needed.
@@ -1712,10 +1806,10 @@ namespace ExpControlsLib
                 SetTreeViewImageList(_TreeView, false);
                 if (_RootNode is not null)
                 {
-                    _RootNode.Expand();
+                    ExpandProgrammatically(_RootNode);
                     if (!(_TreeView.SelectedNode == null))
                     {
-                        _TreeView.SelectedNode.Expand();
+                        ExpandProgrammatically(_TreeView.SelectedNode);
                     }
                     else
                     {
@@ -1861,7 +1955,7 @@ namespace ExpControlsLib
                 {
                     WithTreeViewUpdate(() =>
                     {
-                        _dragDrop.DropNode.Expand();
+                        ExpandProgrammatically(_dragDrop.DropNode);
                         int delta = _TreeView.Height - _dragDrop.NodePoint.Y;
                         if (delta < _TreeView.Height / 2d && delta > 0)
                         {
@@ -2400,7 +2494,7 @@ namespace ExpControlsLib
                     _TreeView.Nodes.Clear();
                     _RootNode = candidateRoot;
                     _TreeView.Nodes.Add(candidateRoot);
-                    candidateRoot.Expand();
+                    ExpandProgrammatically(candidateRoot);
 
                     // A root can finish loading after the control's initial VisibleChanged
                     // event. Select it here so the initial navigation state is initialized
@@ -2430,6 +2524,12 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Populates child folders for a given CShellItem if they are empty or older than the given timeout.
+        /// </summary>
+        /// <param name="csi"></param>
+        /// <param name="t"></param>
+        /// <returns></returns>
         private CShellItem? PopulateChildFolders(CShellItem? csi, CancellationToken t)
         {
             if (csi == null || !csi.IsFolder) return null;
@@ -2453,9 +2553,9 @@ namespace ExpControlsLib
                     _ = child.IconIndexNormal;
                     _ = child.IconIndexOpen;
                 }
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]   ExpTree.PopulateChildFolders: Warming up {child.DisplayName}");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]   ExpTree.PopulateChildFolders: Warming up {child.DisplayName}");
             }
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateChildFolders: complete");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateChildFolders: populating for '{csi.DisplayName}' complete");
 
             return target;
         }
@@ -2470,47 +2570,104 @@ namespace ExpControlsLib
         /// The <see cref="TreeNode"/> containing only a dummy placeholder node that should
         /// be replaced with its real child nodes.
         /// </param>
-        private async Task PopulateNodeAsync(TreeNode node, CancellationToken? token = null)
+        private async Task<bool> PopulateNodeAsync(TreeNode node, CancellationToken? token = null)
         {
-            if (node?.Tag is not CShellItem csi) return;
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Begin for '{csi.DisplayName}'");
+            static string Ts() => DateTime.Now.ToString("HH:mm:ss.fff");
+            static int Tid() => Environment.CurrentManagedThreadId;
+            static string Canceled(CancellationToken? t) => t is { IsCancellationRequested: true } ? "canceled" : "active";
+
+            if (node?.Tag is not CShellItem csi)
+            {
+                Debug.WriteLine($"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] ABORT: node/tag invalid");
+                return false;
+            }
+
+            Debug.WriteLine(
+                $"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] BEGIN " +
+                $"node='{node.Text}', item='{csi.DisplayName}', " +
+                $"initialNodeChildren={node.Nodes.Count}, token={Canceled(token)}");
 
             try
             {
-                if (token is not null && token.Value.IsCancellationRequested) return;
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Enqueueing STA work for '{csi.DisplayName}'...");
-                var result = await _staRunner.EnqueueWork(
-                    t => PopulateChildFolders(csi, t)
-                    , token ?? CancellationToken.None);
+                if (token is { IsCancellationRequested: true })
+                {
+                    Debug.WriteLine($"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] EARLY-CANCEL before enqueue for '{csi.DisplayName}'");
+                    return true;
+                }
 
-                if (result == null) return;
+                if (_staRunner is null)
+                {
+                    Debug.WriteLine($"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] ERROR: _staRunner is null for '{csi.DisplayName}'");
+                    return false;
+                }
 
-                if (token is not null && token.Value.IsCancellationRequested) return;
+                Debug.WriteLine($"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] ENQUEUE-STA for '{csi.DisplayName}'");
+                var result = await _staRunner.EnqueueWork<CShellItem?>(
+                    t => PopulateChildFolders(csi, t),
+                    token ?? CancellationToken.None);
+
+                Debug.WriteLine(
+                    $"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] STA-COMPLETE for '{csi.DisplayName}', " +
+                    $"resultNull={(result is null)}");
+
+                if (result is null)
+                {
+                    Debug.WriteLine($"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] ERROR: STA returned null for '{csi.DisplayName}'");
+                    return false;
+                }
+
+                if (token is { IsCancellationRequested: true })
+                {
+                    Debug.WriteLine($"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] CANCEL after STA for '{csi.DisplayName}'");
+                    return true;
+                }
+
+                Debug.WriteLine(
+                    $"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] PRE-SORT for '{csi.DisplayName}', " +
+                    $"directoryCountBeforeSort={result.Directories.Count}");
 
                 node.Tag = result;
                 result.Directories.Sort();
 
-                if (token is not null && token.Value.IsCancellationRequested) return;
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Updating TreeView for '{csi.DisplayName}'...");
+                Debug.WriteLine(
+                    $"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] PRE-UI-UPDATE for '{csi.DisplayName}', " +
+                    $"existingNodeChildren={node.Nodes.Count}, token={Canceled(token)}");
+
+                if (token is { IsCancellationRequested: true })
+                {
+                    Debug.WriteLine($"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] CANCEL before UI update for '{csi.DisplayName}'");
+                    return true;
+                }
+
                 _TreeView.BeginUpdate();
                 try
                 {
+                    var oldCount = node.Nodes.Count;
                     node.Nodes.Clear();
                     BuildTree(node, result.Directories);
+                    var newCount = node.Nodes.Count;
+
+                    Debug.WriteLine(
+                        $"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] UI-UPDATED for '{csi.DisplayName}', " +
+                        $"oldNodeChildren={oldCount}, newNodeChildren={newCount}, sourceDirectories={result.Directories.Count}");
                 }
                 finally
                 {
                     _TreeView.EndUpdate();
+                    Debug.WriteLine($"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] ENDUPDATE for '{csi.DisplayName}'");
                 }
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: End for '{csi.DisplayName}'");
+
+                Debug.WriteLine($"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] END SUCCESS for '{csi.DisplayName}'");
+                return true;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException oce)
             {
+                Debug.WriteLine($"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] CANCELED EXCEPTION for '{csi.DisplayName}': {oce.Message}");
                 throw;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.PopulateNodeAsync: Error - {ex}");
+                Debug.WriteLine($"[{Ts()}] ExpTree.PopulateNodeAsync [T{Tid()}] ERROR for '{csi.DisplayName}': {ex}");
                 throw;
             }
         }
@@ -2634,6 +2791,7 @@ namespace ExpControlsLib
             return ReferenceEquals(nodeItem, item) || CPidl.ResolvesToSamePathOrName(nodeItem.PIDL, item.PIDL);
         }
 
+
         /// <summary>
         /// Raises <see cref="ExpTreeNodeSelected"/> with the expected path/display payload.
         /// </summary>
@@ -2664,49 +2822,6 @@ namespace ExpControlsLib
             // Trim to match the logic used in MainForm's RemoveUselessSpecialLocations
             var path = (item.FullPath ?? "").Trim(':', '{', '}');
             return _excludedItems.Contains(path);
-        }
-
-        #endregion Private Methods
-
-        /// <summary>
-        /// Cancels any active root load. The load task owns disposal of its linked
-        /// cancellation source after its background work has observed cancellation.
-        /// </summary>
-        private void Cleanup()
-        {
-            _rootLoadVersion++;
-            _rootLoadCts?.Cancel();
-            _rootLoadCts = null;
-            _dragDrop.Dispose();
-            DragHandler?.Dispose();
-            DragHandler = null;
-            DropHandler?.Dispose();
-            DropHandler = null;
-            _contextMenu.Dispose();
-            _staRunner?.Dispose();
-            _staRunner = null;
-            if (_shellController?.ShellUpdater != null)
-                _shellController.ShellUpdater.UpdateEvent -= ShellController_UpdateEventHandler;
-        }
-
-        /// <summary> 
-        /// Clean up any resources being used.
-        /// </summary>
-        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
-        protected override void Dispose(bool disposing)
-        {
-            try
-            {
-                if (disposing && components != null)
-                {
-                    components.Dispose();
-                }
-                Cleanup();
-            }
-            finally
-            {
-                base.Dispose(disposing);
-            }
         }
 
 
@@ -2776,6 +2891,8 @@ namespace ExpControlsLib
             // FONTS = &H14
             // PRINTHOOD = &H1B
         }
+
+        #endregion
     }
 
 

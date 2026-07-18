@@ -1,0 +1,138 @@
+$patch = @'
+diff --git a/ExpControlsLib/ExpTree.cs b/ExpControlsLib/ExpTree.cs
+--- a/ExpControlsLib/ExpTree.cs
++++ b/ExpControlsLib/ExpTree.cs
+@@
+         /// <summary>
+         /// Indicates whether the pending expansion item should also be selected after the root
+         /// load completes and the deferred expansion is performed.
+         /// </summary>
+         private bool _pendingSelectExpandedNode;
++
++        /// <summary>
++        /// Suppresses <see cref="Tv1_BeforeExpand"/> population logic during
++        /// programmatic expand operations.
++        /// </summary>
++        private int _programmaticExpandSuppressionDepth;
+@@
+         private void WithTreeViewUpdate(Action action)
+         {
+             _TreeView.BeginUpdate();
+             try
+             {
+                 action();
+             }
+             finally
+             {
+                 _TreeView.EndUpdate();
+             }
+         }
++
++        /// <summary>
++        /// Expands a node programmatically. By default this suppresses
++        /// <see cref="Tv1_BeforeExpand"/> async population behavior.
++        /// </summary>
++        private void ExpandProgrammatically(TreeNode node, bool suppressBeforeExpand = true)
++        {
++            ArgumentNullException.ThrowIfNull(node);
++
++            if (!suppressBeforeExpand)
++            {
++                node.Expand();
++                return;
++            }
++
++            _programmaticExpandSuppressionDepth++;
++            try
++            {
++                node.Expand();
++            }
++            finally
++            {
++                _programmaticExpandSuppressionDepth--;
++            }
++        }
+@@
+             try
+             {
+                 _TreeView.BeginUpdate();
+ 
+-                baseNode.Expand();
++                ExpandProgrammatically(baseNode);
+ 
+                 while (lim > 0)
+                 {
+                     if (TryFindAncestorChildNode(baseNode, newItem, out var match))
+                     {
+                         baseNode = match!;
+-                        baseNode.Expand();
++                        ExpandProgrammatically(baseNode);
+                         lim -= 1;
+                         continue;
+                     }
+@@
+-                WithTreeViewUpdate(() => baseNode.Expand());
++                WithTreeViewUpdate(() => ExpandProgrammatically(baseNode));
+@@
+-                        WithTreeViewUpdate(() => baseNode.Expand());
++                        WithTreeViewUpdate(() => ExpandProgrammatically(baseNode));
+                         depthLimit -= 1;
+                         continue;
+                     }
+@@
+         private async void Tv1_BeforeExpand(object sender, TreeViewCancelEventArgs e)
+         {
++            if (_programmaticExpandSuppressionDepth > 0)
++            {
++                if (e.Node?.Tag is CShellItem suppressedItem)
++                {
++                    e.Node.ImageIndex = suppressedItem.IconIndexOpen;
++                }
++
++                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Tv1_BeforeExpand: Skipped for programmatic expand '{e.Node?.Text}'");
++                return;
++            }
++
+             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Tv1_BeforeExpand: Begin for '{e.Node?.Text}'");
+             if (e.Node.Nodes.Count == 1 && e.Node.Nodes[0] is ExpTreeNode { IsPlaceholder: true })
+             {
+@@
+                 SetTreeViewImageList(_TreeView, false);
+                 if (_RootNode is not null)
+                 {
+-                    _RootNode.Expand();
++                    ExpandProgrammatically(_RootNode);
+                     if (!(_TreeView.SelectedNode == null))
+                     {
+-                        _TreeView.SelectedNode.Expand();
++                        ExpandProgrammatically(_TreeView.SelectedNode);
+                     }
+                     else
+                     {
+@@
+                 try
+                 {
+                     WithTreeViewUpdate(() =>
+                     {
+-                        _dragDrop.DropNode.Expand();
++                        ExpandProgrammatically(_dragDrop.DropNode);
+                         int delta = _TreeView.Height - _dragDrop.NodePoint.Y;
+                         if (delta < _TreeView.Height / 2d && delta > 0)
+                         {
+@@
+                 WithTreeViewUpdate(() =>
+                 {
+                     _TreeView.Nodes.Clear();
+                     _RootNode = candidateRoot;
+                     _TreeView.Nodes.Add(candidateRoot);
+-                    candidateRoot.Expand();
++                    ExpandProgrammatically(candidateRoot);
+ 
+                     // A root can finish loading after the control's initial VisibleChanged
+                     // event. Select it here so the initial navigation state is initialized
+'@
+
+Set-Content -Path .\expand-suppression.patch -Value $patch -NoNewline
+git apply --check .\expand-suppression.patch
+git apply .\expand-suppression.patch
+git diff -- ExpControlsLib/ExpTree.cs
