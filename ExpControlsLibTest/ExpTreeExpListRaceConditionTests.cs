@@ -17,7 +17,9 @@ namespace ExpControlsLibTest
     /// the SynchronizationContext will be reset to NUnit.Framework.Internal.SafeSynchronizationContext after
     /// your code resumes from an "await".  So, we must set the SynchronizationContext to a 
     /// WindowsFormsSynchronizationContext before Application.Run() is called.
-    /// 
+    /// One of the key takeaways from this is that it is possible for a resumption from an await to resume on a 
+    /// different thread than the one that started the await.  I think this is caused by the thread saving the resumption
+    /// thread id when Application.Run is called and then the thread context is changed after that and then the 
     /// </remarks>
     [TestFixture]
     [Apartment(ApartmentState.STA)]
