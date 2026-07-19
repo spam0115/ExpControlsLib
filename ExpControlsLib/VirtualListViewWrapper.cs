@@ -975,7 +975,7 @@ namespace ExpControlsLib
                 }
                 else
                 {
-                    Debug.WriteLine("VirtualListViewWrapper.GetLviFromVirtual failed to get item #" + index.ToString() + " from cache - " + item.Text);
+                    //Debug.WriteLine("VirtualListViewWrapper.GetLviFromVirtual failed to get item #" + index.ToString() + " from cache - " + item.Text);
                     lvi = CreateLviFromCsi(item);
                     _itemCache[index] = lvi;
                     return lvi;

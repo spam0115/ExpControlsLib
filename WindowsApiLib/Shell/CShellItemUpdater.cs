@@ -184,14 +184,19 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        public void OnMoveItem(CShellItem item, string newPath)
+        /// <summary>
+        /// Fires the events for a file move.
+        /// </summary>
+        /// <param name="item">the original file with old path</param>
+        /// <param name="fullyQualifiedDestinationName">The full path and name of the destination file</param>
+        public void OnMoveItem(CShellItem item, string fullyQualifiedDestinationName)
         {
-            if (item == null || string.IsNullOrEmpty(newPath)) return;
+            if (item == null || string.IsNullOrEmpty(fullyQualifiedDestinationName)) return;
 
-            IntPtr newPidl = CPidl.PathToPidl(newPath);
+            IntPtr newPidl = CPidl.PathToPidl(fullyQualifiedDestinationName);
             try
             {
-                UpdateLogic.DoUpdateMoved(item, newPidl);
+                UpdateLogic.HandleMoved(item, newPidl);
             }
             finally
             {
@@ -203,7 +208,7 @@ namespace WindowsApiLib.Shell
         {
             if (item == null || newParent == null) return;
 
-            UpdateLogic.DoUpdateMoved(item, newParent.PIDL);
+            UpdateLogic.HandleMoved(item, newParent.PIDL);
         }
 
         #endregion
