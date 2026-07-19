@@ -3134,7 +3134,7 @@ namespace ExpControlsLib
                 }
 
                 if (movedItems.Count > 0)
-                    RemoveItemsFromList(movedItems.ToArray());
+                    RemoveItemsFromList(movedItems);
             }
 
             // Fire ExpListDragCompleted for copy operations (move is handled by the shell notification
@@ -3153,21 +3153,23 @@ namespace ExpControlsLib
                 && (e.Effect == DragDropEffects.Move || e.Effect == DragDropEffects.None))
             {
                 ExpListDragCompleted?.Invoke(this,
-                    new DragCompletedEventArgs(e.Effect, _pendingDragItems));
+                    new DragCompletedEventArgs(e.Effect, _pendingDragItems,
+                        destinationPath: e.DestinationItem?.FullPath,
+                        destination: e.DestinationItem));
             }
 
             _pendingDragItems = null;
         }
 
-        private void RemoveItemsFromList(CShellItem[] items)
+        public void RemoveItemsFromList(IEnumerable<CShellItem> items)
         {
-            bool useUpdate = items.Length > _batchThreshold;
+            bool useUpdate = items.Count() > _batchThreshold;
             if (useUpdate) _listView.BeginUpdate();
             try
             {
                 _listViewWrapper.RemoveItems(items);
 
-                if (items.Length > this._listViewWrapper.GetApproxVisibleCount())
+                if (items.Count() > this._listViewWrapper.GetApproxVisibleCount())
                     OnScroll();
 
                 if (_currentFolderCsi != null)

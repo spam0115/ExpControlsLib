@@ -1676,6 +1676,12 @@
             load completes and the deferred expansion is performed.
             </summary>
         </member>
+        <member name="F:ExpControlsLib.ExpTree._programmaticExpandSuppressionDepth">
+            <summary>
+            Suppresses <see cref="M:ExpControlsLib.ExpTree.Tv1_BeforeExpand(System.Object,System.Windows.Forms.TreeViewCancelEventArgs)"/> lazy-load behavior while internal code
+            performs programmatic node expansion.
+            </summary>
+        </member>
         <member name="F:ExpControlsLib.ExpTree._DropHandler">
             <summary>
             Backing field for the <see cref="P:ExpControlsLib.ExpTree.DropHandler"/> property.
@@ -2004,7 +2010,9 @@
         <member name="M:ExpControlsLib.ExpTree.ExpandANodeAsync(WindowsApiLib.Shell.CShellItem,System.Boolean)">
             <summary>
             Asynchronously expands TreeNodes from the tree root through the node represented by
-            <paramref name="target"/>, populating lazy-loaded (dummy) nodes on demand.
+            <paramref name="target"/>.  Expands the tree to the target node, selecting it if 
+            <paramref name="SelectExpandedNode"/> is true.  Populates lazy-loaded (dummy) nodes 
+            on demand and reloads folder contents if they are older than a set timeout.  
             This is the preferred async counterpart of <see cref="M:ExpControlsLib.ExpTree.ExpandANode(WindowsApiLib.Shell.CShellItem,System.Boolean)"/>.
             </summary>
             <param name="target">
@@ -2020,6 +2028,15 @@
             A <see cref="T:System.Threading.Tasks.Task`1"/> that resolves to <c>true</c> if the node was found
             and expanded successfully, or <c>false</c> otherwise.
             </returns>
+        </member>
+        <member name="M:ExpControlsLib.ExpTree.NodeNeedsPopulating(System.Windows.Forms.TreeNode)">
+            <summary>
+            Test to see if the node needs populating.
+            A node needs populating if it has a dummy child node or if its contents are older than the set timeout
+            or if it has never been populated before.
+            </summary>
+            <param name="node"></param>
+            <returns></returns>
         </member>
         <member name="M:ExpControlsLib.ExpTree.ShellController_UpdateEventHandler(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
             <summary>
@@ -2384,6 +2401,14 @@
             the returned task rather than relying on the <see cref="P:ExpControlsLib.ExpTree.Root"/> property setter.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.PopulateChildFolders(WindowsApiLib.Shell.CShellItem,System.Threading.CancellationToken)">
+            <summary>
+            Populates child folders for a given CShellItem if they are empty or older than the given timeout.
+            </summary>
+            <param name="csi"></param>
+            <param name="t"></param>
+            <returns></returns>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.PopulateNodeAsync(System.Windows.Forms.TreeNode,System.Nullable{System.Threading.CancellationToken})">
             <summary>
             Asynchronously populates a lazy-loaded TreeNode by fetching its child
@@ -2437,18 +2462,6 @@
             <c>true</c> if the item's path (stripped of leading/trailing <c>:</c>, <c>{</c>, and <c>}</c>
             characters) is found in <see cref="P:ExpControlsLib.ExpTree.ExcludedItems"/>; otherwise <c>false</c>.
             </returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.Cleanup">
-            <summary>
-            Cancels any active root load. The load task owns disposal of its linked
-            cancellation source after its background work has observed cancellation.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpTree.Dispose(System.Boolean)">
-            <summary> 
-            Clean up any resources being used.
-            </summary>
-            <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         </member>
         <member name="T:ExpControlsLib.ExpTree.StartDir">
             <summary>
