@@ -2110,7 +2110,7 @@ namespace ExpControlsLib
                     }
                 }
 
-                if (colIndex == 0)
+                if (mapping == ".DisplayName")
                 {
                     text = item.DisplayName;
                 }
@@ -3878,6 +3878,7 @@ namespace ExpControlsLib
                                 Debug.WriteLine($"LoadIconsForItems: GetItem returned null for index {i}");
                                 continue;
                             }
+                            int oldImageIndex = csi.ImageIndex;
                             csi.ImageIndex = SystemImageListManager.GetIconIndex(csi, isLarge);
 
                             var lvi = _listViewWrapper.GetLviFromVirtual(i);
@@ -3888,7 +3889,7 @@ namespace ExpControlsLib
                                 continue;
                             }
 
-                            if (lvi.ImageIndex != csi.ImageIndex)
+                            if (oldImageIndex != csi.ImageIndex)
                             {
                                 lvi.ImageIndex = csi.ImageIndex;
                                 _listView.RedrawItems(i, i, false);
@@ -3947,6 +3948,7 @@ namespace ExpControlsLib
                                 Debug.WriteLine($"LoadIconsForItems: GetItem returned null for index {i}");
                                 continue;
                             }
+                            int oldImageIndex = csi.ImageIndex;
                             csi.ImageIndex = SystemImageListManager.GetIconIndex(csi, isLarge);
 
                             var lvi = _listViewWrapper.GetLviFromVirtual(i);
@@ -3957,7 +3959,7 @@ namespace ExpControlsLib
                                 continue;
                             }
 
-                            if (lvi.ImageIndex != csi.ImageIndex)
+                            if (oldImageIndex != csi.ImageIndex)
                             {
                                 lvi.ImageIndex = csi.ImageIndex;
                                 _listView.RedrawItems(i, i, false);
