@@ -28,69 +28,86 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.splitContainer1 = new System.Windows.Forms.SplitContainer();
-            this.expTree1 = new ExpControlsLib.ExpTree();
-            this.expList1 = new ExpControlsLib.ExpList();
-            ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).BeginInit();
-            this.splitContainer1.Panel1.SuspendLayout();
-            this.splitContainer1.Panel2.SuspendLayout();
-            this.splitContainer1.SuspendLayout();
-            this.SuspendLayout();
+            splitContainer1 = new System.Windows.Forms.SplitContainer();
+            expTree1 = new ExpControlsLib.ExpTree();
+            expList1 = new ExpControlsLib.ExpList();
+            ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
+            splitContainer1.Panel1.SuspendLayout();
+            splitContainer1.Panel2.SuspendLayout();
+            splitContainer1.SuspendLayout();
+            SuspendLayout();
             // 
             // splitContainer1
             // 
-            this.splitContainer1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.splitContainer1.Location = new System.Drawing.Point(0, 0);
-            this.splitContainer1.Name = "splitContainer1";
+            splitContainer1.Dock = System.Windows.Forms.DockStyle.Fill;
+            splitContainer1.Location = new System.Drawing.Point(0, 0);
+            splitContainer1.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            splitContainer1.Name = "splitContainer1";
             // 
             // splitContainer1.Panel1
             // 
-            this.splitContainer1.Panel1.Controls.Add(this.expTree1);
+            splitContainer1.Panel1.Controls.Add(expTree1);
             // 
             // splitContainer1.Panel2
             // 
-            this.splitContainer1.Panel2.Controls.Add(this.expList1);
-            this.splitContainer1.Size = new System.Drawing.Size(784, 461);
-            this.splitContainer1.SplitterDistance = 250;
-            this.splitContainer1.TabIndex = 0;
+            splitContainer1.Panel2.Controls.Add(expList1);
+            splitContainer1.Size = new System.Drawing.Size(1045, 709);
+            splitContainer1.SplitterDistance = 333;
+            splitContainer1.SplitterWidth = 5;
+            splitContainer1.TabIndex = 0;
             // 
             // expTree1
             // 
-            this.expTree1.AllowFolderRename = true;
-            this.expTree1.Cursor = System.Windows.Forms.Cursors.Default;
-            this.expTree1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.expTree1.Location = new System.Drawing.Point(0, 0);
-            this.expTree1.Name = "expTree1";
-            this.expTree1.ShowRootLines = false;
-            this.expTree1.Size = new System.Drawing.Size(250, 461);
-            this.expTree1.StartUpDirectory = ExpControlsLib.ExpTree.StartDir.Desktop;
-            this.expTree1.TabIndex = 0;
-            this.expTree1.ExpTreeNodeSelected += new ExpControlsLib.ExpTree.ExpTreeNodeSelectedEventHandler(this.expTree1_ExpTreeNodeSelected);
+            expTree1.AllowFolderRename = true;
+            expTree1.Dock = System.Windows.Forms.DockStyle.Fill;
+            expTree1.Location = new System.Drawing.Point(0, 0);
+            expTree1.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            expTree1.Name = "expTree1";
+            expTree1.Root = null;
+            expTree1.SelectedNode = null;
+            expTree1.ShowRootLines = false;
+            expTree1.Size = new System.Drawing.Size(333, 709);
+            expTree1.StartUpDirectory = ExpControlsLib.ExpTree.StartDir.Desktop;
+            expTree1.TabIndex = 0;
+            expTree1.ExpTreeNodeSelected += expTree1_ExpTreeNodeSelected;
             // 
             // expList1
             // 
-            this.expList1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.expList1.Location = new System.Drawing.Point(0, 0);
-            this.expList1.Name = "expList1";
-            this.expList1.Size = new System.Drawing.Size(530, 461);
-            this.expList1.TabIndex = 0;
-            this.expList1.ExpListItemDoubleClick += new ExpControlsLib.ExpList.ExpListItemDoubleClickEventHandler(this.expList1_ExpListItemDoubleClick);
+            expList1.CheckBoxes = true;
+            expList1.CurrentFolderCsi = null;
+            expList1.DisplayMode = ExpControlsLib.ListViewDisplayMode.LargeIcon;
+            expList1.Dock = System.Windows.Forms.DockStyle.Fill;
+            expList1.FullRowSelect = true;
+            expList1.HeaderStyle = System.Windows.Forms.ColumnHeaderStyle.Clickable;
+            expList1.IsShuttingDown = false;
+            expList1.LastMoveFolder = null;
+            expList1.Location = new System.Drawing.Point(0, 0);
+            expList1.Margin = new System.Windows.Forms.Padding(7, 6, 7, 6);
+            expList1.MultiSelect = true;
+            expList1.Name = "expList1";
+            expList1.Size = new System.Drawing.Size(707, 709);
+            expList1.SortColumn = 0;
+            expList1.TabIndex = 0;
+            expList1.VerticalScrollPosition = 0;
+            expList1.VirtualMode = true;
+            expList1.ExpListItemDoubleClick += expList1_ExpListItemDoubleClick;
             // 
             // Form1
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(784, 461);
-            this.Controls.Add(this.splitContainer1);
-            this.Name = "Form1";
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "Form1";
-            this.Load += new System.EventHandler(this.Form1_Load);
-            this.splitContainer1.Panel1.ResumeLayout(false);
-            this.splitContainer1.Panel2.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).EndInit();
-            this.splitContainer1.ResumeLayout(false);
-            this.ResumeLayout(false);
+            AutoScaleDimensions = new System.Drawing.SizeF(8F, 20F);
+            AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            ClientSize = new System.Drawing.Size(1045, 709);
+            Controls.Add(splitContainer1);
+            Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            Name = "Form1";
+            StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            Text = "Form1";
+            Load += Form1_Load;
+            splitContainer1.Panel1.ResumeLayout(false);
+            splitContainer1.Panel2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)splitContainer1).EndInit();
+            splitContainer1.ResumeLayout(false);
+            ResumeLayout(false);
 
         }
 

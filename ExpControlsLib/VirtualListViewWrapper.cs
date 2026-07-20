@@ -39,18 +39,26 @@ namespace ExpControlsLib
         private bool _inSort = false;
 
         /// <summary>
-        /// The filtered view of items. When non-null, this is what the ListView displays.
-        /// When null, the ListView displays all items from <see cref="MasterItems"/>.
+        /// The master list of all the items.
         /// </summary>
         private List<CShellItem>? _filteredView;
 
         public readonly ListView _ListView;
-        public readonly HugeList<CShellItem> MasterItems = new();
+        public readonly HugeList<CShellItem> Items = new();
         public bool IsShuttingDown;
 
         /// <summary>
+        /// When <c>true</c>, the <see cref="ExpList"/> handler must ignore <c>ItemChecked</c>
+        /// events fired by the inner <see cref="ListView"/>. Set while
+        /// <see cref="CreateLviFromCsi"/> applies model state to a freshly materialized item,
+        /// and while <see cref="SyncCheckedInCache"/> writes back to an already-cached item,
+        /// to prevent feedback loops.
+        /// </summary>
+        internal bool SuppressCheckEvents;
+
+        /// <summary>
         /// The filtered view of items. When non-null, this is what the ListView displays.
-        /// When null, the ListView displays all items from <see cref="MasterItems"/>.
+        /// When null, the ListView displays all items from <see cref="Items"/>.
         /// </summary>
         public List<CShellItem>? FilteredView => _filteredView;
 
@@ -63,12 +71,12 @@ namespace ExpControlsLib
         /// Gets the collection that the ListView should read from.
         /// Returns the filtered view if active, otherwise the master list.
         /// </summary>
-        private IEnumerable<CShellItem> ActiveView => _filteredView ?? (IEnumerable<CShellItem>)MasterItems;
+        private IEnumerable<CShellItem> ActiveView => _filteredView ?? (IEnumerable<CShellItem>)Items;
 
         /// <summary>
         /// Gets the number of items in the active view (filtered or master).
         /// </summary>
-        private int ActiveViewCount => _filteredView?.Count ?? MasterItems.Count;
+        private int ActiveViewCount => _filteredView?.Count ?? Items.Count;
 
         /// <summary>
         /// Gets the item at the specified index from the active view.
@@ -77,7 +85,7 @@ namespace ExpControlsLib
         {
             if (_filteredView != null)
                 return _filteredView[index];
-            return MasterItems[index];
+            return Items[index];
         }
 
         /// <summary>
@@ -88,7 +96,7 @@ namespace ExpControlsLib
         {
             if (_filteredView == null) return viewIndex;
             var item = _filteredView[viewIndex];
-            return MasterItems.IndexOf(item);
+            return Items.IndexOf(item);
         }
 
         /// <summary>
@@ -105,7 +113,7 @@ namespace ExpControlsLib
             }
 
             _filteredView = new List<CShellItem>();
-            foreach (var item in MasterItems)
+            foreach (var item in Items)
             {
                 if (predicate(item))
                     _filteredView.Add(item);
@@ -211,7 +219,7 @@ namespace ExpControlsLib
                 else
                 {
                     _ListView.RetrieveVirtualItem -= OnRetrieveVirtualItem;
-                    MasterItems.Clear();
+                    Items.Clear();
                     _filteredView = null;
                     _itemCache.Clear();
                     _pathToIndex.Clear();
@@ -308,7 +316,7 @@ namespace ExpControlsLib
             {
                 _ListView.Items.Clear();
             }
-            MasterItems.Clear();
+            Items.Clear();
             _filteredView = null;
             _itemCache.Clear();
             _pathToIndex.Clear();
@@ -327,7 +335,7 @@ namespace ExpControlsLib
             LastTopIndex = -1;
             if (VirtualMode)
             {
-                MasterItems.AddRange(items);
+                Items.AddRange(items);
                 ApplyViewToListView();
             }
             else
@@ -349,7 +357,7 @@ namespace ExpControlsLib
             LastTopIndex = -1;
             if (VirtualMode)
             {
-                MasterItems.Add(item);
+                Items.Add(item);
                 ApplyViewToListView();
             }
             else
@@ -387,19 +395,19 @@ namespace ExpControlsLib
             if (VirtualMode)
             {
                 int masterIndex;
-                lock (MasterItems)
+                lock (Items)
                 {
                     if (_filteredView != null)
                     {
                         // When filtered, find the correct position in the master list
                         // by locating where the adjacent filtered items sit in the master.
                         masterIndex = FindMasterInsertionPointForFiltered(item, index);
-                        MasterItems.Insert(masterIndex, item);
+                        Items.Insert(masterIndex, item);
                     }
                     else
                     {
                         masterIndex = index;
-                        MasterItems.Insert(index, item);
+                        Items.Insert(index, item);
                     }
 
                     ShiftCacheAfterInsertion(masterIndex);
@@ -462,13 +470,13 @@ namespace ExpControlsLib
             {
                 int masterIndex;
                 CShellItem item;
-                lock (MasterItems)
+                lock (Items)
                 {
                     item = GetItemFromActiveView(index);
-                    masterIndex = MasterItems.IndexOf(item);
+                    masterIndex = Items.IndexOf(item);
                     if (masterIndex < 0) return;
 
-                    MasterItems.RemoveAt(masterIndex);
+                    Items.RemoveAt(masterIndex);
 
                     ShiftCacheAfterRemoval(masterIndex);
                 }
@@ -534,11 +542,11 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                lock (MasterItems)
+                lock (Items)
                 {
                     // Rebuild master list in one pass, removing matched items
-                    var remaining = new List<CShellItem>(MasterItems.Count);
-                    foreach (var item in MasterItems)
+                    var remaining = new List<CShellItem>(Items.Count);
+                    foreach (var item in Items)
                     {
                         if (!toRemove.Contains(item))
                         {
@@ -550,8 +558,8 @@ namespace ExpControlsLib
                         }
                     }
 
-                    MasterItems.Clear();
-                    MasterItems.AddRange(remaining);
+                    Items.Clear();
+                    Items.AddRange(remaining);
 
                     // For large batches, it's safer and often faster to just clear the cache
                     _itemCache.Clear();
@@ -1001,7 +1009,53 @@ namespace ExpControlsLib
             }
             item.NeedsRefresh = false;
 
+            // Sync checkbox visual state from the model without triggering the ItemChecked handler.
+            SuppressCheckEvents = true;
+            try   { lvi.Checked = item.Checked; }
+            finally { SuppressCheckEvents = false; }
+
             return lvi;
+        }
+
+        /// <summary>
+        /// Returns the <see cref="CShellItem"/> at <paramref name="viewIndex"/> in the active
+        /// view (filtered or master). Returns <c>null</c> if the index is out of range.
+        /// </summary>
+        internal CShellItem? GetShellItemAtViewIndex(int viewIndex)
+        {
+            if (viewIndex < 0 || viewIndex >= ActiveViewCount) return null;
+            return GetItemFromActiveView(viewIndex);
+        }
+
+        /// <summary>
+        /// Updates the cached <see cref="ListViewItem"/> at <paramref name="viewIndex"/> to
+        /// reflect a programmatic checked-state change without triggering
+        /// <see cref="ExpList"/>'s <c>ItemChecked</c> handler.
+        /// In non-virtual mode updates the live <see cref="ListView.Items"/> entry directly.
+        /// </summary>
+        internal void SyncCheckedInCache(int viewIndex, bool value)
+        {
+            if (viewIndex < 0) return;
+
+            if (VirtualMode)
+            {
+                if (_itemCache.TryGetValue(viewIndex, out var lvi))
+                {
+                    SuppressCheckEvents = true;
+                    try   { lvi.Checked = value; }
+                    finally { SuppressCheckEvents = false; }
+                }
+                // Not cached: next RetrieveVirtualItem will apply item.Checked automatically.
+            }
+            else
+            {
+                if (viewIndex < _ListView.Items.Count)
+                {
+                    SuppressCheckEvents = true;
+                    try   { _ListView.Items[viewIndex].Checked = value; }
+                    finally { SuppressCheckEvents = false; }
+                }
+            }
         }
 
         private void UpdateVirtualListSize()
@@ -1110,8 +1164,8 @@ namespace ExpControlsLib
             else
             {
                 // Sort the master list: copy to List for sorting because HugeList (B-Tree) sort is impractical in-place
-                var list = new List<CShellItem>((int)MasterItems.Count);
-                foreach (var item in MasterItems)
+                var list = new List<CShellItem>((int)Items.Count);
+                foreach (var item in Items)
                 {
                     list.Add(item);
                 }
@@ -1119,8 +1173,8 @@ namespace ExpControlsLib
                 list.Sort(comparer);
 
                 _ListView.BeginUpdate();
-                MasterItems.Clear();
-                MasterItems.AddRange(list);
+                Items.Clear();
+                Items.AddRange(list);
                 _ListView.EndUpdate();
             }
 
@@ -1195,7 +1249,7 @@ namespace ExpControlsLib
                 }
                 else
                 {
-                    long result = MasterItems.BinarySearch(0, MasterItems.Count, item, comparer);
+                    long result = Items.BinarySearch(0, Items.Count, item, comparer);
                     return (int)(result < 0 ? ~result : result);
                 }
             }
@@ -1237,22 +1291,22 @@ namespace ExpControlsLib
             // and insert after it. Otherwise, insert at the master index of the adjacent filtered item.
             if (_filteredView == null || _filteredView.Count == 0)
             {
-                return MasterItems.Count;
+                return Items.Count;
             }
 
             if (filteredInsertIndex >= _filteredView.Count)
             {
                 // Inserting after the last filtered item
                 var lastFiltered = _filteredView[_filteredView.Count - 1];
-                int masterIdx = MasterItems.IndexOf(lastFiltered);
-                return masterIdx >= 0 ? masterIdx + 1 : MasterItems.Count;
+                int masterIdx = Items.IndexOf(lastFiltered);
+                return masterIdx >= 0 ? masterIdx + 1 : Items.Count;
             }
             else
             {
                 // Inserting before the item at filteredInsertIndex
                 var nextFiltered = _filteredView[filteredInsertIndex];
-                int masterIdx = MasterItems.IndexOf(nextFiltered);
-                return masterIdx >= 0 ? masterIdx : MasterItems.Count;
+                int masterIdx = Items.IndexOf(nextFiltered);
+                return masterIdx >= 0 ? masterIdx : Items.Count;
             }
         }
 

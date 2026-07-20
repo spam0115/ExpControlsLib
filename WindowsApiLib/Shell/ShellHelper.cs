@@ -286,7 +286,12 @@ namespace WindowsApiLib.Shell
             var IID_IDropTargetHelper = ShellAPI.IID_IDropTargetHelper;
             if (CoCreateInstance(ref CLSID_DragDropHelper, IntPtr.Zero, CLSCTX.INPROC_SERVER, ref IID_IDropTargetHelper, out helperPtr) == S_OK)
             {
-                dropHelper = (IDropTargetHelper)Marshal.GetObjectForIUnknown(helperPtr);
+                // Use GetUniqueObjectForIUnknown rather than GetObjectForIUnknown to bypass
+                // the CLR's RCW identity cache. In tight create/dispose loops (e.g. unit tests
+                // that construct many ExpTree/ExpList controls) the cache can hand back a
+                // stale RCW whose underlying COM object has already been released, causing an
+                // intermittent InvalidCastException (E_NOINTERFACE) on the cast below.
+                dropHelper = (IDropTargetHelper)Marshal.GetUniqueObjectForIUnknown(helperPtr);
                 return true;
             }
             else

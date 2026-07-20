@@ -55,6 +55,8 @@ namespace ExpControlsLib
     ///     <item><description>Shows how to handle a DoubleClick on a ListViewItem.</description></item>
     ///     </list>
     ///     </para>
+    ///     
+    ///     BTW, non-virtual mode is currently broken because I don't really care about non-virtual mode right now.
     /// </remarks>
     /// 
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
@@ -348,6 +350,18 @@ namespace ExpControlsLib
         [Category("Action")]
         [Description("Fires when the sort column or order has changed")]
         public event EventHandler SortOrderChanged;
+
+        /// <summary>Delegate for the <see cref="ItemChecked"/> event.</summary>
+        public delegate void ExpListItemCheckedEventHandler(object? sender, ExpListItemCheckedEventArgs e);
+
+        /// <summary>
+        /// Occurs after a <see cref="CShellItem"/>'s checked state changes as a result of a
+        /// user interaction or a call to <see cref="SetChecked"/>.
+        /// Not raised during bulk <see cref="CheckAll"/> / <see cref="UncheckAll"/>.
+        /// </summary>
+        [Category("Action")]
+        [Description("Fires when an item's checked state changes")]
+        public event ExpListItemCheckedEventHandler? ItemChecked;
 
 
         #endregion
@@ -649,6 +663,36 @@ namespace ExpControlsLib
         [Browsable(false)]
         public IEnumerable<CShellItem> SelectedCShellItems => _listViewWrapper.SelectedCShellItems;
 
+        /// <summary>
+        /// Gets or sets a value indicating whether a checkbox is displayed next to each item.
+        /// </summary>
+        /// <remarks>
+        /// WinForms renders the checkbox glyph only in <c>Details</c>, <c>List</c>, and
+        /// <c>SmallIcon</c> view modes. In <c>LargeIcon</c> / thumbnail modes the glyph may
+        /// not appear, but <see cref="CShellItem.Checked"/> state is still maintained in the model.
+        /// </remarks>
+        [Category("Behavior")]
+        [Description("Show a checkbox next to each list item.")]
+        [DefaultValue(false)]
+        public bool CheckBoxes
+        {
+            get => _listView.CheckBoxes;
+            set => _listView.CheckBoxes = value;
+        }
+
+        /// <summary>
+        /// Enumerates every <see cref="CShellItem"/> in the master list whose
+        /// <see cref="CShellItem.Checked"/> property is <c>true</c>.
+        /// Reflects the full master list regardless of any active filter.
+        /// </summary>
+        [Browsable(false)]
+        public IEnumerable<CShellItem> CheckedShellItems =>
+            _listViewWrapper.Items.Where(i => i.Checked);
+
+        /// <summary>Gets the count of checked items in the master list.</summary>
+        [Browsable(false)]
+        public int CheckedCount => _listViewWrapper.Items.Count(i => i.Checked);
+
         #endregion
 
 
@@ -683,6 +727,7 @@ namespace ExpControlsLib
                 _listView.KeyPress += ExpFileList_KeyPress;
                 _listView.SelectedIndexChanged += ExpFileList_SelectedIndexChanged;
                 _listView.ItemSelectionChanged += ExpFileList_ItemSelectionChanged;
+                _listView.ItemChecked          += ExpFileList_ItemChecked;
 
                 _listViewWrapper = new VirtualListViewWrapper(this, _listView);
                 _listViewWrapper.CreateListviewItemCallback = CreateListviewItemCallback;
@@ -874,6 +919,90 @@ namespace ExpControlsLib
             }
         }
 
+
+        #endregion
+
+
+        #region Checkbox Support
+
+        /// <summary>
+        /// Handles the inner ListView's <c>ItemChecked</c> event.
+        /// Writes the new state back to the <see cref="CShellItem"/> model and raises
+        /// <see cref="ItemChecked"/> on <see cref="ExpList"/>.
+        /// Suppressed while <see cref="VirtualListViewWrapper"/> is materializing items.
+        /// </summary>
+        private void ExpFileList_ItemChecked(object? sender, ItemCheckedEventArgs e)
+        {
+            if (_listViewWrapper.SuppressCheckEvents) return;
+            if (IsShuttingDown) return;
+
+            int viewIndex = e.Item.Index;
+            var csi = _listViewWrapper.GetShellItemAtViewIndex(viewIndex);
+            if (csi == null) return;
+
+            csi.Checked = e.Item.Checked;
+            ItemChecked?.Invoke(this, new ExpListItemCheckedEventArgs(csi, viewIndex, csi.Checked));
+        }
+
+        /// <summary>
+        /// Programmatically sets the checked state of <paramref name="item"/>.
+        /// Updates both the <see cref="CShellItem"/> model and the visible
+        /// <see cref="ListViewItem"/> if currently cached. Raises <see cref="ItemChecked"/>.
+        /// </summary>
+        public void SetChecked(CShellItem item, bool value)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+            item.Checked = value;
+
+            int viewIndex = _listViewWrapper.GetIndexFromFullPath(item.FullPath);
+            _listViewWrapper.SyncCheckedInCache(viewIndex, value);
+
+            ItemChecked?.Invoke(this, new ExpListItemCheckedEventArgs(item, viewIndex, value));
+        }
+
+        /// <summary>
+        /// Checks all items in the master list.
+        /// Does not raise <see cref="ItemChecked"/> per item.
+        /// </summary>
+        public void CheckAll()   => SetAllChecked(true);
+
+        /// <summary>
+        /// Unchecks all items in the master list.
+        /// Does not raise <see cref="ItemChecked"/> per item.
+        /// </summary>
+        public void UncheckAll() => SetAllChecked(false);
+
+        private void SetAllChecked(bool value)
+        {
+            foreach (var csi in _listViewWrapper.Items)
+                csi.Checked = value;
+
+            _listViewWrapper.SuppressCheckEvents = true;
+            try
+            {
+                if (_listViewWrapper.VirtualMode)
+                {
+                    // Clear the item cache: the next RetrieveVirtualItem for each row will
+                    // call CreateLviFromCsi which applies csi.Checked automatically.
+                    _listViewWrapper.InvalidateCache();
+                    _listView.Invalidate();
+                }
+                else
+                {
+                    _listView.BeginUpdate();
+                    foreach (ListViewItem lvi in _listView.Items)
+                    {
+                        if (lvi.Tag is CShellItem csi)
+                            lvi.Checked = csi.Checked;
+                    }
+                    _listView.EndUpdate();
+                }
+            }
+            finally
+            {
+                _listViewWrapper.SuppressCheckEvents = false;
+            }
+        }
 
         #endregion
 
@@ -2116,7 +2245,7 @@ namespace ExpControlsLib
                 }
                 else
                 {
-                    // 2. Try bulk fetch if still not found
+                    // 2. Try external event handler
                     EnsureCustomColumnDataFetched(item);
                     if (item.ColumnDic.TryGetValue(colText, out ListViewSubitemData propInfo))
                         return propInfo;
@@ -2165,7 +2294,7 @@ namespace ExpControlsLib
             // Invalidate cached data in shell items
             if (VirtualMode)
             {
-                foreach (var item in _listViewWrapper.MasterItems)
+                foreach (var item in _listViewWrapper.Items)
                 {
                     item.ColumnDic.Clear();
                     item.ResetInfo();
@@ -2400,8 +2529,6 @@ namespace ExpControlsLib
                     {
                         if (token.IsCancellationRequested) return null;
                         
-                        //EnsureCustomColumnDataFetched(item); // Pre-fetch custom column data (e.g. NSFW scores)
-                        
                         // Icon index
                         if (!IsThumbnailViewMode())
                         {
@@ -2431,12 +2558,24 @@ namespace ExpControlsLib
 
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: STA work returned, result={result != null}, cancelled={token.IsCancellationRequested}");
 
-                if (token.IsCancellationRequested) return false;
+                //already handled by bulk fetch above
+                // Populate externally supplied custom-column values while the loaded
+                // items are on the UI thread. This ensures callers can inspect column
+                // data immediately after LoadDirectoryAsync completes, even for items
+                // that have not yet been materialized by the ListView.
+                //foreach (var item in result.Items)
+                //{
+                //    if (token.IsCancellationRequested) return false;
+                //    EnsureCustomColumnDataFetched(item);
+                //}
 
                 if (result != null)
                 {
+                    if (token.IsCancellationRequested) return false;
+
                     if (InvokeRequired) Debug.WriteLine("ERROR: begin invoke required but not being used in explist.");
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: Updating ListView with {result.Items.Count} items...");
+                    
                     _listView.BeginUpdate();
                     try
                     {
@@ -2445,15 +2584,6 @@ namespace ExpControlsLib
                         // Dispose old ImageLists and create a fresh one to prevent
                         // GDI handle exhaustion from accumulated thumbnails across navigations.
                         _thumbnailManager.ResetForNewFolder();
-
-                        // Populate externally supplied custom-column values while the loaded
-                        // items are on the UI thread. This ensures callers can inspect column
-                        // data immediately after LoadDirectoryAsync completes, even for items
-                        // that have not yet been materialized by the ListView.
-                        foreach (var item in result.Items)
-                        {
-                            EnsureCustomColumnDataFetched(item);
-                        }
 
                         _listViewWrapper.AddRange(result.Items);
 
@@ -3341,7 +3471,7 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                lock (_listViewWrapper.MasterItems)
+                lock (_listViewWrapper.Items)
                 {
                     int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
                     if (index == -1)

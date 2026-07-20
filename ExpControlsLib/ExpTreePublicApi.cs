@@ -36,8 +36,9 @@ public partial class ExpTree
         }
     }
 
-    /// <summary>Returns the TreeView's current node collection.</summary>
-    [Obsolete("Use SelectedNode and Root-oriented navigation APIs where possible.")]
+    /// <summary>
+    /// Returns the TreeView's current node collection.
+    /// </summary>
     [System.ComponentModel.Browsable(false)]
     public TreeNodeCollection? Nodes => _TreeView?.Nodes;
 }

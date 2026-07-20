@@ -326,6 +326,12 @@ namespace WindowsApiLib.Shell
         /// </summary>
         public long ID { get; set; }
 
+
+        /// <summary>
+        /// Is the item checked or not.  Useful if you're using checkboxes in the ListView
+        /// </summary>
+        public bool Checked { get; set; }
+
         /// <summary>
         /// Associated listview item
         /// </summary>

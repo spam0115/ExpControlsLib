@@ -765,6 +765,158 @@ namespace ExpControlsLibTest
                 if (Directory.Exists(tempDir2)) Directory.Delete(tempDir2, true);
             }
         }
+
+        // ── Checkbox support ─────────────────────────────────────────────────────
+
+        [Test]
+        public void CheckBoxes_Property_ForwardsToInnerListView()
+        {
+            using var expList = new ExpList();
+            expList.Initialize(_shellController);
+            using var form = new Form();
+            form.Controls.Add(expList);
+            form.Show();
+
+            Assert.IsFalse(expList.CheckBoxes, "Default should be false");
+
+            expList.CheckBoxes = true;
+            Assert.IsTrue(expList.CheckBoxes);
+
+            expList.CheckBoxes = false;
+            Assert.IsFalse(expList.CheckBoxes);
+        }
+
+        [Test]
+        public async Task SetChecked_UpdatesModelAndRaisesEvent()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "ExpListCheck_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            File.WriteAllText(Path.Combine(tempDir, "a.txt"), "x");
+            File.WriteAllText(Path.Combine(tempDir, "b.txt"), "x");
+            try
+            {
+                using var expList = new ExpList();
+                expList.Initialize(_shellController);
+                expList.CheckBoxes = true;
+                expList.VirtualMode = true;
+                using var form = new Form();
+                form.Controls.Add(expList);
+                form.Show();
+
+                await expList.LoadDirectoryAsync(tempDir);
+                for (int i = 0; i < 200; i++)
+                {
+                    if (expList.Count >= 2) break;
+                    await Task.Delay(10);
+                    Application.DoEvents();
+                }
+                Assert.That(expList.Count, Is.EqualTo(2));
+
+                var item = expList.GetItem(0)!;
+                ExpListItemCheckedEventArgs? receivedArgs = null;
+                expList.ItemChecked += (s, e) => receivedArgs = e;
+
+                expList.SetChecked(item, true);
+
+                Assert.IsTrue(item.Checked, "CShellItem.Checked should be true");
+                Assert.IsNotNull(receivedArgs, "ItemChecked event should have fired");
+                Assert.That(receivedArgs!.Item, Is.SameAs(item));
+                Assert.IsTrue(receivedArgs.Checked);
+                Assert.That(expList.CheckedCount, Is.EqualTo(1));
+                Assert.That(expList.CheckedShellItems.Single(), Is.SameAs(item));
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Test]
+        public async Task CheckAll_UncheckAll_UpdatesAllItems()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "ExpListCheckAll_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            for (int i = 0; i < 5; i++)
+                File.WriteAllText(Path.Combine(tempDir, $"f{i}.txt"), "x");
+            try
+            {
+                using var expList = new ExpList();
+                expList.Initialize(_shellController);
+                expList.CheckBoxes = true;
+                expList.VirtualMode = true;
+                using var form = new Form();
+                form.Controls.Add(expList);
+                form.Show();
+
+                await expList.LoadDirectoryAsync(tempDir);
+                for (int i = 0; i < 200; i++)
+                {
+                    if (expList.Count >= 5) break;
+                    await Task.Delay(10);
+                    Application.DoEvents();
+                }
+                Assert.That(expList.Count, Is.EqualTo(5));
+
+                expList.CheckAll();
+                Assert.That(expList.CheckedCount, Is.EqualTo(5), "All 5 should be checked after CheckAll");
+
+                expList.UncheckAll();
+                Assert.That(expList.CheckedCount, Is.EqualTo(0), "All should be unchecked after UncheckAll");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Test]
+        public async Task CheckedState_SurvivesSort()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "ExpListCheckSort_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            File.WriteAllText(Path.Combine(tempDir, "C.txt"), "x");
+            File.WriteAllText(Path.Combine(tempDir, "A.txt"), "x");
+            File.WriteAllText(Path.Combine(tempDir, "B.txt"), "x");
+            try
+            {
+                using var expList = new ExpList();
+                expList.Initialize(_shellController);
+                expList.CheckBoxes = true;
+                expList.VirtualMode = true;
+                using var form = new Form();
+                form.Controls.Add(expList);
+                form.Show();
+
+                await expList.LoadDirectoryAsync(tempDir);
+                for (int i = 0; i < 200; i++)
+                {
+                    if (expList.Count >= 3) break;
+                    await Task.Delay(10);
+                    Application.DoEvents();
+                }
+                Assert.That(expList.Count, Is.EqualTo(3));
+
+                // Find "B.txt" and check it
+                CShellItem? itemB = null;
+                for (int j = 0; j < expList.Count; j++)
+                    if (expList.GetItem(j)?.DisplayName == "B.txt") { itemB = expList.GetItem(j); break; }
+                Assert.IsNotNull(itemB, "B.txt should be in the list");
+                expList.SetChecked(itemB!, true);
+                Assert.That(expList.CheckedCount, Is.EqualTo(1));
+
+                // Sort descending — B.txt should still be checked regardless of its new index
+                expList.Sort(0, SortOrder.Descending);
+                Application.DoEvents();
+
+                Assert.IsTrue(itemB!.Checked, "B.txt.Checked should survive sort");
+                Assert.That(expList.CheckedCount, Is.EqualTo(1));
+                Assert.That(expList.CheckedShellItems.Single(), Is.SameAs(itemB));
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
     }
 }
 
