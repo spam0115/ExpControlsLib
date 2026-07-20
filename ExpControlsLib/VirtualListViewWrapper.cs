@@ -57,6 +57,15 @@ namespace ExpControlsLib
         internal bool SuppressCheckEvents;
 
         /// <summary>
+        /// Tracks the checkbox state the caller <em>wants</em>, independent of whether
+        /// the current <see cref="DisplayMode"/> supports checkboxes. When the mode
+        /// switches away from a checkbox-compatible view the checkbox is suppressed on
+        /// the underlying <see cref="ListView"/>, but this flag remembers that it should
+        /// be restored once a compatible mode is entered again.
+        /// </summary>
+        private bool _desiredCheckBoxes;
+
+        /// <summary>
         /// The filtered view of items. When non-null, this is what the ListView displays.
         /// When null, the ListView displays all items from <see cref="Items"/>.
         /// </summary>
@@ -66,6 +75,66 @@ namespace ExpControlsLib
         /// Gets a value indicating whether a filter is currently active.
         /// </summary>
         public bool IsFilterActive => _filteredView != null;
+
+        /// <summary>
+        /// Returns <c>true</c> if the given display mode is compatible with
+        /// <see cref="ListView.CheckBoxes"/>. WinForms throws a
+        /// <see cref="NotSupportedException"/> if <c>CheckBoxes</c> is <c>true</c>
+        /// while the view is <see cref="View.Tile"/>, <see cref="View.LargeIcon"/>,
+        /// or any of the custom thumbnail modes (which map to <c>LargeIcon</c>
+        /// internally).
+        /// </summary>
+        private static bool SupportsCheckBoxes(ListViewDisplayMode mode) =>
+            mode == ListViewDisplayMode.Details ||
+            mode == ListViewDisplayMode.SmallIcon ||
+            mode == ListViewDisplayMode.List;
+
+        /// <summary>
+        /// Gets or sets whether checkboxes should be shown. The desired state is always
+        /// stored in <c>_desiredCheckBoxes</c>; the underlying
+        /// <see cref="ListView.CheckBoxes"/> is only set to <c>true</c> when the
+        /// current <see cref="DisplayMode"/> is compatible (Details, SmallIcon, List).
+        /// Switching to an incompatible mode (Tile, LargeIcon, Thumbnail, …)
+        /// automatically suppresses the glyph and switching back restores it.
+        /// </summary>
+        internal bool CheckBoxes
+        {
+            get => _desiredCheckBoxes;
+            set
+            {
+                _desiredCheckBoxes = value;
+                bool compatible = SupportsCheckBoxes(DisplayMode);
+                ApplyCheckBoxesToListView(compatible && value);
+            }
+        }
+
+        /// <summary>
+        /// Applies <paramref name="active"/> to <see cref="ListView.CheckBoxes"/> using
+        /// the VirtualMode round-trip guard so the handle recreation side-effects are
+        /// handled correctly. Does nothing if the value is already correct.
+        /// </summary>
+        private void ApplyCheckBoxesToListView(bool active)
+        {
+            if (_listView.CheckBoxes == active) return;
+
+            // CheckBoxes toggle forces a handle recreation — same guard pattern as the
+            // DisplayMode setter. See VirtualMode <remarks> for the full explanation.
+            bool wasVirtual = _listView.VirtualMode;
+            if (wasVirtual)
+            {
+                _listView.VirtualMode = false;
+                _listView.VirtualListSize = 0;
+            }
+
+            _listView.CheckBoxes = active;
+
+            if (wasVirtual)
+            {
+                _listView.VirtualMode = true;
+                _listView.VirtualListSize = ActiveViewCount;
+                _itemCache.Clear();
+            }
+        }
 
         /// <summary>
         /// Gets the collection that the ListView should read from.
@@ -321,19 +390,15 @@ namespace ExpControlsLib
             {
                 if (field == value) return;
 
-                // Changing ListView.View while both CheckBoxes=true and VirtualMode=true
-                // triggers a handle recreation that silently resets VirtualListSize to 0
-                // and corrupts any cached LVIs, making Details view appear completely
-                // empty. Work around it by temporarily disabling virtual mode, changing
-                // the view, then restoring virtual mode with the correct list size and
-                // a cleared item cache. See the <remarks> block on VirtualMode above
-                // for the full explanation of the handle-recreation issue.
-                bool needsGuard = VirtualMode && _listView.CheckBoxes;
-                if (needsGuard)
-                {
-                    _listView.VirtualMode = false;
-                    _listView.VirtualListSize = 0;
-                }
+                // If we are entering a mode that does not support checkboxes (Tile,
+                // LargeIcon, thumbnail modes), suppress the glyph on the ListView now
+                // so WinForms does not throw a NotSupportedException. If we are leaving
+                // such a mode and returning to a compatible one (Details, SmallIcon,
+                // List), restore the glyph. ApplyCheckBoxesToListView handles the
+                // VirtualMode round-trip guard internally — see VirtualMode <remarks>
+                // for the full handle-recreation explanation.
+                if (_desiredCheckBoxes)
+                    ApplyCheckBoxesToListView(SupportsCheckBoxes(value));
 
                 if (value <= ListViewDisplayMode.Tile) // View values native to the ListView control 
                 {
@@ -342,16 +407,6 @@ namespace ExpControlsLib
                 else
                 {
                     _listView.View = View.LargeIcon; //XP era kludge for thumbnail mode
-                }
-
-                if (needsGuard)
-                {
-                    _listView.VirtualMode = true;
-                    _listView.VirtualListSize = ActiveViewCount;
-                    // Cached LVIs are corrupted after a VirtualMode round-trip — the Win32
-                    // virtual list rejects them silently. Discard them so fresh items are
-                    // built on the next RetrieveVirtualItem.
-                    _itemCache.Clear();
                 }
 
                 field = value;
@@ -1062,12 +1117,13 @@ namespace ExpControlsLib
                         lvi.ImageIndex = item.ImageIndex;
                     }
 
-                    // In virtual mode the Win32 ListView tracks Selected/Focused by index,
-                    // not by ListViewItem instance. Stale flags baked into a cached LVI
-                    // cause leftover focus rectangles ("dashed outlines") that never clear.
-                    // Reset them here so painting uses the ListView's authoritative state.
-                    if (lvi.Selected) lvi.Selected = false;
-                    if (lvi.Focused)  lvi.Focused  = false;
+                    // NOTE: do NOT reset lvi.Selected or lvi.Focused here.
+                    // In virtual mode the Win32 ListView owns selection/focus state by
+                    // index; writing those properties on a ListViewItem sends
+                    // LVM_SETITEMSTATE back to the control, which triggers a repaint,
+                    // which fires RetrieveVirtualItem again — an infinite loop leading
+                    // to a StackOverflowException. The ListView ignores the LVI flags
+                    // for selection/focus during virtual-mode rendering anyway.
 
                     return lvi;
                 }

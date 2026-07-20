@@ -687,25 +687,8 @@ namespace ExpControlsLib
         [DefaultValue(false)]
         public bool CheckBoxes
         {
-            get => _listView.CheckBoxes;
-            set
-            {
-                if (_listView.CheckBoxes == value) return;
-                bool wasVirtual = _listView.VirtualMode;
-                if (wasVirtual)
-                {
-                    _listView.VirtualMode = false;
-                    _listView.VirtualListSize = 0;
-                }
-                _listView.CheckBoxes = value;
-                if (wasVirtual)
-                {
-                    _listView.VirtualMode = true;
-                    _listView.VirtualListSize = _listViewWrapper.ActiveViewCount;
-                    // Cached LVIs are corrupted after a VirtualMode round-trip.
-                    _listViewWrapper.InvalidateCache();
-                }
-            }
+            get => _listViewWrapper.CheckBoxes;
+            set => _listViewWrapper.CheckBoxes = value;
         }
 
         /// <summary>

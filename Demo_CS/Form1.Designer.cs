@@ -31,7 +31,6 @@
             splitContainer1 = new System.Windows.Forms.SplitContainer();
             expTree1 = new ExpControlsLib.ExpTree();
             expList1 = new ExpControlsLib.ExpList();
-            columnHeader1 = new System.Windows.Forms.ColumnHeader();
             columnHeader2 = new System.Windows.Forms.ColumnHeader();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
@@ -76,7 +75,7 @@
             // expList1
             // 
             expList1.CheckBoxes = true;
-            expList1.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] { columnHeader1, columnHeader2 });
+            expList1.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] { columnHeader2 });
             expList1.CurrentFolderCsi = null;
             expList1.DisplayMode = ExpControlsLib.ListViewDisplayMode.Details;
             expList1.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -94,12 +93,6 @@
             expList1.VerticalScrollPosition = 0;
             expList1.VirtualMode = true;
             expList1.ExpListItemDoubleClick += expList1_ExpListItemDoubleClick;
-            // 
-            // columnHeader1
-            // 
-            columnHeader1.Tag = ".ID";
-            columnHeader1.Text = "ID";
-            columnHeader1.Width = 50;
             // 
             // columnHeader2
             // 
@@ -131,7 +124,6 @@
         private System.Windows.Forms.SplitContainer splitContainer1;
         private ExpControlsLib.ExpTree expTree1;
         private ExpControlsLib.ExpList expList1;
-        private System.Windows.Forms.ColumnHeader columnHeader1;
         private System.Windows.Forms.ColumnHeader columnHeader2;
     }
 }
