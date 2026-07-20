@@ -1460,7 +1460,7 @@ namespace ExpControlsLib
                 AppendMenu(viewSubMenu, checkedFlag, (int)CMD.EXTRA_LARGE_THUMBNAILS, "Extra Large Thumbnails");
 
                 checkedFlag = (DisplayMode == ListViewDisplayMode.LargeIcon) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.LARGEICON, "Large Icons");
+                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.LARGEICON, "Icons");
 
                 checkedFlag = (DisplayMode == ListViewDisplayMode.List) ? checkedValue : (uint)MFT.BYCOMMAND;
                 AppendMenu(viewSubMenu, checkedFlag, (int)CMD.LIST, "List");
@@ -1540,7 +1540,7 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Displays a context menu for the ListView when no items are selected.
-        /// This menu includes view options (Tiles, Large Icons, List, Details), 
+        /// This menu includes view options (Tiles, Icons, List, Details), 
         /// refresh, select all, paste operations, and new item creation.
         /// </summary>
         /// <param name="pt">The point (in screen coordinates) where the menu should be displayed.</param>
@@ -3954,6 +3954,20 @@ namespace ExpControlsLib
             {
                 if (value <= ListViewDisplayMode.Tile) //built-in Windows 95 Shell view modes
                 {
+                    // Clear the WinForms LargeImageList property before installing the system
+                    // image list via SendMessage. SystemImageListManager.SetListViewImageList
+                    // uses LVM_SETIMAGELIST directly and bypasses the WinForms property cache,
+                    // so if the property still points at a thumbnail ImageList (from a prior
+                    // Thumbnail-mode session), any later WinForms operation that re-syncs its
+                    // cached ImageList (handle recreation, style change, etc.) will stomp the
+                    // native handle back to the thumbnail list — visually leaving us in
+                    // Thumbnail mode even though DisplayMode says LargeIcon.
+                    // Because Thumbnail modes map View to LargeIcon too, this is the only state
+                    // that distinguishes them, so this cleanup is essential for reliable
+                    // switching between Thumbnail <-> LargeIcon (and any other system mode).
+                    _listView.LargeImageList = null;
+                    _listView.SmallImageList = null;
+
                     bool large = (value == ListViewDisplayMode.LargeIcon);
 
                     if (large)

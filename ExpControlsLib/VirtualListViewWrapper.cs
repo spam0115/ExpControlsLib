@@ -390,15 +390,23 @@ namespace ExpControlsLib
             {
                 if (field == value) return;
 
-                // If we are entering a mode that does not support checkboxes (Tile,
-                // LargeIcon, thumbnail modes), suppress the glyph on the ListView now
-                // so WinForms does not throw a NotSupportedException. If we are leaving
-                // such a mode and returning to a compatible one (Details, SmallIcon,
-                // List), restore the glyph. ApplyCheckBoxesToListView handles the
-                // VirtualMode round-trip guard internally — see VirtualMode <remarks>
-                // for the full handle-recreation explanation.
-                if (_desiredCheckBoxes)
-                    ApplyCheckBoxesToListView(SupportsCheckBoxes(value));
+                // Checkbox suppression around the view change.
+                //
+                // WinForms throws NotSupportedException if CheckBoxes is true while View
+                // is Tile or LargeIcon (or any of our custom thumbnail modes which map
+                // to LargeIcon). We therefore must:
+                //   * If entering an incompatible mode: drop CheckBoxes BEFORE changing View.
+                //   * If entering a compatible mode:    change View BEFORE restoring CheckBoxes.
+                // ApplyCheckBoxesToListView handles the VirtualMode round-trip guard
+                // internally — see VirtualMode <remarks> for the full handle-recreation
+                // explanation.
+                bool newModeSupportsCheckBoxes = SupportsCheckBoxes(value);
+
+                if (_desiredCheckBoxes && !newModeSupportsCheckBoxes)
+                {
+                    // Must suppress checkboxes first so the view change doesn't throw.
+                    ApplyCheckBoxesToListView(false);
+                }
 
                 if (value <= ListViewDisplayMode.Tile) // View values native to the ListView control 
                 {
@@ -410,6 +418,12 @@ namespace ExpControlsLib
                 }
 
                 field = value;
+
+                if (_desiredCheckBoxes && newModeSupportsCheckBoxes)
+                {
+                    // Safe to (re-)apply checkboxes now that the view supports them.
+                    ApplyCheckBoxesToListView(true);
+                }
 
                 if (VirtualMode) InvalidateVirtualItemImagesIndexes();
 

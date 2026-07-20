@@ -1176,7 +1176,7 @@
         <member name="M:ExpControlsLib.ExpList.ShowAndHandleContextMenu(System.Drawing.Point)">
             <summary>
             Displays a context menu for the ListView when no items are selected.
-            This menu includes view options (Tiles, Large Icons, List, Details), 
+            This menu includes view options (Tiles, Icons, List, Details), 
             refresh, select all, paste operations, and new item creation.
             </summary>
             <param name="pt">The point (in screen coordinates) where the menu should be displayed.</param>
