@@ -677,21 +677,39 @@ namespace ExpControlsLib
         public bool CheckBoxes
         {
             get => _listView.CheckBoxes;
-            set => _listView.CheckBoxes = value;
+            set
+            {
+                if (_listView.CheckBoxes == value) return;
+                bool wasVirtual = _listView.VirtualMode;
+                if (wasVirtual)
+                {
+                    _listView.VirtualMode = false;
+                    _listView.VirtualListSize = 0;
+                }
+                _listView.CheckBoxes = value;
+                if (wasVirtual)
+                {
+                    _listView.VirtualMode = true;
+                    _listView.VirtualListSize = _listViewWrapper.ActiveViewCount;
+                    // Cached LVIs are corrupted after a VirtualMode round-trip.
+                    _listViewWrapper.InvalidateCache();
+                }
+            }
         }
 
         /// <summary>
-        /// Enumerates every <see cref="CShellItem"/> in the master list whose
+        /// Enumerates every <see cref="CShellItem"/> in the list whose
         /// <see cref="CShellItem.Checked"/> property is <c>true</c>.
-        /// Reflects the full master list regardless of any active filter.
+        /// Works in both virtual and non-virtual mode; reflects the full item set
+        /// regardless of any active filter.
         /// </summary>
         [Browsable(false)]
         public IEnumerable<CShellItem> CheckedShellItems =>
-            _listViewWrapper.Items.Where(i => i.Checked);
+            _listViewWrapper.AllShellItems.Where(i => i.Checked);
 
-        /// <summary>Gets the count of checked items in the master list.</summary>
+        /// <summary>Gets the count of checked items.</summary>
         [Browsable(false)]
-        public int CheckedCount => _listViewWrapper.Items.Count(i => i.Checked);
+        public int CheckedCount => _listViewWrapper.AllShellItems.Count(i => i.Checked);
 
         #endregion
 
@@ -974,7 +992,8 @@ namespace ExpControlsLib
 
         private void SetAllChecked(bool value)
         {
-            foreach (var csi in _listViewWrapper.Items)
+            // Update the model for every item regardless of virtual/non-virtual mode.
+            foreach (var csi in _listViewWrapper.AllShellItems)
                 csi.Checked = value;
 
             _listViewWrapper.SuppressCheckEvents = true;
@@ -2115,7 +2134,7 @@ namespace ExpControlsLib
 
         private void PopulateColumnData(ListViewItem lvi, CShellItem item)
         {
-            for (int i = 1; i < _listView.Columns.Count; i++)
+            for (int i = 0; i < _listView.Columns.Count; i++)
             {
                 ColumnHeader col = _listView.Columns[i];
 
@@ -2161,6 +2180,9 @@ namespace ExpControlsLib
                     // Optimization: Check for common properties directly
                     switch (propName)
                     {
+                        case "ID":
+                            text = item.ID.ToString();
+                            return new ListViewSubitemData(text, null);
                         case "DisplayName":
                             text = item.DisplayName;
                             return new ListViewSubitemData(text, null);
@@ -3486,7 +3508,7 @@ namespace ExpControlsLib
                     //thumbnails that are provided for items that are offscreen will be drawn by the ListView when
                     //they are brought on screen.  Items that are already onscreen are not redrawn unless done so 
                     //manually here.
-                    _listViewWrapper._ListView.RedrawItems(index, index, false);
+                    _listViewWrapper._listView.RedrawItems(index, index, false);
                 }
             }
             else
@@ -4323,7 +4345,7 @@ namespace ExpControlsLib
                 {
                     _onScroll = onScroll;
                     _listViewWrapper = listView;
-                    _listView = _listViewWrapper._ListView;
+                    _listView = _listViewWrapper._listView;
                     AssignHandle(_listView.Handle);
                 }
                 finally
@@ -4420,9 +4442,9 @@ namespace ExpControlsLib
             LoadImageAtIndex(index);
 
             if (VirtualMode)
-                _listViewWrapper._ListView.EnsureVisible(index);
+                _listViewWrapper._listView.EnsureVisible(index);
             else
-                _listViewWrapper._ListView.Items[index].EnsureVisible();
+                _listViewWrapper._listView.Items[index].EnsureVisible();
         }
 
         #endregion

@@ -21,7 +21,6 @@ namespace Demo_CS
         {
             this.expTree1.StartUpDirectory = ExpControlsLib.ExpTree.StartDir.Desktop;
             this.expTree1.AllowDrop = true;
-            this.expList1.DisplayMode = ListViewDisplayMode.Thumbnail;
         }
 
         //Load files to ExpFileList

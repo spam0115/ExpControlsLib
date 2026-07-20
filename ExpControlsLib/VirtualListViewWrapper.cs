@@ -43,7 +43,7 @@ namespace ExpControlsLib
         /// </summary>
         private List<CShellItem>? _filteredView;
 
-        public readonly ListView _ListView;
+        public readonly ListView _listView;
         public readonly HugeList<CShellItem> Items = new();
         public bool IsShuttingDown;
 
@@ -76,7 +76,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Gets the number of items in the active view (filtered or master).
         /// </summary>
-        private int ActiveViewCount => _filteredView?.Count ?? Items.Count;
+        public int ActiveViewCount => _filteredView?.Count ?? Items.Count;
 
         /// <summary>
         /// Gets the item at the specified index from the active view.
@@ -155,10 +155,10 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                _ListView.VirtualListSize = ActiveViewCount;
+                _listView.VirtualListSize = ActiveViewCount;
             }
 
-            _ListView.Invalidate();
+            _listView.Invalidate();
         }
 
         /// <summary>
@@ -192,8 +192,8 @@ namespace ExpControlsLib
             {
                 _prevSortOrder = _sortOrder;
                 _sortOrder = value;
-                if (!VirtualMode && _ListView != null)
-                    _ListView.Sorting = value;
+                if (!VirtualMode && _listView != null)
+                    _listView.Sorting = value;
             }
         }
 
@@ -203,22 +203,22 @@ namespace ExpControlsLib
         [Browsable(true), Category("Behavior"), DefaultValue(false)]
         public bool VirtualMode
         {
-            get => _ListView.VirtualMode;
+            get => _listView.VirtualMode;
             set
             {
-                if (_ListView.VirtualMode == value) return;
-                _ListView.VirtualMode = value;
+                if (_listView.VirtualMode == value) return;
+                _listView.VirtualMode = value;
 
                 if (value)
                 {
-                    _ListView.RetrieveVirtualItem -= OnRetrieveVirtualItem; //just in case
-                    _ListView.RetrieveVirtualItem += OnRetrieveVirtualItem;
-                    _ListView.Items.Clear();
+                    _listView.RetrieveVirtualItem -= OnRetrieveVirtualItem; //just in case
+                    _listView.RetrieveVirtualItem += OnRetrieveVirtualItem;
+                    _listView.Items.Clear();
                     _indexPathToLvi.Clear();
                 }
                 else
                 {
-                    _ListView.RetrieveVirtualItem -= OnRetrieveVirtualItem;
+                    _listView.RetrieveVirtualItem -= OnRetrieveVirtualItem;
                     Items.Clear();
                     _filteredView = null;
                     _itemCache.Clear();
@@ -227,17 +227,17 @@ namespace ExpControlsLib
             }
         }
 
-        public int Count => VirtualMode ? ActiveViewCount : _ListView.Items.Count;
+        public int Count => VirtualMode ? ActiveViewCount : _listView.Items.Count;
 
-        public int SelectedCount => _ListView.SelectedIndices.Count;
+        public int SelectedCount => _listView.SelectedIndices.Count;
 
-        public ListView.SelectedIndexCollection SelectedIndices => _ListView.SelectedIndices;
+        public ListView.SelectedIndexCollection SelectedIndices => _listView.SelectedIndices;
 
         public IEnumerable<CShellItem> SelectedCShellItems
         {
             get
             {
-                foreach (int index in _ListView.SelectedIndices)
+                foreach (int index in _listView.SelectedIndices)
                 {
                     var item = GetItem(index);
                     if (item != null) yield return item;
@@ -263,14 +263,38 @@ namespace ExpControlsLib
             set
             {
                 if (field == value) return;
+
+                // WinForms bug: changing ListView.View while both CheckBoxes=true and
+                // VirtualMode=true causes a handle recreation that silently resets
+                // VirtualListSize to 0, making Details view appear completely empty.
+                // Work around it by temporarily disabling virtual mode, changing the
+                // view, then restoring virtual mode with the correct list size.
+                bool needsGuard = VirtualMode && _listView.CheckBoxes;
+                if (needsGuard)
+                {
+                    _listView.VirtualMode = false;
+                    _listView.VirtualListSize = 0;
+                }
+
                 if (value <= ListViewDisplayMode.Tile) // View values native to the ListView control 
                 {
-                    _ListView.View = (View)value;
+                    _listView.View = (View)value;
                 }
                 else
                 {
-                    _ListView.View = View.LargeIcon; //XP era kludge for thumbnail mode
+                    _listView.View = View.LargeIcon; //XP era kludge for thumbnail mode
                 }
+
+                if (needsGuard)
+                {
+                    _listView.VirtualMode = true;
+                    _listView.VirtualListSize = ActiveViewCount;
+                    // Cached LVIs are corrupted after a VirtualMode round-trip — the Win32
+                    // virtual list rejects them silently. Discard them so fresh items are
+                    // built on the next RetrieveVirtualItem.
+                    _itemCache.Clear();
+                }
+
                 field = value;
 
                 if (VirtualMode) InvalidateVirtualItemImagesIndexes();
@@ -287,9 +311,9 @@ namespace ExpControlsLib
         public VirtualListViewWrapper(ExpList expList, ListView listView)
         {
             _expList = expList ?? throw new ArgumentNullException(nameof(expList));
-            _ListView = listView ?? throw new ArgumentNullException(nameof(listView));
+            _listView = listView ?? throw new ArgumentNullException(nameof(listView));
 
-            _ListView.RetrieveVirtualItem += OnRetrieveVirtualItem;
+            _listView.RetrieveVirtualItem += OnRetrieveVirtualItem;
         }
 
         /// <summary>
@@ -299,22 +323,22 @@ namespace ExpControlsLib
         public void Initialize()
         {
             //create sorter.  this can't be done earlier because listview columns aren't available during the constructor
-            Sorter = new LVColSorter(_ListView);
-            _ListView.ListViewItemSorter = Sorter;
+            Sorter = new LVColSorter(_listView);
+            _listView.ListViewItemSorter = Sorter;
         }
 
         public void Clear()
         {
             Debug.WriteLine("VirtualListViewWrapper.Clear");
-            _ListView.SelectedIndices.Clear();
+            _listView.SelectedIndices.Clear();
             LastTopIndex = -1;
             if (VirtualMode)
             {
-                _ListView.VirtualListSize = 0;
+                _listView.VirtualListSize = 0;
             }
             else
             {
-                _ListView.Items.Clear();
+                _listView.Items.Clear();
             }
             Items.Clear();
             _filteredView = null;
@@ -340,14 +364,14 @@ namespace ExpControlsLib
             }
             else
             {
-                _ListView.BeginUpdate();
+                _listView.BeginUpdate();
                 foreach (var item in items)
                 {
                     var lvi = CreateListviewItemCallback?.Invoke(item) ?? new ListViewItem(item.DisplayName) { Tag = item };
-                    _ListView.Items.Add(lvi);
+                    _listView.Items.Add(lvi);
                     _indexPathToLvi[item.FullPath] = lvi;
                 }
-                _ListView.EndUpdate();
+                _listView.EndUpdate();
             }
         }
 
@@ -363,7 +387,7 @@ namespace ExpControlsLib
             else
             {
                 var lvi = CreateListviewItemCallback?.Invoke(item) ?? new ListViewItem(item.DisplayName) { Tag = item };
-                _ListView.Items.Add(lvi);
+                _listView.Items.Add(lvi);
                 _indexPathToLvi[item.FullPath] = lvi;
             }
         }
@@ -427,13 +451,13 @@ namespace ExpControlsLib
 
                 if (startRedraw <= endRedraw)
                 {
-                    _ListView.RedrawItems(startRedraw, endRedraw, false);
+                    _listView.RedrawItems(startRedraw, endRedraw, false);
                 }
             }
             else
             {
                 var lvi = CreateListviewItemCallback?.Invoke(item) ?? new ListViewItem(item.DisplayName) { Tag = item };
-                _ListView.Items.Insert(index, lvi);
+                _listView.Items.Insert(index, lvi);
                 _indexPathToLvi[item.FullPath] = lvi;
                 lvi.EnsureVisible();
             }
@@ -494,15 +518,15 @@ namespace ExpControlsLib
 
                 if (startRedraw <= endRedraw)
                 {
-                    _ListView.RedrawItems(startRedraw, endRedraw, false);
+                    _listView.RedrawItems(startRedraw, endRedraw, false);
                 }
             }
             else
             {
-                var lvi = _ListView.Items[index];
+                var lvi = _listView.Items[index];
                 if (lvi.Tag is CShellItem csi)
                     _indexPathToLvi.Remove(csi.FullPath);
-                _ListView.Items.RemoveAt(index);
+                _listView.Items.RemoveAt(index);
             }
         }
 
@@ -515,7 +539,7 @@ namespace ExpControlsLib
             if (toRemove.Count <= BatchThreshold)
             {
                 try { 
-                    _ListView.SuspendLayout();
+                    _listView.SuspendLayout();
                     // Process small number of removals individually to avoid full redraw
                     var indices = new List<int>();
                     foreach (var item in items)
@@ -534,7 +558,7 @@ namespace ExpControlsLib
                 }
                 finally
                 {
-                    _ListView.ResumeLayout();
+                    _listView.ResumeLayout();
                 }
 
                 return;
@@ -566,26 +590,26 @@ namespace ExpControlsLib
                 }
 
                 ApplyViewToListView();
-                _ListView.Invalidate();
+                _listView.Invalidate();
             }
             else
             {
-                _ListView.BeginUpdate();
+                _listView.BeginUpdate();
                 try
                 {
                     // Remove backwards to minimize shifting
-                    for (int i = _ListView.Items.Count - 1; i >= 0; i--)
+                    for (int i = _listView.Items.Count - 1; i >= 0; i--)
                     {
-                        if (_ListView.Items[i].Tag is CShellItem csi && toRemove.Contains(csi))
+                        if (_listView.Items[i].Tag is CShellItem csi && toRemove.Contains(csi))
                         {
                             _indexPathToLvi.Remove(csi.FullPath);
-                            _ListView.Items.RemoveAt(i);
+                            _listView.Items.RemoveAt(i);
                         }
                     }
                 }
                 finally
                 {
-                    _ListView.EndUpdate();
+                    _listView.EndUpdate();
                 }
             }
         }
@@ -601,8 +625,8 @@ namespace ExpControlsLib
             }
             else
             {
-                if (index >= 0 && index < _ListView.Items.Count)
-                    return _ListView.Items[index].Tag as CShellItem;
+                if (index >= 0 && index < _listView.Items.Count)
+                    return _listView.Items[index].Tag as CShellItem;
             }
 
             Debug.WriteLine("VirtualListViewWrapper.GetItem failed to get item at index " + index);
@@ -617,8 +641,8 @@ namespace ExpControlsLib
             }
             else
             {
-                if (index >= 0 && index < _ListView.Items.Count)
-                    return _ListView.Items[index];
+                if (index >= 0 && index < _listView.Items.Count)
+                    return _listView.Items[index];
             }
             return null;
         }
@@ -629,7 +653,7 @@ namespace ExpControlsLib
             if (VirtualMode)
             {
                 if (_pathToIndex.TryGetValue(item.FullPath, out int index))
-                    return _ListView.SelectedIndices.Contains(index);
+                    return _listView.SelectedIndices.Contains(index);
                 return false;
             }
             else
@@ -739,13 +763,13 @@ namespace ExpControlsLib
                 // Update the sorter state so the UI (context menu, header glyph) reflects the current sort.
                 // When in VirtualMode, we must do this explicitly because the sorter isn't sorting the items.
                 // If NOT in VirtualMode, LVColSorter.SetSort will also perform the sort via m_View.Sort().
-                if (_ListView.ListViewItemSorter is LVColSorter sorter)
+                if (_listView.ListViewItemSorter is LVColSorter sorter)
                 {
                     sorter.SetSort(column, order);
                 }
                 else if (!VirtualMode)
                 {
-                    _ListView.Sort();
+                    _listView.Sort();
                 }
             }
             finally
@@ -764,16 +788,16 @@ namespace ExpControlsLib
         {
             if (VirtualMode)
             {
-                if (index >= 0 && index < _ListView.VirtualListSize)
+                if (index >= 0 && index < _listView.VirtualListSize)
                 {
-                    _ListView.RedrawItems(index, index, false);
+                    _listView.RedrawItems(index, index, false);
                 }
             }
             else
             {
-                if (index >= 0 && index < _ListView.Items.Count)
+                if (index >= 0 && index < _listView.Items.Count)
                 {
-                    var lvi = _ListView.Items[index];
+                    var lvi = _listView.Items[index];
                 }
             }
         }
@@ -808,9 +832,9 @@ namespace ExpControlsLib
                 }
                 else
                 {
-                    if (index >= 0 && index < _ListView.Items.Count)
+                    if (index >= 0 && index < _listView.Items.Count)
                     {
-                        lvi = _ListView.Items[index];
+                        lvi = _listView.Items[index];
                         UpdateListviewItemCallback?.Invoke(lvi, csi);
                     }
                 }
@@ -850,16 +874,16 @@ namespace ExpControlsLib
             if (VirtualMode)
             {
                 _itemCache.Clear();
-                _ListView.Invalidate();
+                _listView.Invalidate();
             }
             else
             {
-                _ListView.BeginUpdate();
-                foreach (ListViewItem lvi in _ListView.Items)
+                _listView.BeginUpdate();
+                foreach (ListViewItem lvi in _listView.Items)
                 {
                     UpdateListviewItemCallback?.Invoke(lvi, lvi.Tag as CShellItem);
                 }
-                _ListView.EndUpdate();
+                _listView.EndUpdate();
             }
         }
 
@@ -997,7 +1021,7 @@ namespace ExpControlsLib
             if (lvi == null)
             {   //this shouldn't ever happen, but just in case the callback fails, create a basic ListViewItem to avoid crashing the ListView
                 lvi = new ListViewItem(item.DisplayName) { Tag = item };
-                foreach (var col in _ListView.Columns)
+                foreach (var col in _listView.Columns)
                 {
                     Debug.WriteLine("Failed to create listview item");
 
@@ -1019,12 +1043,39 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Returns the <see cref="CShellItem"/> at <paramref name="viewIndex"/> in the active
-        /// view (filtered or master). Returns <c>null</c> if the index is out of range.
+        /// view. Works in both virtual and non-virtual modes. Returns <c>null</c> if out of range.
         /// </summary>
         internal CShellItem? GetShellItemAtViewIndex(int viewIndex)
         {
-            if (viewIndex < 0 || viewIndex >= ActiveViewCount) return null;
-            return GetItemFromActiveView(viewIndex);
+            if (viewIndex < 0) return null;
+            if (VirtualMode)
+            {
+                if (viewIndex >= ActiveViewCount) return null;
+                return GetItemFromActiveView(viewIndex);
+            }
+            else
+            {
+                if (viewIndex >= _listView.Items.Count) return null;
+                return _listView.Items[viewIndex].Tag as CShellItem;
+            }
+        }
+
+        /// <summary>
+        /// Enumerates every <see cref="CShellItem"/> regardless of virtual/non-virtual mode.
+        /// In virtual mode returns <see cref="Items"/>; in non-virtual mode reads <c>Tag</c>
+        /// from each <see cref="ListView.Items"/> entry.
+        /// </summary>
+        internal IEnumerable<CShellItem> AllShellItems
+        {
+            get
+            {
+                if (VirtualMode)
+                    return Items;
+                return _listView.Items
+                    .Cast<ListViewItem>()
+                    .Select(lvi => lvi.Tag as CShellItem)
+                    .Where(csi => csi != null)!;
+            }
         }
 
         /// <summary>
@@ -1049,10 +1100,10 @@ namespace ExpControlsLib
             }
             else
             {
-                if (viewIndex < _ListView.Items.Count)
+                if (viewIndex < _listView.Items.Count)
                 {
                     SuppressCheckEvents = true;
-                    try   { _ListView.Items[viewIndex].Checked = value; }
+                    try   { _listView.Items[viewIndex].Checked = value; }
                     finally { SuppressCheckEvents = false; }
                 }
             }
@@ -1060,7 +1111,7 @@ namespace ExpControlsLib
 
         private void UpdateVirtualListSize()
         {
-            _ListView.VirtualListSize = ActiveViewCount;
+            _listView.VirtualListSize = ActiveViewCount;
         }
 
         private void RecreateIndexMapping()
@@ -1076,26 +1127,26 @@ namespace ExpControlsLib
 
         private (int index, ColumnHeader header) GetDisplayNameColumn()
         {
-            for (int i = 0; i < _ListView.Columns.Count; i++)
+            for (int i = 0; i < _listView.Columns.Count; i++)
             {
-                var col = _ListView.Columns[i];
+                var col = _listView.Columns[i];
                 if (col.Tag?.ToString().Trim() == ".DisplayName")
                 {
                     return (i, col);
                 }
             }
-            if (_ListView.Columns.Count > 0)
+            if (_listView.Columns.Count > 0)
             {
-                return (0, _ListView.Columns[0]);
+                return (0, _listView.Columns[0]);
             }
             return (-1, null);
         }
 
         private CShellItemComparer GetSecondaryComparer(int primaryColumn)
         {
-            if (primaryColumn >= 0 && primaryColumn < _ListView.Columns.Count)
+            if (primaryColumn >= 0 && primaryColumn < _listView.Columns.Count)
             {
-                var primCol = _ListView.Columns[primaryColumn];
+                var primCol = _listView.Columns[primaryColumn];
                 string primMapping = primCol.Tag?.ToString().Trim() ?? string.Empty;
                 if (primMapping.StartsWith(".") && primMapping.Substring(1) == "DisplayName")
                 {
@@ -1107,11 +1158,11 @@ namespace ExpControlsLib
             SortOrder secOrder = SortOrder.None;
             ColumnHeader secColHeader = null;
 
-            if (_prevSortColumn >= 0 && _prevSortColumn < _ListView.Columns.Count && _prevSortOrder != SortOrder.None)
+            if (_prevSortColumn >= 0 && _prevSortColumn < _listView.Columns.Count && _prevSortOrder != SortOrder.None)
             {
                 secColIndex = _prevSortColumn;
                 secOrder = _prevSortOrder;
-                secColHeader = _ListView.Columns[secColIndex];
+                secColHeader = _listView.Columns[secColIndex];
             }
             else
             {
@@ -1136,23 +1187,23 @@ namespace ExpControlsLib
         {
             if (order == SortOrder.None || ActiveViewCount == 0) return;
 
-            if (column < 0 || column >= _ListView.Columns.Count) return;
+            if (column < 0 || column >= _listView.Columns.Count) return;
 
             // Save selection and focused item before sort so we can restore after
             var selectedPaths = new List<string>();
-            foreach (int idx in _ListView.SelectedIndices)
+            foreach (int idx in _listView.SelectedIndices)
             {
                 var item = GetItem(idx);
                 if (item != null) selectedPaths.Add(item.FullPath);
             }
             string? focusedPath = null;
-            if (_ListView.FocusedItem != null)
+            if (_listView.FocusedItem != null)
             {
-                var focused = GetItem(_ListView.FocusedItem.Index);
+                var focused = GetItem(_listView.FocusedItem.Index);
                 if (focused != null) focusedPath = focused.FullPath;
             }
 
-            var colHeader = _ListView.Columns[column];
+            var colHeader = _listView.Columns[column];
             var secondaryComparer = GetSecondaryComparer(column);
             var comparer = new CShellItemComparer(_expList, column, order, colHeader, secondaryComparer);
 
@@ -1172,26 +1223,26 @@ namespace ExpControlsLib
 
                 list.Sort(comparer);
 
-                _ListView.BeginUpdate();
+                _listView.BeginUpdate();
                 Items.Clear();
                 Items.AddRange(list);
-                _ListView.EndUpdate();
+                _listView.EndUpdate();
             }
 
             RecreateIndexMapping();
             _itemCache.Clear();
-            _ListView.Refresh();
+            _listView.Refresh();
 
             // Restore selection by finding the new indices of the previously selected items
             if (selectedPaths.Count > 0)
             {
-                _ListView.SelectedIndices.Clear();
+                _listView.SelectedIndices.Clear();
                 int firstRestored = -1;
                 foreach (var path in selectedPaths)
                 {
                     if (_pathToIndex.TryGetValue(path, out int newIndex))
                     {
-                        _ListView.SelectedIndices.Add(newIndex);
+                        _listView.SelectedIndices.Add(newIndex);
                         if (firstRestored < 0) firstRestored = newIndex;
                     }
                 }
@@ -1199,12 +1250,12 @@ namespace ExpControlsLib
                 // Restore focused item and ensure it's visible
                 if (focusedPath != null && _pathToIndex.TryGetValue(focusedPath, out int focusedIndex))
                 {
-                    _ListView.FocusedItem = _ListView.Items[focusedIndex];
-                    _ListView.EnsureVisible(focusedIndex);
+                    _listView.FocusedItem = _listView.Items[focusedIndex];
+                    _listView.EnsureVisible(focusedIndex);
                 }
                 else if (firstRestored >= 0)
                 {
-                    _ListView.EnsureVisible(firstRestored);
+                    _listView.EnsureVisible(firstRestored);
                 }
             }
         }
@@ -1218,10 +1269,10 @@ namespace ExpControlsLib
         /// <returns>The index where the item should be inserted in the active view</returns>
         public int FindInsertionPoint(CShellItem item)
         {
-            if (_sortOrder == SortOrder.None || _sortColumn < 0 || _sortColumn >= _ListView.Columns.Count)
+            if (_sortOrder == SortOrder.None || _sortColumn < 0 || _sortColumn >= _listView.Columns.Count)
                 return ActiveViewCount;
 
-            var colHeader = _ListView.Columns[_sortColumn];
+            var colHeader = _listView.Columns[_sortColumn];
             var secondaryComparer = GetSecondaryComparer(_sortColumn);
             var comparer = new CShellItemComparer(_expList, _sortColumn, _sortOrder, colHeader, secondaryComparer);
 
@@ -1257,12 +1308,12 @@ namespace ExpControlsLib
             {
                 // Binary search on ListView.Items
                 int low = 0;
-                int high = _ListView.Items.Count - 1;
+                int high = _listView.Items.Count - 1;
 
                 while (low <= high)
                 {
                     int mid = low + ((high - low) / 2);
-                    var midCsi = _ListView.Items[mid].Tag as CShellItem;
+                    var midCsi = _listView.Items[mid].Tag as CShellItem;
                     int compareResult = comparer.Compare(item, midCsi);
 
                     if (compareResult == 0)
@@ -1361,21 +1412,21 @@ namespace ExpControlsLib
             Debug.WriteLine("ExpList: GetTopIndex Begin");
             try
             {
-                if (_ListView == null || !_ListView.IsHandleCreated) return -1;
+                if (_listView == null || !_listView.IsHandleCreated) return -1;
 
-                int total = _ListView.VirtualMode ? _ListView.VirtualListSize : _ListView.Items.Count;
+                int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
                 if (total <= 0) return -1;
 
                 if (LastTopIndex > -1) return LastTopIndex; // cache for repeated calls.  The OS will sometimes make tons of redundant calls in a brief amount of time.
 
-                var view = _ListView.View;
+                var view = _listView.View;
 
                 // 1) Fast O(1) path for Details/List views.
                 if (view == View.Details || view == View.List)
                 {
-                    if (!_ListView.VirtualMode && _ListView.TopItem != null)
+                    if (!_listView.VirtualMode && _listView.TopItem != null)
                     {
-                        LastTopIndex = _ListView.TopItem.Index;
+                        LastTopIndex = _listView.TopItem.Index;
                         return LastTopIndex;
                     }
 
@@ -1432,7 +1483,7 @@ namespace ExpControlsLib
             Debug.WriteLine("ExpList: FindTopLeftByTopIndex Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             try
             {
-                int idx = (int)SendMessage(_ListView.Handle, LVM_GETTOPINDEX, IntPtr.Zero, IntPtr.Zero);
+                int idx = (int)SendMessage(_listView.Handle, LVM_GETTOPINDEX, IntPtr.Zero, IntPtr.Zero);
                 if (idx >= 0 && idx < total) return idx;
                 return -1;
             }
@@ -1453,18 +1504,18 @@ namespace ExpControlsLib
             try
             {
                 POINT origin = new POINT();
-                IntPtr res = SendMessage(_ListView.Handle, LVM_GETORIGIN, IntPtr.Zero, ref origin);
+                IntPtr res = SendMessage(_listView.Handle, LVM_GETORIGIN, IntPtr.Zero, ref origin);
                 if (res == IntPtr.Zero) return -1; // message unsupported / failed
 
-                bool largeIcon = (_ListView.View == View.LargeIcon);
-                int packed = (int)SendMessage(_ListView.Handle, LVM_GETITEMSPACING,
+                bool largeIcon = (_listView.View == View.LargeIcon);
+                int packed = (int)SendMessage(_listView.Handle, LVM_GETITEMSPACING,
                     largeIcon ? IntPtr.Zero : (IntPtr)1, IntPtr.Zero);
                 int cellW = packed & 0xFFFF;
                 int cellH = (packed >> 16) & 0xFFFF;
 
                 if (cellW <= 0 || cellH <= 0) return -1;
 
-                int vw = Math.Max(1, _ListView.ClientSize.Width);
+                int vw = Math.Max(1, _listView.ClientSize.Width);
                 int cols = Math.Max(1, (int)Math.Floor(vw / (float)cellW));
 
                 int row = Math.Max(0, origin.y / cellH);
@@ -1489,7 +1540,7 @@ namespace ExpControlsLib
             Debug.WriteLine("ExpList: FindTopLeftBySingleHitTest Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             try
             {
-                var client = _ListView.ClientRectangle;
+                var client = _listView.ClientRectangle;
                 if (client.Width <= 0 || client.Height <= 0) return -1;
 
                 int half = Math.Max(3, GetSizeForDisplayMode() / 2);
@@ -1512,7 +1563,7 @@ namespace ExpControlsLib
                         if (idx < 0 || idx >= total) continue;
 
                         RECT rc = new RECT { left = LVIR_BOUNDS };
-                        if (SendMessage(_ListView.Handle, LVM_GETITEMRECT, (IntPtr)idx, ref rc) != IntPtr.Zero)
+                        if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)idx, ref rc) != IntPtr.Zero)
                         {
                             if (rc.top < bestTop || (rc.top == bestTop && rc.left < bestLeft))
                             {
@@ -1550,12 +1601,12 @@ namespace ExpControlsLib
                 int i = -1;
                 while (true)
                 {
-                    i = (int)SendMessage(_ListView.Handle, LVM_GETNEXTITEM, (IntPtr)i, (IntPtr)LVNI_VISIBLE);
+                    i = (int)SendMessage(_listView.Handle, LVM_GETNEXTITEM, (IntPtr)i, (IntPtr)LVNI_VISIBLE);
                     if (i < 0) break;
                     if (i >= total) continue;
 
                     RECT rc = new RECT { left = LVIR_BOUNDS };
-                    if (SendMessage(_ListView.Handle, LVM_GETITEMRECT, (IntPtr)i, ref rc) == IntPtr.Zero)
+                    if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)i, ref rc) == IntPtr.Zero)
                         continue;
 
                     if (rc.top < bestTop || (rc.top == bestTop && rc.left < bestLeft))
@@ -1584,7 +1635,7 @@ namespace ExpControlsLib
             Debug.WriteLine("ExpList: FindTopLeftByHitTestScan Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             try
             {
-                var client = _ListView.ClientRectangle;
+                var client = _listView.ClientRectangle;
                 if (client.Width <= 0 || client.Height <= 0) return -1;
 
                 //int step = Math.Max(6, _listView.Font.Height / 2);
@@ -1602,7 +1653,7 @@ namespace ExpControlsLib
                         if (idx < 0 || idx >= listCount) continue;
 
                         RECT rc = new RECT { left = LVIR_BOUNDS };
-                        if (SendMessage(_ListView.Handle, LVM_GETITEMRECT, (IntPtr)idx, ref rc) != IntPtr.Zero)
+                        if (SendMessage(_listView.Handle, LVM_GETITEMRECT, (IntPtr)idx, ref rc) != IntPtr.Zero)
                         {
                             if (rc.top < bestTop || (rc.top == bestTop && rc.left < bestLeft))
                             {
@@ -1642,7 +1693,7 @@ namespace ExpControlsLib
                     pt = new POINT { x = x, y = y }
                 };
 
-                int result = (int)SendMessage(_ListView.Handle, LVM_HITTEST, IntPtr.Zero, ref ht);
+                int result = (int)SendMessage(_listView.Handle, LVM_HITTEST, IntPtr.Zero, ref ht);
                 return result; // -1 if none
             }
             finally
@@ -1656,10 +1707,10 @@ namespace ExpControlsLib
             Debug.WriteLine("ExpList: GetApproxVisibleCount Begin");
             try
             {
-                if (_ListView == null || !_ListView.IsHandleCreated)
+                if (_listView == null || !_listView.IsHandleCreated)
                     return 0;
 
-                return _ListView.View == View.LargeIcon
+                return _listView.View == View.LargeIcon
                     ? GetApproxVisibleCountLargeIcon()
                     : GetAnyVisibleCount();
             }
@@ -1671,24 +1722,24 @@ namespace ExpControlsLib
 
         private int GetAnyVisibleCount()
         {
-            if (_ListView == null || !_ListView.IsHandleCreated || _ListView.View == View.LargeIcon)
+            if (_listView == null || !_listView.IsHandleCreated || _listView.View == View.LargeIcon)
                 return 0;
 
-            int total = _ListView.VirtualMode ? _ListView.VirtualListSize : _ListView.Items.Count;
+            int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
             if (total <= 0) return 0;
 
-            switch (_ListView.View)
+            switch (_listView.View)
             {
                 case View.Details:
                 case View.List:
                     // LVM_GETCOUNTPERPAGE is geometry-based and works in virtual mode
-                    int perPage = (int)SendMessage(_ListView.Handle, LVM_GETCOUNTPERPAGE, IntPtr.Zero, IntPtr.Zero);
+                    int perPage = (int)SendMessage(_listView.Handle, LVM_GETCOUNTPERPAGE, IntPtr.Zero, IntPtr.Zero);
                     return Math.Min(total, Math.Max(0, perPage));
 
                 case View.SmallIcon:
                 case View.Tile:
                     // LVM_GETCOUNTPERPAGE returns total item count for these views, so use spacing math instead
-                    return EstimateVisibleBySpacing(_ListView, total, largeIcon: false);
+                    return EstimateVisibleBySpacing(_listView, total, largeIcon: false);
 
                 default:
                     return 0;
@@ -1722,27 +1773,27 @@ namespace ExpControlsLib
             Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon Begin");
             try
             {
-                if (_ListView == null || !_ListView.IsHandleCreated || _ListView.View != View.LargeIcon)
+                if (_listView == null || !_listView.IsHandleCreated || _listView.View != View.LargeIcon)
                     return 0;
 
-                int total = _ListView.VirtualMode ? _ListView.VirtualListSize : _ListView.Items.Count;
+                int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
                 if (total <= 0) return 0;
 
                 // FALSE => large icon spacing
-                int packed = (int)SendMessage(_ListView.Handle, LVM_GETITEMSPACING, IntPtr.Zero, IntPtr.Zero);
+                int packed = (int)SendMessage(_listView.Handle, LVM_GETITEMSPACING, IntPtr.Zero, IntPtr.Zero);
                 int cellW = packed & 0xFFFF;
                 int cellH = (packed >> 16) & 0xFFFF;
 
                 // Fallback if spacing couldn't be read
                 if (cellW <= 0 || cellH <= 0)
                 {
-                    var img = _ListView.LargeImageList?.ImageSize ?? new System.Drawing.Size(32, 32);
+                    var img = _listView.LargeImageList?.ImageSize ?? new System.Drawing.Size(32, 32);
                     cellW = Math.Max(1, img.Width + 32);                   // rough label/padding allowance
-                    cellH = Math.Max(1, img.Height + _ListView.Font.Height * 2 + 16);
+                    cellH = Math.Max(1, img.Height + _listView.Font.Height * 2 + 16);
                 }
 
-                int vw = Math.Max(1, _ListView.ClientSize.Width);
-                int vh = Math.Max(1, _ListView.ClientSize.Height);
+                int vw = Math.Max(1, _listView.ClientSize.Width);
+                int vh = Math.Max(1, _listView.ClientSize.Height);
 
                 int cols = Math.Max(1, (int)Math.Ceiling(vw / (double)cellW));
                 int rows = Math.Max(1, (int)Math.Ceiling(vh / (double)cellH));
@@ -1768,7 +1819,7 @@ namespace ExpControlsLib
         {
             return DisplayMode switch
             {
-                ListViewDisplayMode.Details => _ListView.Font.Height,
+                ListViewDisplayMode.Details => _listView.Font.Height,
                 ListViewDisplayMode.SmallIcon => 16,
                 ListViewDisplayMode.Tile => 32,
                 ListViewDisplayMode.Thumbnail => 48,

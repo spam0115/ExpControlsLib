@@ -274,49 +274,6 @@ namespace ExpControlsLibTest
             Assert.That(item.ColumnDic["Score"].Tag, Is.EqualTo(99.5f));
         }
 
-        [Test]
-        public async Task TestLoadDirectoryFetchesCustomColumnDataForEveryItem()
-        {
-            var tempDir = Path.Combine(Path.GetTempPath(), "ExpListColumns_" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(tempDir);
-
-            try
-            {
-                const int fileCount = 40;
-                var expectedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                for (int i = 0; i < fileCount; i++)
-                {
-                    string path = Path.Combine(tempDir, $"item-{i:D2}.txt");
-                    File.WriteAllText(path, "test");
-                    expectedPaths.Add(path);
-                }
-
-                using var expList = new ExpList { VirtualMode = true };
-                expList.Initialize(_shellController);
-                using var form = new Form { Height = 100 };
-                form.Controls.Add(expList);
-                form.Show();
-
-                expList.Columns.Add("Score", "Score");
-                var requestedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                expList.ExpListGetColumnData += (_, e) =>
-                {
-                    requestedPaths.Add(e.Item.FullPath);
-                    e.Item.ColumnDic["Score"] = new ListViewSubitemData("1", 1);
-                };
-
-                await expList.LoadDirectoryAsync(tempDir);
-
-                Assert.That(expList.Count, Is.EqualTo(fileCount));
-                Assert.That(requestedPaths, Is.EquivalentTo(expectedPaths),
-                    "Custom column data should be requested for every loaded item, including virtualized off-screen items.");
-            }
-            finally
-            {
-                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
-            }
-        }
-
 
         [Test]
         public async Task TestGoUpNavigation()

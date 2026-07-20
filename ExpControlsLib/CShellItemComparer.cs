@@ -78,6 +78,10 @@ namespace ExpControlsLib
             {
                 switch (_mapping)
                 {
+                    case ".Checked":
+                        return x.Checked.CompareTo(y.Checked);
+                    case ".ID":
+                        return x.ID.CompareTo(y.ID);
                     case ".DisplayName":
                         return StringLogicalComparer.CompareStrings(x.DisplayName, y.DisplayName);
                     case ".TypeName":
