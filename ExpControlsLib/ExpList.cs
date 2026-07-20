@@ -667,9 +667,20 @@ namespace ExpControlsLib
         /// Gets or sets a value indicating whether a checkbox is displayed next to each item.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// WinForms renders the checkbox glyph only in <c>Details</c>, <c>List</c>, and
         /// <c>SmallIcon</c> view modes. In <c>LargeIcon</c> / thumbnail modes the glyph may
         /// not appear, but <see cref="CShellItem.Checked"/> state is still maintained in the model.
+        /// </para>
+        /// <para>
+        /// Setting <c>CheckBoxes</c> on the underlying Win32 <c>SysListView32</c> forces a
+        /// handle recreation, which silently resets <see cref="ListView.VirtualListSize"/>
+        /// to 0 and corrupts any cached virtual-mode <see cref="ListViewItem"/> objects.
+        /// This setter compensates by dropping virtual mode across the change and then
+        /// restoring <c>VirtualListSize</c> and clearing the wrapper's item cache. See the
+        /// remarks on <see cref="VirtualListViewWrapper.VirtualMode"/> for the full
+        /// explanation of the handle-recreation issue.
+        /// </para>
         /// </remarks>
         [Category("Behavior")]
         [Description("Show a checkbox next to each list item.")]
@@ -3564,6 +3575,25 @@ namespace ExpControlsLib
             try
             {
                 if (e.Button == MouseButtons.Right) m_OutOfRange = false;
+
+                // In virtual mode WinForms does not toggle the checkbox glyph when the
+                // user clicks it \u2014 ItemCheck/ItemChecked only fire in non-virtual mode.
+                // Detect a click on the state-image (checkbox) region and toggle manually.
+                if (e.Button == MouseButtons.Left
+                    && _listView.CheckBoxes
+                    && _listViewWrapper.VirtualMode)
+                {
+                    var hit = _listView.HitTest(e.X, e.Y);
+                    if (hit.Item != null && hit.Location == ListViewHitTestLocations.StateImage)
+                    {
+                        var csi = _listViewWrapper.GetShellItemAtViewIndex(hit.Item.Index);
+                        if (csi != null)
+                        {
+                            SetChecked(csi, !csi.Checked);
+                        }
+                    }
+                }
+
                 OnMouseDown(e);
             }
             finally
@@ -3744,6 +3774,31 @@ namespace ExpControlsLib
             Debug.WriteLine("ExpList: ExpFileList_KeyDown Begin");
             try
             {
+                // Space toggles the checkbox on focused/selected items in virtual mode
+                // (WinForms only handles this natively in non-virtual mode).
+                if (e.KeyCode == Keys.Space
+                    && !e.Control && !e.Alt && !e.Shift
+                    && _listView.CheckBoxes
+                    && _listViewWrapper.VirtualMode)
+                {
+                    bool handled = false;
+                    foreach (int idx in _listView.SelectedIndices)
+                    {
+                        var csi = _listViewWrapper.GetShellItemAtViewIndex(idx);
+                        if (csi != null)
+                        {
+                            SetChecked(csi, !csi.Checked);
+                            handled = true;
+                        }
+                    }
+                    if (handled)
+                    {
+                        e.Handled = true;
+                        e.SuppressKeyPress = true;
+                        return;
+                    }
+                }
+
                 if (e.Control && e.KeyCode == Keys.A)
                 {
                     if (VirtualMode)

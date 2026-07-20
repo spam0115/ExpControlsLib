@@ -200,6 +200,51 @@ namespace ExpControlsLib
         public SortOrder Sorting => SortOrder;
 
 
+        /// <summary>
+        /// Gets or sets whether the underlying <see cref="ListView"/> is in virtual mode
+        /// (owner-data, populated via <see cref="ListView.RetrieveVirtualItem"/>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>ListView handle recreation issue.</b> Several state-changing properties on
+        /// the underlying Win32 <c>SysListView32</c> control cannot be modified in place
+        /// and force WinForms to destroy and recreate the HWND. When the handle is
+        /// recreated, some properties are re-applied automatically by the WinForms
+        /// wrapper but others are silently dropped or reset. Properties known to trigger
+        /// a handle recreation include (non-exhaustive): <c>VirtualMode</c>,
+        /// <c>CheckBoxes</c>, and in some combinations <c>View</c>.
+        /// </para>
+        /// <para>
+        /// Observed fallout of a handle recreation in this control:
+        /// <list type="bullet">
+        ///   <item><description>
+        ///     The <c>LVS_EX_CHECKBOXES</c> extended style is dropped even though
+        ///     <see cref="ListView.CheckBoxes"/> still reads <c>true</c>. The checkbox
+        ///     glyph stops rendering until <c>CheckBoxes</c> is re-set on the new handle.
+        ///   </description></item>
+        ///   <item><description>
+        ///     <see cref="ListView.VirtualListSize"/> resets to <c>0</c>, so a Details
+        ///     view will appear empty until the size is re-assigned.
+        ///   </description></item>
+        ///   <item><description>
+        ///     Any <see cref="ListViewItem"/> instances that were cached across the
+        ///     toggle become unusable in virtual mode: <c>RetrieveVirtualItem</c> still
+        ///     accepts them and the row count is correct, but Win32 refuses to paint
+        ///     them and they are not hit-testable. The <c>_itemCache</c> must be cleared
+        ///     so fresh items are built on the next paint.
+        ///   </description></item>
+        /// </list>
+        /// </para>
+        /// <para>
+        /// Because of this, any code path in this class (or its callers) that touches
+        /// one of the recreation-triggering properties while another one is active must
+        /// capture the affected state up-front, apply the change, then explicitly
+        /// restore <c>CheckBoxes</c>, <c>VirtualListSize</c>, and invalidate the item
+        /// cache. See also <see cref="DisplayMode"/> and
+        /// <c>ExpList.CheckBoxes</c> for the two other setters that must apply the same
+        /// workaround.
+        /// </para>
+        /// </remarks>
         [Browsable(true), Category("Behavior"), DefaultValue(false)]
         public bool VirtualMode
         {
@@ -207,6 +252,13 @@ namespace ExpControlsLib
             set
             {
                 if (_listView.VirtualMode == value) return;
+
+                // Toggling VirtualMode recreates the ListView handle and silently drops
+                // the LVS_EX_CHECKBOXES extended style. Capture CheckBoxes now so we can
+                // re-apply it on the new handle. See the <remarks> block above for the
+                // full explanation of the handle-recreation issue.
+                bool wasCheckBoxes = _listView.CheckBoxes;
+
                 _listView.VirtualMode = value;
 
                 if (value)
@@ -223,6 +275,11 @@ namespace ExpControlsLib
                     _filteredView = null;
                     _itemCache.Clear();
                     _pathToIndex.Clear();
+                }
+
+                if (wasCheckBoxes && !_listView.CheckBoxes)
+                {
+                    _listView.CheckBoxes = true;
                 }
             }
         }
@@ -264,11 +321,13 @@ namespace ExpControlsLib
             {
                 if (field == value) return;
 
-                // WinForms bug: changing ListView.View while both CheckBoxes=true and
-                // VirtualMode=true causes a handle recreation that silently resets
-                // VirtualListSize to 0, making Details view appear completely empty.
-                // Work around it by temporarily disabling virtual mode, changing the
-                // view, then restoring virtual mode with the correct list size.
+                // Changing ListView.View while both CheckBoxes=true and VirtualMode=true
+                // triggers a handle recreation that silently resets VirtualListSize to 0
+                // and corrupts any cached LVIs, making Details view appear completely
+                // empty. Work around it by temporarily disabling virtual mode, changing
+                // the view, then restoring virtual mode with the correct list size and
+                // a cleared item cache. See the <remarks> block on VirtualMode above
+                // for the full explanation of the handle-recreation issue.
                 bool needsGuard = VirtualMode && _listView.CheckBoxes;
                 if (needsGuard)
                 {
@@ -1002,7 +1061,14 @@ namespace ExpControlsLib
                     {
                         lvi.ImageIndex = item.ImageIndex;
                     }
-                    
+
+                    // In virtual mode the Win32 ListView tracks Selected/Focused by index,
+                    // not by ListViewItem instance. Stale flags baked into a cached LVI
+                    // cause leftover focus rectangles ("dashed outlines") that never clear.
+                    // Reset them here so painting uses the ListView's authoritative state.
+                    if (lvi.Selected) lvi.Selected = false;
+                    if (lvi.Focused)  lvi.Focused  = false;
+
                     return lvi;
                 }
                 else
@@ -1034,8 +1100,16 @@ namespace ExpControlsLib
             item.NeedsRefresh = false;
 
             // Sync checkbox visual state from the model without triggering the ItemChecked handler.
+            // In virtual mode ListViewItem.Checked does NOT drive the glyph \u2014 the ListView asks
+            // for StateImageIndex on every draw (1 = unchecked, 2 = checked). Set both so the
+            // property reads back correctly and the glyph actually renders.
             SuppressCheckEvents = true;
-            try   { lvi.Checked = item.Checked; }
+            try
+            {
+                lvi.Checked = item.Checked;
+                if (_listView.CheckBoxes)
+                    lvi.StateImageIndex = item.Checked ? 1 : 0;
+            }
             finally { SuppressCheckEvents = false; }
 
             return lvi;
@@ -1093,8 +1167,14 @@ namespace ExpControlsLib
                 if (_itemCache.TryGetValue(viewIndex, out var lvi))
                 {
                     SuppressCheckEvents = true;
-                    try   { lvi.Checked = value; }
+                    try
+                    {
+                        lvi.Checked = value;
+                        if (_listView.CheckBoxes)
+                            lvi.StateImageIndex = value ? 1 : 0;
+                    }
                     finally { SuppressCheckEvents = false; }
+                    _listView.RedrawItems(viewIndex, viewIndex, false);
                 }
                 // Not cached: next RetrieveVirtualItem will apply item.Checked automatically.
             }
