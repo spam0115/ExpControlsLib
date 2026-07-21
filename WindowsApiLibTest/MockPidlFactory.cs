@@ -47,14 +47,14 @@ namespace WindowsApiLibTest
                 // ------------------------------------------------------------------
                 case CSIDL.DRIVES:
                     return BuildPidl(
-                        MakeVirtualFolderItem(0x1F, 0x50, ShellNamespaceGuids.MyComputer));
+                        MakeVirtualFolderItem(0x1F, 0x50, SpecialShellLocations.MyComputer));
 
                 // ------------------------------------------------------------------
                 // The new version of "My Computer" is called "This PC" in Windows 8.1/10/11.
                 // ------------------------------------------------------------------
                 case CSIDL.THISPC:
                     return BuildPidl(
-                        MakeVirtualFolderItem(0x1F, 0x50, ShellNamespaceGuids.ComputerFolder));
+                        MakeVirtualFolderItem(0x1F, 0x50, SpecialShellLocations.ComputerFolder));
 
                 // ------------------------------------------------------------------
                 // MY DOCUMENTS  →  virtual-folder SHITEMID
@@ -62,14 +62,14 @@ namespace WindowsApiLibTest
                 // ------------------------------------------------------------------
                 case CSIDL.MYDOCUMENTS:
                     return BuildPidl(
-                        MakeVirtualFolderItem(0x1F, 0x50, ShellNamespaceGuids.MyDocuments));
+                        MakeVirtualFolderItem(0x1F, 0x50, SpecialShellLocations.MyDocuments));
 
                 // ------------------------------------------------------------------
                 // MY PICTURES  →  virtual-folder SHITEMID
                 // ------------------------------------------------------------------
                 case CSIDL.MYPICTURES:
                     return BuildPidl(
-                        MakeVirtualFolderItem(0x1F, 0x50, ShellNamespaceGuids.MyPictures));
+                        MakeVirtualFolderItem(0x1F, 0x50, SpecialShellLocations.MyPictures));
 
                 // ------------------------------------------------------------------
                 // C_DRIVE (C:\)
@@ -252,7 +252,7 @@ namespace WindowsApiLibTest
                 if (first.Length == 2 && first[1] == ':')
                 {
                     // Prepend My Computer virtual folder, then the drive item
-                    items.Add(MakeVirtualFolderItem(0x1F, 0x50, ShellNamespaceGuids.MyComputer));
+                    items.Add(MakeVirtualFolderItem(0x1F, 0x50, SpecialShellLocations.MyComputer));
                     items.Add(MakeDriveItem(first + "\\"));
                     startSegment = 1;
                 }

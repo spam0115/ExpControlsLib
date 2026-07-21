@@ -773,15 +773,15 @@
                 Explanation about how file icons are handled:
                 It is handled by a weird mix of Windows and custom code.  We use the OS's Shell's 
                 SystemImageListManager - it caches icons and provides them on demand to the ListView.  
-                The Listview is linked to the SystemImageListManager by calling 
-                SystemImageListManager.SetListViewImageList(ExpFileList, ...).  However, just setting the image list
+                The Listview is linked to the image-list orchestrator, which selects the appropriate
+                native or managed image list. However, just setting the image list
                 doesn't link the listview items to the image list - you still have to set the ImageIndex of each 
                 ListViewItem to the appropriate index in the SystemImageList.  This is done by setting  
-                ListViewItem.ImageIndex = SystemImageListManager.GetIconIndex(lvi.Tag) (Tag contains a reference to 
+                ListViewItem.ImageIndex is populated by the orchestrator (Tag contains a reference to
                 the CShellItem for each Shell item entity.).
                 
                 However, for thumbnail display modes, Windows Shell doesn't have native support for that. 
-                We implented the ThumbnailImageListManager to make up for that shortfall and fill in the SystemImageListManager.
+                We implemented the ImageListOrchestrator to coordinate that shortfall.
             
                 Item images a draw by passing SystemImageLists into the Windows Shell ListView control.
                 
@@ -801,6 +801,8 @@
                 <item><description>Shows how to handle a DoubleClick on a ListViewItem.</description></item>
                 </list>
                 </para>
+                
+                BTW, non-virtual mode is currently broken because I don't really care about non-virtual mode right now.
             </remarks>
             
         </member>
@@ -972,6 +974,16 @@
             Occurs when the sort column or order has changed.
             </summary>
         </member>
+        <member name="T:ExpControlsLib.ExpList.ExpListItemCheckedEventHandler">
+            <summary>Delegate for the <see cref="E:ExpControlsLib.ExpList.ItemChecked"/> event.</summary>
+        </member>
+        <member name="E:ExpControlsLib.ExpList.ItemChecked">
+            <summary>
+            Occurs after a <see cref="T:WindowsApiLib.Shell.CShellItem"/>'s checked state changes as a result of a
+            user interaction or a call to <see cref="M:ExpControlsLib.ExpList.SetChecked(WindowsApiLib.Shell.CShellItem,System.Boolean)"/>.
+            Not raised during bulk <see cref="M:ExpControlsLib.ExpList.CheckAll"/> / <see cref="M:ExpControlsLib.ExpList.UncheckAll"/>.
+            </summary>
+        </member>
         <member name="P:ExpControlsLib.ExpList.DisplayMode">
             <summary>
             Gets or sets the display mode used to present items in the list view.
@@ -1109,6 +1121,38 @@
             ListView.SelectedItems can't be used in virtual mode.
             </summary>
         </member>
+        <member name="P:ExpControlsLib.ExpList.CheckBoxes">
+            <summary>
+            Gets or sets a value indicating whether a checkbox is displayed next to each item.
+            </summary>
+            <remarks>
+            <para>
+            WinForms renders the checkbox glyph only in <c>Details</c>, <c>List</c>, and
+            <c>SmallIcon</c> view modes. In <c>LargeIcon</c> / thumbnail modes the glyph may
+            not appear, but <see cref="P:WindowsApiLib.Shell.CShellItem.Checked"/> state is still maintained in the model.
+            </para>
+            <para>
+            Setting <c>CheckBoxes</c> on the underlying Win32 <c>SysListView32</c> forces a
+            handle recreation, which silently resets <see cref="P:System.Windows.Forms.ListView.VirtualListSize"/>
+            to 0 and corrupts any cached virtual-mode <see cref="T:System.Windows.Forms.ListViewItem"/> objects.
+            This setter compensates by dropping virtual mode across the change and then
+            restoring <c>VirtualListSize</c> and clearing the wrapper's item cache. See the
+            remarks on <see cref="P:ExpControlsLib.VirtualListViewWrapper.VirtualMode"/> for the full
+            explanation of the handle-recreation issue.
+            </para>
+            </remarks>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.CheckedShellItems">
+            <summary>
+            Enumerates every <see cref="T:WindowsApiLib.Shell.CShellItem"/> in the list whose
+            <see cref="P:WindowsApiLib.Shell.CShellItem.Checked"/> property is <c>true</c>.
+            Works in both virtual and non-virtual mode; reflects the full item set
+            regardless of any active filter.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpList.CheckedCount">
+            <summary>Gets the count of checked items.</summary>
+        </member>
         <member name="M:ExpControlsLib.ExpList.#ctor">
             <summary>
             Initializes a new instance of <see cref="T:ExpControlsLib.ExpList"/>, wires up all event handlers
@@ -1143,6 +1187,33 @@
             Overrides <see cref="M:System.Windows.Forms.Control.WndProc(System.Windows.Forms.Message@)"/> to handle shell context menu messages.
             </summary>
             <param name="m">The Windows <see cref="T:System.Windows.Forms.Message"/> to process.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.ExpFileList_ItemChecked(System.Object,System.Windows.Forms.ItemCheckedEventArgs)">
+            <summary>
+            Handles the inner ListView's <c>ItemChecked</c> event.
+            Writes the new state back to the <see cref="T:WindowsApiLib.Shell.CShellItem"/> model and raises
+            <see cref="E:ExpControlsLib.ExpList.ItemChecked"/> on <see cref="T:ExpControlsLib.ExpList"/>.
+            Suppressed while <see cref="T:ExpControlsLib.VirtualListViewWrapper"/> is materializing items.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.SetChecked(WindowsApiLib.Shell.CShellItem,System.Boolean)">
+            <summary>
+            Programmatically sets the checked state of <paramref name="item"/>.
+            Updates both the <see cref="T:WindowsApiLib.Shell.CShellItem"/> model and the visible
+            <see cref="T:System.Windows.Forms.ListViewItem"/> if currently cached. Raises <see cref="E:ExpControlsLib.ExpList.ItemChecked"/>.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.CheckAll">
+            <summary>
+            Checks all items in the master list.
+            Does not raise <see cref="E:ExpControlsLib.ExpList.ItemChecked"/> per item.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.UncheckAll">
+            <summary>
+            Unchecks all items in the master list.
+            Does not raise <see cref="E:ExpControlsLib.ExpList.ItemChecked"/> per item.
+            </summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.DeleteSelectedItems">
             <summary>
@@ -1393,12 +1464,6 @@
             </summary>
             <param name="csi">The <see cref="T:WindowsApiLib.Shell.CShellItem"/> to launch.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.IsThumbnailViewMode">
-            <summary>
-            Determines if the current display mode is a thumbnail-based view.
-            </summary>
-            <returns>True if in a thumbnail view mode.</returns>
-        </member>
         <member name="M:ExpControlsLib.ExpList.IsWithin(System.Windows.Forms.Control,System.Windows.Forms.MouseEventArgs)">
             <summary>
             Determines if the mouse coordinates are within the client area of the specified control.
@@ -1590,6 +1655,25 @@
             <summary>
             Gets the dictionary of column data, keyed by column name.
             </summary>
+        </member>
+        <member name="T:ExpControlsLib.ExpListItemCheckedEventArgs">
+            <summary>
+            Event arguments for the <see cref="E:ExpControlsLib.ExpList.ItemChecked"/> event.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListItemCheckedEventArgs.Item">
+            <summary>Gets the <see cref="T:WindowsApiLib.Shell.CShellItem"/> whose checked state changed.</summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListItemCheckedEventArgs.ViewIndex">
+            <summary>Gets the view index of the item in the current (possibly filtered) view.</summary>
+        </member>
+        <member name="P:ExpControlsLib.ExpListItemCheckedEventArgs.Checked">
+            <summary>Gets the new checked state.</summary>
+        </member>
+        <member name="M:ExpControlsLib.ExpListItemCheckedEventArgs.#ctor(WindowsApiLib.Shell.CShellItem,System.Int32,System.Boolean)">
+            <param name="item">The shell item whose state changed.</param>
+            <param name="viewIndex">Its index in the active view.</param>
+            <param name="checked">The new checked value.</param>
         </member>
         <member name="T:ExpControlsLib.ExpListMoveEventArgs">
             <summary>
@@ -2600,13 +2684,40 @@
             </summary>
         </member>
         <member name="P:ExpControlsLib.ExpTree.Nodes">
-            <summary>Returns the TreeView's current node collection.</summary>
+            <summary>
+            Returns the TreeView's current node collection.
+            </summary>
         </member>
         <member name="T:ExpControlsLib.ExpTreeContextMenu">
             <summary>Owns the native context-menu instance and forwards owner-draw window messages.</summary>
         </member>
         <member name="T:ExpControlsLib.ExpTreeDragDropState">
             <summary>Owns transient drag-over state and the delayed auto-expansion timer.</summary>
+        </member>
+        <member name="T:ExpControlsLib.ImageListOrchestrator">
+            <summary>
+            Coordinates the image-list implementation used by <see cref="T:ExpControlsLib.ExpList"/>.
+            System image-list operations remain delegated to <see cref="T:WindowsApiLib.SystemImageListManager"/>,
+            while thumbnail operations are owned by an instance-scoped manager.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ImageListOrchestrator.GetInitialImageIndex(WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Returns an initial index without starting asynchronous thumbnail work.
+            This is used by virtual-list callbacks that may be invoked for off-screen items.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ImageListOrchestrator.EnsureImage(WindowsApiLib.Shell.CShellItem,System.Int32)">
+            <summary>
+            Gets an icon immediately, or gets/queues the active thumbnail and returns -1 while
+            the thumbnail request is pending.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ImageListOrchestrator.RefreshImage(WindowsApiLib.Shell.CShellItem,System.Int32,System.Action)">
+            <summary>
+            Refreshes an item after a Shell update. Thumbnail mode queues work; system-icon mode
+            asks the caller to redraw the item after the synchronous icon lookup.
+            </summary>
         </member>
         <member name="T:ExpControlsLib.ListViewDisplayMode">
             <summary>
@@ -2927,6 +3038,13 @@
             Requests a thumbnail for a file and updates the ListView when ready
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.EnsureThumbnail(WindowsApiLib.Shell.CShellItem,System.Int32,System.Int32)">
+            <summary>
+            Gets a cached thumbnail index or queues a request when the thumbnail is not cached.
+            Unlike <see cref="M:ExpControlsLib.ThumbnailImageListManager.GetThumbnailIndex(WindowsApiLib.Shell.CShellItem,System.Int32)"/>, this method preserves the caller's item index
+            when a request must be queued.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.OnThumbnailReady(System.Object,ExpControlsLib.ThumbnailReadyEventArgs)">
             <summary>
             Handles thumbnail ready events and updates the ListView.
@@ -3120,19 +3238,63 @@
         </member>
         <member name="F:ExpControlsLib.VirtualListViewWrapper._filteredView">
             <summary>
-            The filtered view of items. When non-null, this is what the ListView displays.
-            When null, the ListView displays all items from <see cref="F:ExpControlsLib.VirtualListViewWrapper.MasterItems"/>.
+            The master list of all the items.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.VirtualListViewWrapper.SuppressCheckEvents">
+            <summary>
+            When <c>true</c>, the <see cref="T:ExpControlsLib.ExpList"/> handler must ignore <c>ItemChecked</c>
+            events fired by the inner <see cref="T:System.Windows.Forms.ListView"/>. Set while
+            <see cref="M:ExpControlsLib.VirtualListViewWrapper.CreateLviFromCsi(WindowsApiLib.Shell.CShellItem)"/> applies model state to a freshly materialized item,
+            and while <see cref="M:ExpControlsLib.VirtualListViewWrapper.SyncCheckedInCache(System.Int32,System.Boolean)"/> writes back to an already-cached item,
+            to prevent feedback loops.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.VirtualListViewWrapper._desiredCheckBoxes">
+            <summary>
+            Tracks the checkbox state the caller <em>wants</em>, independent of whether
+            the current <see cref="P:ExpControlsLib.VirtualListViewWrapper.DisplayMode"/> supports checkboxes. When the mode
+            switches away from a checkbox-compatible view the checkbox is suppressed on
+            the underlying <see cref="T:System.Windows.Forms.ListView"/>, but this flag remembers that it should
+            be restored once a compatible mode is entered again.
             </summary>
         </member>
         <member name="P:ExpControlsLib.VirtualListViewWrapper.FilteredView">
             <summary>
             The filtered view of items. When non-null, this is what the ListView displays.
-            When null, the ListView displays all items from <see cref="F:ExpControlsLib.VirtualListViewWrapper.MasterItems"/>.
+            When null, the ListView displays all items from <see cref="F:ExpControlsLib.VirtualListViewWrapper.Items"/>.
             </summary>
         </member>
         <member name="P:ExpControlsLib.VirtualListViewWrapper.IsFilterActive">
             <summary>
             Gets a value indicating whether a filter is currently active.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.SupportsCheckBoxes(ExpControlsLib.ListViewDisplayMode)">
+            <summary>
+            Returns <c>true</c> if the given display mode is compatible with
+            <see cref="P:System.Windows.Forms.ListView.CheckBoxes"/>. WinForms throws a
+            <see cref="T:System.NotSupportedException"/> if <c>CheckBoxes</c> is <c>true</c>
+            while the view is <see cref="F:System.Windows.Forms.View.Tile"/>, <see cref="F:System.Windows.Forms.View.LargeIcon"/>,
+            or any of the custom thumbnail modes (which map to <c>LargeIcon</c>
+            internally).
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.CheckBoxes">
+            <summary>
+            Gets or sets whether checkboxes should be shown. The desired state is always
+            stored in <c>_desiredCheckBoxes</c>; the underlying
+            <see cref="P:System.Windows.Forms.ListView.CheckBoxes"/> is only set to <c>true</c> when the
+            current <see cref="P:ExpControlsLib.VirtualListViewWrapper.DisplayMode"/> is compatible (Details, SmallIcon, List).
+            Switching to an incompatible mode (Tile, LargeIcon, Thumbnail, …)
+            automatically suppresses the glyph and switching back restores it.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.ApplyCheckBoxesToListView(System.Boolean)">
+            <summary>
+            Applies <paramref name="active"/> to <see cref="P:System.Windows.Forms.ListView.CheckBoxes"/> using
+            the VirtualMode round-trip guard so the handle recreation side-effects are
+            handled correctly. Does nothing if the value is already correct.
             </summary>
         </member>
         <member name="P:ExpControlsLib.VirtualListViewWrapper.ActiveView">
@@ -3191,6 +3353,53 @@
             <summary>
             Callback to update an existing ListViewItem with data from a CShellItem.
             </summary>
+        </member>
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.VirtualMode">
+            <summary>
+            Gets or sets whether the underlying <see cref="T:System.Windows.Forms.ListView"/> is in virtual mode
+            (owner-data, populated via <see cref="E:System.Windows.Forms.ListView.RetrieveVirtualItem"/>).
+            </summary>
+            <remarks>
+            <para>
+            <b>ListView handle recreation issue.</b> Several state-changing properties on
+            the underlying Win32 <c>SysListView32</c> control cannot be modified in place
+            and force WinForms to destroy and recreate the HWND. When the handle is
+            recreated, some properties are re-applied automatically by the WinForms
+            wrapper but others are silently dropped or reset. Properties known to trigger
+            a handle recreation include (non-exhaustive): <c>VirtualMode</c>,
+            <c>CheckBoxes</c>, and in some combinations <c>View</c>.
+            </para>
+            <para>
+            Observed fallout of a handle recreation in this control:
+            <list type="bullet">
+              <item><description>
+                The <c>LVS_EX_CHECKBOXES</c> extended style is dropped even though
+                <see cref="P:System.Windows.Forms.ListView.CheckBoxes"/> still reads <c>true</c>. The checkbox
+                glyph stops rendering until <c>CheckBoxes</c> is re-set on the new handle.
+              </description></item>
+              <item><description>
+                <see cref="P:System.Windows.Forms.ListView.VirtualListSize"/> resets to <c>0</c>, so a Details
+                view will appear empty until the size is re-assigned.
+              </description></item>
+              <item><description>
+                Any <see cref="T:System.Windows.Forms.ListViewItem"/> instances that were cached across the
+                toggle become unusable in virtual mode: <c>RetrieveVirtualItem</c> still
+                accepts them and the row count is correct, but Win32 refuses to paint
+                them and they are not hit-testable. The <c>_itemCache</c> must be cleared
+                so fresh items are built on the next paint.
+              </description></item>
+            </list>
+            </para>
+            <para>
+            Because of this, any code path in this class (or its callers) that touches
+            one of the recreation-triggering properties while another one is active must
+            capture the affected state up-front, apply the change, then explicitly
+            restore <c>CheckBoxes</c>, <c>VirtualListSize</c>, and invalidate the item
+            cache. See also <see cref="P:ExpControlsLib.VirtualListViewWrapper.DisplayMode"/> and
+            <c>ExpList.CheckBoxes</c> for the two other setters that must apply the same
+            workaround.
+            </para>
+            </remarks>
         </member>
         <member name="P:ExpControlsLib.VirtualListViewWrapper.DisplayMode">
             <summary>
@@ -3285,6 +3494,27 @@
             </remarks>
             <param name="sender"></param>
             <param name="e"></param>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.GetShellItemAtViewIndex(System.Int32)">
+            <summary>
+            Returns the <see cref="T:WindowsApiLib.Shell.CShellItem"/> at <paramref name="viewIndex"/> in the active
+            view. Works in both virtual and non-virtual modes. Returns <c>null</c> if out of range.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.VirtualListViewWrapper.AllShellItems">
+            <summary>
+            Enumerates every <see cref="T:WindowsApiLib.Shell.CShellItem"/> regardless of virtual/non-virtual mode.
+            In virtual mode returns <see cref="F:ExpControlsLib.VirtualListViewWrapper.Items"/>; in non-virtual mode reads <c>Tag</c>
+            from each <see cref="P:System.Windows.Forms.ListView.Items"/> entry.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.SyncCheckedInCache(System.Int32,System.Boolean)">
+            <summary>
+            Updates the cached <see cref="T:System.Windows.Forms.ListViewItem"/> at <paramref name="viewIndex"/> to
+            reflect a programmatic checked-state change without triggering
+            <see cref="T:ExpControlsLib.ExpList"/>'s <c>ItemChecked</c> handler.
+            In non-virtual mode updates the live <see cref="P:System.Windows.Forms.ListView.Items"/> entry directly.
+            </summary>
         </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.FindInsertionPoint(WindowsApiLib.Shell.CShellItem)">
             <summary>

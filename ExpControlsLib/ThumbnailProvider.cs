@@ -44,9 +44,12 @@ namespace ExpControlsLib
         private StaThreadRunner _requestQueueRunner;
 
         /// <summary>Cancellation source used to stop the background processor on dispose.</summary>
-        private CancellationTokenSource _cancellationTokenSource;
+        private CancellationTokenSource? _cancellationTokenSource;
         private CancellationToken _cancellationToken;
         private readonly Dictionary<string, Task> _activeTasks = new();
+        private readonly object _lifetimeLock = new();
+        private readonly List<CancellationTokenSource> _retiredCancellationTokenSources = new();
+        private bool _disposed;
 
         private int _maxThreads = 1;  /// <summary>Maximum number of thumbnails generated concurrently</summary>
 
@@ -96,6 +99,13 @@ namespace ExpControlsLib
         /// <param name="reqArgs">Optional caller-supplied object echoed back in the event args (useful for correlation).</param>
         public void EnqueueThumbnailRequest(int size, ThumbnailRequestArgs reqArgs)
         {
+            CancellationToken cancellationToken;
+            lock (_lifetimeLock)
+            {
+                if (_disposed) return;
+                cancellationToken = _cancellationToken;
+            }
+
             if (ThumbnailReady == null)
             {
                 Debug.WriteLine("No subscribers for ThumbnailReady event; skipping thumbnail generation.");
@@ -148,10 +158,18 @@ namespace ExpControlsLib
             Console.WriteLine("\tAdding to thumbnail request queue: " + (csi?.DisplayName ?? filePath));
 #endif
 
-            var task = _requestQueueRunner.EnqueueWork(_cancellationToken => { 
-                if (_cancellationToken.IsCancellationRequested) return; 
-                GenerateThumbnailAndNotify(reqArgs); }
-                , _cancellationToken);
+            Task task;
+            lock (_lifetimeLock)
+            {
+                if (_disposed) return;
+
+                cancellationToken = _cancellationToken;
+                task = _requestQueueRunner.EnqueueWork(cancellationToken =>
+                {
+                    if (cancellationToken.IsCancellationRequested) return;
+                    GenerateThumbnailAndNotify(reqArgs);
+                }, cancellationToken);
+            }
 
             lock (_activeTasks)
             {
@@ -175,11 +193,18 @@ namespace ExpControlsLib
         /// 
         /// </summary>
         /// <remarks>After cancellation, already-running tasks may still finish and create bitmaps which may not have gdi resources released correctly.</remarks>
-        public void CancelPendingRequests() { 
-            _cancellationTokenSource.Cancel();
+        public void CancelPendingRequests()
+        {
+            lock (_lifetimeLock)
+            {
+                if (_disposed || _cancellationTokenSource == null) return;
 
-            _cancellationTokenSource = new CancellationTokenSource();
-            _cancellationToken = _cancellationTokenSource.Token;
+                var previousSource = _cancellationTokenSource;
+                _cancellationTokenSource = new CancellationTokenSource();
+                _cancellationToken = _cancellationTokenSource.Token;
+                _retiredCancellationTokenSources.Add(previousSource);
+                previousSource.Cancel();
+            }
 
             lock (_activeTasks)
             {
@@ -201,7 +226,20 @@ namespace ExpControlsLib
         /// </summary>
         public void Dispose()
         {
-            _cancellationTokenSource?.Cancel();
+            CancellationTokenSource? currentSource;
+            CancellationTokenSource[] retiredSources;
+            lock (_lifetimeLock)
+            {
+                if (_disposed) return;
+                _disposed = true;
+
+                currentSource = _cancellationTokenSource;
+                _cancellationTokenSource = null;
+                retiredSources = _retiredCancellationTokenSources.ToArray();
+                _retiredCancellationTokenSources.Clear();
+            }
+
+            currentSource?.Cancel();
             _requestQueueRunner.CancelPending();
             _requestQueueRunner.Dispose();
 
@@ -212,7 +250,9 @@ namespace ExpControlsLib
                 _activeTasks.Clear();
             }
 
-            _cancellationTokenSource?.Dispose();
+            currentSource?.Dispose();
+            foreach (var retiredSource in retiredSources)
+                retiredSource.Dispose();
         }
 
 

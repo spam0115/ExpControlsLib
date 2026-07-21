@@ -27,15 +27,15 @@ namespace ExpControlsLib
     ///     Explanation about how file icons are handled:
     ///     It is handled by a weird mix of Windows and custom code.  We use the OS's Shell's 
     ///     SystemImageListManager - it caches icons and provides them on demand to the ListView.  
-    ///     The Listview is linked to the SystemImageListManager by calling 
-    ///     SystemImageListManager.SetListViewImageList(ExpFileList, ...).  However, just setting the image list
+    ///     The Listview is linked to the image-list orchestrator, which selects the appropriate
+    ///     native or managed image list. However, just setting the image list
     ///     doesn't link the listview items to the image list - you still have to set the ImageIndex of each 
     ///     ListViewItem to the appropriate index in the SystemImageList.  This is done by setting  
-    ///     ListViewItem.ImageIndex = SystemImageListManager.GetIconIndex(lvi.Tag) (Tag contains a reference to 
+    ///     ListViewItem.ImageIndex is populated by the orchestrator (Tag contains a reference to
     ///     the CShellItem for each Shell item entity.).
     ///     
     ///     However, for thumbnail display modes, Windows Shell doesn't have native support for that. 
-    ///     We implented the ThumbnailImageListManager to make up for that shortfall and fill in the SystemImageListManager.
+    ///     We implemented the ImageListOrchestrator to coordinate that shortfall.
     /// 
     ///     Item images a draw by passing SystemImageLists into the Windows Shell ListView control.
     ///     
@@ -77,7 +77,7 @@ namespace ExpControlsLib
         private ShellController? _shellController = null;
         private HashSet<string> _excludedItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private Func<CShellItem, bool>? _filter;
-        private ThumbnailImageListManager _thumbnailManager; // Manager for thumbnail display modes
+        private ImageListOrchestrator _imageListOrchestrator;
         private VirtualListViewWrapper _listViewWrapper;
         private bool _initialized = false;
 
@@ -131,9 +131,13 @@ namespace ExpControlsLib
 
         private void Cleanup()
         {
+            _scrollDebounceTimer?.Stop();
+            _scrollDebounceTimer?.Dispose();
+            _scrollDebounceTimer = null;
             _loadDirectoryCancelTs?.Cancel();
             _loadDirectoryCancelTs?.Dispose();
             _loadDirectoryCancelTs = null;
+            _imageListOrchestrator?.Dispose();
             if (_shellController?.ShellUpdater != null)
                 _shellController.ShellUpdater.UpdateEvent -= ShellUpdater_UpdateEventInvoker;
         }
@@ -788,10 +792,10 @@ namespace ExpControlsLib
                 DW.DragEnd += DW_DragEnd;
                 DropWrap = new ClvDropWrapper(_listView);
 
-                // Initialize Thumbnail Manager
-                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Initializing thumbnail manager...");
-                _thumbnailManager = new ThumbnailImageListManager(this, this.GetThumbnailSizeForMode());
-                _thumbnailManager.ThumbnailReady += ThumbnailManager_ThumbnailReady;
+                // Initialize the image-list coordinator.
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Initializing image-list orchestrator...");
+                _imageListOrchestrator = new ImageListOrchestrator(this, _listView, DisplayMode, GetThumbnailSizeForMode());
+                _imageListOrchestrator.ThumbnailReady += ThumbnailManager_ThumbnailReady;
 
                 //set up sorter
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Initializing sorter...");
@@ -812,8 +816,9 @@ namespace ExpControlsLib
                 _scrollDebounceTimer.Interval = 100;
                 _scrollDebounceTimer.Tick += (s, e) =>
                 {
-                    _scrollDebounceTimer.Stop();
-                    _thumbnailManager.CancelPendingRequests();
+                    _scrollDebounceTimer?.Stop();
+                    if (IsDisposed || Disposing) return;
+                    _imageListOrchestrator?.CancelPendingRequests();
                     LoadImagesForVisibleItems();
                 };
 
@@ -2043,10 +2048,7 @@ namespace ExpControlsLib
                                 int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
                                 if (index >= 0)
                                 {
-                                    if (IsThumbnailViewMode())
-                                        _thumbnailManager.RequestThumbnail(e.Item, GetThumbnailSizeForMode(), index);
-                                    else
-                                        _listViewWrapper.RedrawItem(index);
+                                    _imageListOrchestrator.RefreshImage(e.Item, index, () => _listViewWrapper.RedrawItem(index));
                                 }
                                 break;
                             }
@@ -2056,10 +2058,7 @@ namespace ExpControlsLib
                                 int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
                                 if (index >= 0)
                                 {
-                                    if (IsThumbnailViewMode())
-                                        _thumbnailManager.RequestThumbnail(e.Item, GetThumbnailSizeForMode(), index);
-                                    else
-                                        _listViewWrapper.RedrawItem(index);
+                                    _imageListOrchestrator.RefreshImage(e.Item, index, () => _listViewWrapper.RedrawItem(index));
                                 }
                                 break;
                             }
@@ -2116,13 +2115,7 @@ namespace ExpControlsLib
 
                 PopulateColumnData(lvi, csi); //you need this even in non-details mode to facilitate sorting
 
-                if (IsThumbnailViewMode())
-                {
-                    //int index = _thumbnailManager.GetThumbnailIndex(csi, GetThumbnailSizeForMode()); //do not do this because sometimes windows will request all items from the listview for no reason
-                    lvi.ImageIndex = -1;
-                }
-                else
-                    lvi.ImageIndex = SystemImageListManager.GetIconIndex(csi, _listViewWrapper.DisplayMode == ListViewDisplayMode.LargeIcon);
+                lvi.ImageIndex = _imageListOrchestrator.GetInitialImageIndex(csi);
             }
             finally
             {
@@ -2309,7 +2302,7 @@ namespace ExpControlsLib
             if (_currentFolderCsi == null) return;
 
             // Invalidate thumbnails and create a fresh ImageList
-            _thumbnailManager.ResetForNewFolder();
+            _imageListOrchestrator.ResetForNewFolder();
 
             // Invalidate cached data in shell items
             if (VirtualMode)
@@ -2544,16 +2537,12 @@ namespace ExpControlsLib
 
                     if (token.IsCancellationRequested) return null;
 
-                    bool isLarge = (_listViewWrapper.DisplayMode == ListViewDisplayMode.LargeIcon);
                     foreach (var item in combined)
                     {
                         if (token.IsCancellationRequested) return null;
                         
                         // Icon index
-                        if (!IsThumbnailViewMode())
-                        {
-                            item.ImageIndex = SystemImageListManager.GetIconIndex(item, isLarge);
-                        }
+                        item.ImageIndex = _imageListOrchestrator.GetInitialImageIndex(item);
                     }
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync.STA: Warmup complete");
 
@@ -2603,7 +2592,7 @@ namespace ExpControlsLib
 
                         // Dispose old ImageLists and create a fresh one to prevent
                         // GDI handle exhaustion from accumulated thumbnails across navigations.
-                        _thumbnailManager.ResetForNewFolder();
+                        _imageListOrchestrator.ResetForNewFolder();
 
                         _listViewWrapper.AddRange(result.Items);
 
@@ -2952,12 +2941,6 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Determines if the current display mode is a thumbnail-based view.
-        /// </summary>
-        /// <returns>True if in a thumbnail view mode.</returns>
-        private bool IsThumbnailViewMode() => DisplayMode == ListViewDisplayMode.Thumbnail || DisplayMode == ListViewDisplayMode.LargeThumbnail || DisplayMode == ListViewDisplayMode.ExtraLargeThumbnail;
-
-        /// <summary>
         /// Determines if the mouse coordinates are within the client area of the specified control.
         /// </summary>
         /// <param name="ctl">The control to check.</param>
@@ -3114,7 +3097,7 @@ namespace ExpControlsLib
 
                     if (csi.ImageIndex == -1)
                     {
-                        _thumbnailManager.RequestThumbnail(csi, GetThumbnailSizeForMode(), listView.FocusedItem.Index);
+                        _imageListOrchestrator.EnsureImage(csi, listView.FocusedItem.Index);
                     }
 
                     ExpListItemClick?.Invoke(listView.FocusedItem, csi);
@@ -3467,14 +3450,14 @@ namespace ExpControlsLib
                 {
                     //using (var bitmap = (Bitmap)e.Thumbnail)
                     //{
-                    //    image_index = _thumbnailManager.AddThumbnail(e, bitmap);
+                    //    image_index = _imageListOrchestrator.AddThumbnail(e, bitmap);
                     //}
-                    image_index = _thumbnailManager.AddThumbnail(e, (Bitmap)e.Thumbnail);
+                    image_index = _imageListOrchestrator.AddThumbnail(e, (Bitmap)e.Thumbnail);
                     e.Thumbnail.Dispose();
                 }
                 else
                 {
-                    image_index = _thumbnailManager.AddThumbnail(e, null);
+                    image_index = _imageListOrchestrator.AddThumbnail(e, null);
                 }
             }
             finally
@@ -3956,10 +3939,20 @@ namespace ExpControlsLib
             Debug.WriteLine("ExpList: SetAndLoadImageList Begin");
             try
             {
+                EnterImageListMutation();
+                try
+                {
+                    _imageListOrchestrator.ApplyMode(value);
+                }
+                finally
+                {
+                    ExitImageListMutation();
+                }
+                /*
                 if (value <= ListViewDisplayMode.Tile) //built-in Windows 95 Shell view modes
                 {
                     // Clear the WinForms LargeImageList property before installing the system
-                    // image list via SendMessage. SystemImageListManager.SetListViewImageList
+                    // image list via SendMessage. The orchestrator owns that native-list setup.
                     // uses LVM_SETIMAGELIST directly and bypasses the WinForms property cache,
                     // so if the property still points at a thumbnail ImageList (from a prior
                     // Thumbnail-mode session), any later WinForms operation that re-syncs its
@@ -3975,30 +3968,11 @@ namespace ExpControlsLib
                     bool large = (value == ListViewDisplayMode.LargeIcon);
 
                     if (large)
-                        SystemImageListManager.SetListViewImageList(_listView, true, false);
+                        // Legacy large-list branch; now owned by ImageListOrchestrator.
                     else
-                        SystemImageListManager.SetListViewImageList(_listView, false, false);
+                        // Legacy small-list branch; now owned by ImageListOrchestrator.
                 }
-                else //custom thumbnail view modes
-                {
-                    //EnterListViewEnumeration();
-                    try
-                    {
-                        EnterImageListMutation();
-                        try
-                        {
-                            _thumbnailManager.SetImageListForSize(GetThumbnailSizeForMode(value));
-                        }
-                        finally
-                        {
-                            ExitImageListMutation();
-                        }
-                    }
-                    finally
-                    {
-                        //ExitListViewEnumeration();
-                    }
-                }
+                */
             }
             finally
             {
@@ -4010,14 +3984,11 @@ namespace ExpControlsLib
             Debug.WriteLine("ExpList: LoadImageAtIndex Begin");
             try
             {
-                if (DisplayMode <= ListViewDisplayMode.Tile)
-                {
-                    LoadIconsForItems(index, endIndex);
-                }
-                else
-                {
-                    LoadThumbnailsAtIndexes(index, endIndex);
-                }
+                _imageListOrchestrator.LoadImageAtIndex(
+                    index,
+                    endIndex,
+                    () => LoadIconsForItems(index, endIndex),
+                    () => LoadThumbnailsAtIndexes(index, endIndex));
             }
             finally
             {
@@ -4032,14 +4003,9 @@ namespace ExpControlsLib
             {
                 mode = mode == null ? DisplayMode : mode;
 
-                if (mode <= ListViewDisplayMode.Tile)
-                {
-                    LoadIconsForItems(true);
-                }
-                else
-                {
-                    LoadThumbnailsForItems(GetThumbnailSizeForMode(mode), true);
-                }
+                _imageListOrchestrator.LoadImagesForVisibleItems(
+                    () => LoadIconsForItems(true),
+                    () => LoadThumbnailsForItems(GetThumbnailSizeForMode(mode), true));
             }
             finally
             {
@@ -4058,8 +4024,6 @@ namespace ExpControlsLib
             try
             {
                 if (!_listView.IsHandleCreated) return;
-
-                bool isLarge = (_listView.View == View.LargeIcon);
 
                 EnterListViewEnumeration();
                 try
@@ -4087,7 +4051,7 @@ namespace ExpControlsLib
                                 continue;
                             }
                             int oldImageIndex = csi.ImageIndex;
-                            csi.ImageIndex = SystemImageListManager.GetIconIndex(csi, isLarge);
+                            csi.ImageIndex = _imageListOrchestrator.GetInitialImageIndex(csi);
 
                             var lvi = _listViewWrapper.GetLviFromVirtual(i);
 
@@ -4115,7 +4079,7 @@ namespace ExpControlsLib
 
                             if (item.Tag is CShellItem csi && item.ImageIndex == -1)
                             {
-                                item.ImageIndex = SystemImageListManager.GetIconIndex(csi, isLarge);
+                                item.ImageIndex = _imageListOrchestrator.GetInitialImageIndex(csi);
                             }
                         }
                     }
@@ -4138,8 +4102,6 @@ namespace ExpControlsLib
             {
                 if (!_listView.IsHandleCreated) return;
 
-                bool isLarge = (_listView.View == View.LargeIcon);
-
                 EnterListViewEnumeration();
                 try
                 {
@@ -4157,7 +4119,7 @@ namespace ExpControlsLib
                                 continue;
                             }
                             int oldImageIndex = csi.ImageIndex;
-                            csi.ImageIndex = SystemImageListManager.GetIconIndex(csi, isLarge);
+                                csi.ImageIndex = _imageListOrchestrator.GetInitialImageIndex(csi);
 
                             var lvi = _listViewWrapper.GetLviFromVirtual(i);
 
@@ -4185,7 +4147,7 @@ namespace ExpControlsLib
 
                             if (item.Tag is CShellItem csi && item.ImageIndex == -1)
                             {
-                                item.ImageIndex = SystemImageListManager.GetIconIndex(csi, isLarge);
+                                item.ImageIndex = _imageListOrchestrator.GetInitialImageIndex(csi);
                             }
                         }
                     }
@@ -4259,13 +4221,7 @@ namespace ExpControlsLib
                         for (int i = startIndex; i <= endIndex; i++)
                         {
                             var csi = _listViewWrapper.GetItem(i);
-                            if (csi.ImageIndex != -1)
-                            {
-                                // Skip if already in image list (GetThumbnailIndex will return != -1)
-                                if (_thumbnailManager.GetThumbnailIndex(csi, thumbnailSize) != -1) continue;
-                            }
-
-                            _thumbnailManager.RequestThumbnail(csi, thumbnailSize, i);
+                            if (_imageListOrchestrator.EnsureImage(csi, i) != -1) continue;
                             Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
                         }
 
@@ -4279,16 +4235,7 @@ namespace ExpControlsLib
                                 continue;
                             }
 
-                            if (csi.ImageIndex == -1)
-                            {
-                                _thumbnailManager.RequestThumbnail(csi, thumbnailSize, i);
-                                Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
-                            }
-                            else
-                            {
-                                // Skip if already in image list (GetThumbnailIndex will return != -1)
-                                if (_thumbnailManager.GetThumbnailIndex(csi, thumbnailSize) != -1) continue;
-                            }
+                            if (_imageListOrchestrator.EnsureImage(csi, i) != -1) continue;
                         }
                     }
                     else
@@ -4303,7 +4250,7 @@ namespace ExpControlsLib
                             if (!clientRect.IntersectsWith(item.Bounds)) continue;
 
                             if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
-                                _thumbnailManager.RequestThumbnail(csi, thumbnailSize);
+                                _imageListOrchestrator.EnsureImage(csi);
                         }
                     }
                 }
@@ -4338,13 +4285,7 @@ namespace ExpControlsLib
                         for (int i = startIndex; i <= endIndex; i++)
                         {
                             var csi = _listViewWrapper.GetItem(i);
-                            if (csi.ImageIndex != -1)
-                            {
-                                // Skip if already in image list (GetThumbnailIndex will return != -1)
-                                if (_thumbnailManager.GetThumbnailIndex(csi, GetThumbnailSizeForMode()) != -1) continue;
-                            }
-
-                            _thumbnailManager.RequestThumbnail(csi, GetThumbnailSizeForMode(), i);
+                            if (_imageListOrchestrator.EnsureImage(csi, i) != -1) continue;
                             Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
                         }
                     }
@@ -4356,7 +4297,7 @@ namespace ExpControlsLib
                             if (item is null) continue;
 
                             if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
-                                _thumbnailManager.RequestThumbnail(csi, GetThumbnailSizeForMode());
+                                _imageListOrchestrator.EnsureImage(csi);
                         }
                     }
                 }
@@ -4383,7 +4324,7 @@ namespace ExpControlsLib
         ///geometry calculations instead of rendering the list. The timer waits for a 200ms pause in scrolling before doing this
         ///calculation.
         /// </summary>
-        private System.Windows.Forms.Timer _scrollDebounceTimer;
+        private System.Windows.Forms.Timer? _scrollDebounceTimer;
 
         /// <summary>
         /// Hook for capturing scroll and other events from the ListView to trigger lazy loading.

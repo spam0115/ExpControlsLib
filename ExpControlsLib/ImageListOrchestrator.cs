@@ -1,0 +1,168 @@
+using System;
+using System.Drawing;
+using System.Runtime.Versioning;
+using System.Windows.Forms;
+using WindowsApiLib;
+using WindowsApiLib.Shell;
+
+namespace ExpControlsLib
+{
+    /// <summary>
+    /// Coordinates the image-list implementation used by <see cref="ExpList"/>.
+    /// System image-list operations remain delegated to <see cref="SystemImageListManager"/>,
+    /// while thumbnail operations are owned by an instance-scoped manager.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    internal sealed class ImageListOrchestrator : IDisposable
+    {
+        private readonly ListView _listView;
+        private readonly ThumbnailImageListManager _thumbnailManager;
+        private ListViewDisplayMode _currentMode;
+        private bool _disposed;
+
+        public ImageListOrchestrator(
+            ExpList expList,
+            ListView listView,
+            ListViewDisplayMode initialMode,
+            int initialThumbnailSize)
+        {
+            if (expList == null) throw new ArgumentNullException(nameof(expList));
+            _listView = listView ?? throw new ArgumentNullException(nameof(listView));
+            _currentMode = initialMode;
+            _thumbnailManager = new ThumbnailImageListManager(expList, initialThumbnailSize);
+            _thumbnailManager.ThumbnailReady += OnThumbnailReady;
+        }
+
+        public event EventHandler<ThumbnailReadyEventArgs> ThumbnailReady;
+
+        public ListViewDisplayMode CurrentMode => _currentMode;
+
+        public bool IsThumbnailMode => IsThumbnailModeFor(_currentMode);
+
+        public int ActiveThumbnailSize => GetThumbnailSize(_currentMode);
+
+        public void ApplyMode(ListViewDisplayMode mode)
+        {
+            _currentMode = mode;
+
+            if (IsThumbnailModeFor(mode))
+            {
+                _thumbnailManager.SetImageListForSize(GetThumbnailSize(mode));
+                return;
+            }
+
+            // SystemImageListManager installs native handles with SendMessage. Clear the
+            // WinForms properties first so a later property synchronization cannot restore
+            // a stale thumbnail ImageList handle.
+            _listView.LargeImageList = null;
+            _listView.SmallImageList = null;
+
+            bool large = mode == ListViewDisplayMode.LargeIcon;
+            SystemImageListManager.SetListViewImageList(_listView, large, false);
+        }
+
+        /// <summary>
+        /// Returns an initial index without starting asynchronous thumbnail work.
+        /// This is used by virtual-list callbacks that may be invoked for off-screen items.
+        /// </summary>
+        public int GetInitialImageIndex(CShellItem item)
+        {
+            if (item == null) return -1;
+            if (IsThumbnailMode) return -1;
+
+            // Preserve ExpList's existing open-icon behavior during this refactor. The
+            // SystemImageListManager parameter is named GetOpenIcon, not image size.
+            return SystemImageListManager.GetIconIndex(item, _currentMode == ListViewDisplayMode.LargeIcon);
+        }
+
+        /// <summary>
+        /// Gets an icon immediately, or gets/queues the active thumbnail and returns -1 while
+        /// the thumbnail request is pending.
+        /// </summary>
+        public int EnsureImage(CShellItem item, int itemIndex = -1)
+        {
+            if (item == null) return -1;
+
+            if (IsThumbnailMode)
+                return _thumbnailManager.EnsureThumbnail(item, ActiveThumbnailSize, itemIndex);
+
+            return GetInitialImageIndex(item);
+        }
+
+        /// <summary>
+        /// Refreshes an item after a Shell update. Thumbnail mode queues work; system-icon mode
+        /// asks the caller to redraw the item after the synchronous icon lookup.
+        /// </summary>
+        public void RefreshImage(CShellItem item, int itemIndex, Action redraw)
+        {
+            if (item == null) return;
+
+            if (IsThumbnailMode)
+                _thumbnailManager.EnsureThumbnail(item, ActiveThumbnailSize, itemIndex);
+            else
+                redraw?.Invoke();
+        }
+
+        public int AddThumbnail(ThumbnailReadyEventArgs args, Bitmap thumbnail)
+        {
+            return _thumbnailManager.AddThumbnail(args, thumbnail);
+        }
+
+        public void CancelPendingRequests()
+        {
+            if (!_disposed)
+                _thumbnailManager.CancelPendingRequests();
+        }
+
+        public void ResetForNewFolder() => _thumbnailManager.ResetForNewFolder();
+
+        public void ClearCache() => _thumbnailManager.ClearCache();
+
+        public void LoadImageAtIndex(int index, int endIndex, Action loadIcons, Action loadThumbnails)
+        {
+            if (IsThumbnailMode)
+                loadThumbnails?.Invoke();
+            else
+                loadIcons?.Invoke();
+        }
+
+        public void LoadImagesForVisibleItems(Action loadIcons, Action loadThumbnails)
+        {
+            if (IsThumbnailMode)
+                loadThumbnails?.Invoke();
+            else
+                loadIcons?.Invoke();
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _thumbnailManager.ThumbnailReady -= OnThumbnailReady;
+            _thumbnailManager.Dispose();
+        }
+
+        private void OnThumbnailReady(object sender, ThumbnailReadyEventArgs e)
+        {
+            ThumbnailReady?.Invoke(this, e);
+        }
+
+        private static bool IsThumbnailModeFor(ListViewDisplayMode mode)
+        {
+            return mode == ListViewDisplayMode.Thumbnail
+                || mode == ListViewDisplayMode.LargeThumbnail
+                || mode == ListViewDisplayMode.ExtraLargeThumbnail;
+        }
+
+        private static int GetThumbnailSize(ListViewDisplayMode mode)
+        {
+            return mode switch
+            {
+                ListViewDisplayMode.Thumbnail => 48,
+                ListViewDisplayMode.LargeThumbnail => 96,
+                ListViewDisplayMode.ExtraLargeThumbnail => 256,
+                _ => 48
+            };
+        }
+    }
+}

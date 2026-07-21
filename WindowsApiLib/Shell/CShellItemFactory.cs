@@ -596,7 +596,7 @@ namespace WindowsApiLib.Shell
             var shfi = new SHFILEINFO();
             var dwflag = SHGFI.DISPLAYNAME | SHGFI.TYPENAME | SHGFI.PIDL;
             int dwAttr = 0;
-            var DesktopPidl = GetShellNamespacePidl(ShellNamespaceGuids.DesktopFileSystem);
+            var DesktopPidl = GetShellNamespacePidl(SpecialShellLocations.DesktopFileSystem);
             SHGetFileInfo(DesktopPidl, dwAttr, ref shfi, SHFILEINFO_size, dwflag);
 
             IShellFolder iShellFolder = null;

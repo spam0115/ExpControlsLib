@@ -191,6 +191,28 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Gets a cached thumbnail index or queues a request when the thumbnail is not cached.
+        /// Unlike <see cref="GetThumbnailIndex"/>, this method preserves the caller's item index
+        /// when a request must be queued.
+        /// </summary>
+        public int EnsureThumbnail(CShellItem csi, int thumbnailSize, int itemIndex = -1)
+        {
+            if (csi == null) return -1;
+
+            string key = CreateKey(csi.FullPath, thumbnailSize);
+            if (_slotByKey.TryGetValue(key, out var slot))
+            {
+                _lruKeys.Remove(key);
+                _lruKeys.Add(key);
+                csi.ImageIndex = slot.Index;
+                return slot.Index;
+            }
+
+            RequestThumbnail(csi, thumbnailSize, itemIndex);
+            return -1;
+        }
+
         internal void CancelPendingRequests()
         {
             _thumbnailProvider.CancelPendingRequests();

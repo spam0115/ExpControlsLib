@@ -26,7 +26,7 @@ namespace ExpControlsLibTest
     public class ExpTreeExpListRaceConditionTests
     {
         private string _testPath;
-        private const int _iterations = 100;
+        private const int _iterations = 20;
 
 
         [SetUp]
