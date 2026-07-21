@@ -65,14 +65,12 @@ namespace ExpControlsLib
         /// Returns an initial index without starting asynchronous thumbnail work.
         /// This is used by virtual-list callbacks that may be invoked for off-screen items.
         /// </summary>
-        public int GetInitialImageIndex(CShellItem item)
+        public int GetInitialImageIndex(CShellItem item, bool getOpenIcon = false)
         {
             if (item == null) return -1;
             if (IsThumbnailMode) return -1;
 
-            // Preserve ExpList's existing open-icon behavior during this refactor. The
-            // SystemImageListManager parameter is named GetOpenIcon, not image size.
-            return SystemImageListManager.GetIconIndex(item, _currentMode == ListViewDisplayMode.LargeIcon);
+            return SystemImageListManager.GetIconIndex(item, getOpenIcon);
         }
 
         /// <summary>
