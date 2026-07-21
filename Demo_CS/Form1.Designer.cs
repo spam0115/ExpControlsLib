@@ -52,8 +52,8 @@
             // splitContainer1.Panel2
             // 
             splitContainer1.Panel2.Controls.Add(expList1);
-            splitContainer1.Size = new System.Drawing.Size(1464, 906);
-            splitContainer1.SplitterDistance = 466;
+            splitContainer1.Size = new System.Drawing.Size(1652, 906);
+            splitContainer1.SplitterDistance = 525;
             splitContainer1.SplitterWidth = 5;
             splitContainer1.TabIndex = 0;
             // 
@@ -67,7 +67,7 @@
             expTree1.Root = null;
             expTree1.SelectedNode = null;
             expTree1.ShowRootLines = false;
-            expTree1.Size = new System.Drawing.Size(466, 906);
+            expTree1.Size = new System.Drawing.Size(525, 906);
             expTree1.StartUpDirectory = ExpControlsLib.ExpTree.StartDir.Desktop;
             expTree1.TabIndex = 0;
             expTree1.ExpTreeNodeSelected += expTree1_ExpTreeNodeSelected;
@@ -87,7 +87,7 @@
             expList1.Margin = new System.Windows.Forms.Padding(7, 6, 7, 6);
             expList1.MultiSelect = true;
             expList1.Name = "expList1";
-            expList1.Size = new System.Drawing.Size(993, 906);
+            expList1.Size = new System.Drawing.Size(1122, 906);
             expList1.SortColumn = 0;
             expList1.TabIndex = 0;
             expList1.VerticalScrollPosition = 0;
@@ -104,7 +104,7 @@
             // 
             AutoScaleDimensions = new System.Drawing.SizeF(8F, 20F);
             AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            ClientSize = new System.Drawing.Size(1464, 906);
+            ClientSize = new System.Drawing.Size(1652, 906);
             Controls.Add(splitContainer1);
             Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             Name = "Form1";

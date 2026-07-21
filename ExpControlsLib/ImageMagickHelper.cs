@@ -11,7 +11,7 @@ namespace ExpControlsLib
     /// while preserving its 32-bit alpha channel.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    public static class BitmapHelper
+    public static class ImageMagickHelper
     {
         /// <summary>
         /// Converts an HBITMAP returned by the shell into a MagickImage

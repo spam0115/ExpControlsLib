@@ -458,7 +458,7 @@ namespace ExpControlsLib
                     }
                 }
 
-                var image = BitmapHelper.HBitmapToMagickImage(hbm);
+                var image = ImageMagickHelper.HBitmapToMagickImage(hbm);
                 if (image == null) return null;
                 return ApplyLetterboxMagick(image, size);
             }
