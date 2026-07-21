@@ -19,6 +19,7 @@ using MethodInvoker = System.Windows.Forms.MethodInvoker;
 
 namespace ExpControlsLib
 {
+    /// <summary>Contains private helpers used to materialize, search, filter, sort, and update list items.</summary>
     public partial class ExpList
     {
         #region Private Methods

@@ -19,6 +19,7 @@ using MethodInvoker = System.Windows.Forms.MethodInvoker;
 
 namespace ExpControlsLib
 {
+    /// <summary>Implements folder navigation history, back/forward navigation, and parent-folder traversal.</summary>
     public partial class ExpList
     {
         #region Navigation

@@ -19,6 +19,7 @@ using MethodInvoker = System.Windows.Forms.MethodInvoker;
 
 namespace ExpControlsLib
 {
+    /// <summary>Handles shell notifications, shell commands, context-menu operations, and dynamic item updates.</summary>
     public partial class ExpList
     {
         #region Dynamic Update Handler
@@ -117,7 +118,7 @@ namespace ExpControlsLib
                 }
 
                 var capturedParentPidl = CPidl.Clone(_currentFolderCsi.PIDL);
-                _staRunner.EnqueueWork(InvokeMenuCommand("delete", capturedParentPidl, relPidls));
+                _shellCommandService?.InvokeVerbAsync("delete", capturedParentPidl, relPidls);
 
                 if (hasItems)
                 {
@@ -292,7 +293,7 @@ namespace ExpControlsLib
 
                 // Offload shell interaction to background STA thread. 
                 // Binding MUST happen on this thread to avoid marshaling back to UI thread.
-                _staRunner.EnqueueWork(InvokeMenuCommand(cmd, capturedParentPidl, capturedRelPidls));
+                _shellCommandService?.InvokeVerbAsync(cmd, capturedParentPidl, capturedRelPidls);
             }
             catch (Exception ex)
             {
@@ -313,107 +314,6 @@ namespace ExpControlsLib
         /// <param name="capturedParentPidl"></param>
         /// <param name="capturedRelPidls"></param>
         /// <returns></returns>
-        private static Func<CancellationToken, int> InvokeMenuCommand(string cmd, nint capturedParentPidl, List<nint> capturedRelPidls)
-        {
-            return _ =>
-            {
-                IShellFolder desktop = null;
-                IShellFolder parentFolder = null;
-                IntPtr iUnknownOut = IntPtr.Zero;
-                IContextMenu? contextMenu = null;
-                IntPtr lpVerbAnsi = IntPtr.Zero;
-                IntPtr lpVerbUni = IntPtr.Zero;
-
-                // Create a hidden dummy window on this thread to act as the owner.
-                // This ensures the dialog is modal to THIS thread's window and NOT the app's main window.
-                using (Control dummy = new Control())
-                {
-                    IntPtr dummyHandle = dummy.Handle; // Force handle creation
-
-                    try
-                    {
-                        // 1. Get Desktop Folder on THIS thread
-                        int hr = SHGetDesktopFolder(ref desktop);
-                        if (hr != S_OK || desktop == null)
-                        {
-                            Debug.WriteLine($"InvokeCommand failed: HRESULT=0x{hr:X8}, cmd='{cmd}'");
-                            return hr;
-                        }
-
-                        // 2. Bind to Parent Folder on THIS thread
-                        if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
-                        {
-                            parentFolder = desktop;
-                        }
-                        else
-                        {
-                            IntPtr folderPtr = IntPtr.Zero;
-                            hr = desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr);
-                            if (hr != S_OK || folderPtr == IntPtr.Zero)
-                            {
-                                Debug.WriteLine($"InvokeCommand failed: HRESULT=0x{hr:X8}, cmd='{cmd}'");
-                                return hr;
-                            }
-                            parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
-                            Marshal.Release(folderPtr);
-                        }
-
-                        // 3. Get IContextMenu on THIS thread
-                        IntPtr rgfReserved = IntPtr.Zero;
-                        hr = parentFolder.GetUIObjectOf(IntPtr.Zero, (uint)capturedRelPidls.Count, capturedRelPidls.ToArray(),
-                            IID_IContextMenu, rgfReserved, out iUnknownOut);
-
-                        if (hr != S_OK || iUnknownOut == IntPtr.Zero)
-                        {
-                            Debug.WriteLine($"InvokeCommand failed: HRESULT=0x{hr:X8}, cmd='{cmd}'");
-                            return hr;
-                        }
-
-                        contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
-
-                        // 4. Invoke Command
-                        lpVerbAnsi = Marshal.StringToHGlobalAnsi(cmd);
-                        lpVerbUni = Marshal.StringToHGlobalUni(cmd);
-
-                        var cmi = new CMInvokeCommandInfoEx
-                        {
-                            cbSize = Marshal.SizeOf(typeof(CMInvokeCommandInfoEx)),
-                            hwnd = dummyHandle, // Dialog is modal to this hidden window on the background thread
-                            nShow = (int)SW.SHOWNORMAL,
-                            fMask = (int)(CMIC.UNICODE | CMIC.PTINVOKE | CMIC.ASYNCOK),
-                            ptInvoke = new Point(0, 0),
-                            lpVerb = lpVerbAnsi,
-                            lpVerbW = lpVerbUni
-                        };
-
-                        hr = contextMenu.InvokeCommand(cmi);
-                        if (hr != S_OK && hr != -1)
-                        {
-                            Debug.WriteLine($"InvokeCommand failed: HRESULT=0x{hr:X8}, cmd='{cmd}'");
-                        }
-                        return hr;
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Error in background shell operation: {ex.Message}");
-                        return -1;
-                    }
-                    finally
-                    {
-                        if (lpVerbAnsi != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbAnsi);
-                        if (lpVerbUni != IntPtr.Zero) Marshal.FreeHGlobal(lpVerbUni);
-                        if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
-                        if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
-                        if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
-                        if (desktop != null) Marshal.ReleaseComObject(desktop);
-                        if (capturedParentPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(capturedParentPidl);
-                        foreach (var pidl in capturedRelPidls) Marshal.FreeCoTaskMem(pidl);
-                    }
-                }
-            };
-        }
-
-
         /// <summary>
         /// Creates a native Windows context menu for the current folder.
         /// </summary>
@@ -734,58 +634,10 @@ namespace ExpControlsLib
                         var capturedParentPidl = CPidl.Clone(parentPidl); //I don't think this is needed but just in case.
                         var cmi_shell = cmi;
 
-                        await _staRunner.EnqueueWork(_ =>
-                        {
-                            IShellFolder desktop = null;
-                            IShellFolder parentFolder = null;
-                            IntPtr iUnknownOut = IntPtr.Zero;
-                            IContextMenu? contextMenu = null;
-
-                            // Create a hidden dummy window on this thread to act as the owner.
-                            using (Control dummy = new Control())
-                            {
-                                IntPtr dummyHandle = dummy.Handle;
-                                cmi_shell.hwnd = dummyHandle;
-
-                                try
-                                {
-                                    SHGetDesktopFolder(ref desktop);
-                                    if (desktop == null) return -1;
-
-                                    if (CPidl.IsShellNamespaceRoot(capturedParentPidl))
-                                        parentFolder = desktop;
-                                    else
-                                    {
-                                        IntPtr folderPtr = IntPtr.Zero;
-                                        if (desktop.BindToObject(capturedParentPidl, IntPtr.Zero, ShellAPI.IID_IShellFolder, ref folderPtr) != S_OK) return -1;
-                                        parentFolder = (IShellFolder)Marshal.GetTypedObjectForIUnknown(folderPtr, typeof(IShellFolder));
-                                        Marshal.Release(folderPtr);
-                                    }
-
-                                    IntPtr rgfReserved = IntPtr.Zero;
-                                    var relPidls = new IntPtr[] { capturedRelPidl };
-                                    if (parentFolder.GetUIObjectOf(IntPtr.Zero, 1, relPidls, IID_IContextMenu, rgfReserved, out iUnknownOut) != S_OK) return -1;
-
-                                    contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
-
-                                    return contextMenu.InvokeCommand(cmi_shell);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Debug.WriteLine($"Error in background context menu shell operation: {ex.Message}");
-                                    return -1;
-                                }
-                                finally
-                                {
-                                    if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
-                                    if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
-                                    if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
-                                    if (desktop != null) Marshal.ReleaseComObject(desktop);
-                                    if (capturedRelPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(capturedRelPidl);
-                                    if (capturedParentPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(capturedParentPidl);
-                                }
-                            }
-                        });
+                        await _shellCommandService!.InvokeContextMenuAsync(
+                            capturedParentPidl,
+                            new[] { capturedRelPidl },
+                            cmi_shell);
 
                         // Clean up allocated strings
                         if (cmi.lpVerb != IntPtr.Zero && cmi.lpVerb.ToInt64() > 0xFFFF) Marshal.FreeHGlobal(cmi.lpVerb);

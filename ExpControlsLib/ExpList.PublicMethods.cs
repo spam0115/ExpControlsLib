@@ -19,6 +19,7 @@ using MethodInvoker = System.Windows.Forms.MethodInvoker;
 
 namespace ExpControlsLib
 {
+    /// <summary>Contains the public operations for loading, querying, refreshing, and manipulating list contents.</summary>
     public partial class ExpList
     {
         #region Public Methods

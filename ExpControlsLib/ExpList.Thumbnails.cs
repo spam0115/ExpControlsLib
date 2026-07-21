@@ -19,6 +19,7 @@ using MethodInvoker = System.Windows.Forms.MethodInvoker;
 
 namespace ExpControlsLib
 {
+    /// <summary>Manages lazy icon and thumbnail loading, image-list updates, and visible-item refreshes.</summary>
     public partial class ExpList
     {
         #region Lazy Thumbnail Loading Support

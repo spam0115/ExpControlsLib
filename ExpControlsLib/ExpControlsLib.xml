@@ -4,20 +4,6 @@
         <name>ExpControlsLib</name>
     </assembly>
     <members>
-        <member name="T:ExpControlsLib.BitmapHelper">
-            <summary>
-            Converts an HBITMAP returned by the shell into a MagickImage
-            while preserving its 32-bit alpha channel.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.BitmapHelper.HBitmapToMagickImage(System.IntPtr)">
-            <summary>
-            Converts an HBITMAP returned by the shell into a MagickImage
-            while preserving its 32-bit alpha channel.
-            </summary>
-            <param name="hbm">Handle to the GDI bitmap to convert. Ownership is not transferred.</param>
-            <returns>A MagickImage, or <c>null</c> if the conversion fails.</returns>
-        </member>
         <member name="T:ExpControlsLib.ContextMenuResult">
             <summary>
             Result of a <see cref="M:ExpControlsLib.ContextMenu.ShowMenu(System.IntPtr,WindowsApiLib.Shell.CShellItem[],System.Drawing.Point,System.Boolean,System.Boolean)"/> call.
@@ -766,6 +752,7 @@
             </summary>
         </member>
         <member name="T:ExpControlsLib.ExpList">
+            <summary>Provides checkbox state synchronization between the ListView and shell-item models.</summary>
             <summary>
                 This Form is a fully working start point for any form which requires an ExplorerTree and
                 ListView with enough room left for application specific controls.
@@ -805,6 +792,12 @@
                 BTW, non-virtual mode is currently broken because I don't really care about non-virtual mode right now.
             </remarks>
             
+            <summary>Handles shell notifications, shell commands, context-menu operations, and dynamic item updates.</summary>
+            <summary>Contains the ListView, keyboard, mouse, label-edit, and other UI event handlers.</summary>
+            <summary>Implements folder navigation history, back/forward navigation, and parent-folder traversal.</summary>
+            <summary>Contains private helpers used to materialize, search, filter, sort, and update list items.</summary>
+            <summary>Contains the public operations for loading, querying, refreshing, and manipulating list contents.</summary>
+            <summary>Manages lazy icon and thumbnail loading, image-list updates, and visible-item refreshes.</summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.ExpFileList_ItemChecked(System.Object,System.Windows.Forms.ItemCheckedEventArgs)">
             <summary>
@@ -1240,7 +1233,7 @@
             </summary>
             <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste").</param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.InvokeMenuCommand(System.String,System.IntPtr,System.Collections.Generic.List{System.IntPtr})">
+        <member name="M:ExpControlsLib.ExpList.CreateContextMenu(System.IntPtr@,System.IntPtr@,System.IntPtr@)">
             <summary>
             This invokes the specified shell command on a background STA thread with it's own window handle.
             </summary>
@@ -1248,8 +1241,6 @@
             <param name="capturedParentPidl"></param>
             <param name="capturedRelPidls"></param>
             <returns></returns>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.CreateContextMenu(System.IntPtr@,System.IntPtr@,System.IntPtr@)">
             <summary>
             Creates a native Windows context menu for the current folder.
             </summary>
@@ -2719,6 +2710,20 @@
             asks the caller to redraw the item after the synchronous icon lookup.
             </summary>
         </member>
+        <member name="T:ExpControlsLib.ImageMagickHelper">
+            <summary>
+            Converts an HBITMAP returned by the shell into a MagickImage
+            while preserving its 32-bit alpha channel.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ImageMagickHelper.HBitmapToMagickImage(System.IntPtr)">
+            <summary>
+            Converts an HBITMAP returned by the shell into a MagickImage
+            while preserving its 32-bit alpha channel.
+            </summary>
+            <param name="hbm">Handle to the GDI bitmap to convert. Ownership is not transferred.</param>
+            <returns>A MagickImage, or <c>null</c> if the conversion fails.</returns>
+        </member>
         <member name="T:ExpControlsLib.ListViewDisplayMode">
             <summary>
             this is basically a superset of the View enum from Forms.View.  
@@ -2925,6 +2930,13 @@
             It also contains the Class <see cref="T:ExpControlsLib.ContextMenu">WindowsContextMenu</see> that provides the infrastucture 
             for displaying a Windows Context Menu on a Control and for Invoking a Command selected by the user from that Context Menu.
             Additionally it contains a number of Classes that support the main Classes.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ShellCommandService">
+            <summary>
+            Executes shell verbs and context-menu commands on the control's dedicated STA
+            runner. The caller transfers ownership of all cloned PIDLs passed to this class;
+            they are released after the shell call completes.
             </summary>
         </member>
         <member name="T:ExpControlsLib.StaThreadRunner">

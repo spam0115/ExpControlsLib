@@ -128,6 +128,7 @@ namespace ExpControlsLib
 
         private CancellationTokenSource? _loadDirectoryCancelTs;
         private StaThreadRunner? _staRunner;
+        private ShellCommandService? _shellCommandService;
 
         private void Cleanup()
         {
@@ -144,6 +145,7 @@ namespace ExpControlsLib
 
             _staRunner?.Dispose();
             _staRunner = null;
+            _shellCommandService = null;
 
             _imageListOrchestrator?.Dispose();
             if (_shellController?.ShellUpdater != null)
@@ -797,6 +799,7 @@ namespace ExpControlsLib
             try
             {
                 _staRunner = new StaThreadRunner(5, "ExpListStaRunner"); //todo: i think we might be limited to one sta thread becuase com objects have thread affinity and COM tries to marshal com calls to different threads and post messages onto the other thread's message queue.
+                _shellCommandService = new ShellCommandService(_staRunner);
 
                 // Setup Drag and Drop Wrappers
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Setting up drag/drop...");

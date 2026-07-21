@@ -19,6 +19,7 @@ using MethodInvoker = System.Windows.Forms.MethodInvoker;
 
 namespace ExpControlsLib
 {
+    /// <summary>Provides checkbox state synchronization between the ListView and shell-item models.</summary>
     public partial class ExpList
     {
         #region Checkbox Support
