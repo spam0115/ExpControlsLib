@@ -1465,8 +1465,12 @@ namespace ExpControlsLib
                 checkedFlag = (DisplayMode == ListViewDisplayMode.List) ? checkedValue : (uint)MFT.BYCOMMAND;
                 AppendMenu(viewSubMenu, checkedFlag, (int)CMD.LIST, "List");
 
-                checkedFlag = (DisplayMode == ListViewDisplayMode.Tile) ? checkedValue : (uint)MFT.BYCOMMAND;
-                AppendMenu(viewSubMenu, checkedFlag, (int)CMD.TILES, "Tiles");
+                // Tile view is not supported in virtual mode — omit the option entirely.
+                if (!_listViewWrapper.VirtualMode)
+                {
+                    checkedFlag = (DisplayMode == ListViewDisplayMode.Tile) ? checkedValue : (uint)MFT.BYCOMMAND;
+                    AppendMenu(viewSubMenu, checkedFlag, (int)CMD.TILES, "Tiles");
+                }
 
                 // Add sorting options to the Sort by submenu.
                 if (_listView.ListViewItemSorter is LVColSorter sorter)

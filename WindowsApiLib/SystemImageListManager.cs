@@ -135,8 +135,8 @@ namespace WindowsApiLib
 
         #region    Public Properties
         /// <summary>
-    /// The Handle (as IntPtr) of the per process System Image List containing Small Icons.
-    /// </summary>
+        /// The Handle (as IntPtr) of the per process System Image List containing Small Icons.
+        /// </summary>
         public static IntPtr hSmallImageList
         {
             get
@@ -144,9 +144,10 @@ namespace WindowsApiLib
                 return m_smImgList;
             }
         }
+
         /// <summary>
-    /// The Handle (as IntPtr) of the per process System Image List containing Large Icons.
-    /// </summary>
+        /// The Handle (as IntPtr) of the per process System Image List containing Large Icons.
+        /// </summary>
         public static IntPtr hLargeImageList
         {
             get
@@ -154,9 +155,10 @@ namespace WindowsApiLib
                 return m_lgImgList;
             }
         }
+
         /// <summary>
-    /// The Handle (as IntPtr) of the per process System Image List containing Extra Large Icons.
-    /// </summary>
+        /// The Handle (as IntPtr) of the per process System Image List containing Extra Large Icons.
+        /// </summary>
         public static IntPtr hXLargeImageList
         {
             get
@@ -166,8 +168,8 @@ namespace WindowsApiLib
         }
 
         /// <summary>
-    /// The Handle (as IntPtr) of the per process System Image List containing Jumbo Icons.
-    /// </summary>
+        /// The Handle (as IntPtr) of the per process System Image List containing Jumbo Icons.
+        /// </summary>
         public static IntPtr hJumboImageList
         {
             get
