@@ -1782,8 +1782,8 @@ namespace ExpControlsLib
                                 }
                                 finally
                                 {
-                                    if (iUnknownOut != IntPtr.Zero) Marshal.ReleaseComObject(iUnknownOut);
                                     if (contextMenu != null) Marshal.ReleaseComObject(contextMenu);
+                                    if (iUnknownOut != IntPtr.Zero) Marshal.Release(iUnknownOut);
                                     if (parentFolder != null && parentFolder != desktop) Marshal.ReleaseComObject(parentFolder);
                                     if (desktop != null) Marshal.ReleaseComObject(desktop);
                                     if (capturedRelPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(capturedRelPidl);
