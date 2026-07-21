@@ -18,6 +18,113 @@
             <param name="hbm">Handle to the GDI bitmap to convert. Ownership is not transferred.</param>
             <returns>A MagickImage, or <c>null</c> if the conversion fails.</returns>
         </member>
+        <member name="T:ExpControlsLib.ContextMenuResult">
+            <summary>
+            Result of a <see cref="M:ExpControlsLib.ContextMenu.ShowMenu(System.IntPtr,WindowsApiLib.Shell.CShellItem[],System.Drawing.Point,System.Boolean,System.Boolean)"/> call.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ContextMenuResult.Success">
+            <summary>True if the user selected a command; false if the menu was cancelled.</summary>
+        </member>
+        <member name="P:ExpControlsLib.ContextMenuResult.Verb">
+            <summary>The verb string (e.g. "open", "rename") from GetCommandString, or null for custom commands.</summary>
+        </member>
+        <member name="P:ExpControlsLib.ContextMenuResult.CommandInfo">
+            <summary>The raw command information from the shell context menu.</summary>
+        </member>
+        <member name="P:ExpControlsLib.ContextMenuResult.InvokeHResult">
+            <summary>The HRESULT from invoking the command on the original IContextMenu, or 0 if not invoked.</summary>
+        </member>
+        <member name="T:ExpControlsLib.NewMenuScope">
+            <summary>
+            A disposable scope that manages the lifetime of a "New" submenu created by
+            <see cref="M:ExpControlsLib.ContextMenu.SetUpNewMenu(WindowsApiLib.Shell.CShellItem,System.IntPtr,System.Int32)"/>. Disposing this scope releases all
+            associated COM objects and clears the menu handle.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.NewMenuScope.MenuHandle">
+            <summary>The HMENU of the "New" submenu within the parent context menu.</summary>
+        </member>
+        <member name="T:ExpControlsLib.ContextMenu">
+            <summary>
+            WindowsContextMenu provides the infrastructure for displaying a Windows Context Menu on a Control
+            and for Invoking a Command selected by the user from that Context Menu. Cascaded sub-menus are created,
+            displayed, and responded to as required.
+            The Context Menu applies to all CShItems
+            passed to the ShowMenu Function and all CShItems must be in the same Folder. 
+            </summary>
+            <remarks>Though specifically designed for ListView and TreeView Controls, this Class will work for any Control which
+                     is associated with a single Folder and can provide CShItems from that Folder.</remarks>
+        </member>
+        <member name="F:ExpControlsLib.ContextMenu.cntxMenuExtended">
+            <summary>Extends IContextMenu to support owner-drawn items and submenus (HandleMenuMsg).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ContextMenu.cntxMenuCascading">
+            <summary>Extends IContextMenu2 to support advanced cascading menus with result return (HandleMenuMsg2).</summary>
+        </member>
+        <member name="F:ExpControlsLib.ContextMenu.newMenuBase">
+            <summary>Base interface for the 'New' submenu creation.</summary>
+        </member>
+        <member name="F:ExpControlsLib.ContextMenu.newMenuExtended">
+            <summary>Extends newMenu to support owner-drawn items and submenus in the 'New' menu.</summary>
+        </member>
+        <member name="F:ExpControlsLib.ContextMenu.newMenuCascading">
+            <summary>Extends newMenu2 to support advanced cascading features in the 'New' menu.</summary>
+        </member>
+        <member name="M:ExpControlsLib.ContextMenu.ShowMenu(System.IntPtr,WindowsApiLib.Shell.CShellItem[],System.Drawing.Point,System.Boolean,System.Boolean)">
+            <summary>
+            Displays a shell context menu for the given items and returns the user's selection.
+            All COM resources are released before this method returns — callers do NOT need to
+            call <see cref="!:ReleaseMenu"/> afterward.
+            </summary>
+            <param name="hwnd">The handle to the control to host the ContextMenu</param>
+            <param name="items">The items for which to show the ContextMenu. These items must be in the same folder.</param>
+            <param name="pt">The point where the ContextMenu should appear</param>
+            <param name="allowRename">Set if the ContextMenu should contain the Rename command where appropriate</param>
+            <param name="minimal">If true, uses CMF.VERBSONLY to filter out most 3rd party extensions</param>
+            <returns>A <see cref="T:ExpControlsLib.ContextMenuResult"/> indicating what the user selected.</returns>
+        </member>
+        <member name="M:ExpControlsLib.ContextMenu.InvokeCommand(WindowsApiLib.Shell.IContextMenu,System.UInt32,System.String,System.Drawing.Point)">
+            <summary>
+            Invokes a specific command from an IContextMenu.
+            </summary>
+            <param name="iContextMenu">the IContextMenu containing the item</param>
+            <param name="cmd">the index of the command to invoke</param>
+            <param name="parentDir">the parent directory from where to invoke</param>
+            <param name="ptInvoke">the point (in screen coordinates) from which to invoke</param>
+        </member>
+        <member name="M:ExpControlsLib.ContextMenu.SetUpNewMenu(WindowsApiLib.Shell.CShellItem,System.IntPtr,System.Int32)">
+            <summary>
+            Creates and initializes a "New" submenu for the given folder.
+            Returns a <see cref="T:ExpControlsLib.NewMenuScope"/> that must be disposed by the caller
+            (typically via a <c>using</c> statement) when the menu is no longer needed.
+            </summary>
+            <param name="itm">The folder for which to create the "New" submenu.</param>
+            <param name="contextMenu">The parent popup menu handle to attach the submenu to.</param>
+            <param name="index">The position index within the parent menu.</param>
+            <returns>A <see cref="T:ExpControlsLib.NewMenuScope"/> that manages the submenu lifetime.</returns>
+        </member>
+        <member name="T:ExpControlsLib.CShellItemComparer">
+            <summary>
+            Implements IComparer for CShellItem to support custom sorting in ExpList, 
+            especially for virtual mode.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.CShellItemComparer.#ctor(ExpControlsLib.ExpList,System.Int32,System.Windows.Forms.SortOrder,System.Windows.Forms.ColumnHeader,ExpControlsLib.CShellItemComparer)">
+            <summary>
+            Initializes a new instance of the CShellItemComparer class.
+            </summary>
+            <param name="expList">The ExpList instance to fetch data from.</param>
+            <param name="column">The index of the column to sort on.</param>
+            <param name="order">The sort order.</param>
+            <param name="columnHeader">The ColumnHeader associated with the column.</param>
+            <param name="secondaryComparer">The secondary comparer to use when primary comparison is equal.</param>
+        </member>
+        <member name="M:ExpControlsLib.CShellItemComparer.Compare(WindowsApiLib.Shell.CShellItem,WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Compares two CShellItems based on the specified column and order.
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.CDragWrapper">
             <summary>
             A wrapper for handling drag operations from a ListView or TreeView.
@@ -283,92 +390,6 @@
             Release the IDropTarget and free's the allocated memory
             </summary>
         </member>
-        <member name="T:ExpControlsLib.ContextMenuResult">
-            <summary>
-            Result of a <see cref="M:ExpControlsLib.ContextMenu.ShowMenu(System.IntPtr,WindowsApiLib.Shell.CShellItem[],System.Drawing.Point,System.Boolean,System.Boolean)"/> call.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.ContextMenuResult.Success">
-            <summary>True if the user selected a command; false if the menu was cancelled.</summary>
-        </member>
-        <member name="P:ExpControlsLib.ContextMenuResult.Verb">
-            <summary>The verb string (e.g. "open", "rename") from GetCommandString, or null for custom commands.</summary>
-        </member>
-        <member name="P:ExpControlsLib.ContextMenuResult.CommandInfo">
-            <summary>The raw command information from the shell context menu.</summary>
-        </member>
-        <member name="P:ExpControlsLib.ContextMenuResult.InvokeHResult">
-            <summary>The HRESULT from invoking the command on the original IContextMenu, or 0 if not invoked.</summary>
-        </member>
-        <member name="T:ExpControlsLib.NewMenuScope">
-            <summary>
-            A disposable scope that manages the lifetime of a "New" submenu created by
-            <see cref="M:ExpControlsLib.ContextMenu.SetUpNewMenu(WindowsApiLib.Shell.CShellItem,System.IntPtr,System.Int32)"/>. Disposing this scope releases all
-            associated COM objects and clears the menu handle.
-            </summary>
-        </member>
-        <member name="P:ExpControlsLib.NewMenuScope.MenuHandle">
-            <summary>The HMENU of the "New" submenu within the parent context menu.</summary>
-        </member>
-        <member name="T:ExpControlsLib.ContextMenu">
-            <summary>
-            WindowsContextMenu provides the infrastructure for displaying a Windows Context Menu on a Control
-            and for Invoking a Command selected by the user from that Context Menu. Cascaded sub-menus are created,
-            displayed, and responded to as required.
-            The Context Menu applies to all CShItems
-            passed to the ShowMenu Function and all CShItems must be in the same Folder. 
-            </summary>
-            <remarks>Though specifically designed for ListView and TreeView Controls, this Class will work for any Control which
-                     is associated with a single Folder and can provide CShItems from that Folder.</remarks>
-        </member>
-        <member name="F:ExpControlsLib.ContextMenu.cntxMenuExtended">
-            <summary>Extends IContextMenu to support owner-drawn items and submenus (HandleMenuMsg).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ContextMenu.cntxMenuCascading">
-            <summary>Extends IContextMenu2 to support advanced cascading menus with result return (HandleMenuMsg2).</summary>
-        </member>
-        <member name="F:ExpControlsLib.ContextMenu.newMenuBase">
-            <summary>Base interface for the 'New' submenu creation.</summary>
-        </member>
-        <member name="F:ExpControlsLib.ContextMenu.newMenuExtended">
-            <summary>Extends newMenu to support owner-drawn items and submenus in the 'New' menu.</summary>
-        </member>
-        <member name="F:ExpControlsLib.ContextMenu.newMenuCascading">
-            <summary>Extends newMenu2 to support advanced cascading features in the 'New' menu.</summary>
-        </member>
-        <member name="M:ExpControlsLib.ContextMenu.ShowMenu(System.IntPtr,WindowsApiLib.Shell.CShellItem[],System.Drawing.Point,System.Boolean,System.Boolean)">
-            <summary>
-            Displays a shell context menu for the given items and returns the user's selection.
-            All COM resources are released before this method returns — callers do NOT need to
-            call <see cref="!:ReleaseMenu"/> afterward.
-            </summary>
-            <param name="hwnd">The handle to the control to host the ContextMenu</param>
-            <param name="items">The items for which to show the ContextMenu. These items must be in the same folder.</param>
-            <param name="pt">The point where the ContextMenu should appear</param>
-            <param name="allowRename">Set if the ContextMenu should contain the Rename command where appropriate</param>
-            <param name="minimal">If true, uses CMF.VERBSONLY to filter out most 3rd party extensions</param>
-            <returns>A <see cref="T:ExpControlsLib.ContextMenuResult"/> indicating what the user selected.</returns>
-        </member>
-        <member name="M:ExpControlsLib.ContextMenu.InvokeCommand(WindowsApiLib.Shell.IContextMenu,System.UInt32,System.String,System.Drawing.Point)">
-            <summary>
-            Invokes a specific command from an IContextMenu.
-            </summary>
-            <param name="iContextMenu">the IContextMenu containing the item</param>
-            <param name="cmd">the index of the command to invoke</param>
-            <param name="parentDir">the parent directory from where to invoke</param>
-            <param name="ptInvoke">the point (in screen coordinates) from which to invoke</param>
-        </member>
-        <member name="M:ExpControlsLib.ContextMenu.SetUpNewMenu(WindowsApiLib.Shell.CShellItem,System.IntPtr,System.Int32)">
-            <summary>
-            Creates and initializes a "New" submenu for the given folder.
-            Returns a <see cref="T:ExpControlsLib.NewMenuScope"/> that must be disposed by the caller
-            (typically via a <c>using</c> statement) when the menu is no longer needed.
-            </summary>
-            <param name="itm">The folder for which to create the "New" submenu.</param>
-            <param name="contextMenu">The parent popup menu handle to attach the submenu to.</param>
-            <param name="index">The position index within the parent menu.</param>
-            <returns>A <see cref="T:ExpControlsLib.NewMenuScope"/> that manages the submenu lifetime.</returns>
-        </member>
         <member name="T:ExpControlsLib.ControlDropWrapper">
             <summary>
             A Class to serve as a broker between a Control that is associated with a single Folder and
@@ -431,27 +452,6 @@
             <param name="pt">Where the Drop occurred on the Control</param>
             <param name="pdwEffect">Result of the Drop - unreliable in case of Move</param>
             <returns>S_OK</returns>
-        </member>
-        <member name="T:ExpControlsLib.CShellItemComparer">
-            <summary>
-            Implements IComparer for CShellItem to support custom sorting in ExpList, 
-            especially for virtual mode.
-            </summary>
-        </member>
-        <member name="M:ExpControlsLib.CShellItemComparer.#ctor(ExpControlsLib.ExpList,System.Int32,System.Windows.Forms.SortOrder,System.Windows.Forms.ColumnHeader,ExpControlsLib.CShellItemComparer)">
-            <summary>
-            Initializes a new instance of the CShellItemComparer class.
-            </summary>
-            <param name="expList">The ExpList instance to fetch data from.</param>
-            <param name="column">The index of the column to sort on.</param>
-            <param name="order">The sort order.</param>
-            <param name="columnHeader">The ColumnHeader associated with the column.</param>
-            <param name="secondaryComparer">The secondary comparer to use when primary comparison is equal.</param>
-        </member>
-        <member name="M:ExpControlsLib.CShellItemComparer.Compare(WindowsApiLib.Shell.CShellItem,WindowsApiLib.Shell.CShellItem)">
-            <summary>
-            Compares two CShellItems based on the specified column and order.
-            </summary>
         </member>
         <member name="T:ExpControlsLib.CtvDropWrapper">
             <summary>The CtvDropWrapper class deals with the mechanics of receiving a
@@ -2701,7 +2701,7 @@
             while thumbnail operations are owned by an instance-scoped manager.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ImageListOrchestrator.GetInitialImageIndex(WindowsApiLib.Shell.CShellItem)">
+        <member name="M:ExpControlsLib.ImageListOrchestrator.GetInitialImageIndex(WindowsApiLib.Shell.CShellItem,System.Boolean)">
             <summary>
             Returns an initial index without starting asynchronous thumbnail work.
             This is used by virtual-list callbacks that may be invoked for off-screen items.

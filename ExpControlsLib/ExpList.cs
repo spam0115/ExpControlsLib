@@ -134,12 +134,25 @@ namespace ExpControlsLib
             _scrollDebounceTimer?.Stop();
             _scrollDebounceTimer?.Dispose();
             _scrollDebounceTimer = null;
+
+            // Stop producers before releasing the resources they may be using.
+            // In particular, directory loads can still be queued on the dedicated
+            // STA runner when the control is torn down.
             _loadDirectoryCancelTs?.Cancel();
             _loadDirectoryCancelTs?.Dispose();
             _loadDirectoryCancelTs = null;
+
+            _staRunner?.Dispose();
+            _staRunner = null;
+
             _imageListOrchestrator?.Dispose();
             if (_shellController?.ShellUpdater != null)
                 _shellController.ShellUpdater.UpdateEvent -= ShellUpdater_UpdateEventInvoker;
+
+            // ContextMenu owns shell COM interfaces and the New-menu state. Release
+            // it with the rest of the control-owned resources, including when the
+            // menu is still open while the control is being disposed.
+            m_WindowsContextMenu.Dispose();
         }
 
         #endregion
@@ -2462,7 +2475,12 @@ namespace ExpControlsLib
                 ClearListView();
                 return true;
             }
-            _loadDirectoryCancelTs?.Cancel(); //cancel any prior invokations
+            // Cancel and dispose the previous source before replacing it. This keeps
+            // repeated navigation/reload operations from accumulating registrations
+            // and native wait handles for the lifetime of the control.
+            var previousLoadCancellation = _loadDirectoryCancelTs;
+            previousLoadCancellation?.Cancel();
+            previousLoadCancellation?.Dispose();
             _loadDirectoryCancelTs = new CancellationTokenSource();
             var token = _loadDirectoryCancelTs.Token;
 

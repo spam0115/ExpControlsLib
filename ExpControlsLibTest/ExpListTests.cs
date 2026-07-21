@@ -346,6 +346,9 @@ namespace ExpControlsLibTest
                 Assert.That(item, Is.Not.Null);
                 Assert.That(expList.CurrentFolderCsi, Is.Not.Null);
 
+                int itemsChangedCount = 0;
+                expList.ExpListItemsChanged += (_, _) => itemsChangedCount++;
+
                 var eventArgs = new ShellItemUpdateEventArgs(item!, CShItemUpdateType.Deleted);
                 _shellController.ShellUpdater.RaiseUpdateEvent(expList.CurrentFolderCsi!, eventArgs);
 
@@ -358,6 +361,8 @@ namespace ExpControlsLibTest
                 }
 
                 Assert.That(expList.Count, Is.EqualTo(0), "Item should have been removed from list.");
+                Assert.That(itemsChangedCount, Is.EqualTo(1),
+                    "A delete notification for the displayed folder should dispatch one items-changed event.");
             }
             finally
             {
