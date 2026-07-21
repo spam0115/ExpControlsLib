@@ -77,7 +77,7 @@ namespace ExpControlsLib
         private ShellController? _shellController = null;
         private HashSet<string> _excludedItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private Func<CShellItem, bool>? _filter;
-        private ImageListOrchestrator _imageListOrchestrator;
+        private ImageListOrchestrator _imageListOrchestrator = null!;
         private VirtualListViewWrapper _listViewWrapper;
         private bool _initialized = false;
 
@@ -391,7 +391,7 @@ namespace ExpControlsLib
                 _listViewWrapper.DisplayMode = value;
 
                 SetImageListForMode(value);
-                if (_listViewWrapper.VirtualMode) LoadImagesForVisibleItems();
+                if (_imageListOrchestrator != null && _listViewWrapper.VirtualMode) LoadImagesForVisibleItems();
 
                 DisplayModeChanged?.Invoke(value);
             }
@@ -800,6 +800,7 @@ namespace ExpControlsLib
                 //set up sorter
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Initializing sorter...");
                 _listViewWrapper.Initialize();
+                SetImageListForMode(DisplayMode);
                 _listViewWrapper.Sorter.SortOrderChanged += (s, e) =>
                 {
                     if (VirtualMode)
@@ -3936,6 +3937,10 @@ namespace ExpControlsLib
         /// <param name="value">The <see cref="ListViewDisplayMode"/> to configure for.</param>
         private void SetImageListForMode(ListViewDisplayMode value)
         {
+            // DisplayMode can be assigned by the designer before the control's Load event.
+            // Defer native/managed image-list installation until the orchestrator exists.
+            if (_imageListOrchestrator == null) return;
+
             Debug.WriteLine("ExpList: SetAndLoadImageList Begin");
             try
             {
