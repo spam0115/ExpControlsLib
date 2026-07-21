@@ -754,176 +754,36 @@ namespace ExpControlsLib
 
                 try
                 {
+                    bool raiseItemsChanged = false;
                     switch (e.UpdateType)
                     {
                         case CShItemUpdateType.Created:
-                            {
-                                if (!isTargetFolder && !isTargetItem) return;
-                                if (IsExcluded(e.Item)) return;
-                                if (_filter != null && !_filter(e.Item)) return; // pre-filter new items
-
-                                _listViewWrapper.InsertSorted(e.Item);
-                                m_CreateNew = false; //I don't think this is even used?
-
-                                break;
-                            }
-
+                            raiseItemsChanged = HandleCreatedUpdate(e.Item, isTargetFolder, isTargetItem);
+                            break;
                         case CShItemUpdateType.Deleted:
-                            if (e.Item is null)
-                            {
-                                Debug.WriteLine("ExpList received DELETED event but no item was specified.");
-                                return;
-                            }
-
-                            if (_activeDeletes.ContainsKey(e.Item.FullPath))
-                            {
-                                Debug.WriteLine("  [DELETE] Already processing delete for this item. Skipping to avoid duplicate work.");
-                                return;
-                            }
-
-                            try
-                            {
-                                _activeDeletes.Add(e.Item.FullPath, true);
-                                int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
-                                if (index >= 0)
-                                {
-                                    //bool wasSelected = _listViewWrapper.IsItemSelected(e.Item);
-                                    _listViewWrapper.RemoveAt(index);
-
-                                    //if (wasSelected && SelectedCount == 0 && Count > 0)
-                                    //{
-                                    //    int nextIndex = Math.Min(index, Count - 1);
-                                    //    var nextLvi = _listViewWrapper.GetListViewItem(nextIndex);
-                                    //    if (nextLvi != null)
-                                    //    {
-                                    //        nextLvi.Selected = true;
-                                    //        nextLvi.Focused = true;
-                                    //    }
-                                    //}
-                                }
-                            }
-                            finally
-                            {
-                                _activeDeletes.Remove(e.Item.FullPath);
-                            }
+                            raiseItemsChanged = HandleDeletedUpdate(e.Item);
                             break;
-
-                        case CShItemUpdateType.Renamed: // This event can be raised in various rename scenarios - file rename, folder rename, drag-drop move with rename, etc.  The structure of the event (which properties are populated) can vary based on the scenario, so the handling needs to be robust to these variations.
-                            {
-                                var csi = e.Item;
-
-                                if (e.Item.Parent.FullPath != _currentFolderCsi.FullPath) return;
-
-                                int index = -1;
-                                if (VirtualMode)
-                                {
-                                    index = _listViewWrapper.FindInsertionPoint(csi);
-                                }
-                                else
-                                {
-                                    var lvi = csi.LVItem;
-                                    if (lvi is null) throw new Exception("ListViewItem not found for renamed item");
-                                    index = lvi.Index;
-                                }
-
-                                if (index >= 0)
-                                {
-                                    _listViewWrapper.RemoveAt(index);
-                                    if (!IsExcluded(csi) && (_filter == null || _filter(csi)))
-                                    {
-                                        _listViewWrapper.InsertSorted(csi);
-                                    }
-                                }
-                                break;
-                            }
-
+                        case CShItemUpdateType.Renamed:
+                            HandleRenamedUpdate(e.Item);
+                            break;
                         case CShItemUpdateType.Moved:
-                            {
-                                var csi = e.Item;
-                                // The sender is the old parent folder.
-                                // csi.Parent has already been updated to the new parent.
-                                if (sender is CShellItem senderFolder
-                                    && CPidl.ResolvesToSamePathOrName(senderFolder.PIDL, _currentFolderCsi.PIDL))
-                                {
-                                    // Item was moved FROM the current folder → remove it
-                                    _listViewWrapper.RemoveItems(new[] { csi });
-
-                                    if (_currentFolderCsi != null)
-                                    {
-                                        string path = _currentFolderCsi.FullPath.StartsWith(":")
-                                            ? _currentFolderCsi.DisplayName
-                                            : _currentFolderCsi.FullPath;
-                                        ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
-                                    }
-                                }
-
-                                // If this item was part of a pending drag, fire DragCompleted with paths
-                                if (_pendingDragItems is not null)
-                                {
-                                    var match = Array.Find(_pendingDragItems, i => ReferenceEquals(i, csi));
-                                    if (match is not null)
-                                    {
-                                        // Remove from pending so DW_DragEnd doesn't fire a duplicate
-                                        _pendingDragItems = _pendingDragItems.Where(i => !ReferenceEquals(i, csi)).ToArray();
-                                        if (_pendingDragItems.Length == 0) _pendingDragItems = null;
-
-                                        ExpListDragCompleted?.Invoke(this,
-                                            new DragCompletedEventArgs(DragDropEffects.Move,
-                                                new[] { csi }, e.OldPath, e.NewPath));
-                                    }
-                                }
-                                break;
-                            }
-
-                        case CShItemUpdateType.Updated:
-                            {
-                                int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
-                                if (index >= 0)
-                                {
-                                    _listViewWrapper.RedrawItem(index);
-                                }
-
-                                break;
-                            }
-
-                        case CShItemUpdateType.UpdateDir:
-                            Debug.WriteLine("\tUpdateDir");
-                            await LoadDirectoryAsync(_currentFolderCsi, true, reload: true);
+                            HandleMovedUpdate(sender, e);
                             break;
-
+                        case CShItemUpdateType.Updated:
+                            HandleUpdatedUpdate(e.Item);
+                            break;
+                        case CShItemUpdateType.UpdateDir:
+                            await HandleDirectoryUpdateAsync();
+                            break;
                         case CShItemUpdateType.IconChange:
-                            {
-                                int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
-                                if (index >= 0)
-                                {
-                                    _imageListOrchestrator.RefreshImage(e.Item, index, () => _listViewWrapper.RedrawItem(index));
-                                }
-                                break;
-                            }
-
                         case CShItemUpdateType.MediaChange:
-                            {
-                                int index = _listViewWrapper.GetIndexFromFullPath(e.Item.FullPath);
-                                if (index >= 0)
-                                {
-                                    _imageListOrchestrator.RefreshImage(e.Item, index, () => _listViewWrapper.RedrawItem(index));
-                                }
-                                break;
-                            }
+                            HandleImageUpdate(e.Item);
+                            break;
                     }
 
-                    // Fire ExpListItemsChanged for Created/Deleted events.
-                    // This was previously in UpdateInvoke but must be here since
-                    // BeginInvoke is now used (the marshaling path wouldn't fire it).
-                    if (e.UpdateType == CShItemUpdateType.Created || e.UpdateType == CShItemUpdateType.Deleted)
+                    if (raiseItemsChanged)
                     {
-                        if (_currentFolderCsi != null)
-                        {
-                            if (_currentFolderCsi.FullPath.StartsWith(":"))
-                                ExpListItemsChanged?.Invoke(_currentFolderCsi.DisplayName, _currentFolderCsi);
-                            else
-                                ExpListItemsChanged?.Invoke(_currentFolderCsi.FullPath, _currentFolderCsi);
-                        }
+                        RaiseItemsChangedForCurrentFolder();
                     }
                 }
                 catch (Exception ex)
@@ -942,6 +802,126 @@ namespace ExpControlsLib
             {
                 //Debug.WriteLine("ExpList: DoItemUpdate End");
             }
+        }
+
+        private bool HandleCreatedUpdate(CShellItem item, bool isTargetFolder, bool isTargetItem)
+        {
+            if (!isTargetFolder && !isTargetItem) return false;
+            if (IsExcluded(item)) return false;
+            if (_filter != null && !_filter(item)) return false;
+
+            _listViewWrapper.InsertSorted(item);
+            m_CreateNew = false;
+            return true;
+        }
+
+        private bool HandleDeletedUpdate(CShellItem item)
+        {
+            if (_activeDeletes.ContainsKey(item.FullPath))
+            {
+                Debug.WriteLine("  [DELETE] Already processing delete for this item. Skipping to avoid duplicate work.");
+                return false;
+            }
+
+            try
+            {
+                _activeDeletes.Add(item.FullPath, true);
+                int index = _listViewWrapper.GetIndexFromFullPath(item.FullPath);
+                if (index >= 0)
+                {
+                    _listViewWrapper.RemoveAt(index);
+                }
+                return true;
+            }
+            finally
+            {
+                _activeDeletes.Remove(item.FullPath);
+            }
+        }
+
+        private void HandleRenamedUpdate(CShellItem item)
+        {
+            if (item.Parent.FullPath != _currentFolderCsi.FullPath) return;
+
+            int index;
+            if (VirtualMode)
+            {
+                index = _listViewWrapper.FindInsertionPoint(item);
+            }
+            else
+            {
+                var lvi = item.LVItem;
+                if (lvi is null) throw new Exception("ListViewItem not found for renamed item");
+                index = lvi.Index;
+            }
+
+            if (index >= 0)
+            {
+                _listViewWrapper.RemoveAt(index);
+                if (!IsExcluded(item) && (_filter == null || _filter(item)))
+                {
+                    _listViewWrapper.InsertSorted(item);
+                }
+            }
+        }
+
+        private void HandleMovedUpdate(object? sender, ShellItemUpdateEventArgs e)
+        {
+            var item = e.Item;
+            if (sender is CShellItem senderFolder
+                && CPidl.ResolvesToSamePathOrName(senderFolder.PIDL, _currentFolderCsi.PIDL))
+            {
+                _listViewWrapper.RemoveItems(new[] { item });
+                RaiseItemsChangedForCurrentFolder();
+            }
+
+            if (_pendingDragItems is not null)
+            {
+                var match = Array.Find(_pendingDragItems, i => ReferenceEquals(i, item));
+                if (match is not null)
+                {
+                    _pendingDragItems = _pendingDragItems.Where(i => !ReferenceEquals(i, item)).ToArray();
+                    if (_pendingDragItems.Length == 0) _pendingDragItems = null;
+
+                    ExpListDragCompleted?.Invoke(this,
+                        new DragCompletedEventArgs(DragDropEffects.Move,
+                            new[] { item }, e.OldPath, e.NewPath));
+                }
+            }
+        }
+
+        private void HandleUpdatedUpdate(CShellItem item)
+        {
+            int index = _listViewWrapper.GetIndexFromFullPath(item.FullPath);
+            if (index >= 0)
+            {
+                _listViewWrapper.RedrawItem(index);
+            }
+        }
+
+        private async Task HandleDirectoryUpdateAsync()
+        {
+            Debug.WriteLine("\tUpdateDir");
+            await LoadDirectoryAsync(_currentFolderCsi, true, reload: true);
+        }
+
+        private void HandleImageUpdate(CShellItem item)
+        {
+            int index = _listViewWrapper.GetIndexFromFullPath(item.FullPath);
+            if (index >= 0)
+            {
+                _imageListOrchestrator.RefreshImage(item, index, () => _listViewWrapper.RedrawItem(index));
+            }
+        }
+
+        private void RaiseItemsChangedForCurrentFolder()
+        {
+            if (_currentFolderCsi == null) return;
+
+            string path = _currentFolderCsi.FullPath.StartsWith(":")
+                ? _currentFolderCsi.DisplayName
+                : _currentFolderCsi.FullPath;
+            ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
         }
 
 
