@@ -38,7 +38,6 @@ namespace ExpControlsLib
 
                 if (SelectedCount <= 0) return;
 
-                CShellItem[] selectedItems;
                 IShellFolder? folder;
                 List<IntPtr> relPidls;
                 int deleteCount = 0;
@@ -54,34 +53,30 @@ namespace ExpControlsLib
                         return;
                     }
 
-                    if (VirtualMode)
-                        selectedItems = SelectedCShellItems.ToArray();
-                    else
-                        selectedItems = _listView?.SelectedItems?.Cast<ListViewItem>()?.Select(item => item.Tag as CShellItem)?.ToArray() ?? new CShellItem[0];
+                    relPidls = new List<IntPtr>(_listViewWrapper.SelectedCShellItems.Count());
 
-                    relPidls = new List<IntPtr>(selectedItems.Length);
-
-                    for (int i = 0; i < selectedItems.Length; i++)
+                    int i = -1;
+                    foreach (var item in _listViewWrapper.SelectedCShellItems)
                     {
-                        var sel = selectedItems[i];
-                        if (sel == null)
+                        i++;
+                        if (item == null)
                         {
                             Debug.WriteLine($"Selected item {i} is null");
                             continue;
                         }
 
-                        if (!sel.CanDelete)
+                        if (!item.CanDelete)
                         {
-                            MessageBox.Show($"Cannot delete: {sel.DisplayName}", "Cannot Delete",
+                            MessageBox.Show($"Cannot delete: {item.DisplayName}", "Cannot Delete",
                                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             continue;
                         }
 
-                        IntPtr pidl = sel.LastPIDL;
+                        IntPtr pidl = item.LastPIDL;
                         if (pidl == IntPtr.Zero)
                         {
-                            Debug.WriteLine($"Failed to get PIDL for item: {sel.DisplayName}");
-                            MessageBox.Show($"Failed to get ID for item: {sel.DisplayName}", "Error",
+                            Debug.WriteLine($"Failed to get PIDL for item: {item.DisplayName}");
+                            MessageBox.Show($"Failed to get ID for item: {item.DisplayName}", "Error",
                                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             continue;
                         }
@@ -123,10 +118,10 @@ namespace ExpControlsLib
                 {
                     try
                     {
-                        _shellController.HierachyManager.RemoveRange(selectedItems, raiseEvents: false);
-                        _listViewWrapper.RemoveItems(selectedItems);
+                        _shellController.HierachyManager.RemoveRange(_listViewWrapper.SelectedCShellItems, raiseEvents: false);
+                        _listViewWrapper.RemoveItems(_listViewWrapper.SelectedCShellItems);
 
-                        if (selectedItems.Length > _listViewWrapper.GetApproxVisibleCount())
+                        if (_listViewWrapper.SelectedCShellItems.Count() > _listViewWrapper.GetApproxVisibleCount())
                             OnScroll();
 
                         if (_currentFolderCsi != null)
@@ -137,7 +132,7 @@ namespace ExpControlsLib
                             ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
                         }
 
-                        ExpListDeleted?.Invoke(this, new ExpListDeletedEventArgs(selectedItems, deletedIndices));
+                        ExpListDeleted?.Invoke(this, new ExpListDeletedEventArgs(_listViewWrapper.SelectedCShellItems.ToArray(), deletedIndices));
                     }
                     finally
                     {
@@ -238,31 +233,22 @@ namespace ExpControlsLib
                             return;
                         }
 
-                        if (VirtualMode)
-                        {
-                            selectedItems = SelectedCShellItems.ToArray();
-                        }
-                        else
-                        {
-                            selectedItems = _listView?.SelectedItems?.Cast<ListViewItem>()?.Select(item => item.Tag as CShellItem)?.ToArray() ?? new CShellItem[0];
-                        }
+                        relPidls = new List<IntPtr>(_listViewWrapper.SelectedCShellItems.Count());
 
-                        relPidls = new List<IntPtr>(selectedItems.Length);
-
-                        for (int i = 0; i < selectedItems.Length; i++)
+                        int i = -1;
+                        foreach (var item in _listViewWrapper.SelectedCShellItems)
                         {
-                            var sel = selectedItems[i];
-                            if (sel == null)
+                            if (item == null)
                             {
                                 Debug.WriteLine($"Selected item {i} is null");
                                 continue;
                             }
 
-                            IntPtr pidl = sel.LastPIDL;
+                            IntPtr pidl = item.LastPIDL;
                             if (pidl == IntPtr.Zero)
                             {
-                                Debug.WriteLine($"Failed to get PIDL for item: {sel.DisplayName}");
-                                MessageBox.Show($"Failed to get ID for item: {sel.DisplayName}", "Error",
+                                Debug.WriteLine($"Failed to get PIDL for item: {item.DisplayName}");
+                                MessageBox.Show($"Failed to get ID for item: {item.DisplayName}", "Error",
                                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                                 continue;
                             }
@@ -318,6 +304,7 @@ namespace ExpControlsLib
         /// </summary>
         /// <param name="comContextMenu">Output parameter for the main context menu handle.</param>
         /// <param name="viewSubMenu">Output parameter for the View submenu handle.</param>
+        /// <param name="sortSubMenu">Output parameter for the Sort by submenu handle.</param>
         private void CreateContextMenu(out IntPtr comContextMenu, out IntPtr viewSubMenu, out IntPtr sortSubMenu)
         {
             Debug.WriteLine("ExpList: CreateContextMenu Begin");

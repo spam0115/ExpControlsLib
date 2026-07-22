@@ -81,7 +81,7 @@ namespace ExpControlsLib
         /// available for a previously submitted request. Subscribers that update
         /// UI must marshal back to the UI thread themselves.
         /// </summary>
-        public event EventHandler<ThumbnailReadyEventArgs> ThumbnailReady;
+        public event EventHandler<ThumbnailReadyEventArgs>? ThumbnailReady;
 
         #endregion
 

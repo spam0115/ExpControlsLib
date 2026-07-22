@@ -23,10 +23,9 @@ namespace WindowsApiLibTest
                 Assert.IsNotNull(CShellItemFactory.Instance, "Instance should not be null after initialization.");
 
                 // Verify basic properties are populated
-                Assert.IsNotNull(CShellItemFactory.DesktopCSI.PIDL, "DesktopPidl should not be null.");
-                Assert.AreNotEqual(IntPtr.Zero, CShellItemFactory.DesktopCSI.PIDL, "DesktopPidl should not be zero.");
+                Assert.IsNotNull(CShellItemFactory.DesktopCSI, "DesktopPidl should not be null.");
+                Assert.AreNotEqual(IntPtr.Zero, CShellItemFactory.DesktopCSI?.PIDL, "DesktopPidl should not be zero.");
 
-                Assert.IsNotNull(CShellItemFactory.EmptyPidl, "EmptyPidl should not be null.");
                 Assert.AreNotEqual(IntPtr.Zero, CShellItemFactory.EmptyPidl, "EmptyPidl should not be zero.");
 
                 Assert.IsNotNull(CShellItemFactory.SystemName, "SystemName should not be null.");

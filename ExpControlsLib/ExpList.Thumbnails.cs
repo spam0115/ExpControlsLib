@@ -41,31 +41,6 @@ namespace ExpControlsLib
                 {
                     ExitImageListMutation();
                 }
-                /*
-                if (value <= ListViewDisplayMode.Tile) //built-in Windows 95 Shell view modes
-                {
-                    // Clear the WinForms LargeImageList property before installing the system
-                    // image list via SendMessage. The orchestrator owns that native-list setup.
-                    // uses LVM_SETIMAGELIST directly and bypasses the WinForms property cache,
-                    // so if the property still points at a thumbnail ImageList (from a prior
-                    // Thumbnail-mode session), any later WinForms operation that re-syncs its
-                    // cached ImageList (handle recreation, style change, etc.) will stomp the
-                    // native handle back to the thumbnail list — visually leaving us in
-                    // Thumbnail mode even though DisplayMode says LargeIcon.
-                    // Because Thumbnail modes map View to LargeIcon too, this is the only state
-                    // that distinguishes them, so this cleanup is essential for reliable
-                    // switching between Thumbnail <-> LargeIcon (and any other system mode).
-                    _listView.LargeImageList = null;
-                    _listView.SmallImageList = null;
-
-                    bool large = (value == ListViewDisplayMode.LargeIcon);
-
-                    if (large)
-                        // Legacy large-list branch; now owned by ImageListOrchestrator.
-                    else
-                        // Legacy small-list branch; now owned by ImageListOrchestrator.
-                }
-                */
             }
             finally
             {

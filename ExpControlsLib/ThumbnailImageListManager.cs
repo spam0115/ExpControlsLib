@@ -44,7 +44,7 @@ namespace ExpControlsLib
             }
         }
 
-        public event EventHandler<ThumbnailReadyEventArgs> ThumbnailReady;
+        public event EventHandler<ThumbnailReadyEventArgs>? ThumbnailReady;
 
         /// <summary>
         /// Initializes a new instance of the ThumbnailImageListManager class.
@@ -229,7 +229,7 @@ namespace ExpControlsLib
         /// results to be invalid due to file deletions or navigating to different folders.  Cases like these
         /// must be detected and thumbnail results should be ignored.
         /// </remarks>
-        private void OnThumbnailReady(object sender, ThumbnailReadyEventArgs e)
+        private void OnThumbnailReady(object? sender, ThumbnailReadyEventArgs e)
         {
             if (ThumbnailReady != null)
                 ThumbnailReady(this, e);

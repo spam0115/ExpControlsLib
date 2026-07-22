@@ -140,7 +140,7 @@ namespace ExpControlsLib
             _thumbnailManager.Dispose();
         }
 
-        private void OnThumbnailReady(object sender, ThumbnailReadyEventArgs e)
+        private void OnThumbnailReady(object? sender, ThumbnailReadyEventArgs e)
         {
             ThumbnailReady?.Invoke(this, e);
         }
