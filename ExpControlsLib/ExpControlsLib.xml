@@ -3162,6 +3162,9 @@
         <member name="F:ExpControlsLib.ThumbnailProvider._cancellationTokenSource">
             <summary>Cancellation source used to stop the background processor on dispose.</summary>
         </member>
+        <member name="F:ExpControlsLib.ThumbnailProvider.WtsExtractionPending">
+            <summary>Maximum number of thumbnails generated concurrently</summary>
+        </member>
         <member name="E:ExpControlsLib.ThumbnailProvider.ThumbnailReady">
             <summary>
             Raised on a worker thread when a thumbnail (or null fallback) becomes
@@ -3202,7 +3205,7 @@
             Cleans up resources
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailProvider.GenerateThumbnailAndNotify(ExpControlsLib.ThumbnailRequestArgs)">
+        <member name="M:ExpControlsLib.ThumbnailProvider.GenerateThumbnailAndNotify(ExpControlsLib.ThumbnailRequestArgs,System.Threading.CancellationToken)">
             <summary>
             Worker routine that produces the thumbnail for a single
             <see cref="!:ThumbnailRequest"/>, populates the cache, and raises
@@ -3210,6 +3213,25 @@
             so consumers can fall back to an icon.
             </summary>
             <param name="request">The request to process.</param>
+        </member>
+        <member name="M:ExpControlsLib.ThumbnailProvider.BytesToBitmap(System.Byte[],System.Int32)">
+            <summary>
+            Converts a byte array to a <see cref="T:System.Drawing.Bitmap"/> of the specified size.
+            The reason we don't store a bitmap directly in the cache is to avoid GDI handle exhaustion, as bitmaps are unmanaged resources.
+            Instead, we store the raw pixel data and reconstruct the bitmap on demand.
+            </summary>
+            <remarks>
+            The <paramref name="bytes"/> array must contain premultiplied-alpha BGRA pixels
+            (i.e. produced by ImageMagick with <c>Alpha(AlphaOption.Associate)</c> and exported
+            as <c>MagickFormat.Bgra</c>).  On little-endian Windows the in-memory layout of
+            <see cref="F:System.Drawing.Imaging.PixelFormat.Format32bppPArgb"/> is B, G, R, A — an exact match for
+            BGRA bytes, so <see cref="M:System.Runtime.InteropServices.Marshal.Copy(System.Byte[],System.Int32,System.IntPtr,System.Int32)"/> can write them directly with no
+            channel reordering.  Passing straight-alpha or non-BGRA bytes here will
+            produce incorrect colours or transparency.
+            </remarks>
+            <param name="bytes">Premultiplied-alpha BGRA pixel data, 4 bytes per pixel.</param>
+            <param name="size">The width and height of the square bitmap in pixels.</param>
+            <returns>A <see cref="F:System.Drawing.Imaging.PixelFormat.Format32bppPArgb"/> <see cref="T:System.Drawing.Bitmap"/> created from the byte array.</returns>
         </member>
         <member name="M:ExpControlsLib.ThumbnailProvider.ConstructCacheKey(System.String,System.Int32)">
             <summary>
@@ -3245,6 +3267,17 @@
             A <see cref="T:System.Drawing.Bitmap"/> letterboxed to <paramref name="size"/> x
             <paramref name="size"/>, or <c>null</c> if no image could be obtained.
             </returns>
+        </member>
+        <member name="M:ExpControlsLib.ThumbnailProvider.GetThumbnailFromOsBaseMagick(WindowsApiLib.Shell.IShellItemImageFactory,System.Int32,System.Threading.CancellationToken,System.Boolean)">
+            <summary>
+            Gets an image or icon from the OS using the provided <see cref="T:WindowsApiLib.Shell.IShellItemImageFactory"/>. 
+            The image is returned as a <see cref="T:ImageMagick.MagickImage"/> for further processing.
+            Graphical media files of known formats should return a thumbnail, 
+            while other files (like programs or documents) should return an icon.
+            </summary>
+            <param name="factory"></param>
+            <param name="size"></param>
+            <returns></returns>
         </member>
         <member name="M:ExpControlsLib.ThumbnailProvider.TryGetCachedThumbnail(System.String,System.Int32,System.Drawing.Image@)">
             <summary>

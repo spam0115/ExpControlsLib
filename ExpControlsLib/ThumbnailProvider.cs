@@ -53,6 +53,27 @@ namespace ExpControlsLib
 
         private int _maxThreads = 1;  /// <summary>Maximum number of thumbnails generated concurrently</summary>
 
+        // The Shell has accepted the request, but its thumbnail handler has not finished.
+        // Keeping the STA worker occupied during these bounded waits deliberately applies
+        // backpressure to the Windows thumbnail subsystem.
+        private const int WtsExtractionPending = unchecked((int)0x8004B205);
+        private static readonly int[] ExtractionPendingRetryDelaysMs = { 25, 50, 100, 200, 400, 800 };
+        private static readonly HashSet<string> ThumbnailExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            // Still images
+            ".jpg", ".jpeg", ".jpe", ".png", ".gif", ".bmp", ".dib", ".tif", ".tiff",
+            ".webp", ".heic", ".heif", ".avif", ".ico", ".svg",
+            // Video files
+            ".mp4", ".m4v", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".flv",
+            ".mpg", ".mpeg", ".mpe", ".ts", ".m2ts", ".mts", ".3gp", ".3g2"
+        };
+
+        internal static bool IsThumbnailCandidate(string? filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath)) return false;
+            return ThumbnailExtensions.Contains(Path.GetExtension(filePath));
+        }
+
         #region Public events
 
         /// <summary>
@@ -167,7 +188,7 @@ namespace ExpControlsLib
                 task = _requestQueueRunner.EnqueueWork(cancellationToken =>
                 {
                     if (cancellationToken.IsCancellationRequested) return;
-                    GenerateThumbnailAndNotify(reqArgs);
+                    GenerateThumbnailAndNotify(reqArgs, cancellationToken);
                 }, cancellationToken);
             }
 
@@ -266,11 +287,12 @@ namespace ExpControlsLib
         /// so consumers can fall back to an icon.
         /// </summary>
         /// <param name="request">The request to process.</param>
-        private void GenerateThumbnailAndNotify(ThumbnailRequestArgs request)
+        private void GenerateThumbnailAndNotify(ThumbnailRequestArgs request, CancellationToken cancellationToken)
         {
             Bitmap? thumbnail = null;
             try
             {
+                if (cancellationToken.IsCancellationRequested) return;
                 Debug.WriteLine("Attempting to generate thumbnail for: " + request.Item.DisplayName);
 
                 if (ThumbnailReady == null)
@@ -279,13 +301,17 @@ namespace ExpControlsLib
                     return;
                 }
 
-                using (var magickImage = GetMagickThumbnailFromOS(request.Item.PIDL, request.Size))
+                bool requestThumbnail = IsThumbnailCandidate(request.Item.FullPath);
+                using (var magickImage = GetMagickThumbnailFromOS(request.Item.PIDL, request.Size, cancellationToken, requestThumbnail))
                 {
                     if (magickImage == null)
                     {
-                        Debug.WriteLine("\tError generating thumbnail for: " + request.Item.DisplayName);
+                        Debug.WriteLine(cancellationToken.IsCancellationRequested
+                            ? "\tThumbnail generation canceled: " + request.Item.DisplayName
+                            : "\tError generating thumbnail for: " + request.Item.DisplayName);
                         return;
                     }
+                    if (cancellationToken.IsCancellationRequested) return;
                     // Premultiply alpha (straight → premultiplied) so that both the
                     // cache bytes and the returned Bitmap use the same representation.
                     //
@@ -302,12 +328,20 @@ namespace ExpControlsLib
                     // Using MagickFormat.Argb would produce A,R,G,B in memory, which
                     // does NOT match that layout and would corrupt colours.
                     byte[] bytes = magickImage.ToByteArray(MagickFormat.Bgra);
+                    if (cancellationToken.IsCancellationRequested) return;
                     _thumbnailCache.TryAdd(ConstructCacheKey(request.Item.FullPath, request.Size), bytes);
 
                     // Reconstruct the Bitmap via BytesToBitmap so that the first-use
                     // path and the cache-hit path both return Format32bppPArgb bitmaps
                     // with identical pixel data.
                     thumbnail = BytesToBitmap(bytes, request.Size);
+                }
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    thumbnail?.Dispose();
+                    thumbnail = null;
+                    return;
                 }
 
                 //send event back to the consumer.  Subscriber is responsible for disposing thumbnail.
@@ -381,7 +415,7 @@ namespace ExpControlsLib
         /// </returns>
         public Image? GetThumbnailFromOS(string fileName, int size)
         {
-            using (var magickImage = GetMagickThumbnailFromOS(fileName, size))
+            using (var magickImage = GetMagickThumbnailFromOS(fileName, size, CancellationToken.None, IsThumbnailCandidate(fileName)))
             {
                 return magickImage?.ToBitmap();
             }
@@ -401,19 +435,21 @@ namespace ExpControlsLib
         /// </returns>
         public Bitmap? GetThumbnailFromOS(IntPtr pidl, int size)
         {
-            using (var magickImage = GetMagickThumbnailFromOS(pidl, size))
+            string? fileName = pidl == IntPtr.Zero ? null : CPidl.ToString(pidl);
+            using (var magickImage = GetMagickThumbnailFromOS(pidl, size, CancellationToken.None, IsThumbnailCandidate(fileName)))
             {
                 return magickImage?.ToBitmap();
             }
         }
 
-        private MagickImage? GetMagickThumbnailFromOsCore(string? fileName, int size, Func<(int hr, IntPtr factoryPtr)> createFactory)
+        private MagickImage? GetMagickThumbnailFromOsCore(string? fileName, int size, CancellationToken cancellationToken, bool requestThumbnail, Func<(int hr, IntPtr factoryPtr)> createFactory)
         {
             IntPtr factoryPtr = IntPtr.Zero;
             IShellItemImageFactory? factory = null;
 
             try
             {
+                if (cancellationToken.IsCancellationRequested) return null;
 #if DEBUG
                 Console.WriteLine("\tRequesting thumbnail from OS: " + fileName);
 #endif
@@ -423,12 +459,13 @@ namespace ExpControlsLib
                     return null;
 
                 factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(factoryPtr);
+                if (cancellationToken.IsCancellationRequested) return null;
 
-                var result = GetThumbnailFromOsBaseMagick(factory, size);
+                var result = GetThumbnailFromOsBaseMagick(factory, size, cancellationToken, requestThumbnail);
                 if (result == null)
-                    Console.WriteLine("Failed to get thumbnail from OS for " + fileName);
+                    Console.WriteLine("Failed to get image from OS for " + fileName);
                 else
-                    Console.WriteLine("\tSuccessfully obtained thumbnail from OS for " + fileName);
+                    Console.WriteLine("\tSuccessfully obtained image from OS for " + fileName);
                 return result;
             }
             finally
@@ -438,8 +475,9 @@ namespace ExpControlsLib
             }
         }
 
-        private MagickImage? GetMagickThumbnailFromOS(string fileName, int size)
+        private MagickImage? GetMagickThumbnailFromOS(string fileName, int size, CancellationToken cancellationToken, bool requestThumbnail)
         {
+            if (cancellationToken.IsCancellationRequested) return null;
             if (string.IsNullOrWhiteSpace(fileName))
                 return null;
 
@@ -452,7 +490,7 @@ namespace ExpControlsLib
                 return null;
             }
 
-            return GetMagickThumbnailFromOsCore(fileName, size, () =>
+            return GetMagickThumbnailFromOsCore(fileName, size, cancellationToken, requestThumbnail, () =>
             {
                 Guid iid = ShellAPI.IID_IShellItemImageFactory;
                 int hr = ShellAPI.SHCreateItemFromParsingName(fileName, IntPtr.Zero, ref iid, out IntPtr factoryPtr);
@@ -460,13 +498,14 @@ namespace ExpControlsLib
             });
         }
 
-        private MagickImage? GetMagickThumbnailFromOS(IntPtr pidl, int size)
+        private MagickImage? GetMagickThumbnailFromOS(IntPtr pidl, int size, CancellationToken cancellationToken, bool requestThumbnail)
         {
+            if (cancellationToken.IsCancellationRequested) return null;
             if (pidl == IntPtr.Zero) return null;
 
             string? fileName = CPidl.ToString(pidl);
 
-            return GetMagickThumbnailFromOsCore(fileName, size, () =>
+            return GetMagickThumbnailFromOsCore(fileName, size, cancellationToken, requestThumbnail, () =>
             {
                 Guid iid = ShellAPI.IID_IShellItemImageFactory;
                 int hr = ShellAPI.SHCreateItemFromIDList(pidl, ref iid, out IntPtr factoryPtr);
@@ -474,19 +513,73 @@ namespace ExpControlsLib
             });
         }
 
-        private static MagickImage? GetThumbnailFromOsBaseMagick(IShellItemImageFactory factory, int size)
+        /// <summary>
+        /// Gets an image or icon from the OS using the provided <see cref="IShellItemImageFactory"/>. 
+        /// The image is returned as a <see cref="MagickImage"/> for further processing.
+        /// Graphical media files of known formats should return a thumbnail, 
+        /// while other files (like programs or documents) should return an icon.
+        /// </summary>
+        /// <param name="factory"></param>
+        /// <param name="size"></param>
+        /// <returns></returns>
+        private static MagickImage? GetThumbnailFromOsBaseMagick(IShellItemImageFactory factory, int size, CancellationToken cancellationToken, bool requestThumbnail)
         {
             int hr;
             IntPtr hbm = IntPtr.Zero;
+            var stopwatch = Stopwatch.StartNew();
 
             try
             {
-                uint flags = (uint)ShellAPI.SIIGBF.THUMBNAILONLY;
+                if (cancellationToken.IsCancellationRequested) return null;
+
+                uint flags = requestThumbnail
+                    ? (uint)ShellAPI.SIIGBF.THUMBNAILONLY
+                    : (uint)ShellAPI.SIIGBF.ICONONLY;
                 hr = factory.GetImage(new SIZE { cx = size, cy = size }, flags, out hbm);
 
-                if (hr != 0 || hbm == IntPtr.Zero) //in case of failure, fallback to get icon instead of thumbnail
+                // The Shell returns WTS_E_EXTRACTIONPENDING
+                // while an out-of-process thumbnail handler is still producing the image.
+                // Falling back to ICONONLY here would cache the unknown-file icon as if it
+                // were the completed thumbnail.
+                for (int attempt = 0;
+                    requestThumbnail && hr == WtsExtractionPending && hbm == IntPtr.Zero && attempt < ExtractionPendingRetryDelaysMs.Length;
+                    attempt++)
                 {
-                    Debug.WriteLine("ERROR: Failed to get image from shell item factory");
+                    int delayMs = ExtractionPendingRetryDelaysMs[attempt];
+                    Debug.WriteLine($"Info: Thumbnail extraction pending (0x{hr:X8}); retrying in {delayMs} ms (attempt {attempt + 1}/{ExtractionPendingRetryDelaysMs.Length}, elapsed {stopwatch.ElapsedMilliseconds} ms).");
+                    if (cancellationToken.WaitHandle.WaitOne(delayMs))
+                    {
+                        Debug.WriteLine($"Info: Pending thumbnail extraction canceled after {stopwatch.ElapsedMilliseconds} ms.");
+                        return null;
+                    }
+
+                    if (cancellationToken.IsCancellationRequested) return null;
+                    hr = factory.GetImage(new SIZE { cx = size, cy = size }, flags, out hbm);
+                }
+
+                if (requestThumbnail && hr == WtsExtractionPending && hbm == IntPtr.Zero)
+                {
+                    Debug.WriteLine($"Info: Thumbnail extraction is still pending (0x{hr:X8}) after {stopwatch.ElapsedMilliseconds} ms; skipping icon fallback so it is not cached as a thumbnail.");
+                    return null;
+                }
+
+                if (cancellationToken.IsCancellationRequested) return null;
+
+                if (hr != 0 || hbm == IntPtr.Zero)
+                {
+                    if (hbm != IntPtr.Zero)
+                    {
+                        WinSDK.DeleteObject(hbm);
+                        hbm = IntPtr.Zero;
+                    }
+
+                    if (!requestThumbnail)
+                    {
+                        Debug.WriteLine($"ERROR: Failed to get icon from shell item factory (0x{hr:X8}).");
+                        return null;
+                    }
+
+                    Debug.WriteLine($"Info: Failed to get thumbnail from shell item factory (0x{hr:X8}); trying icon fallback.");
 
                     flags = (uint)ShellAPI.SIIGBF.ICONONLY;
                     hr = factory.GetImage(new SIZE { cx = size, cy = size }, flags, out hbm);
@@ -496,6 +589,8 @@ namespace ExpControlsLib
                         return null;
                     }
                 }
+
+                if (cancellationToken.IsCancellationRequested) return null;
 
                 var image = ImageMagickHelper.HBitmapToMagickImage(hbm);
                 if (image == null) return null;
