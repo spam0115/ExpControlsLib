@@ -9,6 +9,8 @@ namespace Demo_CS
     [SupportedOSPlatform("windows")] // Added to indicate this control is Windows-only
     public partial class Form1 : Form
     {
+        private bool _initialized = false;
+
         public Form1()
         {
             InitializeComponent();
@@ -21,6 +23,7 @@ namespace Demo_CS
         {
             this.expTree1.StartUpDirectory = ExpControlsLib.ExpTree.StartDir.Desktop;
             this.expTree1.AllowDrop = true;
+            _initialized = true;
         }
 
         //Load files to ExpFileList
@@ -32,7 +35,20 @@ namespace Demo_CS
 
         private void expList1_ExpListItemDoubleClick(string SelPath, CShellItem Item)
         {
-            this.expTree1.ExpandANode(Item);
+        }
+
+        private void expList1_ItemSelectionChanged(ListViewItemSelectionChangedEventArgs e)
+        {
+            var x = e.Item;
+
+
+        }
+
+        private void expList1_ExpListCurrentFolderChanged(CShellItem newCsi, CShellItem oldCsi)
+        {
+            if (!_initialized) return;
+
+            this.expTree1.ExpandANodeAsync(newCsi);
         }
     }
 }

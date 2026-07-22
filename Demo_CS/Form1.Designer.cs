@@ -93,6 +93,8 @@
             expList1.VerticalScrollPosition = 0;
             expList1.VirtualMode = true;
             expList1.ExpListItemDoubleClick += expList1_ExpListItemDoubleClick;
+            expList1.ExpListCurrentFolderChanged += expList1_ExpListCurrentFolderChanged;
+            expList1.ItemSelectionChanged += expList1_ItemSelectionChanged;
             // 
             // columnHeader2
             // 

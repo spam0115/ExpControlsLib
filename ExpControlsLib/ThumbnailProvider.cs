@@ -286,19 +286,28 @@ namespace ExpControlsLib
                         Debug.WriteLine("\tError generating thumbnail for: " + request.Item.DisplayName);
                         return;
                     }
-                    // Create the Bitmap FIRST, while the image still has straight
-                    // (non-premultiplied) alpha. MagickImage.ToBitmap() returns a
-                    // Format32bppArgb bitmap, which expects straight-alpha pixel data.
-                    // Calling this after Alpha(Associate) would embed premultiplied
-                    // data in a straight-alpha-format bitmap, causing partially-
-                    // transparent pixels (e.g. anti-aliased edges) to render too dark.
-                    thumbnail = magickImage.ToBitmap();
+                    // Premultiply alpha (straight → premultiplied) so that both the
+                    // cache bytes and the returned Bitmap use the same representation.
+                    //
+                    // Why premultiplied (PArgb)?  GDI+ composites Format32bppPArgb
+                    // faster than Format32bppArgb because the GPU/blitter can skip the
+                    // per-pixel multiply at draw time.  Straight-alpha data must NOT be
+                    // placed into a PArgb bitmap — doing so causes semi-transparent
+                    // pixels (e.g. anti-aliased edges) to render too dark.
+                    magickImage.Alpha(AlphaOption.Associate);
 
-                    // Store in cache as premultiplied BGRA bytes, paired with
-                    // BytesToBitmap's Format32bppPArgb for correct round-tripping.
-                    //magickImage.Alpha(AlphaOption.Associate);
+                    // MagickFormat.Bgra matches the in-memory byte layout of
+                    // Format32bppPArgb on little-endian (x86/x64) Windows:
+                    //   byte[0]=B  byte[1]=G  byte[2]=R  byte[3]=A (premultiplied)
+                    // Using MagickFormat.Argb would produce A,R,G,B in memory, which
+                    // does NOT match that layout and would corrupt colours.
                     byte[] bytes = magickImage.ToByteArray(MagickFormat.Bgra);
                     _thumbnailCache.TryAdd(ConstructCacheKey(request.Item.FullPath, request.Size), bytes);
+
+                    // Reconstruct the Bitmap via BytesToBitmap so that the first-use
+                    // path and the cache-hit path both return Format32bppPArgb bitmaps
+                    // with identical pixel data.
+                    thumbnail = BytesToBitmap(bytes, request.Size);
                 }
 
                 //send event back to the consumer.  Subscriber is responsible for disposing thumbnail.
@@ -317,14 +326,26 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Converts a byte array to a <see cref="Bitmap"/> of the specified size.
-        /// The reason we don't store a bitmap directly in the cache is to avoid GDI handle exhaustion, as bitmaps are unmanaged resources. 
+        /// The reason we don't store a bitmap directly in the cache is to avoid GDI handle exhaustion, as bitmaps are unmanaged resources.
         /// Instead, we store the raw pixel data and reconstruct the bitmap on demand.
         /// </summary>
-        /// <param name="bytes">The byte array containing the image data.</param>
-        /// <param name="size">The desired size of the bitmap.</param>
-        /// <returns>A <see cref="Bitmap"/> created from the byte array.</returns>
+        /// <remarks>
+        /// The <paramref name="bytes"/> array must contain premultiplied-alpha BGRA pixels
+        /// (i.e. produced by ImageMagick with <c>Alpha(AlphaOption.Associate)</c> and exported
+        /// as <c>MagickFormat.Bgra</c>).  On little-endian Windows the in-memory layout of
+        /// <see cref="PixelFormat.Format32bppPArgb"/> is B, G, R, A — an exact match for
+        /// BGRA bytes, so <see cref="Marshal.Copy"/> can write them directly with no
+        /// channel reordering.  Passing straight-alpha or non-BGRA bytes here will
+        /// produce incorrect colours or transparency.
+        /// </remarks>
+        /// <param name="bytes">Premultiplied-alpha BGRA pixel data, 4 bytes per pixel.</param>
+        /// <param name="size">The width and height of the square bitmap in pixels.</param>
+        /// <returns>A <see cref="PixelFormat.Format32bppPArgb"/> <see cref="Bitmap"/> created from the byte array.</returns>
         private Bitmap BytesToBitmap(byte[] bytes, int size)
         {
+            // Format32bppPArgb: premultiplied alpha, in-memory layout B,G,R,A per pixel.
+            // This matches MagickFormat.Bgra exactly, so the Marshal.Copy below is a
+            // straight memory transfer with no per-pixel conversion.
             Bitmap bmp = new Bitmap(size, size, PixelFormat.Format32bppPArgb);
             BitmapData data = bmp.LockBits(new Rectangle(0, 0, size, size), ImageLockMode.WriteOnly, PixelFormat.Format32bppPArgb);
             try
@@ -465,11 +486,13 @@ namespace ExpControlsLib
 
                 if (hr != 0 || hbm == IntPtr.Zero) //in case of failure, fallback to get icon instead of thumbnail
                 {
+                    Debug.WriteLine("ERROR: Failed to get image from shell item factory");
+
                     flags = (uint)ShellAPI.SIIGBF.ICONONLY;
                     hr = factory.GetImage(new SIZE { cx = size, cy = size }, flags, out hbm);
                     if (hr != 0 || hbm == IntPtr.Zero)
                     {
-                        Console.WriteLine("Failed to get image from shell item factory");
+                        Debug.WriteLine("ERROR: Failed to get icon from shell item factory");
                         return null;
                     }
                 }
