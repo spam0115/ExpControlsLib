@@ -296,7 +296,7 @@ namespace ExpControlsLib
 
                     // Store in cache as premultiplied BGRA bytes, paired with
                     // BytesToBitmap's Format32bppPArgb for correct round-tripping.
-                    magickImage.Alpha(AlphaOption.Associate);
+                    //magickImage.Alpha(AlphaOption.Associate);
                     byte[] bytes = magickImage.ToByteArray(MagickFormat.Bgra);
                     _thumbnailCache.TryAdd(ConstructCacheKey(request.Item.FullPath, request.Size), bytes);
                 }
@@ -315,6 +315,14 @@ namespace ExpControlsLib
             }
         }
 
+        /// <summary>
+        /// Converts a byte array to a <see cref="Bitmap"/> of the specified size.
+        /// The reason we don't store a bitmap directly in the cache is to avoid GDI handle exhaustion, as bitmaps are unmanaged resources. 
+        /// Instead, we store the raw pixel data and reconstruct the bitmap on demand.
+        /// </summary>
+        /// <param name="bytes">The byte array containing the image data.</param>
+        /// <param name="size">The desired size of the bitmap.</param>
+        /// <returns>A <see cref="Bitmap"/> created from the byte array.</returns>
         private Bitmap BytesToBitmap(byte[] bytes, int size)
         {
             Bitmap bmp = new Bitmap(size, size, PixelFormat.Format32bppPArgb);
