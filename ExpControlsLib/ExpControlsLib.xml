@@ -2065,6 +2065,12 @@
             <see cref="M:ExpControlsLib.ExpTree.ExpandANodeBaseAsync(WindowsApiLib.Shell.CShellItem,System.Boolean)"/>: blocking on the asynchronous implementation
             on the UI thread can deadlock while lazy shell data is being loaded.</remarks>
         </member>
+        <member name="M:ExpControlsLib.ExpTree.WaitForInitialRootLoadAsync">
+            <summary>
+            Waits for the first root request to commit. A root request that is
+            superseded is followed until the latest root request completes.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ExpTree.ExpandANodeAsync(System.String,System.Boolean)">
             <summary>
             Asynchronously expands TreeNodes from the tree root through the node identified by
@@ -2398,6 +2404,18 @@
             <summary>
             Backing field for <see cref="P:ExpControlsLib.ExpTree.MinimalContextMenu"/>. When <c>true</c>, most third-party
             Shell extensions are filtered out of the context menu.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._initialRootLoadStarted">
+            <summary>
+            Indicates that the first root request has been started. Navigation is
+            not allowed to run until that request (or its latest replacement)
+            successfully commits a root node.
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ExpTree._initialRootLoadFinished">
+            <summary>
+            Indicates that the initial root guard has been satisfied.
             </summary>
         </member>
         <member name="P:ExpControlsLib.ExpTree.UseWindowsContextMenu">
@@ -2937,6 +2955,26 @@
             Executes shell verbs and context-menu commands on the control's dedicated STA
             runner. The caller transfers ownership of all cloned PIDLs passed to this class;
             they are released after the shell call completes.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ShellDirectoryLoadOptions">
+            <summary>
+            Describes which cached Shell child collections should be loaded by
+            <see cref="T:ExpControlsLib.ShellDirectoryLoader"/>.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ShellDirectorySnapshot">
+            <summary>
+            Immutable snapshot of the child Shell items observed for one folder.
+            The collections are copies and may be sorted or filtered by a control
+            without mutating the hierarchy manager's cached collections.
+            </summary>
+        </member>
+        <member name="T:ExpControlsLib.ShellDirectoryLoader">
+            <summary>
+            Performs the shared, UI-independent portion of directory loading.
+            Callers must invoke <see cref="M:ExpControlsLib.ShellDirectoryLoader.Load(WindowsApiLib.Shell.CShellItem,ExpControlsLib.ShellDirectoryLoadOptions,System.Threading.CancellationToken)"/> from an STA worker because Shell
+            enumeration and the hierarchy cache may access COM objects.
             </summary>
         </member>
         <member name="T:ExpControlsLib.StaThreadRunner">

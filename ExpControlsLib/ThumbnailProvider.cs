@@ -273,37 +273,45 @@ namespace ExpControlsLib
             {
                 Debug.WriteLine("Attempting to generate thumbnail for: " + request.Item.DisplayName);
 
-                if (ThumbnailReady == null) return;
+                if (ThumbnailReady == null)
+                {
+                    Debug.WriteLine("ERROR: No subscribers for ThumbnailReady event.  Returning.");
+                    return;
+                }
 
                 using (var magickImage = GetMagickThumbnailFromOS(request.Item.PIDL, request.Size))
                 {
-                    if (magickImage != null)
+                    if (magickImage == null)
                     {
-                        // Create the Bitmap FIRST, while the image still has straight
-                        // (non-premultiplied) alpha. MagickImage.ToBitmap() returns a
-                        // Format32bppArgb bitmap, which expects straight-alpha pixel data.
-                        // Calling this after Alpha(Associate) would embed premultiplied
-                        // data in a straight-alpha-format bitmap, causing partially-
-                        // transparent pixels (e.g. anti-aliased edges) to render too dark.
-                        thumbnail = magickImage.ToBitmap();
-
-                        // Store in cache as premultiplied BGRA bytes, paired with
-                        // BytesToBitmap's Format32bppPArgb for correct round-tripping.
-                        magickImage.Alpha(AlphaOption.Associate);
-                        byte[] bytes = magickImage.ToByteArray(MagickFormat.Bgra);
-                        _thumbnailCache.TryAdd(ConstructCacheKey(request.Item.FullPath, request.Size), bytes);
+                        Debug.WriteLine("\tError generating thumbnail for: " + request.Item.DisplayName);
+                        return;
                     }
+                    // Create the Bitmap FIRST, while the image still has straight
+                    // (non-premultiplied) alpha. MagickImage.ToBitmap() returns a
+                    // Format32bppArgb bitmap, which expects straight-alpha pixel data.
+                    // Calling this after Alpha(Associate) would embed premultiplied
+                    // data in a straight-alpha-format bitmap, causing partially-
+                    // transparent pixels (e.g. anti-aliased edges) to render too dark.
+                    thumbnail = magickImage.ToBitmap();
+
+                    // Store in cache as premultiplied BGRA bytes, paired with
+                    // BytesToBitmap's Format32bppPArgb for correct round-tripping.
+                    magickImage.Alpha(AlphaOption.Associate);
+                    byte[] bytes = magickImage.ToByteArray(MagickFormat.Bgra);
+                    _thumbnailCache.TryAdd(ConstructCacheKey(request.Item.FullPath, request.Size), bytes);
                 }
 
                 //send event back to the consumer.  Subscriber is responsible for disposing thumbnail.
                 ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.Item, thumbnail, request.Size, request.Index));
                 thumbnail = null; // ownership transferred to subscriber
+                Debug.WriteLine("\tThumbnail generation complete: " + request.Item.DisplayName);
+                return;
             }
             catch (Exception ex)
             {
                 thumbnail?.Dispose();
                 thumbnail = null;
-                System.Diagnostics.Debug.WriteLine($"Error generating thumbnail for {request.Item.FullPath}: {ex}");
+                Debug.WriteLine($"Error generating thumbnail for {request.Item.FullPath}: {ex}");
             }
         }
 

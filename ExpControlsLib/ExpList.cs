@@ -75,6 +75,7 @@ namespace ExpControlsLib
         private const int EM_SETSEL = 0xB1;
 
         private ShellController? _shellController = null;
+        private ShellDirectoryLoader? _directoryLoader;
         private HashSet<string> _excludedItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private Func<CShellItem, bool>? _filter;
         private ImageListOrchestrator _imageListOrchestrator = null!;
@@ -782,6 +783,7 @@ namespace ExpControlsLib
                 throw new InvalidOperationException("ExpList has already been initialized.");
 
             _shellController = shellController ?? throw new ArgumentNullException(nameof(shellController));
+            _directoryLoader = new ShellDirectoryLoader(_shellController);
             _initialized = true;
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.Initialize: End");
         }

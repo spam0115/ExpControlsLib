@@ -1,25 +1,17 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
-using static WindowsApiLib.Shell.ShellAPI;
-using static WindowsApiLib.Shell.ShellHelper;
-using MethodInvoker = System.Windows.Forms.MethodInvoker;
 
 namespace ExpControlsLib
 {
     /// <summary>Contains the public operations for loading, querying, refreshing, and manipulating list contents.</summary>
+    [SupportedOSPlatform("windows")]
     public partial class ExpList
     {
         #region Public Methods
@@ -167,8 +159,15 @@ namespace ExpControlsLib
 
                     if (token.IsCancellationRequested) return null;
 
-                    var flags = SHCONTF.NONFOLDERS | (includeFolder ? SHCONTF.FOLDERS : 0);
-                    _shellController.EnsureChildrenPopulatedAndRecent(csi, flags);
+                    var snapshot = _directoryLoader?.Load(
+                        csi,
+                        new ShellDirectoryLoadOptions
+                        {
+                            IncludeFolders = includeFolder,
+                            IncludeFiles = true
+                        },
+                        token);
+                    if (snapshot is null) return null;
 
                     var dirList = new List<CShellItem>();
                     var fileList = new List<CShellItem>();
@@ -176,7 +175,7 @@ namespace ExpControlsLib
                     if (token.IsCancellationRequested) return null;
                     if (includeFolder)
                     {
-                        foreach (var dir in csi.Directories)
+                        foreach (var dir in snapshot.Folders)
                         {
                             if (!IsExcluded(dir)) dirList.Add(dir);
                         }
@@ -184,7 +183,7 @@ namespace ExpControlsLib
 
                     if (token.IsCancellationRequested) return null;
 
-                    foreach (var file in csi.Files)
+                    foreach (var file in snapshot.Files)
                     {
                         if (!IsExcluded(file)) fileList.Add(file);
                     }
@@ -231,7 +230,7 @@ namespace ExpControlsLib
                     return new
                     {
                         Items = combined,
-                        FolderCsi = csi,
+                        FolderCsi = snapshot.Folder,
                         IsSamePath = samePath
                     };
                 }, token); //end async function

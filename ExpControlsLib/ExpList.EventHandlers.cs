@@ -20,6 +20,8 @@ using MethodInvoker = System.Windows.Forms.MethodInvoker;
 namespace ExpControlsLib
 {
     /// <summary>Contains the ListView, keyboard, mouse, label-edit, and other UI event handlers.</summary>
+    [SupportedOSPlatform("windows")]
+    
     public partial class ExpList
     {
         #region Event Handlers

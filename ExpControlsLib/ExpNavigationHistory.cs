@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Runtime.Versioning;
 using WindowsApiLib.Shell;
 
 namespace ExpControlsLib;
@@ -9,6 +10,7 @@ namespace ExpControlsLib;
 /// Owns folder navigation history independently from a visual control.
 /// Targets are removed from history only after the requested navigation succeeds.
 /// </summary>
+[SupportedOSPlatform("windows")]
 internal sealed class ExpNavigationHistory
 {
     private readonly Stack<CShellItem> _back = new();

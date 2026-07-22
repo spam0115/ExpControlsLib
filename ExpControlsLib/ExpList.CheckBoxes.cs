@@ -3,23 +3,14 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using WindowsApiLib;
 using WindowsApiLib.Shell;
-using static WindowsApiLib.Shell.ShellAPI;
-using static WindowsApiLib.Shell.ShellHelper;
-using MethodInvoker = System.Windows.Forms.MethodInvoker;
 
 namespace ExpControlsLib
 {
     /// <summary>Provides checkbox state synchronization between the ListView and shell-item models.</summary>
+    [SupportedOSPlatform("windows")]
     public partial class ExpList
     {
         #region Checkbox Support

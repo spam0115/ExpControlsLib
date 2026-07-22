@@ -13,6 +13,7 @@ namespace ExpControlsLib
     /// <summary>
     /// Result of a <see cref="ContextMenu.ShowMenu"/> call.
     /// </summary>
+    [SupportedOSPlatform("windows")]
     public readonly struct ContextMenuResult
     {
         /// <summary>True if the user selected a command; false if the menu was cancelled.</summary>
@@ -33,6 +34,7 @@ namespace ExpControlsLib
     /// <see cref="ContextMenu.SetUpNewMenu"/>. Disposing this scope releases all
     /// associated COM objects and clears the menu handle.
     /// </summary>
+    [SupportedOSPlatform("windows")]
     public sealed class NewMenuScope : IDisposable
     {
         private readonly ContextMenu _owner;

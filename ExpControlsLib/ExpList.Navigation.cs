@@ -1,16 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
+using System.Runtime.Versioning;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
@@ -20,6 +10,7 @@ using MethodInvoker = System.Windows.Forms.MethodInvoker;
 namespace ExpControlsLib
 {
     /// <summary>Implements folder navigation history, back/forward navigation, and parent-folder traversal.</summary>
+    [SupportedOSPlatform("windows")]
     public partial class ExpList
     {
         #region Navigation

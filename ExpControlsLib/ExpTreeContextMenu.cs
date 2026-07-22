@@ -1,11 +1,13 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using WindowsApiLib;
 using static WindowsApiLib.Shell.ShellAPI;
 
 namespace ExpControlsLib;
 
 /// <summary>Owns the native context-menu instance and forwards owner-draw window messages.</summary>
+[SupportedOSPlatform("windows")]
 internal sealed class ExpTreeContextMenu : IDisposable
 {
     public ContextMenu Menu { get; } = new();

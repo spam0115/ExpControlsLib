@@ -87,6 +87,37 @@ public sealed class ExpTreeCharacterizationTests
     }
 
     [Test]
+    public async Task NavigationIsGuardedUntilTheInitialRootLoadCommits()
+    {
+        var root = CreateTestDirectory("ExpTreeInitialRootGuard");
+        var child = Directory.CreateDirectory(Path.Combine(root, "Child")).FullName;
+
+        try
+        {
+            EnsurePathInHierarchy(root);
+            EnsurePathInHierarchy(child);
+
+            using var tree = new ExpTree();
+            tree.Initialize(ShellController.Instance);
+            using var form = ShowTree(tree);
+
+            // No root has committed yet, so the synchronous compatibility API
+            // must not attempt to navigate through an empty TreeView.
+            Assert.That(tree.ExpandANode(FindItem(child)), Is.False);
+
+            tree.Root = FindItem(root);
+            var loaded = await tree.ExpandANodeAsync(child);
+
+            Assert.That(loaded, Is.True);
+            Assert.That(tree.SelectedItem?.FullPath, Is.EqualTo(child).IgnoreCase);
+        }
+        finally
+        {
+            DeleteTestDirectory(root);
+        }
+    }
+
+    [Test]
     public async Task ExpansionOutsideTheCurrentRootReturnsFalseAndDoesNotChangeSelection()
     {
         var root = CreateTestDirectory("ExpTreeRootBoundary");
