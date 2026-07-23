@@ -1009,6 +1009,10 @@
             Gets or sets the display mode used to present items in the list view.
             The native ListView dates from Windows 95 and doesn't support thumbnails.  Support for thumbnails 
             was a kludge introduced in XP.
+            If you have checkboxes turned on and then you switch to a displaymode that doesn't support checkboxes 
+            (all icon modes), the handle for this control will be recreated.  This also happens if you switch from a 
+            displaymode that doesn't support checkboxes to one that does.  This causes the scroll position to be lost
+            so we must save and restore the scroll position.
             </summary>
             <remarks>Use this property to select among multiple visual representations for items,
             including standard views and thumbnail modes. Changing the display mode updates the appearance of the list
@@ -1097,6 +1101,7 @@
         <member name="P:ExpControlsLib.ExpList.VirtualMode">
             <summary>
             Gets or sets a value indicating whether the list view is in virtual mode.
+            This must be set before the control is displayed.
             </summary>
         </member>
         <member name="P:ExpControlsLib.ExpList.CurrentPath">
@@ -3435,43 +3440,10 @@
             </summary>
             <remarks>
             <para>
-            <b>ListView handle recreation issue.</b> Several state-changing properties on
-            the underlying Win32 <c>SysListView32</c> control cannot be modified in place
-            and force WinForms to destroy and recreate the HWND. When the handle is
-            recreated, some properties are re-applied automatically by the WinForms
-            wrapper but others are silently dropped or reset. Properties known to trigger
-            a handle recreation include (non-exhaustive): <c>VirtualMode</c>,
-            <c>CheckBoxes</c>, and in some combinations <c>View</c>.
-            </para>
-            <para>
-            Observed fallout of a handle recreation in this control:
-            <list type="bullet">
-              <item><description>
-                The <c>LVS_EX_CHECKBOXES</c> extended style is dropped even though
-                <see cref="P:System.Windows.Forms.ListView.CheckBoxes"/> still reads <c>true</c>. The checkbox
-                glyph stops rendering until <c>CheckBoxes</c> is re-set on the new handle.
-              </description></item>
-              <item><description>
-                <see cref="P:System.Windows.Forms.ListView.VirtualListSize"/> resets to <c>0</c>, so a Details
-                view will appear empty until the size is re-assigned.
-              </description></item>
-              <item><description>
-                Any <see cref="T:System.Windows.Forms.ListViewItem"/> instances that were cached across the
-                toggle become unusable in virtual mode: <c>RetrieveVirtualItem</c> still
-                accepts them and the row count is correct, but Win32 refuses to paint
-                them and they are not hit-testable. The <c>_itemCache</c> must be cleared
-                so fresh items are built on the next paint.
-              </description></item>
-            </list>
-            </para>
-            <para>
-            Because of this, any code path in this class (or its callers) that touches
-            one of the recreation-triggering properties while another one is active must
-            capture the affected state up-front, apply the change, then explicitly
-            restore <c>CheckBoxes</c>, <c>VirtualListSize</c>, and invalidate the item
-            cache. See also <see cref="P:ExpControlsLib.VirtualListViewWrapper.DisplayMode"/> and
-            <c>ExpList.CheckBoxes</c> for the two other setters that must apply the same
-            workaround.
+            <c>VirtualMode</c> must be set before the ListView handle is created. WinForms
+            does not support changing the owner-data mode after the control has been
+            displayed, because doing so invalidates the ListView's item storage and
+            cached state.
             </para>
             </remarks>
         </member>

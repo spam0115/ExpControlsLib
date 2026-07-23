@@ -1172,6 +1172,19 @@ namespace WindowsApiLib.Shell
         #region            SendMessage
         public const int SB_HORZ = 0;
         public const int SB_VERT = 1;
+        public const uint SIF_ALL = 0x17;
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SCROLLINFO
+        {
+            public uint cbSize;
+            public uint fMask;
+            public int nMin;
+            public int nMax;
+            public uint nPage;
+            public int nPos;
+            public int nTrackPos;
+        }
         /// <summary>
         /// Contains information about a hit test in a ListView control, including the point, flags, and item/group index.
         /// </summary>
@@ -1225,6 +1238,12 @@ namespace WindowsApiLib.Shell
         /// <returns>The current position of the scrollbar thumb.</returns>
         [DllImport("user32.dll")]
         public static extern int GetScrollPos(IntPtr hWnd, int nBar);
+
+        /// <summary>
+        /// Retrieves the range, page size, and current position of a scrollbar.
+        /// </summary>
+        [DllImport("user32.dll")]
+        public static extern bool GetScrollInfo(IntPtr hWnd, int nBar, ref SCROLLINFO lpScrollInfo);
 
         /// <inheritdoc cref="SendMessage(IntPtr, uint, int, int)" />
         [DllImport("user32", CharSet = CharSet.Auto)]

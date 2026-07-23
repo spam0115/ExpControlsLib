@@ -119,21 +119,21 @@ namespace ExpControlsLib
 
             // CheckBoxes toggle forces a handle recreation — same guard pattern as the
             // DisplayMode setter. See VirtualMode <remarks> for the full explanation.
-            bool wasVirtual = _listView.VirtualMode;
-            if (wasVirtual)
-            {
-                _listView.VirtualMode = false;
-                _listView.VirtualListSize = 0;
-            }
+            //bool wasVirtual = _listView.VirtualMode;
+            //if (wasVirtual)
+            //{
+            //    _listView.VirtualMode = false;
+            //    _listView.VirtualListSize = 0;
+            //}
 
             _listView.CheckBoxes = active;
 
-            if (wasVirtual)
-            {
-                _listView.VirtualMode = true;
-                _listView.VirtualListSize = ActiveViewCount;
-                _itemCache.Clear();
-            }
+            //if (wasVirtual)
+            //{
+            //    _listView.VirtualMode = true;
+            //    _listView.VirtualListSize = ActiveViewCount;
+            //    _itemCache.Clear();
+            //}
         }
 
         /// <summary>
@@ -275,43 +275,10 @@ namespace ExpControlsLib
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>ListView handle recreation issue.</b> Several state-changing properties on
-        /// the underlying Win32 <c>SysListView32</c> control cannot be modified in place
-        /// and force WinForms to destroy and recreate the HWND. When the handle is
-        /// recreated, some properties are re-applied automatically by the WinForms
-        /// wrapper but others are silently dropped or reset. Properties known to trigger
-        /// a handle recreation include (non-exhaustive): <c>VirtualMode</c>,
-        /// <c>CheckBoxes</c>, and in some combinations <c>View</c>.
-        /// </para>
-        /// <para>
-        /// Observed fallout of a handle recreation in this control:
-        /// <list type="bullet">
-        ///   <item><description>
-        ///     The <c>LVS_EX_CHECKBOXES</c> extended style is dropped even though
-        ///     <see cref="ListView.CheckBoxes"/> still reads <c>true</c>. The checkbox
-        ///     glyph stops rendering until <c>CheckBoxes</c> is re-set on the new handle.
-        ///   </description></item>
-        ///   <item><description>
-        ///     <see cref="ListView.VirtualListSize"/> resets to <c>0</c>, so a Details
-        ///     view will appear empty until the size is re-assigned.
-        ///   </description></item>
-        ///   <item><description>
-        ///     Any <see cref="ListViewItem"/> instances that were cached across the
-        ///     toggle become unusable in virtual mode: <c>RetrieveVirtualItem</c> still
-        ///     accepts them and the row count is correct, but Win32 refuses to paint
-        ///     them and they are not hit-testable. The <c>_itemCache</c> must be cleared
-        ///     so fresh items are built on the next paint.
-        ///   </description></item>
-        /// </list>
-        /// </para>
-        /// <para>
-        /// Because of this, any code path in this class (or its callers) that touches
-        /// one of the recreation-triggering properties while another one is active must
-        /// capture the affected state up-front, apply the change, then explicitly
-        /// restore <c>CheckBoxes</c>, <c>VirtualListSize</c>, and invalidate the item
-        /// cache. See also <see cref="DisplayMode"/> and
-        /// <c>ExpList.CheckBoxes</c> for the two other setters that must apply the same
-        /// workaround.
+        /// <c>VirtualMode</c> must be set before the ListView handle is created. WinForms
+        /// does not support changing the owner-data mode after the control has been
+        /// displayed, because doing so invalidates the ListView's item storage and
+        /// cached state.
         /// </para>
         /// </remarks>
         [Browsable(true), Category("Behavior"), DefaultValue(false)]
@@ -322,11 +289,11 @@ namespace ExpControlsLib
             {
                 if (_listView.VirtualMode == value) return;
 
-                // Toggling VirtualMode recreates the ListView handle and silently drops
-                // the LVS_EX_CHECKBOXES extended style. Capture CheckBoxes now so we can
-                // re-apply it on the new handle. See the <remarks> block above for the
-                // full explanation of the handle-recreation issue.
-                bool wasCheckBoxes = _listView.CheckBoxes;
+                if (_listView.IsHandleCreated)
+                {
+                    throw new InvalidOperationException(
+                        "VirtualMode can only be set before the ListView is displayed.");
+                }
 
                 _listView.VirtualMode = value;
 
@@ -346,10 +313,6 @@ namespace ExpControlsLib
                     _pathToIndex.Clear();
                 }
 
-                if (wasCheckBoxes && !_listView.CheckBoxes)
-                {
-                    _listView.CheckBoxes = true;
-                }
             }
         }
 
@@ -427,10 +390,6 @@ namespace ExpControlsLib
 
                 if (VirtualMode) InvalidateVirtualItemImagesIndexes();
 
-                //SetImageListForMode(value);
-                //if (VirtualMode) LoadImagesForItems();
-
-                //DisplayModeChanged?.Invoke(value);
             }
         }
 
@@ -1020,6 +979,23 @@ namespace ExpControlsLib
             _itemCache.Clear();
         }
 
+        public int GetRowHeight()
+        {
+            int itemCount = _listView.VirtualMode
+                ? _listView.VirtualListSize
+                : _listView.Items.Count;
+
+            if (itemCount == 0)
+                return 0;
+
+            int topIndex = _listView.TopItem?.Index ?? 0;
+            topIndex = Math.Clamp(topIndex, 0, itemCount - 1);
+
+            return _listView
+                .GetItemRect(topIndex, ItemBoundsPortion.Entire)
+                .Height;
+        }
+
         /// <summary>
         /// Returns true if the given item index is within the currently visible
         /// viewport. Uses <see cref="GetTopIndex"/> + <see cref="GetApproxVisibleCount"/>,
@@ -1564,7 +1540,7 @@ namespace ExpControlsLib
             {
                 if (_listView == null || !_listView.IsHandleCreated) return -1;
 
-                int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+                int total = VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
                 if (total <= 0) return -1;
 
                 if (LastTopIndex > -1) return LastTopIndex; // cache for repeated calls.  The OS will sometimes make tons of redundant calls in a brief amount of time.
@@ -1574,7 +1550,7 @@ namespace ExpControlsLib
                 // 1) Fast O(1) path for Details/List views.
                 if (view == View.Details || view == View.List)
                 {
-                    if (!_listView.VirtualMode && _listView.TopItem != null)
+                    if (!VirtualMode && _listView.TopItem != null)
                     {
                         LastTopIndex = _listView.TopItem.Index;
                         return LastTopIndex;
@@ -1875,7 +1851,7 @@ namespace ExpControlsLib
             if (_listView == null || !_listView.IsHandleCreated || _listView.View == View.LargeIcon)
                 return 0;
 
-            int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+            int total = VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
             if (total <= 0) return 0;
 
             switch (_listView.View)
@@ -1926,7 +1902,7 @@ namespace ExpControlsLib
                 if (_listView == null || !_listView.IsHandleCreated || _listView.View != View.LargeIcon)
                     return 0;
 
-                int total = _listView.VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
+                int total = VirtualMode ? _listView.VirtualListSize : _listView.Items.Count;
                 if (total <= 0) return 0;
 
                 // FALSE => large icon spacing

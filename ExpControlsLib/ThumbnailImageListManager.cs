@@ -1,15 +1,11 @@
 using C5;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
-using static System.Windows.Forms.ListView;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
-using static WindowsApiLib.Shell.ShellAPI;
 
 namespace ExpControlsLib
 {
@@ -107,22 +103,15 @@ namespace ExpControlsLib
 
             var imageList = GetImageList(thumbnailSize);
 
-            _expList._listView.BeginUpdate();
+            _expList.BeginListViewUpdate();
             try
             {
-                _expList._listView.LargeImageList = imageList;
-                if (!_expList._listView.VirtualMode)
-                {
-                    foreach (ListViewItem item in _expList._listView.Items)
-                    {
-                        if (item is null) continue;
-                        item.ImageIndex = -1;
-                    }
-                }
+                _expList.LargeImageList = imageList;
+                _expList.ResetListViewItemImageIndices();
             }
             finally
             {
-                _expList._listView.EndUpdate();
+                _expList.EndListViewUpdate();
             }
         }
 
@@ -263,8 +252,8 @@ namespace ExpControlsLib
             try
             {
                 imageList = GetImageList(_activeSize);
-                if (_expList._listView.LargeImageList != imageList)
-                    _expList._listView.LargeImageList = imageList;
+                if (_expList.LargeImageList != imageList)
+                    _expList.LargeImageList = imageList;
 
                 string key = CreateKey(reqArgs.Item.FullPath, reqArgs.Size);
                 int index = -1;
@@ -386,11 +375,7 @@ namespace ExpControlsLib
             _lruKeys.Clear();
             _slotByKey.Clear();
 
-            if (_expList != null && _expList._listView != null)
-            {
-                _expList._listView.LargeImageList = null;
-                _expList._listView.SmallImageList = null;
-            }
+            _expList?.ClearListViewImageLists();
 
             if (_activeSize > 0)
             {
@@ -400,8 +385,8 @@ namespace ExpControlsLib
                     ColorDepth = ColorDepth.Depth32Bit
                 };
                 _imageLists[_activeSize] = freshList;
-                if (_expList?._listView != null)
-                    _expList._listView.LargeImageList = freshList;
+                if (_expList != null)
+                    _expList.LargeImageList = freshList;
             }
         }
 
@@ -422,11 +407,7 @@ namespace ExpControlsLib
             _lruKeys.Clear();
             _slotByKey.Clear();
 
-            if (_expList != null && _expList._listView != null)
-            {
-                _expList._listView.LargeImageList = null;
-                _expList._listView.SmallImageList = null;
-            }
+            _expList?.ClearListViewImageLists();
         }
 
         /// <summary>
