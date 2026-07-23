@@ -122,17 +122,17 @@ namespace ExpControlsLib
             bool wasVirtual = _listView.VirtualMode;
             if (wasVirtual)
             {
-                _listView.VirtualMode = false;
-                _listView.VirtualListSize = 0;
+                //_listView.VirtualMode = false;
+                //_listView.VirtualListSize = 0;
             }
 
             _listView.CheckBoxes = active;
 
             if (wasVirtual)
             {
-                _listView.VirtualMode = true;
-                _listView.VirtualListSize = ActiveViewCount;
-                _itemCache.Clear();
+                //_listView.VirtualMode = true;
+                //_listView.VirtualListSize = ActiveViewCount;
+                //_itemCache.Clear();
             }
         }
 

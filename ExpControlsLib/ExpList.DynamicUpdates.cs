@@ -930,6 +930,19 @@ namespace ExpControlsLib
                 PopulateColumnData(lvi, csi); //you need this even in non-details mode to facilitate sorting
 
                 lvi.ImageIndex = _imageListOrchestrator.GetInitialImageIndex(csi);
+
+                // Sync checkbox visual state from the model without triggering the ItemChecked handler.
+                // In virtual mode ListViewItem.Checked does NOT drive the glyph — the ListView asks
+                // for StateImageIndex on every draw. Set both so the property reads back correctly
+                // and the glyph actually renders. Mirrors the same logic in CreateLviFromCsi.
+                _listViewWrapper.SuppressCheckEvents = true;
+                try
+                {
+                    lvi.Checked = csi.Checked;
+                    if (_listView.CheckBoxes)
+                        lvi.StateImageIndex = csi.Checked ? 1 : 0;
+                }
+                finally { _listViewWrapper.SuppressCheckEvents = false; }
             }
             finally
             {
