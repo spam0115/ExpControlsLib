@@ -32,6 +32,8 @@
             expTree1 = new ExpControlsLib.ExpTree();
             expList1 = new ExpControlsLib.ExpList();
             columnHeader2 = new System.Windows.Forms.ColumnHeader();
+            columnHeader1 = new System.Windows.Forms.ColumnHeader();
+            columnHeader3 = new System.Windows.Forms.ColumnHeader();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -53,7 +55,7 @@
             // 
             splitContainer1.Panel2.Controls.Add(expList1);
             splitContainer1.Size = new System.Drawing.Size(1652, 906);
-            splitContainer1.SplitterDistance = 525;
+            splitContainer1.SplitterDistance = 468;
             splitContainer1.SplitterWidth = 5;
             splitContainer1.TabIndex = 0;
             // 
@@ -67,7 +69,7 @@
             expTree1.Root = null;
             expTree1.SelectedNode = null;
             expTree1.ShowRootLines = false;
-            expTree1.Size = new System.Drawing.Size(525, 906);
+            expTree1.Size = new System.Drawing.Size(468, 906);
             expTree1.StartUpDirectory = ExpControlsLib.ExpTree.StartDir.Desktop;
             expTree1.TabIndex = 0;
             expTree1.ExpTreeNodeSelected += expTree1_ExpTreeNodeSelected;
@@ -75,9 +77,9 @@
             // expList1
             // 
             expList1.CheckBoxes = true;
-            expList1.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] { columnHeader2 });
+            expList1.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] { columnHeader2, columnHeader1, columnHeader3 });
             expList1.CurrentFolderCsi = null;
-            expList1.DisplayMode = ExpControlsLib.ListViewDisplayMode.Details;
+            expList1.DisplayMode = ExpControlsLib.ListViewDisplayMode.LargeIcon;
             expList1.Dock = System.Windows.Forms.DockStyle.Fill;
             expList1.FullRowSelect = true;
             expList1.HeaderStyle = System.Windows.Forms.ColumnHeaderStyle.Clickable;
@@ -87,7 +89,7 @@
             expList1.Margin = new System.Windows.Forms.Padding(7, 6, 7, 6);
             expList1.MultiSelect = true;
             expList1.Name = "expList1";
-            expList1.Size = new System.Drawing.Size(1122, 906);
+            expList1.Size = new System.Drawing.Size(1179, 906);
             expList1.SortColumn = 0;
             expList1.TabIndex = 0;
             expList1.VerticalScrollPosition = 0;
@@ -100,7 +102,19 @@
             // 
             columnHeader2.Tag = ".DisplayName";
             columnHeader2.Text = "Name";
-            columnHeader2.Width = 400;
+            columnHeader2.Width = 500;
+            // 
+            // columnHeader1
+            // 
+            columnHeader1.Tag = ".Type";
+            columnHeader1.Text = "Type";
+            columnHeader1.Width = 250;
+            // 
+            // columnHeader3
+            // 
+            columnHeader3.Tag = ".Size";
+            columnHeader3.Text = "Size";
+            columnHeader3.Width = 100;
             // 
             // Form1
             // 
@@ -127,6 +141,8 @@
         private ExpControlsLib.ExpTree expTree1;
         private ExpControlsLib.ExpList expList1;
         private System.Windows.Forms.ColumnHeader columnHeader2;
+        private System.Windows.Forms.ColumnHeader columnHeader1;
+        private System.Windows.Forms.ColumnHeader columnHeader3;
     }
 }
 

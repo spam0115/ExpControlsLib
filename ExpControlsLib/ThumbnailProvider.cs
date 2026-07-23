@@ -113,7 +113,9 @@ namespace ExpControlsLib
         /// Queues a thumbnail request that will be processed asynchronously for the specified shell
         /// item. If the thumbnail is already cached, <see cref="ThumbnailReady"/>
         /// is raised synchronously on the calling thread; otherwise it will be
-        /// raised later on a background thread.
+        /// raised later on a background thread. The provider also suppresses
+        /// duplicate active work by its path-and-size cache key; the manager's
+        /// lease is the authoritative UI-side deduplication guard.
         /// </summary>
         /// <param name="shellItem">The shell item to generate a thumbnail for.</param>
         /// <param name="size">Desired thumbnail size in pixels (e.g., 96, 256).</param>
@@ -158,7 +160,9 @@ namespace ExpControlsLib
 #if DEBUG
                 Console.WriteLine("\tFound cached thumbnail: " + (csi?.DisplayName ?? filePath));
 #endif
-                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(csi, cachedImage, size, reqArgs.Index));
+                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(
+                    csi, cachedImage, size, reqArgs.Index,
+                    generation: reqArgs.Generation, requestId: reqArgs.RequestId));
                 return;
             }
 
@@ -345,7 +349,9 @@ namespace ExpControlsLib
                 }
 
                 //send event back to the consumer.  Subscriber is responsible for disposing thumbnail.
-                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.Item, thumbnail, request.Size, request.Index));
+                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(
+                    request.Item, thumbnail, request.Size, request.Index,
+                    generation: request.Generation, requestId: request.RequestId));
                 thumbnail = null; // ownership transferred to subscriber
                 Debug.WriteLine("\tThumbnail generation complete: " + request.Item.DisplayName);
                 return;
@@ -514,14 +520,33 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Gets an image or icon from the OS using the provided <see cref="IShellItemImageFactory"/>. 
-        /// The image is returned as a <see cref="MagickImage"/> for further processing.
-        /// Graphical media files of known formats should return a thumbnail, 
-        /// while other files (like programs or documents) should return an icon.
+        /// Gets an image or icon from the OS using the provided <see cref="IShellItemImageFactory"/>.
+        /// The returned bitmap is converted to a <see cref="MagickImage"/> and letterboxed
+        /// to the requested size for the cache and caller.
         /// </summary>
-        /// <param name="factory"></param>
-        /// <param name="size"></param>
-        /// <returns></returns>
+        /// <remarks>
+        /// When <paramref name="requestThumbnail"/> is <see langword="true"/>, the Shell is
+        /// first asked for a thumbnail. A thumbnail handler may return
+        /// <c>WTS_E_EXTRACTIONPENDING</c> with no HBITMAP while it finishes extracting the
+        /// image in another process. In that case this method deliberately keeps the STA
+        /// worker occupied and retries with bounded backoff (25, 50, 100, 200, 400, and
+        /// 800 milliseconds). This applies backpressure to the Windows thumbnail subsystem
+        /// and avoids turning a temporarily unavailable thumbnail into a cached unknown-file icon.
+        ///
+        /// Each delay is cancellation-aware. If the request is canceled while waiting, or
+        /// before a subsequent Shell or conversion operation, the method returns immediately.
+        /// If extraction remains pending after the retry budget, it returns <see langword="null"/>
+        /// without requesting an icon. For a definitive thumbnail failure, the method makes
+        /// one <c>ICONONLY</c> request as a fallback. When <paramref name="requestThumbnail"/>
+        /// is <see langword="false"/>, only the direct <c>ICONONLY</c> path is used; this is
+        /// how non-image and non-video file types avoid thumbnail extraction entirely.
+        /// </summary>
+        /// <param name="factory">Shell image factory used to obtain the HBITMAP.</param>
+        /// <param name="size">Requested width and height of the returned image.</param>
+        /// <param name="cancellationToken">Token used to abandon obsolete requests and waits.</param>
+        /// <param name="requestThumbnail"><see langword="true"/> to try thumbnail extraction;
+        /// <see langword="false"/> to request only the Shell icon.</param>
+        /// <returns>A letterboxed image, or <see langword="null"/> if extraction fails or is canceled.</returns>
         private static MagickImage? GetThumbnailFromOsBaseMagick(IShellItemImageFactory factory, int size, CancellationToken cancellationToken, bool requestThumbnail)
         {
             int hr;

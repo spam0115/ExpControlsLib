@@ -40,6 +40,8 @@ namespace WindowsApiLib.Shell
 
         // ListView Message Constants
         public const int LVM_FIRST = 0x1000;
+        public const int LVM_GETNEXTITEM = LVM_FIRST + 12;
+        public const int LVM_ENSUREVISIBLE = LVM_FIRST + 19;
         public const int LVM_SCROLL = LVM_FIRST + 20;
         public const int LVM_GETEDITCONTROL = LVM_FIRST + 24;
         public const int LVM_SETITEMSTATE = LVM_FIRST + 43;
@@ -53,7 +55,8 @@ namespace WindowsApiLib.Shell
         public const int LVM_GETHEADER = 4127;
         public const int LVM_SETCOLUMN = 4122;
         public const int LVM_SETEXTENDEDLISTVIEWSTYLE = LVM_FIRST + 54;
-        
+        public const int LVNI_VISIBLEONLY = 0x0040;
+
         // 'For ListItem State
         public const int LVIF_STATE = 0x8;
         public const int LVIS_SELECTED = 0x2;
@@ -1172,6 +1175,19 @@ namespace WindowsApiLib.Shell
         #region            SendMessage
         public const int SB_HORZ = 0;
         public const int SB_VERT = 1;
+        public const uint SIF_ALL = 0x17;
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SCROLLINFO
+        {
+            public uint cbSize;
+            public uint fMask;
+            public int nMin;
+            public int nMax;
+            public uint nPage;
+            public int nPos;
+            public int nTrackPos;
+        }
         /// <summary>
         /// Contains information about a hit test in a ListView control, including the point, flags, and item/group index.
         /// </summary>
@@ -1226,6 +1242,12 @@ namespace WindowsApiLib.Shell
         [DllImport("user32.dll")]
         public static extern int GetScrollPos(IntPtr hWnd, int nBar);
 
+        /// <summary>
+        /// Retrieves the range, page size, and current position of a scrollbar.
+        /// </summary>
+        [DllImport("user32.dll")]
+        public static extern bool GetScrollInfo(IntPtr hWnd, int nBar, ref SCROLLINFO lpScrollInfo);
+
         /// <inheritdoc cref="SendMessage(IntPtr, uint, int, int)" />
         [DllImport("user32", CharSet = CharSet.Auto)]
         public static extern int SendMessage(IntPtr hWnd, WM wMsg, int wParam, IntPtr lParam);
@@ -1249,8 +1271,6 @@ namespace WindowsApiLib.Shell
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
-        #endregion
-
         /// <summary>
         /// Destroys an icon and frees any memory the icon occupied.
         /// </summary>
@@ -1258,6 +1278,13 @@ namespace WindowsApiLib.Shell
         /// <returns><c>true</c> if the icon was successfully destroyed; otherwise <c>false</c>.</returns>
         [DllImport("user32.dll")]
         public static extern bool DestroyIcon(IntPtr hIcon);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetWindowRect(
+            IntPtr hWnd,
+            out RECT rect);
+
 
         #region Menu related
 
@@ -1330,6 +1357,8 @@ namespace WindowsApiLib.Shell
         /// <returns>The clipboard format identifier, or <c>0</c> on failure.</returns>
         [DllImport("User32", CharSet = CharSet.Auto)]
         public static extern int RegisterClipboardFormat(string lpszFormat);
+        
+        #endregion
 
         #endregion
 
@@ -1346,7 +1375,6 @@ namespace WindowsApiLib.Shell
         [DllImport("comctl32")]
         public static extern int ImageList_GetIconSize(IntPtr himl, ref int cx, ref int cy);
 
-
         #endregion
 
         #region        ImageList_ReplaceIcon
@@ -1359,7 +1387,6 @@ namespace WindowsApiLib.Shell
         /// <returns>The index of the replaced image, or <c>-1</c> on failure.</returns>
         [DllImport("comctl32", CharSet = CharSet.Auto)]
         public static extern int ImageList_ReplaceIcon(IntPtr hImageList, int IconIndex, IntPtr hIcon);
-
 
 
         /// <summary>
@@ -1381,7 +1408,6 @@ namespace WindowsApiLib.Shell
         /// <returns>Handle to the newly created icon, or <see cref="IntPtr.Zero"/> on failure. The caller must destroy this icon.</returns>
         [DllImport("comctl32")]
         public static extern IntPtr ImageList_GetIcon(IntPtr himl, int i, ILD flags);
-
 
         #endregion
 

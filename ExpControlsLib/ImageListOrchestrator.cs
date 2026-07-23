@@ -112,7 +112,21 @@ namespace ExpControlsLib
                 _thumbnailManager.CancelPendingRequests();
         }
 
-        public void ResetForNewFolder() => _thumbnailManager.ResetForNewFolder();
+        public void ResetForNewFolder()
+        {
+            if (IsThumbnailMode)
+            {
+                _thumbnailManager.ResetForNewFolder();
+                return;
+            }
+
+            // ThumbnailImageListManager.ResetForNewFolder clears both ListView image
+            // lists and installs a managed thumbnail list. That is only appropriate
+            // for thumbnail modes. Standard views use the native shell image list;
+            // re-apply the current mode so a folder load cannot replace it with an
+            // empty managed list.
+            ApplyMode(_currentMode);
+        }
 
         public void ClearCache() => _thumbnailManager.ClearCache();
 

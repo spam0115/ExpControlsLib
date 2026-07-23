@@ -3,20 +3,16 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
-using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
-using static WindowsApiLib.Shell.ShellHelper;
 using MethodInvoker = System.Windows.Forms.MethodInvoker;
-
+using ListView = System.Windows.Forms.ListView;
 
 namespace ExpControlsLib
 {
@@ -117,6 +113,34 @@ namespace ExpControlsLib
         private bool _drainScheduled = false;
 
         private bool IsInDesignMode => (DesignMode || LicenseManager.UsageMode == LicenseUsageMode.Designtime);
+
+        // These methods are the narrow internal surface used by thumbnail management.
+        // Keep the ListView itself private so callers cannot depend on its implementation.
+        internal void BeginListViewUpdate() => _listView.BeginUpdate();
+
+        internal void EndListViewUpdate() => _listView.EndUpdate();
+
+        internal ImageList? LargeImageList
+        {
+            get => _listView.LargeImageList;
+            set => _listView.LargeImageList = value;
+        }
+
+        internal void ResetListViewItemImageIndices()
+        {
+            if (VirtualMode) return;
+
+            foreach (ListViewItem item in _listView.Items)
+            {
+                if (item is not null) item.ImageIndex = -1;
+            }
+        }
+
+        internal void ClearListViewImageLists()
+        {
+            _listView.LargeImageList = null;
+            _listView.SmallImageList = null;
+        }
 
         public bool IsShuttingDown {
             get; 
@@ -392,6 +416,10 @@ namespace ExpControlsLib
         /// Gets or sets the display mode used to present items in the list view.
         /// The native ListView dates from Windows 95 and doesn't support thumbnails.  Support for thumbnails 
         /// was a kludge introduced in XP.
+        /// If you have checkboxes turned on and then you switch to a displaymode that doesn't support checkboxes 
+        /// (all icon modes), the handle for this control will be recreated.  This also happens if you switch from a 
+        /// displaymode that doesn't support checkboxes to one that does.  This causes the scroll position to be lost
+        /// so we must save and restore the scroll position.
         /// </summary>
         /// <remarks>Use this property to select among multiple visual representations for items,
         /// including standard views and thumbnail modes. Changing the display mode updates the appearance of the list
@@ -404,10 +432,42 @@ namespace ExpControlsLib
             get => _listViewWrapper.DisplayMode;
             set
             {
-                _listViewWrapper.DisplayMode = value;
+                if (!_listView.IsHandleCreated)
+                {
+                    _listViewWrapper.DisplayMode = value;
+                    return;
+                }
 
-                SetImageListForMode(value);
-                if (_imageListOrchestrator != null && _listViewWrapper.VirtualMode) LoadImagesForVisibleItems();
+                if (_listViewWrapper.DisplayMode == value) return;
+
+                //save scroll position
+                int topIndex = 0;
+                if (_listViewWrapper.Items.Count > 0)
+                {
+                    topIndex = _listViewWrapper.GetTopIndex();
+                }
+
+                _listViewWrapper._listView.BeginUpdate();
+
+                try
+                {
+                    _listViewWrapper.DisplayMode = value;
+                    //_listViewWrapper._listView.EnsureVisible(topIndex); //no effect inside beginupdate
+                    //_listViewWrapper._listView.TopItem = _listViewWrapper._listView.Items[t]; //no effect inside beginupdate
+                    SetImageListForMode(value);
+                }
+                finally
+                {
+                    _listViewWrapper._listView.EndUpdate();
+                }
+
+
+                if (_listViewWrapper.Items.Count > 0)
+                {
+                    //_listViewWrapper._listView.TopItem = _listViewWrapper._listView.Items[topIndex]; //works for transitioning from icons to details but not from details to icons - just resets to position 0
+                    _listViewWrapper.MoveItemToTop(topIndex);
+                    if (_imageListOrchestrator != null && _listViewWrapper.VirtualMode) LoadImagesForVisibleItems();
+                }
 
                 DisplayModeChanged?.Invoke(value);
             }
@@ -563,6 +623,7 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Gets or sets a value indicating whether the list view is in virtual mode.
+        /// This must be set before the control is displayed.
         /// </summary>
         [Browsable(true), Category("Behavior"), DefaultValue(false)]
         public bool VirtualMode
@@ -652,9 +713,75 @@ namespace ExpControlsLib
             set
             {
                 if (!_listView.IsHandleCreated) return;
-                int current = GetScrollPos(_listView.Handle, SB_VERT);
-                SendMessage(_listView.Handle, (uint)LVM_SCROLL, 0, value - current);
+                //int current = GetScrollPos(_listView.Handle, SB_VERT);
+                SendMessage(_listView.Handle, (uint)LVM_SCROLL, 0, value);
             }
+        }
+
+        private bool TryGetVerticalScrollPercentage(out double percentage)
+        {
+            percentage = 0;
+            if (!_listView.IsHandleCreated) return false;
+
+            var scrollInfo = new SCROLLINFO
+            {
+                cbSize = (uint)Marshal.SizeOf<SCROLLINFO>(),
+                fMask = SIF_ALL
+            };
+
+            if (!GetScrollInfo(_listView.Handle, SB_VERT, ref scrollInfo)) return false;
+
+            int maximumPosition = scrollInfo.nMax - Math.Max((int)scrollInfo.nPage - 1, 0);
+            int scrollableRange = maximumPosition - scrollInfo.nMin;
+            if (scrollableRange <= 0)
+            {
+                percentage = 0;
+                return true;
+            }
+
+            percentage = Math.Clamp(
+                (scrollInfo.nPos - scrollInfo.nMin) / (double)scrollableRange,
+                0,
+                1);
+            return true;
+        }
+
+        private void RestoreVerticalScrollPercentage(double percentage)
+        {
+            if (!_listView.IsHandleCreated) return;
+
+            var scrollInfo = new SCROLLINFO
+            {
+                cbSize = (uint)Marshal.SizeOf<SCROLLINFO>(),
+                fMask = SIF_ALL
+            };
+
+            if (!GetScrollInfo(_listView.Handle, SB_VERT, ref scrollInfo)) return;
+
+            int maximumPosition = scrollInfo.nMax - Math.Max((int)scrollInfo.nPage - 1, 0);
+            int scrollableRange = maximumPosition - scrollInfo.nMin;
+            int targetPosition = scrollInfo.nMin + (int)Math.Round(
+                Math.Clamp(percentage, 0, 1) * Math.Max(scrollableRange, 0));
+
+            var rowHeight = _listViewWrapper.GetRowHeight();
+
+            ////
+
+            targetPosition = (int)Math.Round(scrollInfo.nMin + percentage * scrollableRange);
+
+
+            VerticalScrollPosition = targetPosition * rowHeight;
+        }
+
+        private void QueueVerticalScrollPercentageRestore(double percentage)
+        {
+            if (!_listView.IsHandleCreated || _listView.IsDisposed) return;
+
+            _listView.BeginInvoke((MethodInvoker)(() =>
+            {
+                if (!_listView.IsDisposed)
+                    RestoreVerticalScrollPercentage(percentage);
+            }));
         }
 
         /// <summary>

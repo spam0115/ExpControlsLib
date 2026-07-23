@@ -34,6 +34,19 @@ namespace ExpControlsLibTest
         }
 
         [Test]
+        public void VirtualModeCannotChangeAfterDisplay()
+        {
+            using var expList = new ExpList();
+            expList.Initialize(_shellController);
+
+            using var form = new Form();
+            form.Controls.Add(expList);
+            form.Show();
+
+            Assert.Throws<InvalidOperationException>(() => expList.VirtualMode = true);
+        }
+
+        [Test]
         public void ExpTreeInitializeTwiceThrows()
         {
             using var expTree = new ExpTree();

@@ -50,7 +50,7 @@ namespace ExpControlsLib
             ResumeLayout(false);
         }
 
-        internal ListView _listView;
+        private ListView _listView;
 
         #endregion
     }
