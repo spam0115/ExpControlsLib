@@ -1246,6 +1246,7 @@
             </summary>
             <param name="comContextMenu">Output parameter for the main context menu handle.</param>
             <param name="viewSubMenu">Output parameter for the View submenu handle.</param>
+            <param name="sortSubMenu">Output parameter for the Sort by submenu handle.</param>
         </member>
         <member name="M:ExpControlsLib.ExpList.ShowAndHandleContextMenu(System.Drawing.Point)">
             <summary>
@@ -3268,17 +3269,7 @@
             <paramref name="size"/>, or <c>null</c> if no image could be obtained.
             </returns>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailProvider.GetThumbnailFromOsBaseMagick(WindowsApiLib.Shell.IShellItemImageFactory,System.Int32,System.Threading.CancellationToken,System.Boolean)">
-            <summary>
-            Gets an image or icon from the OS using the provided <see cref="T:WindowsApiLib.Shell.IShellItemImageFactory"/>. 
-            The image is returned as a <see cref="T:ImageMagick.MagickImage"/> for further processing.
-            Graphical media files of known formats should return a thumbnail, 
-            while other files (like programs or documents) should return an icon.
-            </summary>
-            <param name="factory"></param>
-            <param name="size"></param>
-            <returns></returns>
-        </member>
+        <!-- Badly formed XML comment ignored for member "M:ExpControlsLib.ThumbnailProvider.GetThumbnailFromOsBaseMagick(WindowsApiLib.Shell.IShellItemImageFactory,System.Int32,System.Threading.CancellationToken,System.Boolean)" -->
         <member name="M:ExpControlsLib.ThumbnailProvider.TryGetCachedThumbnail(System.String,System.Int32,System.Drawing.Image@)">
             <summary>
             Attempts to retrieve a previously generated thumbnail from the
