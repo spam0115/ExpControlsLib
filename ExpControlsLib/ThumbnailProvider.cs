@@ -113,7 +113,9 @@ namespace ExpControlsLib
         /// Queues a thumbnail request that will be processed asynchronously for the specified shell
         /// item. If the thumbnail is already cached, <see cref="ThumbnailReady"/>
         /// is raised synchronously on the calling thread; otherwise it will be
-        /// raised later on a background thread.
+        /// raised later on a background thread. The provider also suppresses
+        /// duplicate active work by its path-and-size cache key; the manager's
+        /// lease is the authoritative UI-side deduplication guard.
         /// </summary>
         /// <param name="shellItem">The shell item to generate a thumbnail for.</param>
         /// <param name="size">Desired thumbnail size in pixels (e.g., 96, 256).</param>
@@ -158,7 +160,9 @@ namespace ExpControlsLib
 #if DEBUG
                 Console.WriteLine("\tFound cached thumbnail: " + (csi?.DisplayName ?? filePath));
 #endif
-                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(csi, cachedImage, size, reqArgs.Index));
+                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(
+                    csi, cachedImage, size, reqArgs.Index,
+                    generation: reqArgs.Generation, requestId: reqArgs.RequestId));
                 return;
             }
 
@@ -345,7 +349,9 @@ namespace ExpControlsLib
                 }
 
                 //send event back to the consumer.  Subscriber is responsible for disposing thumbnail.
-                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(request.Item, thumbnail, request.Size, request.Index));
+                ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(
+                    request.Item, thumbnail, request.Size, request.Index,
+                    generation: request.Generation, requestId: request.RequestId));
                 thumbnail = null; // ownership transferred to subscriber
                 Debug.WriteLine("\tThumbnail generation complete: " + request.Item.DisplayName);
                 return;

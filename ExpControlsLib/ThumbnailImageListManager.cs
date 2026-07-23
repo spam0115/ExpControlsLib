@@ -3,6 +3,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Drawing;
+using System.Linq;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
@@ -12,6 +13,14 @@ namespace ExpControlsLib
     /// <summary>
     /// Manages ImageLists for thumbnail display modes in the ListView control.
     /// Creates and maintains separate ImageLists for different thumbnail sizes.
+    ///
+    /// <remarks>
+    /// Thumbnail requests are deduplicated by folder generation, item path, and
+    /// requested size. A request remains leased until its UI-side result is
+    /// consumed, so repeated virtual-list callbacks cannot enqueue duplicate
+    /// work while the provider callback is waiting in the UI message queue.
+    /// A three-second lease expiration recovers from lost callbacks.
+    /// </remarks>
     /// </summary>
     [SupportedOSPlatform("windows")]
     public class ThumbnailImageListManager : IDisposable
@@ -24,7 +33,11 @@ namespace ExpControlsLib
         
         private readonly HashedLinkedList<string> _lruKeys = new();
         private readonly System.Collections.Generic.Dictionary<string, ThumbnailSlot> _slotByKey = new();
+        private readonly System.Collections.Generic.Dictionary<string, PendingThumbnail> _pending = new();
+        private readonly object _pendingLock = new();
         private readonly int _capacity;
+        private static readonly TimeSpan PendingLease = TimeSpan.FromSeconds(3);
+        private readonly System.Threading.Timer _pendingLeaseTimer;
 
         private class ThumbnailSlot
         {
@@ -71,6 +84,8 @@ namespace ExpControlsLib
             _capacity = capacity;
             _thumbnailProvider = new ThumbnailProvider();
             _thumbnailProvider.ThumbnailReady += OnThumbnailReady;
+            _pendingLeaseTimer = new System.Threading.Timer(
+                _ => ExpirePendingRequests(), null, PendingLease, PendingLease);
         }
 
         /// <summary>
@@ -137,10 +152,17 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Requests a thumbnail for a file and updates the ListView when ready
+        /// Requests a thumbnail for a file and updates the ListView when ready.
+        /// Duplicate requests for the same generation, path, and size are
+        /// ignored while the existing request lease is active.
         /// </summary>
         public void RequestThumbnail(CShellItem csi, int thumbnailSize, int itemIndex = -1)
         {
+            if (csi == null) return;
+
+            if (!TryBeginRequest(csi, thumbnailSize, out Guid requestId))
+                return;
+
 #if DEBUG
             Console.WriteLine("Requesting thumbnail: " + csi.Text);
 #endif
@@ -150,7 +172,8 @@ namespace ExpControlsLib
                 Generation = _generation,
                 Item = csi,
                 Size = thumbnailSize,
-                Index = itemIndex
+                Index = itemIndex,
+                RequestId = requestId
             };
 
             _thumbnailProvider.EnqueueThumbnailRequest(thumbnailSize, reqObj);
@@ -180,6 +203,12 @@ namespace ExpControlsLib
             }
         }
 
+        private sealed class PendingThumbnail
+        {
+            public Guid RequestId { get; init; }
+            public DateTime StartedUtc { get; init; }
+        }
+
         /// <summary>
         /// Gets a cached thumbnail index or queues a request when the thumbnail is not cached.
         /// Unlike <see cref="GetThumbnailIndex"/>, this method preserves the caller's item index
@@ -202,14 +231,103 @@ namespace ExpControlsLib
             return -1;
         }
 
+        /// <summary>
+        /// Cancels provider work and clears the manager's request leases. This is
+        /// used when the folder, display mode, or control lifetime changes.
+        /// </summary>
         internal void CancelPendingRequests()
         {
             _thumbnailProvider.CancelPendingRequests();
+            lock (_pendingLock)
+                _pending.Clear();
+        }
+
+        /// <summary>
+        /// Admits one request for a deduplication key. A live lease suppresses
+        /// repeated ListView probes; an expired lease permits recovery from a
+        /// provider callback that was never delivered to the UI.
+        /// </summary>
+        private bool TryBeginRequest(CShellItem item, int thumbnailSize, out Guid requestId)
+        {
+            string key = CreateRequestKey(item, thumbnailSize, _generation);
+            DateTime now = DateTime.UtcNow;
+
+            lock (_pendingLock)
+            {
+                if (_pending.TryGetValue(key, out var pending))
+                {
+                    if (now - pending.StartedUtc < PendingLease)
+                    {
+                        requestId = default;
+                        return false;
+                    }
+
+                    // Recover from a request whose completion callback was lost.
+                    _pending.Remove(key);
+                }
+
+                requestId = Guid.NewGuid();
+                _pending[key] = new PendingThumbnail
+                {
+                    RequestId = requestId,
+                    StartedUtc = now
+                };
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Completes and removes the lease for a ready result. A late result from
+        /// an older attempt is still usable when it has the same generation,
+        /// item, and size; this also handles providers that suppressed a retry
+        /// because the original task was still active.
+        /// </summary>
+        private bool TryCompleteRequest(ThumbnailReadyEventArgs args)
+        {
+            if (args.Item == null || args.Generation != _generation || args.RequestId == Guid.Empty)
+                return false;
+
+            string key = CreateRequestKey(args.Item, args.Size, args.Generation);
+            lock (_pendingLock)
+            {
+                if (!_pending.ContainsKey(key))
+                    return false;
+
+                // A late result from an older attempt is still valid when it
+                // belongs to the same generation, item, and size. Consuming it
+                // also lets a retry recover if the provider suppressed the
+                // retry because the original task was still active.
+                _pending.Remove(key);
+                return true;
+            }
+        }
+
+        private static string CreateRequestKey(CShellItem item, int thumbnailSize, int generation) =>
+            $"{generation}|{item.FullPath}|{thumbnailSize}";
+
+        /// <summary>
+        /// Removes leases that exceeded the three-second recovery window.
+        /// </summary>
+        private void ExpirePendingRequests()
+        {
+            DateTime cutoff = DateTime.UtcNow - PendingLease;
+            lock (_pendingLock)
+            {
+                var expiredKeys = _pending
+                    .Where(pair => pair.Value.StartedUtc <= cutoff)
+                    .Select(pair => pair.Key)
+                    .ToList();
+
+                foreach (string key in expiredKeys)
+                    _pending.Remove(key);
+            }
         }
 
 
         /// <summary>
-        /// Handles thumbnail ready events and updates the ListView.
+        /// Handles thumbnail ready events and updates the ListView. Results are
+        /// accepted only for the current generation and an active deduplication
+        /// lease; duplicate callbacks are discarded before touching the image list.
         /// Image manipulation is done on the background thread, while UI updates are marshalled to the UI thread.
         /// 
         /// </summary>
@@ -237,14 +355,12 @@ namespace ExpControlsLib
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ThumbnailImageListManager: AddThumbnail begin");
 
+            if (reqArgs is null || reqArgs.Item is null || !TryCompleteRequest(reqArgs))
+                return -1;
+
             if (thumbnail == null)
             {
-                if (reqArgs.Item != null) reqArgs.Item.ImageIndex = -1;
-                return -1;
-            }
-
-            if (reqArgs is null || reqArgs.Item is null)
-            {
+                reqArgs.Item.ImageIndex = -1;
                 return -1;
             }
 
@@ -395,6 +511,9 @@ namespace ExpControlsLib
         /// </summary>
         public void Clear()
         {
+            lock (_pendingLock)
+                _pending.Clear();
+
             foreach (var imageList in _imageLists.Values)
             {
                 lock (imageList)
@@ -425,6 +544,7 @@ namespace ExpControlsLib
 
         public void Dispose()
         {
+            _pendingLeaseTimer.Dispose();
             Clear();
             _thumbnailProvider?.Dispose();
         }

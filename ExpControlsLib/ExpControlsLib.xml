@@ -2787,8 +2787,12 @@
              Tile view.
             </summary>
         </member>
-        <member name="F:ExpControlsLib.ListViewDisplayMode.Thumbnail">
+        <member name="F:ExpControlsLib.ListViewDisplayMode.Unset">
             new values below
+            <summary>
+            </summary>
+        </member>
+        <member name="F:ExpControlsLib.ListViewDisplayMode.Thumbnail">
             <summary>
             </summary>
         </member>
@@ -3046,10 +3050,18 @@
             <returns>Number of items canceled.</returns>
         </member>
         <member name="T:ExpControlsLib.ThumbnailImageListManager">
-            <summary>
-            Manages ImageLists for thumbnail display modes in the ListView control.
-            Creates and maintains separate ImageLists for different thumbnail sizes.
-            </summary>
+             <summary>
+             Manages ImageLists for thumbnail display modes in the ListView control.
+             Creates and maintains separate ImageLists for different thumbnail sizes.
+            
+             <remarks>
+             Thumbnail requests are deduplicated by folder generation, item path, and
+             requested size. A request remains leased until its UI-side result is
+             consumed, so repeated virtual-list callbacks cannot enqueue duplicate
+             work while the provider callback is waiting in the UI message queue.
+             A three-second lease expiration recovers from lost callbacks.
+             </remarks>
+             </summary>
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.#ctor(ExpControlsLib.ExpList,System.Int32,System.Int32)">
             <summary>
@@ -3086,7 +3098,9 @@
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnail(WindowsApiLib.Shell.CShellItem,System.Int32,System.Int32)">
             <summary>
-            Requests a thumbnail for a file and updates the ListView when ready
+            Requests a thumbnail for a file and updates the ListView when ready.
+            Duplicate requests for the same generation, path, and size are
+            ignored while the existing request lease is active.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.RequestThumbnailFromCache(WindowsApiLib.Shell.CShellItem,System.Int32,System.Int32)">
@@ -3101,9 +3115,37 @@
             when a request must be queued.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.CancelPendingRequests">
+            <summary>
+            Cancels provider work and clears the manager's request leases. This is
+            used when the folder, display mode, or control lifetime changes.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.TryBeginRequest(WindowsApiLib.Shell.CShellItem,System.Int32,System.Guid@)">
+            <summary>
+            Admits one request for a deduplication key. A live lease suppresses
+            repeated ListView probes; an expired lease permits recovery from a
+            provider callback that was never delivered to the UI.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.TryCompleteRequest(ExpControlsLib.ThumbnailReadyEventArgs)">
+            <summary>
+            Completes and removes the lease for a ready result. A late result from
+            an older attempt is still usable when it has the same generation,
+            item, and size; this also handles providers that suppressed a retry
+            because the original task was still active.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.ExpirePendingRequests">
+            <summary>
+            Removes leases that exceeded the three-second recovery window.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.OnThumbnailReady(System.Object,ExpControlsLib.ThumbnailReadyEventArgs)">
             <summary>
-            Handles thumbnail ready events and updates the ListView.
+            Handles thumbnail ready events and updates the ListView. Results are
+            accepted only for the current generation and an active deduplication
+            lease; duplicate callbacks are discarded before touching the image list.
             Image manipulation is done on the background thread, while UI updates are marshalled to the UI thread.
             
             </summary>
@@ -3189,7 +3231,9 @@
             Queues a thumbnail request that will be processed asynchronously for the specified shell
             item. If the thumbnail is already cached, <see cref="E:ExpControlsLib.ThumbnailProvider.ThumbnailReady"/>
             is raised synchronously on the calling thread; otherwise it will be
-            raised later on a background thread.
+            raised later on a background thread. The provider also suppresses
+            duplicate active work by its path-and-size cache key; the manager's
+            lease is the authoritative UI-side deduplication guard.
             </summary>
             <param name="shellItem">The shell item to generate a thumbnail for.</param>
             <param name="size">Desired thumbnail size in pixels (e.g., 96, 256).</param>
@@ -3291,9 +3335,25 @@
             aspect ratio, and centers it on a transparent background using ImageMagick.
             </summary>
         </member>
+        <member name="T:ExpControlsLib.ThumbnailRequestArgs">
+            <summary>
+            Identifies one thumbnail request as it moves from the UI-side manager to
+            the background provider. The generation prevents results from a previous
+            folder from being applied, while <see cref="P:ExpControlsLib.ThumbnailRequestArgs.RequestId"/> correlates the
+            provider callback with the request that admitted it.
+            </summary>
+        </member>
+        <member name="P:ExpControlsLib.ThumbnailRequestArgs.Generation">
+            <summary>Folder/cache generation associated with the request.</summary>
+        </member>
+        <member name="P:ExpControlsLib.ThumbnailRequestArgs.RequestId">
+            <summary>Unique identity assigned when the manager admits the request.</summary>
+        </member>
         <member name="T:ExpControlsLib.ThumbnailReadyEventArgs">
             <summary>
-            Event arguments for thumbnail ready notifications
+            Event arguments for thumbnail-ready notifications. The generation and
+            request identity allow the consumer to reject results that belong to an
+            obsolete folder or a request that has already been consumed.
             </summary>
         </member>
         <member name="T:ExpControlsLib.VirtualListViewWrapper">
