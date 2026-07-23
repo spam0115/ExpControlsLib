@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Drawing;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -11,7 +12,7 @@ using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
 using MethodInvoker = System.Windows.Forms.MethodInvoker;
-
+using ListView = System.Windows.Forms.ListView;
 
 namespace ExpControlsLib
 {
@@ -431,46 +432,43 @@ namespace ExpControlsLib
             get => _listViewWrapper.DisplayMode;
             set
             {
-                if (IsInDesignMode) {
+                if (!_listView.IsHandleCreated)
+                {
+                    _listViewWrapper.DisplayMode = value;
                     return;
                 }
 
                 if (_listViewWrapper.DisplayMode == value) return;
 
-                // Changing View and replacing the image list can reset the native
-                // ListView's scroll position. Preserve the normalized position rather
-                // than the raw pixel offset because item sizes differ by view mode.
-                bool hasVerticalScrollPercentage = TryGetVerticalScrollPercentage(out double verticalScrollPercentage);
-                var t = _listViewWrapper.GetTopIndex();
+                //save scroll position
+                int topIndex = 0;
+                if (_listViewWrapper.Items.Count > 0)
+                {
+                    topIndex = _listViewWrapper.GetTopIndex();
+                }
 
                 _listViewWrapper._listView.BeginUpdate();
 
                 try
                 {
                     _listViewWrapper.DisplayMode = value;
-
+                    //_listViewWrapper._listView.EnsureVisible(topIndex); //no effect inside beginupdate
+                    //_listViewWrapper._listView.TopItem = _listViewWrapper._listView.Items[t]; //no effect inside beginupdate
                     SetImageListForMode(value);
-                    if (_imageListOrchestrator != null && _listViewWrapper.VirtualMode) LoadImagesForVisibleItems();
-
-                    if (_listViewWrapper.Items.Count > 0)
-                    {
-                        //_listViewWrapper._listView.TopItem = _listViewWrapper._listView.Items[t]; //doesn't work.  has no effect inside a beginupdate block.
-                        //_listViewWrapper._listView.EnsureVisible(t); //moves to the general correct area of the list, but not the exact top position.  Still desireable because without this the list will start at position 0.
-                    }
                 }
                 finally
                 {
                     _listViewWrapper._listView.EndUpdate();
                 }
 
-                // EndUpdate performs the final native layout/repaint and can reset the
-                // scroll position again. Restore on the next UI message so this runs
-                // after EndUpdate and after any deferred image-list mutation queued by
-                // SetImageListForMode.
-                if (hasVerticalScrollPercentage) {
-                    RestoreVerticalScrollPercentage(verticalScrollPercentage);
-                    //QueueVerticalScrollPercentageRestore(verticalScrollPercentage);
+
+                if (_listViewWrapper.Items.Count > 0)
+                {
+                    //_listViewWrapper._listView.TopItem = _listViewWrapper._listView.Items[topIndex]; //works for transitioning from icons to details but not from details to icons - just resets to position 0
+                    _listViewWrapper.MoveItemToTop(topIndex);
+                    if (_imageListOrchestrator != null && _listViewWrapper.VirtualMode) LoadImagesForVisibleItems();
                 }
+
                 DisplayModeChanged?.Invoke(value);
             }
         }
@@ -766,6 +764,11 @@ namespace ExpControlsLib
                 Math.Clamp(percentage, 0, 1) * Math.Max(scrollableRange, 0));
 
             var rowHeight = _listViewWrapper.GetRowHeight();
+
+            ////
+
+            targetPosition = (int)Math.Round(scrollInfo.nMin + percentage * scrollableRange);
+
 
             VerticalScrollPosition = targetPosition * rowHeight;
         }

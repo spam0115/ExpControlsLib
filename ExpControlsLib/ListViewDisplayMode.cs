@@ -50,6 +50,10 @@ namespace ExpControlsLib
 
         /// <summary>
         /// </summary>
+        Unset = -1,
+
+        /// <summary>
+        /// </summary>
         Thumbnail = 5,
 
         /// <summary>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Drawing;
 using System.Linq;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
@@ -334,7 +335,6 @@ namespace ExpControlsLib
             }
         }
 
-
         /// <summary>
         /// Gets or sets the display mode used to present items in the list view.
         /// The native ListView dates from Windows 95 and doesn't support thumbnails.  Support for thumbnails 
@@ -391,7 +391,7 @@ namespace ExpControlsLib
                 if (VirtualMode) InvalidateVirtualItemImagesIndexes();
 
             }
-        }
+        } = ListViewDisplayMode.Unset;
 
         #endregion
 
@@ -1954,6 +1954,62 @@ namespace ExpControlsLib
                 ListViewDisplayMode.ExtraLargeThumbnail => 256,
                 _ => throw new Exception("GetSizeForDisplayMode: Unsupported display mode")
             };  
+        }
+
+        internal int GetItemsViewportTop()
+        {
+            // Icon, tile, and list views generally begin at client Y = 0.
+            if (_listView.View != View.Details ||
+                _listView.HeaderStyle == ColumnHeaderStyle.None)
+            {
+                return _listView.ClientRectangle.Top;
+            }
+
+            IntPtr headerHandle = SendMessage(
+                _listView.Handle,
+                LVM_GETHEADER,
+                IntPtr.Zero,
+                IntPtr.Zero);
+
+            if (headerHandle == IntPtr.Zero)
+                return _listView.ClientRectangle.Top;
+
+            if (!GetWindowRect(headerHandle, out RECT headerRect))
+                return _listView.ClientRectangle.Top;
+
+            // GetWindowRect returns screen coordinates. Convert the bottom of
+            // the header to coordinates relative to the ListView.
+            Point headerBottom = _listView.PointToClient(
+                new Point(headerRect.left, headerRect.bottom));
+
+            return headerBottom.Y;
+        }
+
+        public void MoveItemToTop(int index)
+        {
+            int count = _listView.VirtualMode
+                ? _listView.VirtualListSize
+                : _listView.Items.Count;
+
+            if ((uint)index >= (uint)count)
+                return;
+
+            // First make the item available in the viewport so GetItemRect
+            // returns useful coordinates.
+            _listView.EnsureVisible(index);
+
+            Rectangle rect = _listView.GetItemRect(
+                index,
+                ItemBoundsPortion.Entire);
+
+            int targetY = GetItemsViewportTop();
+            int dy = rect.Top - targetY;
+
+            SendMessage(
+                _listView.Handle,
+                LVM_SCROLL,
+                IntPtr.Zero,
+                new IntPtr(dy));
         }
 
         ///// <summary>

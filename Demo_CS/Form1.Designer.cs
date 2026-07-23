@@ -79,7 +79,7 @@
             expList1.CheckBoxes = true;
             expList1.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] { columnHeader2, columnHeader1, columnHeader3 });
             expList1.CurrentFolderCsi = null;
-            expList1.DisplayMode = ExpControlsLib.ListViewDisplayMode.Details;
+            expList1.DisplayMode = ExpControlsLib.ListViewDisplayMode.LargeIcon;
             expList1.Dock = System.Windows.Forms.DockStyle.Fill;
             expList1.FullRowSelect = true;
             expList1.HeaderStyle = System.Windows.Forms.ColumnHeaderStyle.Clickable;
