@@ -50,7 +50,7 @@ namespace ExpControlsLibTest
             int capacity = 3;
             int size = 96;
             var manager = new ThumbnailImageListManager(_expList, size, capacity);
-            manager.SetImageListForSize(size);
+            manager.SetExpListLargeImageList(size);
 
             // 2. Prepare CShellItems and Dummy Bitmaps
             // We need 4 different items to trigger eviction
@@ -122,7 +122,7 @@ namespace ExpControlsLibTest
             int capacity = 3;
             int size = 96;
             var manager = new ThumbnailImageListManager(_expList, size, capacity);
-            manager.SetImageListForSize(size);
+            manager.SetExpListLargeImageList(size);
 
             var items = new List<CShellItem>();
             var tempFiles = new List<string>();
@@ -181,7 +181,7 @@ namespace ExpControlsLibTest
             int capacity = 5;
             int size = 96;
             var manager = new ThumbnailImageListManager(_expList, size, capacity);
-            manager.SetImageListForSize(size);
+            manager.SetExpListLargeImageList(size);
 
             string tempFile = Path.Combine(Path.GetTempPath(), "test_thumb_replace.jpg");
             File.Copy(_testImagePath, tempFile, true);
@@ -221,7 +221,7 @@ namespace ExpControlsLibTest
             // Verify that adding a valid bitmap returns a valid index and updates the CShellItem.ImageIndex.
             int size = 64;
             var manager = new ThumbnailImageListManager(_expList, size);
-            manager.SetImageListForSize(size);
+            manager.SetExpListLargeImageList(size);
 
             var csi = CShellItemFactory.Create(_testImagePath);
             using var bmp = new Bitmap(size, size);
@@ -250,11 +250,11 @@ namespace ExpControlsLibTest
             int size2 = 128;
 
             var manager = new ThumbnailImageListManager(_expList, size1);
-            manager.SetImageListForSize(size1);
+            manager.SetExpListLargeImageList(size1);
             using var bmp1 = new Bitmap(size1, size1);
             int idx1 = manager.AddThumbnail(new ThumbnailReadyEventArgs(csi, bmp1, size1), bmp1);
 
-            manager.SetImageListForSize(size2);
+            manager.SetExpListLargeImageList(size2);
             using var bmp2 = new Bitmap(size2, size2);
             int idx2 = manager.AddThumbnail(new ThumbnailReadyEventArgs(csi, bmp2, size2), bmp2);
 
@@ -272,7 +272,7 @@ namespace ExpControlsLibTest
             // Verify that multiple files (using different source images) are handled correctly.
             int size = 96;
             var manager = new ThumbnailImageListManager(_expList, size);
-            manager.SetImageListForSize(size);
+            manager.SetExpListLargeImageList(size);
 
             string path1 = _testImagePath; // Lena
             string path2 = Path.Combine(AppContext.BaseDirectory, "Resources", "fu.jpg");
@@ -300,7 +300,7 @@ namespace ExpControlsLibTest
             int capacity = 5;
             int size = 64;
             var manager = new ThumbnailImageListManager(_expList, size, capacity);
-            manager.SetImageListForSize(size);
+            manager.SetExpListLargeImageList(size);
             var imageList = manager.GetImageList(size);
 
             int totalItemsToAdd = capacity * 2;

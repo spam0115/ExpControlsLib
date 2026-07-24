@@ -1,6 +1,7 @@
 using C5;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
@@ -28,14 +29,14 @@ namespace ExpControlsLib
         private readonly ConcurrentDictionary<int, ImageList> _imageLists = new();
         private readonly ThumbnailProvider _thumbnailProvider;
         private readonly ExpList _expList;
-        private int _activeSize;
+        private int _activeSize = 0;
         private int _generation = 0;
         
-        private readonly HashedLinkedList<string> _lruKeys = new();
-        private readonly System.Collections.Generic.Dictionary<string, ThumbnailSlot> _slotByKey = new();
-        private readonly System.Collections.Generic.Dictionary<string, PendingThumbnail> _pending = new();
+        private readonly Dictionary<int, HashedLinkedList<string>> _lruKeys = new();
+        private readonly Dictionary<string, ThumbnailSlot> _slotByKey = new();
+        private readonly Dictionary<string, PendingThumbnail> _pending = new();
         private readonly object _pendingLock = new();
-        private readonly int _capacity;
+        private readonly Dictionary<int, int> _capacities = new();
         private static readonly TimeSpan PendingLease = TimeSpan.FromSeconds(3);
         private readonly System.Threading.Timer _pendingLeaseTimer;
 
@@ -74,14 +75,14 @@ namespace ExpControlsLib
         /// </param>
         public ThumbnailImageListManager(ExpList expList, int size, int capacity = -1)
         {
-            _activeSize = size;
             if (capacity == -1)
             {
-                capacity = 16384/this._activeSize*2; // default capacity based on 16k texture limit 
+                capacity = 16384/size * 2; // default capacity based on 16k texture limit 
             }
 
+            _activeSize = size;
             _expList = expList;
-            _capacity = capacity;
+            _capacities[size] = capacity;
             _thumbnailProvider = new ThumbnailProvider();
             _thumbnailProvider.ThumbnailReady += OnThumbnailReady;
             _pendingLeaseTimer = new System.Threading.Timer(
@@ -93,26 +94,31 @@ namespace ExpControlsLib
         /// If the thumbnail is not yet available, it initiates a request and returns -1.
         /// </summary>
         /// <param name="csi"></param>
-        /// <param name="requestedSize"></param>
+        /// <param name="size">the thumbnail size</param>
         /// <returns></returns>
-        public int GetThumbnailIndex(CShellItem csi, int requestedSize)
+        public int GetThumbnailIndex(CShellItem csi, int size)
         {
-            if (_slotByKey.TryGetValue($"{csi.FullPath}|{requestedSize}", out var slot))
+            if (_slotByKey.TryGetValue($"{csi.FullPath}|{size}", out var slot))
             {
                 // Update LRU on access
                 string key = slot.Key;
-                _lruKeys.Remove(key);
-                _lruKeys.Add(key);
+                _lruKeys[size].Remove(key);
+                _lruKeys[size].Add(key);
                 return slot.Index;
             }
             else
             {
-                RequestThumbnail(csi, requestedSize);
+                RequestThumbnail(csi, size);
                 return -1;
             }
         }
 
-        public void SetImageListForSize(int thumbnailSize)
+        /// <summary>
+        /// Sets the active ImageList for the specified thumbnail size. 
+        /// If an ImageList for that size does not exist, it creates one.
+        /// </summary>
+        /// <param name="thumbnailSize"></param>
+        public void SetExpListLargeImageList(int thumbnailSize)
         {
             _activeSize = thumbnailSize;
 
@@ -121,8 +127,8 @@ namespace ExpControlsLib
             _expList.BeginListViewUpdate();
             try
             {
-                _expList.LargeImageList = imageList;
                 _expList.ResetListViewItemImageIndices();
+                _expList.LargeImageList = imageList;
             }
             finally
             {
@@ -142,12 +148,14 @@ namespace ExpControlsLib
 
             Debug.WriteLine("Creating new image list for thumbnails...");
 
-            imageList = new ImageList
+            imageList = new ImageList()
             {
                 ImageSize = new Size(thumbnailSize, thumbnailSize),
                 ColorDepth = ColorDepth.Depth32Bit
             };
             _imageLists[thumbnailSize] = imageList;
+            _capacities[thumbnailSize] = 16384 / thumbnailSize * 2;
+
             return imageList;
         }
 
@@ -193,8 +201,8 @@ namespace ExpControlsLib
             if (_slotByKey.TryGetValue(key, out var slot))
             {
                 // Update LRU
-                _lruKeys.Remove(key);
-                _lruKeys.Add(key);
+                _lruKeys[thumbnailSize].Remove(key);
+                _lruKeys[thumbnailSize].Add(key);
                 csi.ImageIndex = slot.Index;
             }
             else
@@ -221,8 +229,8 @@ namespace ExpControlsLib
             string key = CreateKey(csi.FullPath, thumbnailSize);
             if (_slotByKey.TryGetValue(key, out var slot))
             {
-                _lruKeys.Remove(key);
-                _lruKeys.Add(key);
+                _lruKeys[thumbnailSize].Remove(key);
+                _lruKeys[thumbnailSize].Add(key);
                 csi.ImageIndex = slot.Index;
                 return slot.Index;
             }
@@ -364,21 +372,27 @@ namespace ExpControlsLib
                 return -1;
             }
 
+            int size = reqArgs.Size;
             ImageList imageList = null;
             try
             {
-                imageList = GetImageList(_activeSize);
+                if (!_lruKeys.ContainsKey(size)) 
+                {
+                    _lruKeys.Add(size, new HashedLinkedList<string>());
+                }
+
+                imageList = GetImageList(size);
                 if (_expList.LargeImageList != imageList)
                     _expList.LargeImageList = imageList;
 
-                string key = CreateKey(reqArgs.Item.FullPath, reqArgs.Size);
+                string key = CreateKey(reqArgs.Item.FullPath, size);
                 int index = -1;
 
                 if (_slotByKey.TryGetValue(key, out var existingSlot)) //replace existing thumbnail
                 {
                     index = existingSlot.Index;
-                    _lruKeys.Remove(key);
-                    _lruKeys.Add(key);
+                    _lruKeys[size].Remove(key);
+                    _lruKeys[size].Add(key);
 
                     lock(imageList)
                     {
@@ -388,7 +402,7 @@ namespace ExpControlsLib
                 else //new thumbnail
                 {
                     bool reused = false;
-                    if (_lruKeys.Count >= _capacity)
+                    if (_lruKeys[size].Count >= _capacities[size]) //image quantity exceeds the size limit
                     {
                         // Evict the least-recently-used slot that is NOT currently visible.
                         // Skipping visible items prevents the user from seeing a thumbnail
@@ -398,9 +412,9 @@ namespace ExpControlsLib
                         string? evictedKey = null;
                         ThumbnailSlot? evictedSlot = null;
 
-                        while (_lruKeys.Count > 0)
+                        while (_lruKeys[size].Count > 0)
                         {
-                            string candidateKey = _lruKeys.RemoveFirst();
+                            string candidateKey = _lruKeys[size].RemoveFirst();
                             if (!_slotByKey.TryGetValue(candidateKey, out var candidateSlot))
                             {
                                 // Orphaned LRU entry with no slot; drop it and continue.
@@ -411,7 +425,7 @@ namespace ExpControlsLib
                             if (itemIndex >= 0 && _expList.IsItemVisible(itemIndex))
                             {
                                 // Visible — put back at the end (most-recently-used) and keep looking.
-                                _lruKeys.Add(candidateKey);
+                                _lruKeys[size].Add(candidateKey);
                                 continue;
                             }
 
@@ -435,7 +449,7 @@ namespace ExpControlsLib
                             lock (imageList)
                             {
                                 imageList.Images[index] = thumbnail;
-                                _lruKeys.Add(key);
+                                _lruKeys[size].Add(key);
                                 _slotByKey[key] = evictedSlot;
                             }
                             reused = true;
@@ -449,7 +463,7 @@ namespace ExpControlsLib
                             imageList.Images.Add(thumbnail);
                             index = imageList.Images.Count - 1;
                             var newSlot = new ThumbnailSlot(index, reqArgs.Item, key);
-                            _lruKeys.Add(key);
+                            _lruKeys[size].Add(key);
                             _slotByKey[key] = newSlot;
                         }
                     }
@@ -475,7 +489,7 @@ namespace ExpControlsLib
         /// Called when navigating to a new folder to prevent GDI handle exhaustion from
         /// accumulated thumbnails across many folder navigations.
         /// </summary>
-        public void ResetForNewFolder()
+        public void Reset()
         {
             _generation++;
             CancelPendingRequests();
@@ -495,14 +509,7 @@ namespace ExpControlsLib
 
             if (_activeSize > 0)
             {
-                var freshList = new ImageList
-                {
-                    ImageSize = new Size(_activeSize, _activeSize),
-                    ColorDepth = ColorDepth.Depth32Bit
-                };
-                _imageLists[_activeSize] = freshList;
-                if (_expList != null)
-                    _expList.LargeImageList = freshList;
+                SetExpListLargeImageList(_activeSize);
             }
         }
 

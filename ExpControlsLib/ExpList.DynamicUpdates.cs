@@ -112,7 +112,7 @@ namespace ExpControlsLib
 
                 try
                 {
-                    _shellController.HierachyManager.RemoveRange(csiToRemove, raiseEvents: false);
+                    _shellController.HierachyManager.RemoveRange(csiToRemove, raiseEvents: false); //todo: run this in the background
                     _listViewWrapper.RemoveItems(csiToRemove);
 
                     if (csiToRemove.Count() > _listViewWrapper.GetApproxVisibleCount())
@@ -126,7 +126,7 @@ namespace ExpControlsLib
                         ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
                     }
 
-                    ExpListDeleted?.Invoke(this, new ExpListDeletedEventArgs(csiToRemove, deletedIndices));
+                    ItemDeleted?.Invoke(this, new ExpListDeletedEventArgs(csiToRemove, deletedIndices));
                 }
                 finally
                 {
@@ -138,6 +138,7 @@ namespace ExpControlsLib
                     topItemIndex = topItemIndex >= count ? count : topItemIndex;
                     EnsureVisible(topItemIndex);
                 }
+                
             }
             catch (Exception ex)
             {
@@ -1122,7 +1123,7 @@ namespace ExpControlsLib
             if (_currentFolderCsi == null) return;
 
             // Invalidate thumbnails and create a fresh ImageList
-            _imageListOrchestrator.ResetForNewFolder();
+            _imageListOrchestrator.ResetThumbnailImageLists();
 
             // Invalidate cached data in shell items
             if (VirtualMode)

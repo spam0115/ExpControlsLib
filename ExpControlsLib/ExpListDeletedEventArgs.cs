@@ -4,7 +4,7 @@ using WindowsApiLib.Shell;
 namespace ExpControlsLib
 {
     /// <summary>
-    /// Event arguments for the <see cref="ExpList.ExpListDeleted"/> event.
+    /// Event arguments for the <see cref="ExpList.Deleted"/> event.
     /// </summary>
     public class ExpListDeletedEventArgs : EventArgs
     {

@@ -262,7 +262,7 @@ namespace ExpControlsLib
 
                         // Dispose old ImageLists and create a fresh one to prevent
                         // GDI handle exhaustion from accumulated thumbnails across navigations.
-                        _imageListOrchestrator.ResetForNewFolder();
+                        _imageListOrchestrator.ResetThumbnailImageLists();
 
                         _listViewWrapper.AddRange(result.Items);
 

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Drawing;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -315,7 +314,7 @@ namespace ExpControlsLib
         public event EventHandler<DragCompletedEventArgs>? ExpListDragCompleted;
 
         /// <summary>
-        /// Delegate for the <see cref="ExpListDeleted"/> event.
+        /// Delegate for the <see cref="Deleted"/> event.
         /// </summary>
         public delegate void ExpListDeletedEventHandler(object? sender, ExpListDeletedEventArgs e);
         /// <summary>
@@ -323,14 +322,15 @@ namespace ExpControlsLib
         /// </summary>
         [Category("Action")]
         [Description("Fires when items are deleted from the list view")]
-        public event ExpListDeletedEventHandler ExpListDeleted;
+        public event ExpListDeletedEventHandler ItemDeleted;
 
+        public delegate void ExpListSelectedIndexChangedEventHandler(object? sender, CShellItem item);
         /// <summary>
         /// Occurs when the selection in the list view changes.
         /// </summary>
         [Category("Action")]
         [Description("Fires when the selection changes")]
-        public event EventHandler SelectedIndexChanged;
+        public event ExpListSelectedIndexChangedEventHandler SelectedIndexChanged;
 
         /// <summary>
         /// Delegate for the <see cref="ExpListItemSelectionChangedEventHandler"/> event.
@@ -1084,15 +1084,6 @@ namespace ExpControlsLib
 
 
         #endregion
-
-
-
-
-
-
-
-
-
 
 
         /// <summary> 

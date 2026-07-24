@@ -35,7 +35,7 @@ namespace ExpControlsLib
                 EnterImageListMutation();
                 try
                 {
-                    _imageListOrchestrator.ApplyMode(value);
+                    _imageListOrchestrator.ApplyAppropriateImageList(value);
                 }
                 finally
                 {

@@ -556,8 +556,11 @@ namespace ExpControlsLib
         /// This allows us to reuse existing ListViewItem objects for items that have merely shifted index.
         /// </summary>
         /// <param name="index">The index where the item was removed.</param>
-        private void ShiftCacheAfterRemoval(int index)
+        /// <param name="path">The path of the item being removed.</param>
+        private void RemoveItemFromCachesAndShiftIndexes(int index, string path)
         {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper.ShiftLviCacheAfterRemoval: " + index.ToString());
+
             if (_indexedLviCache.Count == 0) return;
 
             // Remove the deleted item from cache
@@ -570,6 +573,16 @@ namespace ExpControlsLib
                 _indexedLviCache[k - 1] = _indexedLviCache[k];
                 _indexedLviCache.Remove(k);
             }
+
+            _pathToIndex.Remove(path);
+            foreach (var kvp in _pathToIndex)
+            {
+                if (kvp.Value > index)
+                {
+                    _pathToIndex[kvp.Key] = kvp.Value - 1;
+                }
+            }
+
         }
 
         /// <summary>
@@ -580,21 +593,16 @@ namespace ExpControlsLib
         {
             if (index < 0 || index >= Count) return;
 
-            Debug.WriteLine("VirtualListViewWrapper.RemoveAt - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper.RemoveAt: " + index.ToString());
 
             if (VirtualMode)
             {
-                int masterIndex;
-                CShellItem item;
                 lock (Items)
                 {
-                    item = GetItemFromActiveView(index);
-                    masterIndex = Items.IndexOf(item);
-                    if (masterIndex < 0) return;
+                    CShellItem item = GetItemFromActiveView(index);
 
-                    Items.RemoveAt(masterIndex);
-                    _pathToIndex.Remove(item.FullPath);
-                    ShiftCacheAfterRemoval(masterIndex);
+                    Items.RemoveAt(index);
+                    RemoveItemFromCachesAndShiftIndexes(index, item.FullPath);
                 }
             }
             else
@@ -615,7 +623,7 @@ namespace ExpControlsLib
         {
             if (index < 0 || index >= Count) return;
 
-            Debug.WriteLine("VirtualListViewWrapper.RemoveAndRedrawAt - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper.RemoveAndRedrawAt: " + index.ToString());
 
             RemoveAt(index);
 

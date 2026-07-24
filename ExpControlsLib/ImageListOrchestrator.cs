@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
@@ -41,13 +42,18 @@ namespace ExpControlsLib
 
         public int ActiveThumbnailSize => GetThumbnailSize(_currentMode);
 
-        public void ApplyMode(ListViewDisplayMode mode)
+        /// <summary>
+        /// Applies the appropriate image list to the ListView based on the current display mode.
+        /// Either a system image list or a managed thumbnail image list is installed.
+        /// </summary>
+        /// <param name="mode"></param>
+        public void ApplyAppropriateImageList(ListViewDisplayMode mode)
         {
             _currentMode = mode;
 
             if (IsThumbnailModeFor(mode))
             {
-                _thumbnailManager.SetImageListForSize(GetThumbnailSize(mode));
+                _thumbnailManager.SetExpListLargeImageList(GetThumbnailSize(mode));
                 return;
             }
 
@@ -112,20 +118,21 @@ namespace ExpControlsLib
                 _thumbnailManager.CancelPendingRequests();
         }
 
-        public void ResetForNewFolder()
+        /// <summary>
+        /// ThumbnailImageListManager.Reset clears all existing sizes of ListView image lists and 
+        /// installs a managed thumbnail list.That is only appropriate for thumbnail modes.Standard 
+        /// views use the native shell image list;
+        /// </summary>
+        public void ResetThumbnailImageLists()
         {
             if (IsThumbnailMode)
             {
-                _thumbnailManager.ResetForNewFolder();
+                _thumbnailManager.Reset();
                 return;
             }
 
-            // ThumbnailImageListManager.ResetForNewFolder clears both ListView image
-            // lists and installs a managed thumbnail list. That is only appropriate
-            // for thumbnail modes. Standard views use the native shell image list;
-            // re-apply the current mode so a folder load cannot replace it with an
-            // empty managed list.
-            ApplyMode(_currentMode);
+            //re-apply the current mode so a folder load cannot replace it with an empty managed list.
+            //ApplyMode(_currentMode);
         }
 
         public void ClearCache() => _thumbnailManager.ClearCache();

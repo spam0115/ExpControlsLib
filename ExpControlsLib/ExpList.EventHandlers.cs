@@ -129,21 +129,12 @@ namespace ExpControlsLib
                     {
                         SelectedItem = GetItem(_listView.SelectedIndices[0]);
                     }
+
+                    SelectedIndexChanged?.Invoke(this, SelectedItem);
                 }
                 else
                 {
                     SelectedItem = null;
-                }
-
-                if (VirtualMode)
-                {
-                    // In virtual mode, SelectedListViewItemCollection is not populated.
-                    // Consumers should use SelectedCShellItems property instead.
-                    SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
-                }
-                else
-                {
-                    SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
                 }
             }
             catch (InvalidOperationException ex)
