@@ -956,15 +956,15 @@ namespace ExpControlsLib
                     OnScroll();
                 };
 
-                // Initialize thumbnail timer for lazy loading
+                // Initialize thumbnail debounce timer for lazy loading
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Setting up scroll debounce timer...");
                 _scrollDebounceTimer = new System.Windows.Forms.Timer();
                 _scrollDebounceTimer.Interval = 100;
                 _scrollDebounceTimer.Tick += (s, e) =>
                 {
                     _scrollDebounceTimer?.Stop();
-                    if (IsDisposed || Disposing) return;
                     _imageListOrchestrator?.CancelPendingRequests();
+                    if (IsDisposed || Disposing) return;
                     LoadImagesForVisibleItems();
                 };
 

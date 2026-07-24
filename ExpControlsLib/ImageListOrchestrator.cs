@@ -133,14 +133,6 @@ namespace ExpControlsLib
 
         public void ClearCache() => _thumbnailManager.ClearCache();
 
-        public void LoadImagesForRange(int index, int endIndex, Action loadIcons, Action loadThumbnails)
-        {
-            if (IsThumbnailMode)
-                loadThumbnails?.Invoke();
-            else
-                loadIcons?.Invoke();
-        }
-
         public void Dispose()
         {
             if (_disposed) return;

@@ -761,7 +761,7 @@ namespace ExpControlsLib
         {
             if (VirtualMode)
             {
-                return GetLviFromVirtual(index);
+                return GetLviForVirtualItem(index);
             }
             else
             {
@@ -1098,7 +1098,7 @@ namespace ExpControlsLib
             if (isThumbnailMode) _expList.EnterImageListMutation();
             try
             {
-                var lvi = GetLviFromVirtual(e.ItemIndex);
+                var lvi = GetLviForVirtualItem(e.ItemIndex);
                 if (lvi is null)
                 {
                     e.Item = new ListViewItem(); //send back a dummy
@@ -1117,7 +1117,7 @@ namespace ExpControlsLib
             }
         }
 
-        public ListViewItem GetLviFromVirtual(int index)
+        public ListViewItem GetLviForVirtualItem(int index)
         {
             if (index < 0 || index >= ActiveViewCount) return null;
 

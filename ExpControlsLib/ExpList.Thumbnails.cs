@@ -52,11 +52,7 @@ namespace ExpControlsLib
             Debug.WriteLine("ExpList: LoadImagesForRange Begin");
             try
             {
-                _imageListOrchestrator.LoadImagesForRange(
-                    index,
-                    endIndex,
-                    () => LoadIconsForRange(index, endIndex),
-                    () => LoadThumbnailsForRange(index, endIndex));
+                LoadImagesAtIndexes(index, endIndex);
             }
             finally
             {
@@ -102,6 +98,7 @@ namespace ExpControlsLib
                         if (onlyVisible)
                         {
                             topIndex = _listViewWrapper.GetTopIndex();
+                            startIndex = topIndex;
                             _approxCountPerPage = _listViewWrapper.GetApproxVisibleCount();
                             // Preload two pages below, then one page above, for smoother scrolling.
                             endIndex = Math.Min(_listViewWrapper.Count - 1, topIndex + _approxCountPerPage * 2 - 1);
@@ -168,16 +165,16 @@ namespace ExpControlsLib
             if (imageIndex != -1)
                 csi.ImageIndex = imageIndex;
 
-            var lvi = _listViewWrapper.GetLviFromVirtual(i);
-
-            if (lvi is null)
-            {
-                Debug.WriteLine($"LoadImagesForItems: GetItemInternal returned null for index {i}");
-                return false;
-            }
-
             if (oldImageIndex != csi.ImageIndex)
             {
+                var lvi = _listViewWrapper.GetLviForVirtualItem(i);
+
+                if (lvi is null)
+                {
+                    Debug.WriteLine($"LoadImagesForItems: GetItemInternal returned null for index {i}");
+                    return false;
+                }
+
                 lvi.ImageIndex = csi.ImageIndex;
                 _listView.RedrawItems(i, i, false);
             }
@@ -185,9 +182,9 @@ namespace ExpControlsLib
             return true;
         }
 
-        private void LoadIconsForRange(int startIndex, int endIndex = -1)
+        private void LoadImagesAtIndexes(int startIndex, int endIndex = -1)
         {
-            Debug.WriteLine("ExpList: LoadIconsForItems Begin");
+            Debug.WriteLine("ExpList: LoadImagesAtIndexes Begin");
             try
             {
                 if (!_listView.IsHandleCreated) return;
@@ -200,82 +197,7 @@ namespace ExpControlsLib
 
                     if (VirtualMode)
                     {
-                        for (int i = startIndex; i <= endIndex; i++)
-                        {
-                            var csi = GetItem(i);
-                            if (csi is null)
-                            {
-                                Debug.WriteLine($"LoadIconsForItems: GetItem returned null for index {i}");
-                                continue;
-                            }
-                            int oldImageIndex = csi.ImageIndex;
-                                csi.ImageIndex = _imageListOrchestrator.GetInitialImageIndex(csi);
-
-                            var lvi = _listViewWrapper.GetLviFromVirtual(i);
-
-                            if (lvi is null)
-                            {
-                                Debug.WriteLine($"LoadIconsForItems: GetItemInternal returned null for index {i}");
-                                continue;
-                            }
-
-                            if (oldImageIndex != csi.ImageIndex)
-                            {
-                                lvi.ImageIndex = csi.ImageIndex;
-                                _listView.RedrawItems(i, i, false);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        Rectangle clientRect = _listView.ClientRectangle;
-
-                        for (int i = startIndex; i <= endIndex; i++)
-                        {
-                            var item = _listView.Items[i];
-                            if (item is null) continue;
-
-                            if (item.Tag is CShellItem csi && item.ImageIndex == -1)
-                            {
-                                item.ImageIndex = _imageListOrchestrator.GetInitialImageIndex(csi);
-                            }
-                        }
-                    }
-                }
-                finally
-                {
-                    ExitListViewEnumeration();
-                }
-            }
-            finally
-            {
-                Debug.WriteLine("ExpList: LoadIconsForItems End");
-            }
-        }
-
-
-        private void LoadThumbnailsForRange(int startIndex, int endIndex = -1)
-        {
-            Debug.WriteLine("ExpList: LoadThumbnailsAtIndexes Begin");
-
-            try
-            {
-                if (!_listView.IsHandleCreated) return;
-
-                EnterListViewEnumeration();
-                try
-                {
-                    if (endIndex == -1) endIndex = startIndex;
-                    endIndex = Math.Min(_listViewWrapper.Count - 1, endIndex);
-
-                    if (VirtualMode)
-                    {
-                        for (int i = startIndex; i <= endIndex; i++)
-                        {
-                            var csi = _listViewWrapper.GetItem(i);
-                            if (_imageListOrchestrator.EnsureImage(csi, i) != -1) continue;
-                            Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
-                        }
+                        LoadImagesForVirtualRange(startIndex, endIndex);
                     }
                     else
                     {
@@ -285,7 +207,11 @@ namespace ExpControlsLib
                             if (item is null) continue;
 
                             if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
-                                _imageListOrchestrator.EnsureImage(csi);
+                            {
+                                int imageIndex = _imageListOrchestrator.EnsureImage(csi);
+                                if (imageIndex != -1)
+                                    item.ImageIndex = imageIndex;
+                            }
                         }
                     }
                 }
@@ -296,7 +222,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: LoadThumbnailsAtIndexes End");
+                Debug.WriteLine("ExpList: LoadImagesAtIndexes End");
             }
         }
 
