@@ -98,7 +98,10 @@ namespace ExpControlsLib
             if (item == null) return;
 
             if (IsThumbnailMode)
+            {
+                _thumbnailManager.InvalidateThumbnail(item, ActiveThumbnailSize);
                 _thumbnailManager.EnsureThumbnail(item, ActiveThumbnailSize, itemIndex);
+            }
             else
                 redraw?.Invoke();
         }

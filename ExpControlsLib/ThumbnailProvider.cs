@@ -161,8 +161,7 @@ namespace ExpControlsLib
                 Console.WriteLine("\tFound cached thumbnail: " + (csi?.DisplayName ?? filePath));
 #endif
                 ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(
-                    csi, cachedImage, size, reqArgs.Index,
-                    generation: reqArgs.Generation, requestId: reqArgs.RequestId));
+                    csi, cachedImage, size, reqArgs.Index, requestId: reqArgs.RequestId));
                 return;
             }
 
@@ -350,8 +349,7 @@ namespace ExpControlsLib
 
                 //send event back to the consumer.  Subscriber is responsible for disposing thumbnail.
                 ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(
-                    request.Item, thumbnail, request.Size, request.Index,
-                    generation: request.Generation, requestId: request.RequestId));
+                    request.Item, thumbnail, request.Size, request.Index, requestId: request.RequestId));
                 thumbnail = null; // ownership transferred to subscriber
                 Debug.WriteLine("\tThumbnail generation complete: " + request.Item.DisplayName);
                 return;
@@ -401,12 +399,26 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Builds the composite cache key used by <see cref="_thumbnailCache"/>:
-        /// the file path and requested pixel size separated by a pipe.
+        /// the file path, requested pixel size, and filesystem last-write timestamp.
         /// </summary>
         /// <param name="filePath">Full path of the shell item.</param>
         /// <param name="size">Requested square thumbnail size, in pixels.</param>
         /// <returns>The cache key string.</returns>
-        private string ConstructCacheKey(string filePath, int size) => $"{filePath}|{size}";
+        private static string ConstructCacheKey(string filePath, int size)
+        {
+            long version = 0;
+            try
+            {
+                if (File.Exists(filePath))
+                    version = File.GetLastWriteTimeUtc(filePath).Ticks;
+                else if (Directory.Exists(filePath))
+                    version = Directory.GetLastWriteTimeUtc(filePath).Ticks;
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+
+            return $"{filePath}|{size}|{version}";
+        }
 
         /// <summary>
         /// Synchronously extracts a thumbnail from a file system path using

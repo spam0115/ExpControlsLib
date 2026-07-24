@@ -921,10 +921,10 @@
         </member>
         <member name="T:ExpControlsLib.ExpList.ExpListDeletedEventHandler">
             <summary>
-            Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListDeleted"/> event.
+            Delegate for the <see cref="!:Deleted"/> event.
             </summary>
         </member>
-        <member name="E:ExpControlsLib.ExpList.ExpListDeleted">
+        <member name="E:ExpControlsLib.ExpList.ItemDeleted">
             <summary>
             Occurs when items are deleted from the list view.
             </summary>
@@ -1560,29 +1560,24 @@
             For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
             list is applied and each item's <see cref="P:System.Windows.Forms.ListViewItem.ImageIndex"/> is refreshed.
             For custom thumbnail modes, the ListView is switched to LargeIcon view and
-            <see cref="M:ExpControlsLib.ExpList.LoadThumbnailsForItems(System.Int32,System.Boolean)"/> is called to populate thumbnail images.
+            <see cref="M:ExpControlsLib.ExpList.LoadImagesForItems(System.Boolean)"/> is called to populate thumbnail images.
             </summary>
             <param name="value">The <see cref="T:ExpControlsLib.ListViewDisplayMode"/> to configure for.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.LoadIconsForItems(System.Boolean)">
+        <member name="M:ExpControlsLib.ExpList.LoadImagesForItems(System.Boolean)">
             <summary>
-            loads icons (not thumbnails) for the items in the list.
-            Can either load all icons or only icons near the visible section.
+            Loads the appropriate image for each item based on the current display mode.
+            Can either load all images or only images near the visible section.
             </summary>
-            <param name="onlyVisible">true if you only want icons near the visible items.</param>
+            <param name="onlyVisible">true if only images near the visible items should be loaded.</param>
+        </member>
+        <member name="M:ExpControlsLib.ExpList.RequestImageAtIndex(System.Int32)">
+            <summary>Requests the appropriate image for a virtual item at the given index.</summary>
         </member>
         <member name="M:ExpControlsLib.ExpList.GetThumbnailSizeForMode(System.Nullable{ExpControlsLib.ListViewDisplayMode})">
             <summary>
             Gets the pixel size for a given thumbnail display mode
             </summary>
-        </member>
-        <member name="M:ExpControlsLib.ExpList.LoadThumbnailsForItems(System.Int32,System.Boolean)">
-            <summary>
-            loads thumbnails (not icons) for the items in the list.
-            Can either load all thumbnails or only some thumbnails near the visible section.
-            </summary>
-            <param name="thumbnailSize">The size of the thumbnails to load.</param>
-            <param name="onlyVisible">If true, only loads thumbnails for items currently visible in the viewport that don't already have one.</param>
         </member>
         <member name="F:ExpControlsLib.ExpList._scrollDebounceTimer">
              <summary>
@@ -1625,7 +1620,7 @@
         </member>
         <member name="T:ExpControlsLib.ExpListDeletedEventArgs">
             <summary>
-            Event arguments for the <see cref="E:ExpControlsLib.ExpList.ExpListDeleted"/> event.
+            Event arguments for the <see cref="!:ExpList.Deleted"/> event.
             </summary>
         </member>
         <member name="P:ExpControlsLib.ExpListDeletedEventArgs.Items">
@@ -2128,7 +2123,7 @@
         <member name="M:ExpControlsLib.ExpTree.ShellController_UpdateEventHandler(System.Object,WindowsApiLib.Shell.ShellItemUpdateEventArgs)">
             <summary>
             Handles Shell item update notifications from <see cref="T:WindowsApiLib.Shell.CShellItemUpdater"/>.
-            Responds to folder creation, deletion, rename, media change, and general update events
+            Responds to folder creation, deletion, rename, move, media change, and general update events
             by adding, removing, or refreshing the corresponding TreeNode in the tree.
             Only folder-related events are processed; non-folder events are silently ignored.
             </summary>
@@ -2716,6 +2711,13 @@
             while thumbnail operations are owned by an instance-scoped manager.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ImageListOrchestrator.ApplyAppropriateImageList(ExpControlsLib.ListViewDisplayMode)">
+            <summary>
+            Applies the appropriate image list to the ListView based on the current display mode.
+            Either a system image list or a managed thumbnail image list is installed.
+            </summary>
+            <param name="mode"></param>
+        </member>
         <member name="M:ExpControlsLib.ImageListOrchestrator.GetInitialImageIndex(WindowsApiLib.Shell.CShellItem,System.Boolean)">
             <summary>
             Returns an initial index without starting asynchronous thumbnail work.
@@ -2732,6 +2734,13 @@
             <summary>
             Refreshes an item after a Shell update. Thumbnail mode queues work; system-icon mode
             asks the caller to redraw the item after the synchronous icon lookup.
+            </summary>
+        </member>
+        <member name="M:ExpControlsLib.ImageListOrchestrator.ResetThumbnailImageLists">
+            <summary>
+            ThumbnailImageListManager.Reset clears all existing sizes of ListView image lists and 
+            installs a managed thumbnail list.That is only appropriate for thumbnail modes.Standard 
+            views use the native shell image list;
             </summary>
         </member>
         <member name="T:ExpControlsLib.ImageMagickHelper">
@@ -3055,8 +3064,8 @@
              Creates and maintains separate ImageLists for different thumbnail sizes.
             
              <remarks>
-             Thumbnail requests are deduplicated by folder generation, item path, and
-             requested size. A request remains leased until its UI-side result is
+             Thumbnail requests are deduplicated by item path and requested size. A
+             request remains leased until its UI-side result is
              consumed, so repeated virtual-list callbacks cannot enqueue duplicate
              work while the provider callback is waiting in the UI message queue.
              A three-second lease expiration recovers from lost callbacks.
@@ -3088,8 +3097,15 @@
             If the thumbnail is not yet available, it initiates a request and returns -1.
             </summary>
             <param name="csi"></param>
-            <param name="requestedSize"></param>
+            <param name="size">the thumbnail size</param>
             <returns></returns>
+        </member>
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.SetExpListLargeImageList(System.Int32)">
+            <summary>
+            Sets the active ImageList for the specified thumbnail size. 
+            If an ImageList for that size does not exist, it creates one.
+            </summary>
+            <param name="thumbnailSize"></param>
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.GetImageList(System.Int32)">
             <summary>
@@ -3115,6 +3131,13 @@
             when a request must be queued.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.InvalidateThumbnail(WindowsApiLib.Shell.CShellItem,System.Int32)">
+            <summary>
+            Marks an item's cached thumbnail as stale after a Shell file-change notification.
+            The old image remains visible until the replacement arrives, but the next request
+            bypasses the slot cache and replaces that image-list entry in place.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.CancelPendingRequests">
             <summary>
             Cancels provider work and clears the manager's request leases. This is
@@ -3130,10 +3153,8 @@
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.TryCompleteRequest(ExpControlsLib.ThumbnailReadyEventArgs)">
             <summary>
-            Completes and removes the lease for a ready result. A late result from
-            an older attempt is still usable when it has the same generation,
-            item, and size; this also handles providers that suppressed a retry
-            because the original task was still active.
+            Completes and removes the exact lease that admitted a ready result.
+            A stale callback cannot consume a newer request for the same file.
             </summary>
         </member>
         <member name="M:ExpControlsLib.ThumbnailImageListManager.ExpirePendingRequests">
@@ -3164,7 +3185,7 @@
             <param name="thumbnail">The square thumbnail bitmap.</param>
             <returns>The index of the thumbnail in the ImageList, or -1 if it could not be added.</returns>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.ResetForNewFolder">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.Reset">
             <summary>
             Disposes all existing ImageLists and creates a fresh one for the current active size.
             Called when navigating to a new folder to prevent GDI handle exhaustion from
@@ -3286,7 +3307,7 @@
         <member name="M:ExpControlsLib.ThumbnailProvider.ConstructCacheKey(System.String,System.Int32)">
             <summary>
             Builds the composite cache key used by <see cref="F:ExpControlsLib.ThumbnailProvider._thumbnailCache"/>:
-            the file path and requested pixel size separated by a pipe.
+            the file path, requested pixel size, and filesystem last-write timestamp.
             </summary>
             <param name="filePath">Full path of the shell item.</param>
             <param name="size">Requested square thumbnail size, in pixels.</param>
@@ -3338,22 +3359,17 @@
         <member name="T:ExpControlsLib.ThumbnailRequestArgs">
             <summary>
             Identifies one thumbnail request as it moves from the UI-side manager to
-            the background provider. The generation prevents results from a previous
-            folder from being applied, while <see cref="P:ExpControlsLib.ThumbnailRequestArgs.RequestId"/> correlates the
-            provider callback with the request that admitted it.
+            the background provider. <see cref="P:ExpControlsLib.ThumbnailRequestArgs.RequestId"/> correlates the provider
+            callback with the request that admitted it.
             </summary>
-        </member>
-        <member name="P:ExpControlsLib.ThumbnailRequestArgs.Generation">
-            <summary>Folder/cache generation associated with the request.</summary>
         </member>
         <member name="P:ExpControlsLib.ThumbnailRequestArgs.RequestId">
             <summary>Unique identity assigned when the manager admits the request.</summary>
         </member>
         <member name="T:ExpControlsLib.ThumbnailReadyEventArgs">
             <summary>
-            Event arguments for thumbnail-ready notifications. The generation and
-            request identity allow the consumer to reject results that belong to an
-            obsolete folder or a request that has already been consumed.
+            Event arguments for thumbnail-ready notifications. The request identity
+            allows the consumer to reject stale or already-consumed results.
             </summary>
         </member>
         <member name="T:ExpControlsLib.VirtualListViewWrapper">
@@ -3362,14 +3378,14 @@
             Virtual and Regular modes. Provides a unified interface for data manipulation.
             </summary>
         </member>
-        <member name="F:ExpControlsLib.VirtualListViewWrapper._itemCache">
+        <member name="F:ExpControlsLib.VirtualListViewWrapper._indexedLviCache">
             <summary>
             Cache of ListViewItems for virtual mode, keyed by index.  
             Note: it is important to update a given ListViewItems if the associated CShellItem changes, 
             otherwise the ListView will display stale data.
             </summary>
         </member>
-        <member name="F:ExpControlsLib.VirtualListViewWrapper._indexPathToLvi">
+        <member name="F:ExpControlsLib.VirtualListViewWrapper._pathToLvi">
             <summary>
             Provides a mapping from file name to ListViewItems in the listview.  
             Note: This can only be used in non-virtual mode beucase in virtual mode ListViewItems do not persist.
@@ -3478,7 +3494,7 @@
             </summary>
             <param name="predicate">The filter predicate to re-apply.</param>
         </member>
-        <member name="M:ExpControlsLib.VirtualListViewWrapper.ApplyViewToListView">
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.ApplyFilteredViewToListView">
             <summary>
             Updates the ListView to reflect the current active view (filtered or master).
             </summary>
@@ -3538,12 +3554,26 @@
             </summary>
             <param name="index">The index where the item was inserted.</param>
         </member>
-        <member name="M:ExpControlsLib.VirtualListViewWrapper.ShiftCacheAfterRemoval(System.Int32)">
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.RemoveItemFromCachesAndShiftIndexes(System.Int32,System.String)">
             <summary>
             Shifts cached ListViewItem objects after an item has been removed from the list.
             This allows us to reuse existing ListViewItem objects for items that have merely shifted index.
             </summary>
             <param name="index">The index where the item was removed.</param>
+            <param name="path">The path of the item being removed.</param>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.RemoveAt(System.Int32)">
+            <summary>
+            Removes an item at the given location.
+            </summary>
+            <param name="index"></param>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.RemoveAndRedrawAt(System.Int32)">
+            <summary>
+            Removes an item at the given location and redraws the affected areas.
+            This shouldn't be used inside big loops because it is too inefficient.
+            </summary>
+            <param name="index"></param>
         </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.FindLVItem(WindowsApiLib.Shell.CShellItem)">
             <summary>
@@ -3600,6 +3630,13 @@
             </remarks>
             <param name="sender"></param>
             <param name="e"></param>
+        </member>
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.SyncCheckboxState(System.Windows.Forms.ListViewItem,WindowsApiLib.Shell.CShellItem)">
+            <summary>
+            Synchronizes the model's checked state to a freshly materialized virtual
+            ListViewItem. ListViewItem.StateImageIndex is zero-based: 0 is unchecked and
+            1 is checked.
+            </summary>
         </member>
         <member name="M:ExpControlsLib.VirtualListViewWrapper.GetShellItemAtViewIndex(System.Int32)">
             <summary>

@@ -16,8 +16,8 @@ namespace ExpControlsLib
     /// Creates and maintains separate ImageLists for different thumbnail sizes.
     ///
     /// <remarks>
-    /// Thumbnail requests are deduplicated by folder generation, item path, and
-    /// requested size. A request remains leased until its UI-side result is
+    /// Thumbnail requests are deduplicated by item path and requested size. A
+    /// request remains leased until its UI-side result is
     /// consumed, so repeated virtual-list callbacks cannot enqueue duplicate
     /// work while the provider callback is waiting in the UI message queue.
     /// A three-second lease expiration recovers from lost callbacks.
@@ -30,11 +30,11 @@ namespace ExpControlsLib
         private readonly ThumbnailProvider _thumbnailProvider;
         private readonly ExpList _expList;
         private int _activeSize = 0;
-        private int _generation = 0;
         
         private readonly Dictionary<int, HashedLinkedList<string>> _lruKeys = new();
         private readonly Dictionary<string, ThumbnailSlot> _slotByKey = new();
         private readonly Dictionary<string, PendingThumbnail> _pending = new();
+        private readonly System.Collections.Generic.HashSet<string> _invalidatedKeys = new();
         private readonly object _pendingLock = new();
         private readonly Dictionary<int, int> _capacities = new();
         private static readonly TimeSpan PendingLease = TimeSpan.FromSeconds(3);
@@ -127,8 +127,8 @@ namespace ExpControlsLib
             _expList.BeginListViewUpdate();
             try
             {
-                _expList.ResetListViewItemImageIndices();
                 _expList.LargeImageList = imageList;
+                _expList.ResetListViewItemImageIndices();
             }
             finally
             {
@@ -154,7 +154,8 @@ namespace ExpControlsLib
                 ColorDepth = ColorDepth.Depth32Bit
             };
             _imageLists[thumbnailSize] = imageList;
-            _capacities[thumbnailSize] = 16384 / thumbnailSize * 2;
+            if (!_capacities.ContainsKey(thumbnailSize))
+                _capacities[thumbnailSize] = 16384 / thumbnailSize * 2;
 
             return imageList;
         }
@@ -177,7 +178,6 @@ namespace ExpControlsLib
 
             var reqObj = new ThumbnailRequestArgs
             {
-                Generation = _generation,
                 Item = csi,
                 Size = thumbnailSize,
                 Index = itemIndex,
@@ -198,7 +198,7 @@ namespace ExpControlsLib
             if (csi == null) return;
 
             string key = CreateKey(csi.FullPath, thumbnailSize);
-            if (_slotByKey.TryGetValue(key, out var slot))
+            if (_slotByKey.TryGetValue(key, out var slot) && !_invalidatedKeys.Contains(key))
             {
                 // Update LRU
                 _lruKeys[thumbnailSize].Remove(key);
@@ -240,6 +240,17 @@ namespace ExpControlsLib
         }
 
         /// <summary>
+        /// Marks an item's cached thumbnail as stale after a Shell file-change notification.
+        /// The old image remains visible until the replacement arrives, but the next request
+        /// bypasses the slot cache and replaces that image-list entry in place.
+        /// </summary>
+        internal void InvalidateThumbnail(CShellItem item, int thumbnailSize)
+        {
+            if (item == null) return;
+            _invalidatedKeys.Add(CreateKey(item.FullPath, thumbnailSize));
+        }
+
+        /// <summary>
         /// Cancels provider work and clears the manager's request leases. This is
         /// used when the folder, display mode, or control lifetime changes.
         /// </summary>
@@ -257,7 +268,7 @@ namespace ExpControlsLib
         /// </summary>
         private bool TryBeginRequest(CShellItem item, int thumbnailSize, out Guid requestId)
         {
-            string key = CreateRequestKey(item, thumbnailSize, _generation);
+            string key = CreateRequestKey(item, thumbnailSize);
             DateTime now = DateTime.UtcNow;
 
             lock (_pendingLock)
@@ -285,33 +296,27 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// Completes and removes the lease for a ready result. A late result from
-        /// an older attempt is still usable when it has the same generation,
-        /// item, and size; this also handles providers that suppressed a retry
-        /// because the original task was still active.
+        /// Completes and removes the exact lease that admitted a ready result.
+        /// A stale callback cannot consume a newer request for the same file.
         /// </summary>
         private bool TryCompleteRequest(ThumbnailReadyEventArgs args)
         {
-            if (args.Item == null || args.Generation != _generation || args.RequestId == Guid.Empty)
+            if (args.Item == null || args.RequestId == Guid.Empty)
                 return false;
 
-            string key = CreateRequestKey(args.Item, args.Size, args.Generation);
+            string key = CreateRequestKey(args.Item, args.Size);
             lock (_pendingLock)
             {
-                if (!_pending.ContainsKey(key))
+                if (!_pending.TryGetValue(key, out var pending) || pending.RequestId != args.RequestId)
                     return false;
 
-                // A late result from an older attempt is still valid when it
-                // belongs to the same generation, item, and size. Consuming it
-                // also lets a retry recover if the provider suppressed the
-                // retry because the original task was still active.
                 _pending.Remove(key);
                 return true;
             }
         }
 
-        private static string CreateRequestKey(CShellItem item, int thumbnailSize, int generation) =>
-            $"{generation}|{item.FullPath}|{thumbnailSize}";
+        private static string CreateRequestKey(CShellItem item, int thumbnailSize) =>
+            $"{item.FullPath}|{thumbnailSize}";
 
         /// <summary>
         /// Removes leases that exceeded the three-second recovery window.
@@ -363,7 +368,13 @@ namespace ExpControlsLib
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ThumbnailImageListManager: AddThumbnail begin");
 
-            if (reqArgs is null || reqArgs.Item is null || !TryCompleteRequest(reqArgs))
+            if (reqArgs is null || reqArgs.Item is null)
+                return -1;
+
+            // Provider callbacks always carry a request ID and must match the active
+            // lease exactly. Retain the public direct-add path for callers and tests
+            // that construct event args themselves without going through the provider.
+            if (reqArgs.RequestId != Guid.Empty && !TryCompleteRequest(reqArgs))
                 return -1;
 
             if (thumbnail == null)
@@ -386,6 +397,7 @@ namespace ExpControlsLib
                     _expList.LargeImageList = imageList;
 
                 string key = CreateKey(reqArgs.Item.FullPath, size);
+                _invalidatedKeys.Remove(key);
                 int index = -1;
 
                 if (_slotByKey.TryGetValue(key, out var existingSlot)) //replace existing thumbnail
@@ -491,7 +503,6 @@ namespace ExpControlsLib
         /// </summary>
         public void Reset()
         {
-            _generation++;
             CancelPendingRequests();
 
             foreach (var imageList in _imageLists.Values)
@@ -504,6 +515,7 @@ namespace ExpControlsLib
             _imageLists.Clear();
             _lruKeys.Clear();
             _slotByKey.Clear();
+            _invalidatedKeys.Clear();
 
             _expList?.ClearListViewImageLists();
 
@@ -532,6 +544,7 @@ namespace ExpControlsLib
 
             _lruKeys.Clear();
             _slotByKey.Clear();
+            _invalidatedKeys.Clear();
 
             _expList?.ClearListViewImageLists();
         }
