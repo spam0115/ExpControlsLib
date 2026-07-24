@@ -52,7 +52,7 @@
     <ConfigurationOverrideFile></ConfigurationOverrideFile>
     <RegisterForComInterop>false</RegisterForComInterop>
     <RemoveIntegerChecks>false</RemoveIntegerChecks>
-    <WarningLevel>1</WarningLevel>
+    <WarningLevel>0</WarningLevel>
     <NoWarn>42016,42017,42018,42019,42030,42032,42104,42108,42109,42353,42354,42355,WFO1000</NoWarn>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <DebugType>full</DebugType>
@@ -109,5 +109,8 @@
   </ItemGroup>
   <PropertyGroup>
     <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <WarningLevel>0</WarningLevel>
   </PropertyGroup>
 </Project>

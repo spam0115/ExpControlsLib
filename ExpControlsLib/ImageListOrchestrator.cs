@@ -16,31 +16,29 @@ namespace ExpControlsLib
     [SupportedOSPlatform("windows")]
     internal sealed class ImageListOrchestrator : IDisposable
     {
+        private readonly ExpList _expList;
         private readonly ListView _listView;
         private readonly ThumbnailImageListManager _thumbnailManager;
-        private ListViewDisplayMode _currentMode;
         private bool _disposed;
 
         public ImageListOrchestrator(
             ExpList expList,
-            ListView listView,
-            ListViewDisplayMode initialMode,
-            int initialThumbnailSize)
+            ListView listView)
         {
             if (expList == null) throw new ArgumentNullException(nameof(expList));
+            _expList = expList;
             _listView = listView ?? throw new ArgumentNullException(nameof(listView));
-            _currentMode = initialMode;
-            _thumbnailManager = new ThumbnailImageListManager(expList, initialThumbnailSize);
+            _thumbnailManager = new ThumbnailImageListManager(expList, GetThumbnailSize(CurrentMode));
             _thumbnailManager.ThumbnailReady += OnThumbnailReady;
         }
 
         public event EventHandler<ThumbnailReadyEventArgs> ThumbnailReady;
 
-        public ListViewDisplayMode CurrentMode => _currentMode;
+        public ListViewDisplayMode CurrentMode => _expList.DisplayMode;
 
-        public bool IsThumbnailMode => IsThumbnailModeFor(_currentMode);
+        public bool IsThumbnailMode => IsThumbnailModeFor(CurrentMode);
 
-        public int ActiveThumbnailSize => GetThumbnailSize(_currentMode);
+        public int ActiveThumbnailSize => GetThumbnailSize(CurrentMode);
 
         /// <summary>
         /// Applies the appropriate image list to the ListView based on the current display mode.
@@ -49,8 +47,6 @@ namespace ExpControlsLib
         /// <param name="mode"></param>
         public void ApplyAppropriateImageList(ListViewDisplayMode mode)
         {
-            _currentMode = mode;
-
             if (IsThumbnailModeFor(mode))
             {
                 _thumbnailManager.SetExpListLargeImageList(GetThumbnailSize(mode));
@@ -137,15 +133,7 @@ namespace ExpControlsLib
 
         public void ClearCache() => _thumbnailManager.ClearCache();
 
-        public void LoadImageAtIndex(int index, int endIndex, Action loadIcons, Action loadThumbnails)
-        {
-            if (IsThumbnailMode)
-                loadThumbnails?.Invoke();
-            else
-                loadIcons?.Invoke();
-        }
-
-        public void LoadImagesForVisibleItems(Action loadIcons, Action loadThumbnails)
+        public void LoadImagesForRange(int index, int endIndex, Action loadIcons, Action loadThumbnails)
         {
             if (IsThumbnailMode)
                 loadThumbnails?.Invoke();

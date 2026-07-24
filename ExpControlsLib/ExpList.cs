@@ -939,7 +939,7 @@ namespace ExpControlsLib
 
                 // Initialize the image-list coordinator.
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ExpList_Load: Initializing image-list orchestrator...");
-                _imageListOrchestrator = new ImageListOrchestrator(this, _listView, DisplayMode, GetThumbnailSizeForMode());
+                _imageListOrchestrator = new ImageListOrchestrator(this, _listView);
                 _imageListOrchestrator.ThumbnailReady += ThumbnailManager_ThumbnailReady;
 
                 //set up sorter

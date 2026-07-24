@@ -20,7 +20,7 @@ namespace ExpControlsLib
         /// For built-in Windows view modes (Details, List, LargeIcon, Tile), the system image
         /// list is applied and each item's <see cref="ListViewItem.ImageIndex"/> is refreshed.
         /// For custom thumbnail modes, the ListView is switched to LargeIcon view and
-        /// <see cref="LoadThumbnailsForItems"/> is called to populate thumbnail images.
+        /// <see cref="LoadImagesForItems"/> is called to populate thumbnail images.
         /// </summary>
         /// <param name="value">The <see cref="ListViewDisplayMode"/> to configure for.</param>
         private void SetImageListForMode(ListViewDisplayMode value)
@@ -47,33 +47,29 @@ namespace ExpControlsLib
                 Debug.WriteLine("ExpList: SetAndLoadImageList End");
             }
         }
-        private void LoadImageAtIndex(int index, int endIndex = -1)
+        private void LoadImagesForRange(int index, int endIndex = -1)
         {
-            Debug.WriteLine("ExpList: LoadImageAtIndex Begin");
+            Debug.WriteLine("ExpList: LoadImagesForRange Begin");
             try
             {
-                _imageListOrchestrator.LoadImageAtIndex(
+                _imageListOrchestrator.LoadImagesForRange(
                     index,
                     endIndex,
-                    () => LoadIconsForItems(index, endIndex),
-                    () => LoadThumbnailsAtIndexes(index, endIndex));
+                    () => LoadIconsForRange(index, endIndex),
+                    () => LoadThumbnailsForRange(index, endIndex));
             }
             finally
             {
-                //Debug.WriteLine("ExpList: LoadImageAtIndex End");
+                //Debug.WriteLine("ExpList: LoadImagesForRange End");
             }
         }
 
-        private void LoadImagesForVisibleItems(ListViewDisplayMode? mode = null)
+        private void LoadImagesForVisibleItems()
         {
-            Debug.WriteLine("ExpList: LoadImagesForItems Begin");
+            Debug.WriteLine("ExpList: LoadImagesForVisibleItems Begin");
             try
             {
-                mode = mode == null ? DisplayMode : mode;
-
-                _imageListOrchestrator.LoadImagesForVisibleItems(
-                    () => LoadIconsForItems(true),
-                    () => LoadThumbnailsForItems(GetThumbnailSizeForMode(mode), true));
+                LoadImagesForItems(true);
             }
             finally
             {
@@ -82,13 +78,13 @@ namespace ExpControlsLib
         }
 
         /// <summary>
-        /// loads icons (not thumbnails) for the items in the list.
-        /// Can either load all icons or only icons near the visible section.
+        /// Loads the appropriate image for each item based on the current display mode.
+        /// Can either load all images or only images near the visible section.
         /// </summary>
-        /// <param name="onlyVisible">true if you only want icons near the visible items.</param>
-        private void LoadIconsForItems(bool onlyVisible = false)
+        /// <param name="onlyVisible">true if only images near the visible items should be loaded.</param>
+        private void LoadImagesForItems(bool onlyVisible = false)
         {
-            Debug.WriteLine("ExpList: LoadIconsForItems Begin");
+            Debug.WriteLine("ExpList: LoadImagesForItems Begin");
             try
             {
                 if (!_listView.IsHandleCreated) return;
@@ -100,54 +96,43 @@ namespace ExpControlsLib
                     {
                         int startIndex = 0;
                         int endIndex = _listViewWrapper.Count - 1;
+                        int topIndex = 0;
+
+                        //Preload downwards first, upwards later.
+                        if (onlyVisible)
+                        {
+                            topIndex = _listViewWrapper.GetTopIndex();
+                            _approxCountPerPage = _listViewWrapper.GetApproxVisibleCount();
+                            // Preload two pages below, then one page above, for smoother scrolling.
+                            endIndex = Math.Min(_listViewWrapper.Count - 1, topIndex + _approxCountPerPage * 2 - 1);
+                        }
+
+                        LoadImagesForVirtualRange(startIndex, endIndex);
 
                         if (onlyVisible)
                         {
-                            int topIndex = _listViewWrapper.GetTopIndex();
-                            _approxCountPerPage = _listViewWrapper.GetApproxVisibleCount();
-                            // Use a reasonable buffer (1 page above/below) for smoother scrolling
+                            // also preload backwards
                             startIndex = Math.Max(0, topIndex - _approxCountPerPage);
-                            endIndex = Math.Min(_listViewWrapper.Count - 1, topIndex + _approxCountPerPage * 2);
-                        }
-
-                        for (int i = startIndex; i <= endIndex; i++)
-                        {
-                            var csi = GetItem(i);
-                            if (csi is null)
-                            {
-                                Debug.WriteLine($"LoadIconsForItems: GetItem returned null for index {i}");
-                                continue;
-                            }
-                            int oldImageIndex = csi.ImageIndex;
-                            csi.ImageIndex = _imageListOrchestrator.GetInitialImageIndex(csi);
-
-                            var lvi = _listViewWrapper.GetLviFromVirtual(i);
-
-                            if (lvi is null)
-                            {
-                                Debug.WriteLine($"LoadIconsForItems: GetItemInternal returned null for index {i}");
-                                continue;
-                            }
-
-                            if (oldImageIndex != csi.ImageIndex)
-                            {
-                                lvi.ImageIndex = csi.ImageIndex;
-                                _listView.RedrawItems(i, i, false);
-                            }
+                            endIndex = Math.Max(0, topIndex - 1);
+                            LoadImagesForVirtualRange(startIndex, endIndex);
                         }
                     }
                     else
                     {
                         Rectangle clientRect = _listView.ClientRectangle;
+                        clientRect.Inflate(0, clientRect.Height);
 
                         foreach (ListViewItem item in _listView.Items)
                         {
                             if (item is null) continue;
                             if (!clientRect.IntersectsWith(item.Bounds)) continue;
+                            if (onlyVisible && item.ImageIndex != -1) continue;
 
-                            if (item.Tag is CShellItem csi && item.ImageIndex == -1)
+                            if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
                             {
-                                item.ImageIndex = _imageListOrchestrator.GetInitialImageIndex(csi);
+                                int imageIndex = _imageListOrchestrator.EnsureImage(csi);
+                                if (imageIndex != -1)
+                                    item.ImageIndex = imageIndex;
                             }
                         }
                     }
@@ -159,11 +144,48 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: LoadIconsForItems End");
+                Debug.WriteLine("ExpList: LoadImagesForItems End");
             }
         }
 
-        private void LoadIconsForItems(int startIndex, int endIndex = -1)
+        private void LoadImagesForVirtualRange(int startIndex, int endIndex)
+        {
+            for (int i = startIndex; i <= endIndex; i++)
+                RequestImageAtIndex(i);
+        }
+
+        /// <summary>Requests the appropriate image for a virtual item at the given index.</summary>
+        private bool RequestImageAtIndex(int i)
+        {
+            var csi = GetItem(i);
+            if (csi is null)
+            {
+                Debug.WriteLine($"LoadImagesForItems: GetItem returned null for index {i}");
+                return false;
+            }
+            int oldImageIndex = csi.ImageIndex;
+            int imageIndex = _imageListOrchestrator.EnsureImage(csi, i);
+            if (imageIndex != -1)
+                csi.ImageIndex = imageIndex;
+
+            var lvi = _listViewWrapper.GetLviFromVirtual(i);
+
+            if (lvi is null)
+            {
+                Debug.WriteLine($"LoadImagesForItems: GetItemInternal returned null for index {i}");
+                return false;
+            }
+
+            if (oldImageIndex != csi.ImageIndex)
+            {
+                lvi.ImageIndex = csi.ImageIndex;
+                _listView.RedrawItems(i, i, false);
+            }
+
+            return true;
+        }
+
+        private void LoadIconsForRange(int startIndex, int endIndex = -1)
         {
             Debug.WriteLine("ExpList: LoadIconsForItems Begin");
             try
@@ -231,110 +253,8 @@ namespace ExpControlsLib
             }
         }
 
-        /// <summary>
-        /// Gets the pixel size for a given thumbnail display mode
-        /// </summary>
-        private int GetThumbnailSizeForMode(ListViewDisplayMode? mode = null)
-        {
-            //Debug.WriteLine("ExpList: GetThumbnailSizeForMode Begin");
-            try
-            {
-                mode ??= DisplayMode;
-                return mode switch
-                {
-                    ListViewDisplayMode.Thumbnail => 48,
-                    ListViewDisplayMode.LargeThumbnail => 96,
-                    ListViewDisplayMode.ExtraLargeThumbnail => 256,
-                    _ => 48 // Default to 48 for non-thumbnail modes, though this should never be used
-                };
-            }
-            finally
-            {
-                //Debug.WriteLine("ExpList: GetThumbnailSizeForMode End");
-            }
-        }
 
-        /// <summary>
-        /// loads thumbnails (not icons) for the items in the list.
-        /// Can either load all thumbnails or only some thumbnails near the visible section.
-        /// </summary>
-        /// <param name="thumbnailSize">The size of the thumbnails to load.</param>
-        /// <param name="onlyVisible">If true, only loads thumbnails for items currently visible in the viewport that don't already have one.</param>
-        private void LoadThumbnailsForItems(int thumbnailSize, bool onlyVisible = false)
-        {
-            Debug.WriteLine("ExpList: LoadThumbnailsForItems Begin");
-
-            try
-            {
-                if (!_listView.IsHandleCreated) return;
-
-                EnterListViewEnumeration();
-                try
-                {
-                    if (VirtualMode)
-                    {
-                        int startIndex = 0, backFill = 0;
-                        int endIndex = _listViewWrapper.Count - 1;
-
-                        if (onlyVisible)
-                        {
-                            int topIndex = _listViewWrapper.GetTopIndex();
-                            _approxCountPerPage = _listViewWrapper.GetApproxVisibleCount();
-                            // Use a reasonable buffer (1 page above/below) for smoother scrolling
-                            startIndex = Math.Max(0, topIndex);
-                            endIndex = Math.Min(_listViewWrapper.Count - 1, topIndex + _approxCountPerPage * 2);
-                            backFill = startIndex - _approxCountPerPage / 2; // if user scrolls up, we want to have thumbnails ready for the previous page
-                        }
-
-                        for (int i = startIndex; i <= endIndex; i++)
-                        {
-                            var csi = _listViewWrapper.GetItem(i);
-                            if (_imageListOrchestrator.EnsureImage(csi, i) != -1) continue;
-                            Debug.WriteLine("ExpList: thumbnailManager.RequestThumbnail: " + i.ToString());
-                        }
-
-                        backFill = backFill < 0 ? 0 : backFill;
-                        for (int i = backFill; i < startIndex; i++)
-                        {
-                            var csi = _listViewWrapper.GetItem(i);
-                            if (csi is null)
-                            {
-                                Debug.WriteLine($"LoadThumbnailsForItems: GetItem returned null for index {i}");
-                                continue;
-                            }
-
-                            if (_imageListOrchestrator.EnsureImage(csi, i) != -1) continue;
-                        }
-                    }
-                    else
-                    {
-                        Rectangle clientRect = _listView.ClientRectangle;
-                        clientRect.Inflate(0, clientRect.Height); // buffer zone
-
-                        foreach (ListViewItem item in _listView.Items)
-                        {
-                            if (item is null) continue;
-                            if (onlyVisible && item.ImageIndex != -1) continue;
-                            if (!clientRect.IntersectsWith(item.Bounds)) continue;
-
-                            if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
-                                _imageListOrchestrator.EnsureImage(csi);
-                        }
-                    }
-                }
-                finally
-                {
-                    ExitListViewEnumeration();
-                }
-
-            }
-            finally
-            {
-                Debug.WriteLine("ExpList: LoadThumbnailsForItems End");
-            }
-        }
-
-        private void LoadThumbnailsAtIndexes(int startIndex, int endIndex = -1)
+        private void LoadThumbnailsForRange(int startIndex, int endIndex = -1)
         {
             Debug.WriteLine("ExpList: LoadThumbnailsAtIndexes Begin");
 
@@ -377,6 +297,29 @@ namespace ExpControlsLib
             finally
             {
                 Debug.WriteLine("ExpList: LoadThumbnailsAtIndexes End");
+            }
+        }
+
+        /// <summary>
+        /// Gets the pixel size for a given thumbnail display mode
+        /// </summary>
+        private int GetThumbnailSizeForMode(ListViewDisplayMode? mode = null)
+        {
+            //Debug.WriteLine("ExpList: GetThumbnailSizeForMode Begin");
+            try
+            {
+                mode ??= DisplayMode;
+                return mode switch
+                {
+                    ListViewDisplayMode.Thumbnail => 48,
+                    ListViewDisplayMode.LargeThumbnail => 96,
+                    ListViewDisplayMode.ExtraLargeThumbnail => 256,
+                    _ => 48 // Default to 48 for non-thumbnail modes, though this should never be used
+                };
+            }
+            finally
+            {
+                //Debug.WriteLine("ExpList: GetThumbnailSizeForMode End");
             }
         }
 
@@ -504,7 +447,7 @@ namespace ExpControlsLib
 
         public void EnsureVisible(int index)
         {
-            LoadImageAtIndex(index);
+            LoadImagesForRange(index);
 
             if (VirtualMode)
                 _listViewWrapper._listView.EnsureVisible(index);
