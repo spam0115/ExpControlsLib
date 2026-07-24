@@ -318,14 +318,8 @@ namespace ExpControlsLibTest
                     using var bmp = new Bitmap(size, size);
                     manager.AddThumbnail(new ThumbnailReadyEventArgs(csi, bmp, size), bmp);
 
-                    if (i < capacity)
-                    {
-                        Assert.That(imageList.Images.Count, Is.EqualTo(i + 1), $"ImageList should grow to capacity. Current: {imageList.Images.Count}");
-                    }
-                    else
-                    {
-                        Assert.That(imageList.Images.Count, Is.EqualTo(capacity), $"ImageList should NOT grow beyond capacity. Index: {i}");
-                    }
+                    Assert.That(imageList.Images.Count, Is.EqualTo(capacity),
+                        $"ImageList should remain preallocated at capacity. Index: {i}");
                 }
             }
             finally

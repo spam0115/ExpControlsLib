@@ -908,9 +908,9 @@ namespace ExpControlsLib
         /// <summary>
         /// Refreshes the display of a single item whose underlying filesystem or scoring data has changed.
         /// </summary>
-        public void UpdateListviewItemCallback(ListViewItem lvi, CShellItem csi)
+        private void UpdateLviUsingCsiData(ListViewItem lvi, CShellItem csi)
         {
-            //Debug.WriteLine("ExpList: UpdateLviUsingCsi Begin");
+            //Debug.WriteLine("ExpList: UpdateLviUsingCsiData Begin");
             try
             {
                 if (lvi == null || csi == null) return;

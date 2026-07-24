@@ -890,7 +890,7 @@ namespace ExpControlsLib
 
                 _listViewWrapper = new VirtualListViewWrapper(this, _listView);
                 _listViewWrapper.CreateListviewItemCallback = CreateListviewItemCallback;
-                _listViewWrapper.UpdateListviewItemCallback = UpdateListviewItemCallback;
+                _listViewWrapper.UpdateListviewItemCallback = UpdateLviUsingCsiData;
 
             }
             finally

@@ -198,6 +198,86 @@ namespace WindowsApiLibTest
         }
 
         [TestMethod]
+        public async Task FolderDeletion_ReceivesRmdirNotificationAsDeletedEvent()
+        {
+            string folderPath = Path.Combine(
+                Path.GetTempPath(),
+                "ShellRmdirNotification_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(folderPath);
+
+            ShellController controller = null;
+            CShellItem folderItem = null;
+            var observedFolderEvents = new List<string>();
+            object observedFolderEventsLock = new();
+            var deletedEvent = new TaskCompletionSource<ShellItemUpdateEventArgs>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            CShellItemUpdater.CShItemUpdateEventHandler handler = (sender, args) =>
+            {
+                if (!args.Item.IsFolder)
+                {
+                    return;
+                }
+
+                string eventDescription = $"{args.UpdateType}: {args.Item.FullPath}";
+                lock (observedFolderEventsLock)
+                {
+                    observedFolderEvents.Add(eventDescription);
+                }
+
+                if (args.UpdateType == CShItemUpdateType.Deleted &&
+                    (ReferenceEquals(args.Item, folderItem) ||
+                     string.Equals(args.Item.FullPath, folderPath, StringComparison.OrdinalIgnoreCase)))
+                {
+                    deletedEvent.TrySetResult(args);
+                }
+            };
+
+            try
+            {
+                await Runner.EnqueueWork(() =>
+                {
+                    controller = ShellController.Instance;
+                    controller.ShellUpdater.AllowUpdates = true;
+
+                    var tempFolder = controller.HierachyManager.FindAndAllowExpansion(Path.GetTempPath());
+                    Assert.IsNotNull(tempFolder, "The temporary folder should be present in the shell hierarchy.");
+                    tempFolder.LoadFolderContents(false, true);
+
+                    folderItem = controller.HierachyManager.FindAndAllowExpansion(folderPath);
+                    Assert.IsNotNull(folderItem, "The test folder should be present in the shell hierarchy.");
+                    Assert.IsTrue(folderItem.IsFolder, "The test item should be a folder.");
+
+                    controller.ShellUpdater.UpdateEvent += handler;
+                });
+
+                Directory.Delete(folderPath);
+
+                var completed = await Task.WhenAny(
+                    deletedEvent.Task,
+                    Task.Delay(TimeSpan.FromSeconds(10)));
+
+                Assert.AreSame(
+                    deletedEvent.Task,
+                    completed,
+                    $"Deleting a real folder should result in a translated Deleted event from the RMDIR notification path. Observed folder events: {string.Join(", ", observedFolderEvents)}");
+
+                var args = await deletedEvent.Task;
+                Assert.AreEqual(CShItemUpdateType.Deleted, args.UpdateType);
+                Assert.IsTrue(args.Item.IsFolder);
+                Assert.AreEqual(folderPath, args.Item.FullPath, true);
+            }
+            finally
+            {
+                if (controller is not null)
+                    controller.ShellUpdater.UpdateEvent -= handler;
+
+                if (Directory.Exists(folderPath))
+                    Directory.Delete(folderPath, true);
+            }
+        }
+
+        [TestMethod]
         public async Task TestHandleRenameItem_HappyPath()
         {
             await Runner.EnqueueWork(() =>

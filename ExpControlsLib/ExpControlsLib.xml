@@ -1298,7 +1298,7 @@
             <param name="sender">The source of the event.</param>
             <param name="e">The <see cref="T:WindowsApiLib.Shell.ShellItemUpdateEventArgs"/> containing the event data.</param>
         </member>
-        <member name="M:ExpControlsLib.ExpList.UpdateListviewItemCallback(System.Windows.Forms.ListViewItem,WindowsApiLib.Shell.CShellItem)">
+        <member name="M:ExpControlsLib.ExpList.UpdateLviUsingCsiData(System.Windows.Forms.ListViewItem,WindowsApiLib.Shell.CShellItem)">
             <summary>
             Refreshes the display of a single item whose underlying filesystem or scoring data has changed.
             </summary>

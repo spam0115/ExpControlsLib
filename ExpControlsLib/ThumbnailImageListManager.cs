@@ -37,6 +37,12 @@ namespace ExpControlsLib
         private readonly System.Collections.Generic.HashSet<string> _invalidatedKeys = new();
         private readonly object _pendingLock = new();
         private readonly Dictionary<int, int> _capacities = new();
+        // Indices occupied by preallocated dummy images. Real thumbnails
+        // replace these entries instead of growing the native image list.
+        private readonly Dictionary<int, Queue<int>> _freeIndices = new();
+        // ImageList retains the source image until its native handle is
+        // created, so keep each dummy bitmap alive for the lifetime of its list.
+        private readonly Dictionary<int, Bitmap> _dummyImages = new();
         private static readonly TimeSpan PendingLease = TimeSpan.FromSeconds(3);
         private readonly System.Threading.Timer _pendingLeaseTimer;
 
@@ -153,9 +159,29 @@ namespace ExpControlsLib
                 ImageSize = new Size(thumbnailSize, thumbnailSize),
                 ColorDepth = ColorDepth.Depth32Bit
             };
-            _imageLists[thumbnailSize] = imageList;
+
             if (!_capacities.ContainsKey(thumbnailSize))
-                _capacities[thumbnailSize] = 16384 / thumbnailSize * 2;
+                _capacities[thumbnailSize] = Math.Max(1, 16384 / thumbnailSize * 2);
+
+            int capacity = _capacities[thumbnailSize];
+            var dummy = new Bitmap(thumbnailSize, thumbnailSize);
+            try
+            {
+                // ImageList has no public capacity property. Populate every
+                // slot once so the native image list allocates its full
+                // configured size, then reuse those slots forever.
+                //imageList.Images[capacity - 1] = dummy; //crash
+                imageList.Images.AddRange(Enumerable.Repeat(dummy, capacity).ToArray());
+            }
+            catch
+            {
+                dummy.Dispose();
+                throw;
+            }
+
+            //_dummyImages[thumbnailSize] = dummy;
+            _freeIndices[thumbnailSize] = new Queue<int>(Enumerable.Range(0, capacity));
+            _imageLists[thumbnailSize] = imageList;
 
             return imageList;
         }
@@ -414,7 +440,7 @@ namespace ExpControlsLib
                 else //new thumbnail
                 {
                     bool reused = false;
-                    if (_lruKeys[size].Count >= _capacities[size]) //image quantity exceeds the size limit
+                    if (_freeIndices[size].Count == 0)
                     {
                         // Evict the least-recently-used slot that is NOT currently visible.
                         // Skipping visible items prevents the user from seeing a thumbnail
@@ -424,7 +450,8 @@ namespace ExpControlsLib
                         string? evictedKey = null;
                         ThumbnailSlot? evictedSlot = null;
 
-                        while (_lruKeys[size].Count > 0)
+                        int candidatesToCheck = _lruKeys[size].Count;
+                        for (int candidateNumber = 0; candidateNumber < candidatesToCheck; candidateNumber++)
                         {
                             string candidateKey = _lruKeys[size].RemoveFirst();
                             if (!_slotByKey.TryGetValue(candidateKey, out var candidateSlot))
@@ -446,8 +473,23 @@ namespace ExpControlsLib
                             break;
                         }
 
+                        // If every slot is visible, use the most recently added
+                        // slot as the bounded fallback rather than appending.
+                        if (evictedSlot == null)
+                        {
+                            foreach (string candidateKey in _lruKeys[size])
+                            {
+                                if (_slotByKey.TryGetValue(candidateKey, out var candidateSlot))
+                                {
+                                    evictedKey = candidateKey;
+                                    evictedSlot = candidateSlot;
+                                }
+                            }
+                        }
+
                         if (evictedSlot != null && evictedKey != null)
                         {
+                            _lruKeys[size].Remove(evictedKey);
                             _slotByKey.Remove(evictedKey);
                             if (evictedSlot.Item != null)
                             {
@@ -468,17 +510,21 @@ namespace ExpControlsLib
                         }
                     }
 
-                    if (!reused)
+                    if (!reused && _freeIndices[size].Count > 0)
                     {
+                        index = _freeIndices[size].Dequeue();
                         lock (imageList)
                         {
-                            imageList.Images.Add(thumbnail);
-                            index = imageList.Images.Count - 1;
+                            imageList.Images[index] = thumbnail;
                             var newSlot = new ThumbnailSlot(index, reqArgs.Item, key);
                             _lruKeys[size].Add(key);
                             _slotByKey[key] = newSlot;
                         }
+                        reused = true;
                     }
+
+                    if (!reused)
+                        return -1;
                     //Debug.WriteLine("\tImageList size: " + imageList.Images.Count.ToString());
                 }
 
@@ -512,7 +558,11 @@ namespace ExpControlsLib
                     imageList?.Dispose();
                 }
             }
+            foreach (var dummy in _dummyImages.Values)
+                dummy.Dispose();
             _imageLists.Clear();
+            _dummyImages.Clear();
+            _freeIndices.Clear();
             _lruKeys.Clear();
             _slotByKey.Clear();
             _invalidatedKeys.Clear();
@@ -540,7 +590,11 @@ namespace ExpControlsLib
                     imageList?.Dispose();
                 }
             }
+            foreach (var dummy in _dummyImages.Values)
+                dummy.Dispose();
             _imageLists.Clear();
+            _dummyImages.Clear();
+            _freeIndices.Clear();
 
             _lruKeys.Clear();
             _slotByKey.Clear();

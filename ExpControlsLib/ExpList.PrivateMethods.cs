@@ -36,7 +36,7 @@ namespace ExpControlsLib
 
                 ListViewItem lvi = new ListViewItem(item.DisplayName);
 
-                UpdateListviewItemCallback(lvi, item);
+                UpdateLviUsingCsiData(lvi, item);
 
                 return lvi;
             }
