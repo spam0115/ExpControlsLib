@@ -128,7 +128,19 @@ namespace ExpControlsLib
             //    _listView.VirtualListSize = 0;
             //}
 
+            // Cached virtual ListViewItems can be associated with the old native handle.
+            // Drop them before and after the checkbox toggle so the first repaint after a
+            // view switch materializes fresh items with the correct state image.
+            if (VirtualMode)
+                _indexedLviCache.Clear();
+
             _listView.CheckBoxes = active;
+
+            if (VirtualMode)
+            {
+                _indexedLviCache.Clear();
+                _listView.Invalidate();
+            }
 
             //if (wasVirtual)
             //{
@@ -1182,10 +1194,18 @@ namespace ExpControlsLib
             }
             item.NeedsRefresh = false;
 
-            // Sync checkbox visual state from the model without triggering the ItemChecked handler.
-            // In virtual mode ListViewItem.Checked does NOT drive the glyph \u2014 the ListView asks
-            // for StateImageIndex on every draw (1 = unchecked, 2 = checked). Set both so the
-            // property reads back correctly and the glyph actually renders.
+            SyncCheckboxState(lvi, item);
+
+            return lvi;
+        }
+
+        /// <summary>
+        /// Synchronizes the model's checked state to a freshly materialized virtual
+        /// ListViewItem. ListViewItem.StateImageIndex is zero-based: 0 is unchecked and
+        /// 1 is checked.
+        /// </summary>
+        private void SyncCheckboxState(ListViewItem lvi, CShellItem item)
+        {
             SuppressCheckEvents = true;
             try
             {
@@ -1194,8 +1214,6 @@ namespace ExpControlsLib
                     lvi.StateImageIndex = item.Checked ? 1 : 0;
             }
             finally { SuppressCheckEvents = false; }
-
-            return lvi;
         }
 
         /// <summary>
