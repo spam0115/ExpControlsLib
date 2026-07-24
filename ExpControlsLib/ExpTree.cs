@@ -723,6 +723,35 @@ namespace ExpControlsLib
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpTree_Load: End");
         }
 
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (_shellController is not null)
+                {
+                    _shellController.ShellUpdater.UpdateEvent -= ShellController_UpdateEventHandler;
+                }
+
+                _dragDrop.ExpandTimer.Tick -= ExpandNodeTimer_Tick;
+                _dragDrop.Dispose();
+
+                DropHandler?.Dispose();
+                DropHandler = null;
+                DragHandler?.Dispose();
+                DragHandler = null;
+
+                _rootLoadCts?.Cancel();
+                _rootLoadCts?.Dispose();
+                _rootLoadCts = null;
+
+                _staRunner?.Dispose();
+                _staRunner = null;
+                components?.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+
         /// <summary>
         /// Windows Message Handler for receiving Messages associated with a System Menu. 
         /// This is what causes Cascading menus to Display
@@ -1253,7 +1282,7 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Handles Shell item update notifications from <see cref="CShellItemUpdater"/>.
-        /// Responds to folder creation, deletion, rename, media change, and general update events
+        /// Responds to folder creation, deletion, rename, move, media change, and general update events
         /// by adding, removing, or refreshing the corresponding TreeNode in the tree.
         /// Only folder-related events are processed; non-folder events are silently ignored.
         /// </summary>
@@ -1264,13 +1293,26 @@ namespace ExpControlsLib
         /// </param>
         private void ShellController_UpdateEventHandler(object sender, ShellItemUpdateEventArgs e)
         {
+            if (IsDisposed || Disposing)
+            {
+                return;
+            }
+
             // Debug.WriteLine("Enter ExpTree OnItemUpdate -- " & e.Item.DisplayName & " - " & e.UpdateType.ToString)
             if (e.Item is not null && e.Item.IsFolder)  // no interest in non-folder events (or UpdateDir)
             {
 
                 if (InvokeRequired)
                 {
-                    this.BeginInvoke(new Action(() => { ShellController_UpdateEventHandler(sender, e); }));
+                    try
+                    {
+                        this.BeginInvoke(new Action(() => { ShellController_UpdateEventHandler(sender, e); }));
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // The control may be disposed while an update is being
+                        // marshalled from the updater thread.
+                    }
                     return;
                 }
 
@@ -1293,6 +1335,9 @@ namespace ExpControlsLib
                             break;
                         case CShItemUpdateType.Renamed:
                             HandleRenamedUpdate(e.Item, pNode);
+                            break;
+                        case CShItemUpdateType.Moved:
+                            HandleMovedUpdate(e.Item, pNode);
                             break;
                         case CShItemUpdateType.MediaChange:
                             HandleMediaChangeUpdate(e.Item, pNode);
@@ -1359,6 +1404,38 @@ namespace ExpControlsLib
                     renamedNode.EnsureVisible();
                 }
             }
+        }
+
+        private void HandleMovedUpdate(CShellItem item, TreeNode oldParentNode)
+        {
+            // HandleMoved emits an event for the old parent and another for the
+            // new parent.  Remove the old node when present, then add the item
+            // under its current parent if it is not already there.  The checks
+            // make this idempotent when the lower-level remove/add events were
+            // delivered first.
+            if (TryFindMatchingChildNode(oldParentNode, item, out var oldNode))
+            {
+                bool wasSelected = ReferenceEquals(_TreeView.SelectedNode, oldNode);
+                oldParentNode.Nodes.Remove(oldNode);
+                if (wasSelected)
+                {
+                    _TreeView.SelectedNode = null;
+                }
+            }
+
+            if (IsExcluded(item) || item.Parent is null)
+            {
+                return;
+            }
+
+            TreeNode? newParentNode = null;
+            if (!GetTreeNode(item.Parent, ref newParentNode) ||
+                TryFindMatchingChildNode(newParentNode, item, out _))
+            {
+                return;
+            }
+
+            InsertNode(MakeNode(item), newParentNode);
         }
 
         private void HandleMediaChangeUpdate(CShellItem item, TreeNode parentNode)

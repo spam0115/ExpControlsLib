@@ -45,6 +45,10 @@ namespace WindowsApiLib.Shell
                 : CShellItemFactory.Create(CSIDL.DESKTOP);
             HierachyManager = new CShellItemHierachyManager(hierarchyDesktop, hierarchyDesktop);
             ShellUpdater = new CShellItemUpdater(HierachyManager, (uint)SHCNE.DISKEVENTS);
+            // ShellController owns the updater used by the controls.  Keep the
+            // low-level updater opt-in for callers that construct it directly,
+            // but enable notifications for the controller-managed service.
+            ShellUpdater.AllowUpdates = true;
         }
 
         public static ShellController Initialize() 

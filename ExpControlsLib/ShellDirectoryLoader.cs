@@ -104,19 +104,19 @@ namespace ExpControlsLib
             cancellationToken.ThrowIfCancellationRequested();
 
             IReadOnlyList<CShellItem> folders = options.IncludeFolders
-                ? new List<CShellItem>(CopyItems(canonicalFolder.Directories, cancellationToken))
+                ? new List<CShellItem>(ShallowCopyItems(canonicalFolder.Directories, cancellationToken))
                 : Array.Empty<CShellItem>();
 
             cancellationToken.ThrowIfCancellationRequested();
 
             IReadOnlyList<CShellItem> files = options.IncludeFiles
-                ? new List<CShellItem>(CopyItems(canonicalFolder.Files, cancellationToken))
+                ? new List<CShellItem>(ShallowCopyItems(canonicalFolder.Files, cancellationToken))
                 : Array.Empty<CShellItem>();
 
             return new ShellDirectorySnapshot(canonicalFolder, folders, files);
         }
 
-        private static List<CShellItem> CopyItems(
+        private static List<CShellItem> ShallowCopyItems(
             IEnumerable<CShellItem>? items,
             CancellationToken cancellationToken)
         {

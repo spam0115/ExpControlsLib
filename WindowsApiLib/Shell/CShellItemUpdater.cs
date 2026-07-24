@@ -166,20 +166,34 @@ namespace WindowsApiLib.Shell
 
             foreach (var handler in handlers)
             {
-                if (handler.Target is System.Windows.Forms.Control control && control.InvokeRequired)
+                if (handler.Target is System.Windows.Forms.Control control)
                 {
-                    control.BeginInvoke(handler, new object[] { sender, e });
+                    if (control.IsDisposed || control.Disposing)
+                        continue;
+
+                    if (control.InvokeRequired)
+                    {
+                        try
+                        {
+                            control.BeginInvoke(handler, new object[] { sender, e });
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            // The control can be disposed between the checks
+                            // above and BeginInvoke.  A stale UI subscriber
+                            // must not terminate the shell-notification loop.
+                        }
+                        continue;
+                    }
                 }
-                else
+
+                try
                 {
-                    try
-                    {
-                        handler.DynamicInvoke(sender, e);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine("Error invoking event handler: " + ex.ToString());
-                    }
+                    handler.DynamicInvoke(sender, e);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("Error invoking event handler: " + ex.ToString());
                 }
             }
         }

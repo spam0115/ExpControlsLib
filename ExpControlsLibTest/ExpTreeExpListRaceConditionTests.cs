@@ -140,6 +140,8 @@ namespace ExpControlsLibTest
                     catch (Exception ex)
                     {
                         failure = ex;
+                        TestContext.Out.WriteLine($"Test iteration {i} failed: {ex}");
+                        break;
                     }
                     finally
                     {
@@ -239,6 +241,8 @@ namespace ExpControlsLibTest
                     catch (Exception ex)
                     {
                         failure = ex;
+                        TestContext.Out.WriteLine($"Test iteration {i} failed: {ex}");
+                        break;
                     }
                     finally
                     {
@@ -296,12 +300,16 @@ namespace ExpControlsLibTest
                         expList.Initialize(ShellController.Instance);
                         expTree.Initialize(ShellController.Instance);
 
+
                         using var form = new Form();
                         form.Controls.Add(expTree);
                         form.Controls.Add(expList);
                         form.Show();
 
-                        await WaitForCondition(() => expTree.Nodes.Count > 0, "ExpTree root node to load");
+                        await WaitForCondition(() => expTree.Nodes.Count > 0, "ExpTree root node to load"); //wait for slow setup to finish becaue doing any the of the time sensitive stuff before.
+
+                        CShellItem? foundByHierarchyManager = ShellController.Instance.HierachyManager.FindAndAllowExpansion(_testPath);
+                        Assert.IsNotNull(foundByHierarchyManager, "Find by path should returned null");
 
                         await expTree.ExpandANodeAsync(_testPath);
                         await expList.LoadDirectoryAsync(_testPath);
@@ -314,19 +322,21 @@ namespace ExpControlsLibTest
                         Assert.IsNotNull(treeItem);
                         Assert.IsNotNull(listItem);
 
-                        CShellItem? foundByPath = ShellController.Instance.HierachyManager.Find(_testPath);
-                        Assert.IsNotNull(foundByPath, "Find by path should return an item");
+                        Assert.AreSame(treeItem.FullPath, foundByHierarchyManager.FullPath, "treeItem and foundByHierarchyManager should have the same path");
+                        Assert.AreSame(listItem.FullPath, foundByHierarchyManager.FullPath, "listItem and foundByHierarchyManager should have the same path");
 
                         Assert.That(treeItem, Is.SameAs(listItem),
                             "ExpTree.SelectedItem and ExpList.CurrentFolderCsi should be identical references");
-                        Assert.That(listItem, Is.SameAs(foundByPath),
+                        Assert.That(listItem, Is.SameAs(foundByHierarchyManager),
                             "ExpList.CurrentFolderCsi should be the same reference as HierachyManager.Find result");
-                        Assert.That(treeItem, Is.SameAs(foundByPath),
+                        Assert.That(treeItem, Is.SameAs(foundByHierarchyManager),
                             "ExpTree.SelectedItem should be the same reference as HierachyManager.Find result");
                     }
                     catch (Exception ex)
                     {
                         failure = ex;
+                        TestContext.Out.WriteLine($"Test iteration {i} failed: {ex}");
+                        break;
                     }
                     finally
                     {

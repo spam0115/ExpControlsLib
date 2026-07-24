@@ -14,6 +14,17 @@ namespace WindowsApiLibTest
     {
         private StaThreadRunner Runner => AssemblyInitializer.Runner;
 
+        [TestMethod]
+        public async Task ControllerEnablesShellUpdates()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                Assert.IsTrue(
+                    ShellController.Instance.ShellUpdater.AllowUpdates,
+                    "The controller-managed updater must be enabled so controls receive shell notifications.");
+            });
+        }
+
         /// <summary>
         /// test the conditional loading logic which considers age time out for items before loading.
         /// </summary>
