@@ -25,7 +25,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Removes the item at the specified index.
         /// </summary>
-        public void RemoveAt(int index) => _listViewWrapper.RemoveAt(index);
+        public void RemoveAt(int index) => _listViewWrapper.RemoveAndRedrawAt(index);
 
         /// <summary>
         /// Sets the sort column and order without triggering an actual sort.

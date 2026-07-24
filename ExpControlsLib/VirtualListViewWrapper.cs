@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 using TreeLib;
+using WindowsApiLib;
 using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
 
@@ -19,20 +20,20 @@ namespace ExpControlsLib
     [SupportedOSPlatform("windows")]
     internal class VirtualListViewWrapper
     {
-        private const int BatchThreshold = 20;
+        private const int BatchThreshold = 10;
         private readonly ExpList _expList;
         /// <summary>
         /// Cache of ListViewItems for virtual mode, keyed by index.  
         /// Note: it is important to update a given ListViewItems if the associated CShellItem changes, 
         /// otherwise the ListView will display stale data.
         /// </summary>
-        private readonly Dictionary<int, ListViewItem> _itemCache = new(); 
+        private readonly LruDictionary<int, ListViewItem> _indexedLviCache = new(1000); 
         private readonly Dictionary<string, int> _pathToIndex = new(StringComparer.OrdinalIgnoreCase);
         /// <summary>
         /// Provides a mapping from file name to ListViewItems in the listview.  
         /// Note: This can only be used in non-virtual mode beucase in virtual mode ListViewItems do not persist.
         /// </summary>
-        private readonly Dictionary<string, ListViewItem> _indexPathToLvi = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ListViewItem> _pathToLvi = new(StringComparer.OrdinalIgnoreCase);
         private SortOrder _sortOrder = SortOrder.None;
         private int _sortColumn = 0;
         private SortOrder _prevSortOrder = SortOrder.None;
@@ -189,7 +190,7 @@ namespace ExpControlsLib
                     _filteredView.Add(item);
             }
 
-            ApplyViewToListView();
+            ApplyFilteredViewToListView();
         }
 
         /// <summary>
@@ -199,7 +200,7 @@ namespace ExpControlsLib
         {
             if (_filteredView == null) return;
             _filteredView = null;
-            ApplyViewToListView();
+            ApplyFilteredViewToListView();
         }
 
         /// <summary>
@@ -217,10 +218,10 @@ namespace ExpControlsLib
         /// <summary>
         /// Updates the ListView to reflect the current active view (filtered or master).
         /// </summary>
-        private void ApplyViewToListView()
+        private void ApplyFilteredViewToListView()
         {
             LastTopIndex = -1;
-            _itemCache.Clear();
+            _indexedLviCache.Clear(); //the indxes are about to change so we clear this instead of doing a complicated remapping of the cache
             RecreateIndexMapping();
 
             if (VirtualMode)
@@ -303,14 +304,14 @@ namespace ExpControlsLib
                     _listView.RetrieveVirtualItem -= OnRetrieveVirtualItem; //just in case
                     _listView.RetrieveVirtualItem += OnRetrieveVirtualItem;
                     _listView.Items.Clear();
-                    _indexPathToLvi.Clear();
+                    _pathToLvi.Clear();
                 }
                 else
                 {
                     _listView.RetrieveVirtualItem -= OnRetrieveVirtualItem;
                     Items.Clear();
                     _filteredView = null;
-                    _itemCache.Clear();
+                    _indexedLviCache.Clear();
                     _pathToIndex.Clear();
                 }
 
@@ -429,9 +430,9 @@ namespace ExpControlsLib
             }
             Items.Clear();
             _filteredView = null;
-            _itemCache.Clear();
+            _indexedLviCache.Clear();
             _pathToIndex.Clear();
-            _indexPathToLvi.Clear();
+            _pathToLvi.Clear();
         }
 
         /// <summary>
@@ -447,7 +448,7 @@ namespace ExpControlsLib
             if (VirtualMode)
             {
                 Items.AddRange(items);
-                ApplyViewToListView();
+                ApplyFilteredViewToListView();
             }
             else
             {
@@ -456,7 +457,7 @@ namespace ExpControlsLib
                 {
                     var lvi = CreateListviewItemCallback?.Invoke(item) ?? new ListViewItem(item.DisplayName) { Tag = item };
                     _listView.Items.Add(lvi);
-                    _indexPathToLvi[item.FullPath] = lvi;
+                    _pathToLvi[item.FullPath] = lvi;
                 }
                 _listView.EndUpdate();
             }
@@ -469,13 +470,13 @@ namespace ExpControlsLib
             if (VirtualMode)
             {
                 Items.Add(item);
-                ApplyViewToListView();
+                ApplyFilteredViewToListView();
             }
             else
             {
                 var lvi = CreateListviewItemCallback?.Invoke(item) ?? new ListViewItem(item.DisplayName) { Tag = item };
                 _listView.Items.Add(lvi);
-                _indexPathToLvi[item.FullPath] = lvi;
+                _pathToLvi[item.FullPath] = lvi;
             }
         }
 
@@ -486,14 +487,14 @@ namespace ExpControlsLib
         /// <param name="index">The index where the item was inserted.</param>
         private void ShiftCacheAfterInsertion(int index)
         {
-            if (_itemCache.Count == 0) return;
+            if (_indexedLviCache.Count == 0) return;
 
             // Shift all items from the insertion point onwards up by one index
-            var keysToShift = _itemCache.Keys.Where(k => k >= index).OrderByDescending(k => k).ToList();
+            var keysToShift = _indexedLviCache.Keys.Where(k => k >= index).OrderByDescending(k => k).ToList();
             foreach (var k in keysToShift)
             {
-                _itemCache[k + 1] = _itemCache[k];
-                _itemCache.Remove(k);
+                _indexedLviCache[k + 1] = _indexedLviCache[k];
+                _indexedLviCache.Remove(k);
             }
         }
 
@@ -524,7 +525,7 @@ namespace ExpControlsLib
                     ShiftCacheAfterInsertion(masterIndex);
                 }
 
-                ApplyViewToListView();
+                ApplyFilteredViewToListView();
 
                 // Determine if we need to redraw visible items
                 int viewIndex = index; // For filtered view, this is the position in the rebuilt view
@@ -545,7 +546,7 @@ namespace ExpControlsLib
             {
                 var lvi = CreateListviewItemCallback?.Invoke(item) ?? new ListViewItem(item.DisplayName) { Tag = item };
                 _listView.Items.Insert(index, lvi);
-                _indexPathToLvi[item.FullPath] = lvi;
+                _pathToLvi[item.FullPath] = lvi;
                 lvi.EnsureVisible();
             }
         }
@@ -557,20 +558,24 @@ namespace ExpControlsLib
         /// <param name="index">The index where the item was removed.</param>
         private void ShiftCacheAfterRemoval(int index)
         {
-            if (_itemCache.Count == 0) return;
+            if (_indexedLviCache.Count == 0) return;
 
             // Remove the deleted item from cache
-            _itemCache.Remove(index);
+            _indexedLviCache.Remove(index);
 
             // Shift all subsequent items down by one index
-            var keysToShift = _itemCache.Keys.Where(k => k > index).OrderBy(k => k).ToList();
+            var keysToShift = _indexedLviCache.Keys.Where(k => k > index).OrderBy(k => k).ToList();
             foreach (var k in keysToShift)
             {
-                _itemCache[k - 1] = _itemCache[k];
-                _itemCache.Remove(k);
+                _indexedLviCache[k - 1] = _indexedLviCache[k];
+                _indexedLviCache.Remove(k);
             }
         }
 
+        /// <summary>
+        /// Removes an item at the given location.
+        /// </summary>
+        /// <param name="index"></param>
         public void RemoveAt(int index)
         {
             if (index < 0 || index >= Count) return;
@@ -588,32 +593,54 @@ namespace ExpControlsLib
                     if (masterIndex < 0) return;
 
                     Items.RemoveAt(masterIndex);
-
+                    _pathToIndex.Remove(item.FullPath);
                     ShiftCacheAfterRemoval(masterIndex);
-                }
-
-                ApplyViewToListView();
-
-                // Reset viewport cache and determine if we need to redraw
-                int top = GetTopIndex();
-                int visibleCount = GetApproxVisibleCount();
-                int lastVisible = top + visibleCount;
-
-                // Only redraw if the removal affects currently visible items or items that shift into view
-                int startRedraw = Math.Max(index, top);
-                int endRedraw = Math.Min(lastVisible, ActiveViewCount - 1);
-
-                if (startRedraw <= endRedraw)
-                {
-                    _listView.RedrawItems(startRedraw, endRedraw, false);
                 }
             }
             else
             {
                 var lvi = _listView.Items[index];
                 if (lvi.Tag is CShellItem csi)
-                    _indexPathToLvi.Remove(csi.FullPath);
+                    _pathToLvi.Remove(csi.FullPath);
                 _listView.Items.RemoveAt(index);
+            }
+        }
+
+        /// <summary>
+        /// Removes an item at the given location and redraws the affected areas.
+        /// This shouldn't be used inside big loops because it is too inefficient.
+        /// </summary>
+        /// <param name="index"></param>
+        public void RemoveAndRedrawAt(int index)
+        {
+            if (index < 0 || index >= Count) return;
+
+            Debug.WriteLine("VirtualListViewWrapper.RemoveAndRedrawAt - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+
+            RemoveAt(index);
+
+            if (VirtualMode)
+            {
+                //ApplyFilteredViewToListView(); isn't this only needed for additions, not removals?
+
+                RedrawStartingAt(index);
+            }
+        }
+
+        private void RedrawStartingAt(int index)
+        {
+            // redraw new sections if they are in the viewport
+            int top = GetTopIndex();
+            int visibleCount = GetApproxVisibleCount();
+            int lastVisible = top + visibleCount;
+
+            // Only redraw if the removal affects currently visible items or new items shift into view
+            int startRedraw = Math.Max(index, top);
+            int endRedraw = Math.Min(lastVisible, ActiveViewCount - 1);
+
+            if (startRedraw <= endRedraw)
+            {
+                _listView.RedrawItems(index, endRedraw, false);
             }
         }
 
@@ -623,11 +650,11 @@ namespace ExpControlsLib
             var toRemove = new HashSet<CShellItem>(items);
             if (toRemove.Count == 0) return;
 
+            // Process small number of removals individually to avoid full redraw
             if (toRemove.Count <= BatchThreshold)
             {
                 try { 
-                    _listView.SuspendLayout();
-                    // Process small number of removals individually to avoid full redraw
+                    //_listView.SuspendLayout();
                     var indices = new List<int>();
                     foreach (var item in items)
                     {
@@ -637,15 +664,17 @@ namespace ExpControlsLib
 
                     // Remove in reverse order to avoid index shifting problems
                     indices.Sort((a, b) => b.CompareTo(a));
+                    var first = indices.Last();
                     foreach (int index in indices)
                     {
                         RemoveAt(index);
                     }
 
+                    RedrawStartingAt(first);
                 }
                 finally
                 {
-                    _listView.ResumeLayout();
+                    //_listView.ResumeLayout();
                 }
 
                 return;
@@ -672,11 +701,11 @@ namespace ExpControlsLib
                     Items.Clear();
                     Items.AddRange(remaining);
 
-                    // For large batches, it's safer and often faster to just clear the cache
-                    _itemCache.Clear();
+                    // For large batches, it's safer and often faster to just clear the cache rather than trying to remap it
+                    _indexedLviCache.Clear();
                 }
 
-                ApplyViewToListView();
+                ApplyFilteredViewToListView();
                 _listView.Invalidate();
             }
             else
@@ -689,7 +718,7 @@ namespace ExpControlsLib
                     {
                         if (_listView.Items[i].Tag is CShellItem csi && toRemove.Contains(csi))
                         {
-                            _indexPathToLvi.Remove(csi.FullPath);
+                            _pathToLvi.Remove(csi.FullPath);
                             _listView.Items.RemoveAt(i);
                         }
                     }
@@ -766,7 +795,7 @@ namespace ExpControlsLib
 
             try
             {
-                if (_indexPathToLvi.TryGetValue(item.FullPath, out var lvi))
+                if (_pathToLvi.TryGetValue(item.FullPath, out var lvi))
                     return lvi;
                 return null;
             }
@@ -801,7 +830,7 @@ namespace ExpControlsLib
             }
             else
             {
-                if (_indexPathToLvi.TryGetValue(fullPath, out var lvi))
+                if (_pathToLvi.TryGetValue(fullPath, out var lvi))
                     return lvi.Index;
             }
             return -1;
@@ -907,14 +936,14 @@ namespace ExpControlsLib
                 int index = GetIndexFromFullPath(csi.FullPath);
                 if (VirtualMode)
                 {
-                    if (_itemCache.ContainsKey(index)) {
-                        lvi = _itemCache[index];
+                    if (_indexedLviCache.ContainsKey(index)) {
+                        lvi = _indexedLviCache[index];
                         UpdateListviewItemCallback?.Invoke(lvi, csi);
                     }
                     else
                     {
                         lvi = CreateLviFromCsi(csi);
-                        _itemCache[index] = lvi;
+                        _indexedLviCache[index] = lvi;
                     }
                 }
                 else
@@ -960,7 +989,7 @@ namespace ExpControlsLib
         {
             if (VirtualMode)
             {
-                _itemCache.Clear();
+                _indexedLviCache.Clear();
                 _listView.Invalidate();
             }
             else
@@ -976,7 +1005,7 @@ namespace ExpControlsLib
 
         public void InvalidateCache()
         {
-            _itemCache.Clear();
+            _indexedLviCache.Clear();
         }
 
         public int GetRowHeight()
@@ -1028,7 +1057,7 @@ namespace ExpControlsLib
                     if (item != null) item.ImageIndex = -1;
                 }
 
-                foreach (var lvi in _itemCache.Values)
+                foreach (var lvi in _indexedLviCache.Values)
                 {
                     if (lvi != null) lvi.ImageIndex = -1;
                 }
@@ -1090,12 +1119,12 @@ namespace ExpControlsLib
             {
                 Debug.WriteLine("VirtualListViewWrapper.GetLviFromVirtual needs refresh - " + item.Text);
                 var lvi = CreateLviFromCsi(item);
-                _itemCache[index] = lvi;
+                _indexedLviCache[index] = lvi;
                 return lvi;
             }
             else
             {
-                if (_itemCache.TryGetValue(index, out var lvi))
+                if (_indexedLviCache.TryGetValue(index, out var lvi))
                 {
                     // Sync ImageIndex if it was updated in the background while item was cached.
                     // Bidirectional: also pick up when item.ImageIndex has been reset to -1
@@ -1121,7 +1150,7 @@ namespace ExpControlsLib
                 {
                     //Debug.WriteLine("VirtualListViewWrapper.GetLviFromVirtual failed to get item #" + index.ToString() + " from cache - " + item.Text);
                     lvi = CreateLviFromCsi(item);
-                    _itemCache[index] = lvi;
+                    _indexedLviCache[index] = lvi;
                     return lvi;
                 }
             }
@@ -1210,7 +1239,7 @@ namespace ExpControlsLib
 
             if (VirtualMode)
             {
-                if (_itemCache.TryGetValue(viewIndex, out var lvi))
+                if (_indexedLviCache.TryGetValue(viewIndex, out var lvi))
                 {
                     SuppressCheckEvents = true;
                     try
@@ -1356,7 +1385,7 @@ namespace ExpControlsLib
             }
 
             RecreateIndexMapping();
-            _itemCache.Clear();
+            _indexedLviCache.Clear();
             _listView.Refresh();
 
             // Restore selection by finding the new indices of the previously selected items
@@ -2010,6 +2039,13 @@ namespace ExpControlsLib
                 LVM_SCROLL,
                 IntPtr.Zero,
                 new IntPtr(dy));
+        }
+
+        internal void ClearSelected()
+        {
+            _listView.SelectedIndices.Clear();
+            if (!VirtualMode)
+                _listView.SelectedItems.Clear();
         }
 
         ///// <summary>

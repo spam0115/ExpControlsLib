@@ -1130,7 +1130,7 @@ namespace ExpControlsLib
             var index = _listViewWrapper.GetIndex(item);
             if (index >= 0)
             {
-                _listViewWrapper.RemoveAt(index);
+                _listViewWrapper.RemoveAndRedrawAt(index);
             }
         }
     }

@@ -99,44 +99,37 @@ namespace ExpControlsLib
                     return;
                 }
 
-                int topItemIndex = -1;
-                int[] deletedIndices = Array.Empty<int>();
-                bool hasItems = VirtualMode ? _listView.VirtualListSize > 0 : _listView.Items.Count > 0;
-                if (hasItems)
-                {
-                    topItemIndex = _listViewWrapper.GetTopIndex();
-                    deletedIndices = _listView.SelectedIndices.Cast<int>().ToArray();
-                    _listView.SelectedIndices.Clear();
-                    if (!VirtualMode)
-                        _listView.SelectedItems.Clear();
-                }
-
                 var capturedParentPidl = CPidl.Clone(_currentFolderCsi.PIDL);
                 _shellCommandService?.InvokeVerbAsync("delete", capturedParentPidl, relPidls);
 
-                if (hasItems)
+                int topItemIndex = -1;
+                int[] deletedIndices = Array.Empty<int>();
+
+                topItemIndex = _listViewWrapper.GetTopIndex();
+                deletedIndices = _listView.SelectedIndices.Cast<int>().ToArray();
+                var csiToRemove = _listViewWrapper.SelectedCShellItems.ToArray();
+                _listViewWrapper.ClearSelected();
+
+                try
                 {
-                    try
+                    _shellController.HierachyManager.RemoveRange(csiToRemove, raiseEvents: false);
+                    _listViewWrapper.RemoveItems(csiToRemove);
+
+                    if (csiToRemove.Count() > _listViewWrapper.GetApproxVisibleCount())
+                        OnScroll(); //todo: shouldn't call OnScroll.  should call a function specifically to fetch thumbs from the original bottom viewport index onwards
+
+                    if (_currentFolderCsi != null)
                     {
-                        _shellController.HierachyManager.RemoveRange(_listViewWrapper.SelectedCShellItems, raiseEvents: false);
-                        _listViewWrapper.RemoveItems(_listViewWrapper.SelectedCShellItems);
-
-                        if (_listViewWrapper.SelectedCShellItems.Count() > _listViewWrapper.GetApproxVisibleCount())
-                            OnScroll();
-
-                        if (_currentFolderCsi != null)
-                        {
-                            string path = _currentFolderCsi.FullPath.StartsWith(":")
-                                ? _currentFolderCsi.DisplayName
-                                : _currentFolderCsi.FullPath;
-                            ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
-                        }
-
-                        ExpListDeleted?.Invoke(this, new ExpListDeletedEventArgs(_listViewWrapper.SelectedCShellItems.ToArray(), deletedIndices));
+                        string path = _currentFolderCsi.FullPath.StartsWith(":")
+                            ? _currentFolderCsi.DisplayName
+                            : _currentFolderCsi.FullPath;
+                        ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
                     }
-                    finally
-                    {
-                    }
+
+                    ExpListDeleted?.Invoke(this, new ExpListDeletedEventArgs(csiToRemove, deletedIndices));
+                }
+                finally
+                {
                 }
 
                 if (topItemIndex >= 0 && deleteCount > _approxCountPerPage)
@@ -815,7 +808,7 @@ namespace ExpControlsLib
                 int index = _listViewWrapper.GetIndexFromFullPath(item.FullPath);
                 if (index >= 0)
                 {
-                    _listViewWrapper.RemoveAt(index);
+                    _listViewWrapper.RemoveAndRedrawAt(index);
                 }
                 return true;
             }
@@ -843,7 +836,7 @@ namespace ExpControlsLib
 
             if (index >= 0)
             {
-                _listViewWrapper.RemoveAt(index);
+                _listViewWrapper.RemoveAndRedrawAt(index);
                 if (!IsExcluded(item) && (_filter == null || _filter(item)))
                 {
                     _listViewWrapper.InsertSorted(item);
