@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Runtime.Versioning;
@@ -20,14 +21,14 @@ namespace ExpControlsLib
         /// </summary>
         public async Task GoBack()
         {
-            Debug.WriteLine("ExpList: GoBack Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GoBack Begin");
             try
             {
                 await _navigation.GoBackAsync(item => LoadDirectoryBaseAsync(item, true));
             }
             finally
             {
-                Debug.WriteLine("ExpList: GoBack End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GoBack End");
             }
         }
 
@@ -36,14 +37,14 @@ namespace ExpControlsLib
         /// </summary>
         public async Task GoForward()
         {
-            Debug.WriteLine("ExpList: GoForward Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GoForward Begin");
             try
             {
                 await _navigation.GoForwardAsync(item => LoadDirectoryBaseAsync(item, true));
             }
             finally
             {
-                Debug.WriteLine("ExpList: GoForward End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GoForward End");
             }
         }
 
@@ -52,7 +53,7 @@ namespace ExpControlsLib
         /// </summary>
         public async Task GoUp()
         {
-            Debug.WriteLine("ExpList: GoUp Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GoUp Begin");
             try
             {
                 if (_navigation.Current?.Parent is { } parent)
@@ -62,7 +63,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: GoUp End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GoUp End");
             }
         }
 

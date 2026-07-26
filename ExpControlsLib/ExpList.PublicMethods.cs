@@ -45,14 +45,14 @@ namespace ExpControlsLib
         /// <param name="order">The sort order.</param>
         public void Sort(int column, SortOrder order)
         {
-            Debug.WriteLine("ExpList: SetSort Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: SetSort Begin");
             try
             {
                 _listViewWrapper.Sort(column, order);
             }
             finally
             {
-                Debug.WriteLine("ExpList: SetSort End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: SetSort End");
             }
         }
 
@@ -252,7 +252,7 @@ namespace ExpControlsLib
                 {
                     if (token.IsCancellationRequested) return false;
 
-                    if (InvokeRequired) Debug.WriteLine("ERROR: begin invoke required but not being used in explist.");
+                    if (InvokeRequired) Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ERROR: begin invoke required but not being used in explist.");
                     Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.LoadDirectoryBaseAsync: Updating ListView with {result.Items.Count} items...");
                     
                     _listView.BeginUpdate();
@@ -355,7 +355,7 @@ namespace ExpControlsLib
         /// <remarks>This is inefficient and takes O(n) time.</remarks>
         public ListViewItem FindItemByPidl(IntPtr pidl)
         {
-            Debug.WriteLine("ExpList: FindItemByPidl Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindItemByPidl Begin");
             try
             {
                 for (int i = 0; i < _listViewWrapper.Count; i++)
@@ -368,7 +368,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: FindItemByPidl End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindItemByPidl End");
             }
         }
 
@@ -377,7 +377,7 @@ namespace ExpControlsLib
         /// </summary>
         public ListViewItem FindItemByPath(string path)
         {
-            Debug.WriteLine("ExpList: FindItemByPath Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindItemByPath Begin");
             try
             {
                 int index = _listViewWrapper.GetIndexFromFullPath(path);
@@ -387,7 +387,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: FindItemByPath End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindItemByPath End");
             }
         }
 

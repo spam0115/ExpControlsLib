@@ -429,7 +429,7 @@ namespace ExpControlsLib
 
         public void Clear()
         {
-            Debug.WriteLine("VirtualListViewWrapper.Clear");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper.Clear");
             _listView.SelectedIndices.Clear();
             LastTopIndex = -1;
             if (VirtualMode)
@@ -455,7 +455,7 @@ namespace ExpControlsLib
         /// <param name="items"></param>
         public void AddRange(IEnumerable<CShellItem> items)
         {
-            Debug.WriteLine("VirtualListViewWrapper.AddRange #" + items.Count());
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper.AddRange #" + items.Count());
             LastTopIndex = -1;
             if (VirtualMode)
             {
@@ -477,7 +477,7 @@ namespace ExpControlsLib
 
         public void AddToEnd(CShellItem item)
         {
-            Debug.WriteLine("VirtualListViewWrapper.Add - " + item.Text);
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper.Add - " + item.Text);
             LastTopIndex = -1;
             if (VirtualMode)
             {
@@ -512,7 +512,7 @@ namespace ExpControlsLib
 
         public void InsertSorted(CShellItem item)
         {
-            Debug.WriteLine("VirtualListViewWrapper.InsertSorted - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper.InsertSorted - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             LastTopIndex = -1;
             int index = FindInsertionPoint(item);
 
@@ -765,7 +765,7 @@ namespace ExpControlsLib
                     return _listView.Items[index].Tag as CShellItem;
             }
 
-            Debug.WriteLine("VirtualListViewWrapper.GetItem failed to get item at index " + index);
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper.GetItem failed to get item at index " + index);
             return null;
         }
 
@@ -807,7 +807,7 @@ namespace ExpControlsLib
         /// <remarks>Only usable in non-virtual mode.</remarks>
         private ListViewItem? FindLVItem(CShellItem item)
         {
-            //Debug.WriteLine("ExpList: FindLVItem Begin");
+            //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindLVItem Begin");
             if (VirtualMode)
             {
                 return null;
@@ -821,7 +821,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: FindLVItem End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindLVItem End");
             }
         }
 
@@ -876,7 +876,7 @@ namespace ExpControlsLib
 
         public void Sort(int column, SortOrder order)
         {
-            Debug.WriteLine("VirtualListViewWrapper: Sort begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper: Sort begin");
             if (_inSort) return;
             _inSort = true;
             LastTopIndex = -1;
@@ -911,7 +911,7 @@ namespace ExpControlsLib
             finally
             {
                 _inSort = false;
-                Debug.WriteLine("VirtualListViewWrapper: Sort end");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper: Sort end");
             }
         }
 
@@ -948,7 +948,7 @@ namespace ExpControlsLib
         {
             if (csi is null) return;
 
-            Debug.WriteLine("ExpList: RefreshItem Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: RefreshItem Begin");
 
             try
             {
@@ -980,7 +980,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: RefreshItem End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: RefreshItem End");
             }
         }
 
@@ -988,7 +988,7 @@ namespace ExpControlsLib
         {
             if (string.IsNullOrWhiteSpace(path)) return;
 
-            Debug.WriteLine("ExpList: RefreshItemByFullPath Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: RefreshItemByFullPath Begin");
             try
             {
                 int index = GetIndexFromFullPath(path);
@@ -1001,7 +1001,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: RefreshItemByFullPath End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: RefreshItemByFullPath End");
             }
         }
 
@@ -1067,7 +1067,7 @@ namespace ExpControlsLib
         /// </summary>
         private void InvalidateVirtualItemImagesIndexes()
         {
-            //Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes Begin");
+            //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: InvalidateVirtualItemIndexes Begin");
             try
             {
                 if (!VirtualMode) return;
@@ -1084,7 +1084,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: InvalidateVirtualItemIndexes End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: InvalidateVirtualItemIndexes End");
             }
         }
 
@@ -1120,7 +1120,7 @@ namespace ExpControlsLib
             }
             catch(Exception ex)
             {
-                Debug.WriteLine("Error in OnRetrieveVirtualItem: " + ex.Message);
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error in OnRetrieveVirtualItem: " + ex.Message);
                 e.Item = new ListViewItem(); //send back a dummy to avoid crashing the ListView
             }
             finally
@@ -1137,7 +1137,7 @@ namespace ExpControlsLib
 
             if (item.NeedsRefresh) //item has been updated in the background and needs to be recreated as a new ListViewItem to reflect changes
             {
-                Debug.WriteLine("VirtualListViewWrapper.GetLviFromVirtual needs refresh - " + item.Text);
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper.GetLviFromVirtual needs refresh - " + item.Text);
                 var lvi = CreateLviFromCsi(item);
                 _indexedLviCache[index] = lvi;
                 return lvi;
@@ -1168,7 +1168,7 @@ namespace ExpControlsLib
                 }
                 else
                 {
-                    //Debug.WriteLine("VirtualListViewWrapper.GetLviFromVirtual failed to get item #" + index.ToString() + " from cache - " + item.Text);
+                    //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper.GetLviFromVirtual failed to get item #" + index.ToString() + " from cache - " + item.Text);
                     lvi = CreateLviFromCsi(item);
                     _indexedLviCache[index] = lvi;
                     return lvi;
@@ -1184,7 +1184,7 @@ namespace ExpControlsLib
                 lvi = new ListViewItem(item.DisplayName) { Tag = item };
                 foreach (var col in _listView.Columns)
                 {
-                    Debug.WriteLine("Failed to create listview item");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Failed to create listview item");
 
                     var si = new ListViewItem.ListViewSubItem();
                     si.Text = string.Empty;
@@ -1590,7 +1590,7 @@ namespace ExpControlsLib
         /// </summary>
         public int GetTopIndex()
         {
-            Debug.WriteLine("ExpList: GetTopIndex Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GetTopIndex Begin");
             try
             {
                 if (_listView == null || !_listView.IsHandleCreated) return -1;
@@ -1621,37 +1621,37 @@ namespace ExpControlsLib
                     int byOrigin = FindTopLeftByOrigin(total);
                     if (byOrigin >= 0) { 
                         LastTopIndex = byOrigin;
-                        Debug.WriteLine("\tFound TopLeft by FindTopLeftByOrigin.");
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]\tFound TopLeft by FindTopLeftByOrigin.");
                         return byOrigin; 
                     }
 
                     int bySingleHit = FindTopLeftBySingleHitTest(total);
                     if (bySingleHit >= 0) { LastTopIndex = bySingleHit;
-                        Debug.WriteLine("\tFound TopLeft by FindTopLeftBySingleHitTest.");
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]\tFound TopLeft by FindTopLeftBySingleHitTest.");
                         return bySingleHit; }
                 }
 
                 // 3) Visible enumeration (works in many non-virtual cases)
                 int byVisibleEnum = FindTopLeftByVisibleEnumeration(total);
                 if (byVisibleEnum >= 0) { LastTopIndex = byVisibleEnum;
-                    Debug.WriteLine("\tFound TopLeft by FindTopLeftByVisibleEnumeration.");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]\tFound TopLeft by FindTopLeftByVisibleEnumeration.");
                     return byVisibleEnum; }
 
                 // 4) Last-resort fallback: scan viewport by hit-test
                 int byHitTestScan = FindTopLeftByHitTestScan(total);
                 if (byHitTestScan >= 0) { LastTopIndex = byHitTestScan;
-                    Debug.WriteLine("\tFound TopLeft by FindTopLeftByHitTestScan.");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]\tFound TopLeft by FindTopLeftByHitTestScan.");
                     return byHitTestScan; }
 
                 // 5) Absolute fallback
-                Debug.WriteLine("\tFailed to find topleft.");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]\tFailed to find topleft.");
 
                 LastTopIndex = 0;
                 return LastTopIndex;
             }
             finally
             {
-                //Debug.WriteLine("ExpList: GetTopIndex End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GetTopIndex End");
             }
         }
 
@@ -1661,7 +1661,7 @@ namespace ExpControlsLib
         /// </summary>
         private int FindTopLeftByTopIndex(int total)
         {
-            Debug.WriteLine("ExpList: FindTopLeftByTopIndex Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindTopLeftByTopIndex Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             try
             {
                 int idx = (int)SendMessage(_listView.Handle, LVM_GETTOPINDEX, IntPtr.Zero, IntPtr.Zero);
@@ -1670,7 +1670,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: FindTopLeftByTopIndex End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindTopLeftByTopIndex End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             }
         }
 
@@ -1681,7 +1681,7 @@ namespace ExpControlsLib
         /// </summary>
         private int FindTopLeftByOrigin(int total)
         {
-            Debug.WriteLine("ExpList: FindTopLeftByOrigin Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindTopLeftByOrigin Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             try
             {
                 POINT origin = new POINT();
@@ -1708,7 +1708,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: FindTopLeftByOrigin End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindTopLeftByOrigin End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             }
         }
 
@@ -1718,7 +1718,7 @@ namespace ExpControlsLib
         /// </summary>
         private int FindTopLeftBySingleHitTest(int total)
         {
-            Debug.WriteLine("ExpList: FindTopLeftBySingleHitTest Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindTopLeftBySingleHitTest Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             try
             {
                 var client = _listView.ClientRectangle;
@@ -1766,13 +1766,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: FindTopLeftBySingleHitTest End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindTopLeftBySingleHitTest End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             }
         }
 
         private int FindTopLeftByVisibleEnumeration(int total)
         {
-            Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindTopLeftByVisibleEnumeration Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             try
             {
                 int bestIndex = -1;
@@ -1802,7 +1802,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: FindTopLeftByVisibleEnumeration End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindTopLeftByVisibleEnumeration End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             }
         }
 
@@ -1813,7 +1813,7 @@ namespace ExpControlsLib
         /// <returns>index number of what is believed to be the first top-left most item.</returns>
         private int FindTopLeftByHitTestScan(int listCount)
         {
-            Debug.WriteLine("ExpList: FindTopLeftByHitTestScan Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindTopLeftByHitTestScan Begin - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             try
             {
                 var client = _listView.ClientRectangle;
@@ -1860,13 +1860,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: FindTopLeftByHitTestScan End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: FindTopLeftByHitTestScan End - " + DateTime.Now.ToString("HH:mm:ss.fff"));
             }
         }
 
         private int HitTestIndex(int x, int y)
         {
-            //Debug.WriteLine("ExpList: HitTestIndex Begin");
+            //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: HitTestIndex Begin");
             try
             {
                 LVHITTESTINFO ht = new LVHITTESTINFO
@@ -1879,13 +1879,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: HitTestIndex End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: HitTestIndex End");
             }
         }
 
         public int GetApproxVisibleCount()
         {
-            Debug.WriteLine("ExpList: GetApproxVisibleCount Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GetApproxVisibleCount Begin");
             try
             {
                 if (_listView == null || !_listView.IsHandleCreated)
@@ -1897,7 +1897,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: GetApproxVisibleCount End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GetApproxVisibleCount End");
             }
         }
 
@@ -1951,7 +1951,7 @@ namespace ExpControlsLib
 
         private int GetApproxVisibleCountLargeIcon()
         {
-            Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GetApproxVisibleCountLargeIcon Begin");
             try
             {
                 if (_listView == null || !_listView.IsHandleCreated || _listView.View != View.LargeIcon)
@@ -1984,7 +1984,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: GetApproxVisibleCountLargeIcon End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GetApproxVisibleCountLargeIcon End");
             }
         }
 
@@ -2084,7 +2084,7 @@ namespace ExpControlsLib
         ///// <param name="value">The <see cref="ListViewDisplayMode"/> to configure for.</param>
         //private void SetImageListForMode(ListViewDisplayMode value)
         //{
-        //    Debug.WriteLine("ExpList: SetAndLoadImageList Begin");
+        //    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: SetAndLoadImageList Begin");
         //    try
         //    {
         //        if (value <= ListViewDisplayMode.Tile) //built-in Windows 95 Shell view modes
@@ -2103,7 +2103,7 @@ namespace ExpControlsLib
         //    }
         //    finally
         //    {
-        //        Debug.WriteLine("ExpList: SetAndLoadImageList End");
+        //        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: SetAndLoadImageList End");
         //    }
         //}
 
@@ -2112,7 +2112,7 @@ namespace ExpControlsLib
         ///// </summary>
         //private int GetThumbnailSizeForMode(ListViewDisplayMode? mode = null)
         //{
-        //    //Debug.WriteLine("ExpList: GetThumbnailSizeForMode Begin");
+        //    //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GetThumbnailSizeForMode Begin");
         //    try
         //    {
         //        mode ??= DisplayMode;
@@ -2126,7 +2126,7 @@ namespace ExpControlsLib
         //    }
         //    finally
         //    {
-        //        //Debug.WriteLine("ExpList: GetThumbnailSizeForMode End");
+        //        //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GetThumbnailSizeForMode End");
         //    }
         //}
 

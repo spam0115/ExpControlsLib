@@ -152,7 +152,7 @@ namespace ExpControlsLib
                 return imageList;
             }
 
-            Debug.WriteLine("Creating new image list for thumbnails...");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Creating new image list for thumbnails...");
 
             imageList = new ImageList()
             {
@@ -525,7 +525,7 @@ namespace ExpControlsLib
 
                     if (!reused)
                         return -1;
-                    //Debug.WriteLine("\tImageList size: " + imageList.Images.Count.ToString());
+                    //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]\tImageList size: " + imageList.Images.Count.ToString());
                 }
 
                 if (index != -1 && reqArgs.Item != null)
@@ -535,7 +535,7 @@ namespace ExpControlsLib
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("Error adding thumbnail: " + ex.Message);
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error adding thumbnail: " + ex.Message);
       
                 return -1;
             }

@@ -385,7 +385,7 @@ namespace ExpControlsLib
     /// <remarks></remarks>
         public int DragLeave()
         {
-            // Debug.WriteLine("In DragLeave")
+            // Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] In DragLeave")
             m_Original_Effect = 0;
             ResetPrevTarget();
             m_DataObj = IntPtr.Zero;
@@ -411,7 +411,7 @@ namespace ExpControlsLib
         /// <returns>S_OK</returns>
         public int DragDrop(IntPtr pDataObj, MK grfKeyState, POINT pt, ref DragDropEffects pdwEffect)
         {
-            // Debug.WriteLine("In DragDrop: Effect = " & pdwEffect & " Keystate = " & grfKeyState)
+            // Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] In DragDrop: Effect = " & pdwEffect & " Keystate = " & grfKeyState)
             int res;
 
             // If the cursor released before the dwell timer fired, resolve the target now
@@ -429,7 +429,7 @@ namespace ExpControlsLib
                 // version 21 change 
                 if (res != 0 && res != 1)
                 {
-                    Debug.WriteLine("Error in dropping on DropTarget. res = " + res.ToString("X"));
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error in dropping on DropTarget. res = " + res.ToString("X"));
                 } // No error on drop
                   // The documented norm for Optimized Moves is pdwEffect=None, so leave it
 

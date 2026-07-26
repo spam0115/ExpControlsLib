@@ -42,7 +42,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: MakeLVItem End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: MakeLVItem End");
             }
         }
         
@@ -58,14 +58,14 @@ namespace ExpControlsLib
         /// </summary>
         private void EnterListViewEnumeration()
         {
-            Debug.WriteLine("ExpList: EnterListViewEnumeration Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: EnterListViewEnumeration Begin");
             try
             {
                 _enumerationDepth++;
             }
             finally
             {
-                Debug.WriteLine("ExpList: EnterListViewEnumeration End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: EnterListViewEnumeration End");
             }
         }
 
@@ -76,7 +76,7 @@ namespace ExpControlsLib
         /// </summary>
         private void ExitListViewEnumeration()
         {
-            Debug.WriteLine("ExpList: ExitListViewEnumeration Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExitListViewEnumeration Begin");
             try
             {
                 _enumerationDepth--;
@@ -88,7 +88,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExitListViewEnumeration End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExitListViewEnumeration End");
             }
         }
 
@@ -97,7 +97,7 @@ namespace ExpControlsLib
         /// </summary>
         private void DrainDeferredUpdates()
         {
-            Debug.WriteLine("ExpList: DrainDeferredUpdates Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: DrainDeferredUpdates Begin");
             try
             {
                 while (_deferredUpdates.Count > 0)
@@ -108,7 +108,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: DrainDeferredUpdates End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: DrainDeferredUpdates End");
             }
         }
 
@@ -189,7 +189,7 @@ namespace ExpControlsLib
         /// </summary>
         private void InvokeWhenListViewReady(Action action)
         {
-            Debug.WriteLine("ExpList: InvokeWhenListViewReady Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: InvokeWhenListViewReady Begin");
             try
             {
                 if (_enumerationDepth > 0)
@@ -201,7 +201,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: InvokeWhenListViewReady End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: InvokeWhenListViewReady End");
             }
         }
 
@@ -211,7 +211,7 @@ namespace ExpControlsLib
         /// <param name="csi">The <see cref="CShellItem"/> to launch.</param>
         private void LaunchFile(CShellItem csi)
         {
-            Debug.WriteLine("ExpList: LaunchFile Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: LaunchFile Begin");
             try
             {
                 var psi = new ProcessStartInfo
@@ -223,7 +223,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: LaunchFile End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: LaunchFile End");
             }
         }
 
@@ -235,7 +235,7 @@ namespace ExpControlsLib
         /// <returns>True if the mouse is within the control's client area.</returns>
         private bool IsWithin(Control ctl, MouseEventArgs e)
         {
-            Debug.WriteLine("ExpList: IsWithin Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: IsWithin Begin");
             try
             {
                 if (e.X < 0 || e.Y < 0) return false;
@@ -245,7 +245,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: IsWithin End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: IsWithin End");
             }
         }
 
@@ -254,7 +254,7 @@ namespace ExpControlsLib
         /////// </summary>
         //private void SortLVItems()
         //{
-        //    Debug.WriteLine("ExpList: SortLVItems Begin");
+        //    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: SortLVItems Begin");
         //    try
         //    {
         //        if (VirtualMode)
@@ -286,7 +286,7 @@ namespace ExpControlsLib
         //    }
         //    finally
         //    {
-        //        Debug.WriteLine("ExpList: SortLVItems End");
+        //        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: SortLVItems End");
         //    }
         //}
 

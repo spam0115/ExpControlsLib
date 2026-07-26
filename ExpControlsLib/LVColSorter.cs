@@ -154,7 +154,7 @@ namespace ExpControlsLib
         private bool OKToCompare(object X, object Y)
         {
             if (Y == null) {
-                //Debug.WriteLine("Can't compare null object.");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Can't compare null object.");
                 return false; 
             }
 
@@ -343,7 +343,7 @@ namespace ExpControlsLib
             ListView LV = (ListView)sender;   // simplify code a bit -- will throw exception if sender is not a ListView
                                               // Check that this instance of ListViewColumnSorter is still the operative one
                                               // if Me is not the operative ListViewColumnSorter, then remove this instance's Handler and exit
-                                              // Debug.WriteLine("LVSorter ColumnClick on " & e.Column)
+                                              // Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] LVSorter ColumnClick on " & e.Column)
             if (!LV.VirtualMode && (LV.ListViewItemSorter is null || !ReferenceEquals(LV.ListViewItemSorter, this)))
             {
                 LV.ColumnClick -= ListView_ColumnClick;

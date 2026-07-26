@@ -863,7 +863,7 @@ namespace ExpControlsLib
         /// </summary>
         public ExpList()
         {
-            Debug.WriteLine("ExpList: ExpList Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpList Begin");
             try
             {
                 InitializeComponent();
@@ -895,7 +895,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpList End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpList End");
             }
         }
 
@@ -977,7 +977,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpList_Load End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpList_Load End");
             }
         }
 
@@ -1003,14 +1003,14 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpFileList_VisibleChanged(object? sender, EventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpList_VisibleChanged Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpList_VisibleChanged Begin");
             try
             {
 
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpList_VisibleChanged End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpList_VisibleChanged End");
             }
         }
 
@@ -1020,7 +1020,7 @@ namespace ExpControlsLib
         /// <param name="m">The Windows <see cref="Message"/> to process.</param>
         protected override void WndProc(ref Message m)
         {
-            //Debug.WriteLine("ExpList: WndProc Begin");
+            //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: WndProc Begin");
 
             try
             {
@@ -1078,7 +1078,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: WndProc End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: WndProc End");
             }
         }
 
