@@ -26,7 +26,7 @@ namespace ExpControlsLib
     [SupportedOSPlatform("windows")]
     public class ThumbnailImageListManager : IDisposable
     {
-        private readonly ConcurrentDictionary<int, ImageList> _imageLists = new();
+        private readonly ConcurrentDictionary<int, ImageList> _imageLists = new(); //one imagelist for each image size
         private readonly ThumbnailProvider _thumbnailProvider;
         private readonly ExpList _expList;
         private int _activeSize = 0;
@@ -128,7 +128,7 @@ namespace ExpControlsLib
         {
             _activeSize = thumbnailSize;
 
-            var imageList = GetImageList(thumbnailSize);
+            var imageList = GetOrCreateImageList(thumbnailSize);
 
             _expList.BeginListViewUpdate();
             try
@@ -145,7 +145,7 @@ namespace ExpControlsLib
         /// <summary>
         /// Gets or creates an ImageList for the specified thumbnail size
         /// </summary>
-        public ImageList GetImageList(int thumbnailSize)
+        public ImageList GetOrCreateImageList(int thumbnailSize)
         {
             if (_imageLists.TryGetValue(thumbnailSize, out var imageList))
             {
@@ -164,22 +164,32 @@ namespace ExpControlsLib
                 _capacities[thumbnailSize] = Math.Max(1, 16384 / thumbnailSize * 2);
 
             int capacity = _capacities[thumbnailSize];
-            var dummy = new Bitmap(thumbnailSize, thumbnailSize);
-            try
+
+            //// ImageList has no public capacity property. Populate every
+            //// slot once so the native image list allocates its full
+            //// configured size, then reuse those slots forever.
+            ////imageList.Images[capacity - 1] = dummy; //crash
+            //var dummy = new Bitmap(thumbnailSize, thumbnailSize);
+            //try
+            //{
+            //    imageList.Images.AddRange(Enumerable.Repeat(dummy, capacity).ToArray());
+            //}
+            //catch
+            //{
+            //    dummy.Dispose();
+            //    throw;
+            //}
+
+            // Force the normal 4-image native allocation.
+            IntPtr handle = imageList.Handle;
+
+            // Expand it once to the final logical size.
+            if (!ShellAPI.ImageList_SetImageCount(handle, checked((uint)capacity)))
             {
-                // ImageList has no public capacity property. Populate every
-                // slot once so the native image list allocates its full
-                // configured size, then reuse those slots forever.
-                //imageList.Images[capacity - 1] = dummy; //crash
-                imageList.Images.AddRange(Enumerable.Repeat(dummy, capacity).ToArray());
-            }
-            catch
-            {
-                dummy.Dispose();
-                throw;
+                imageList.Dispose();
+                throw new Exception("Failed to set image count.");
             }
 
-            //_dummyImages[thumbnailSize] = dummy;
             _freeIndices[thumbnailSize] = new Queue<int>(Enumerable.Range(0, capacity));
             _imageLists[thumbnailSize] = imageList;
 
@@ -418,7 +428,7 @@ namespace ExpControlsLib
                     _lruKeys.Add(size, new HashedLinkedList<string>());
                 }
 
-                imageList = GetImageList(size);
+                imageList = GetOrCreateImageList(size);
                 if (_expList.LargeImageList != imageList)
                     _expList.LargeImageList = imageList;
 

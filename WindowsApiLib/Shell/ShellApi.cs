@@ -1364,7 +1364,6 @@ namespace WindowsApiLib.Shell
 
         #region        comctl32 Dll Declarations
 
-        #region        ImageList_GetIconSize
         /// <summary>
         /// Retrieves the dimensions of images in an image list.
         /// </summary>
@@ -1375,9 +1374,6 @@ namespace WindowsApiLib.Shell
         [DllImport("comctl32")]
         public static extern int ImageList_GetIconSize(IntPtr himl, ref int cx, ref int cy);
 
-        #endregion
-
-        #region        ImageList_ReplaceIcon
         /// <summary>
         /// Replaces an image in an image list with an icon.
         /// </summary>
@@ -1388,7 +1384,6 @@ namespace WindowsApiLib.Shell
         [DllImport("comctl32", CharSet = CharSet.Auto)]
         public static extern int ImageList_ReplaceIcon(IntPtr hImageList, int IconIndex, IntPtr hIcon);
 
-
         /// <summary>
         /// Returns the number of images in an image list.
         /// </summary>
@@ -1396,9 +1391,7 @@ namespace WindowsApiLib.Shell
         /// <returns>The number of images, or <c>0</c> if the list is empty.</returns>
         [DllImport("comctl32", CharSet = CharSet.Auto)]
         public static extern int ImageList_GetImageCount(IntPtr hImageList);
-        #endregion
 
-        #region        ImageList_GetIcon
         /// <summary>
         /// Creates an icon from an image in an image list.
         /// </summary>
@@ -1409,9 +1402,6 @@ namespace WindowsApiLib.Shell
         [DllImport("comctl32")]
         public static extern IntPtr ImageList_GetIcon(IntPtr himl, int i, ILD flags);
 
-        #endregion
-
-        #region        ImageList_Draw
         /// <summary>
         /// Draws an image list image onto a device context at the specified position.
         /// </summary>
@@ -1425,13 +1415,6 @@ namespace WindowsApiLib.Shell
         [DllImport("comctl32")]
         public static extern int ImageList_Draw(IntPtr hIml, int indx, IntPtr hdcDst, int x, int y, int fStyle);
 
-
-
-
-
-        #endregion
-
-        #region        ImageList_DrawEx
         /// <summary>
         /// Draws an image list image onto a device context with extended options for background and foreground colors.
         /// </summary>
@@ -1449,7 +1432,11 @@ namespace WindowsApiLib.Shell
         [DllImport("comctl32")]
         public static extern int ImageList_DrawEx(IntPtr hIml, int i, IntPtr hdcDst, int x, int y, int dx, int dy, int rgbBk, int rgbFg, int fStyle);
 
-        #endregion
+        [DllImport("comctl32.dll", ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ImageList_SetImageCount(
+            IntPtr himl,
+            uint uNewCount);
 
         #endregion
 

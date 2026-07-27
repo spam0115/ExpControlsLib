@@ -194,7 +194,7 @@ namespace ExpControlsLibTest
                 bmp1.SetPixel(0, 0, Color.Red);
                 int idx1 = manager.AddThumbnail(new ThumbnailReadyEventArgs(csi, bmp1, size), bmp1);
                 
-                var imageList = manager.GetImageList(size);
+                var imageList = manager.GetOrCreateImageList(size);
                 int countBefore = imageList.Images.Count;
 
                 // 2. Add second time for same item
@@ -233,7 +233,7 @@ namespace ExpControlsLibTest
             Assert.That(csi.ImageIndex, Is.EqualTo(index), "CShellItem.ImageIndex should be updated to the returned index.");
             
             // Verify it's in the ImageList
-            var imageList = manager.GetImageList(size);
+            var imageList = manager.GetOrCreateImageList(size);
             Assert.That(imageList.Images.Count, Is.GreaterThan(index), "ImageList should contain the new image.");
             
             // Verify cache retrieval
@@ -301,7 +301,7 @@ namespace ExpControlsLibTest
             int size = 64;
             var manager = new ThumbnailImageListManager(_expList, size, capacity);
             manager.SetExpListLargeImageList(size);
-            var imageList = manager.GetImageList(size);
+            var imageList = manager.GetOrCreateImageList(size);
 
             int totalItemsToAdd = capacity * 2;
             var tempFiles = new List<string>();
