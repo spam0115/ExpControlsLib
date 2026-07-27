@@ -131,7 +131,7 @@ namespace ExpControlsLib
 
             if (ThumbnailReady == null)
             {
-                Debug.WriteLine("No subscribers for ThumbnailReady event; skipping thumbnail generation.");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] No subscribers for ThumbnailReady event; skipping thumbnail generation.");
                 return;
             }
 
@@ -141,15 +141,15 @@ namespace ExpControlsLib
 
             if (string.IsNullOrEmpty(filePath))
             {
-                Debug.WriteLine("ERROR: EnqueueThumbnailRequest - No file path available.");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ERROR: EnqueueThumbnailRequest - No file path available.");
                 return;
             }
 
-            Debug.WriteLine("EnqueueThumbnailRequest: " + filePath);
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] EnqueueThumbnailRequest: " + filePath);
 
             if (reqArgs.Item == null)
             {
-                Debug.WriteLine("ERROR: EnqueueThumbnailRequest - No shell item available.");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ERROR: EnqueueThumbnailRequest - No shell item available.");
                 return;
             }
             var csi = reqArgs.Item;
@@ -296,11 +296,11 @@ namespace ExpControlsLib
             try
             {
                 if (cancellationToken.IsCancellationRequested) return;
-                Debug.WriteLine("Attempting to generate thumbnail for: " + request.Item.DisplayName);
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Attempting to generate thumbnail for: " + request.Item.DisplayName);
 
                 if (ThumbnailReady == null)
                 {
-                    Debug.WriteLine("ERROR: No subscribers for ThumbnailReady event.  Returning.");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ERROR: No subscribers for ThumbnailReady event.  Returning.");
                     return;
                 }
 
@@ -351,7 +351,7 @@ namespace ExpControlsLib
                 ThumbnailReady?.Invoke(this, new ThumbnailReadyEventArgs(
                     request.Item, thumbnail, request.Size, request.Index, requestId: request.RequestId));
                 thumbnail = null; // ownership transferred to subscriber
-                Debug.WriteLine("\tThumbnail generation complete: " + request.Item.DisplayName);
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]\tThumbnail generation complete: " + request.Item.DisplayName);
                 return;
             }
             catch (Exception ex)
@@ -622,7 +622,7 @@ namespace ExpControlsLib
                     hr = factory.GetImage(new SIZE { cx = size, cy = size }, flags, out hbm);
                     if (hr != 0 || hbm == IntPtr.Zero)
                     {
-                        Debug.WriteLine("ERROR: Failed to get icon from shell item factory");
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ERROR: Failed to get icon from shell item factory");
                         return null;
                     }
                 }

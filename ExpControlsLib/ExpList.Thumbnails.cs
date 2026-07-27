@@ -29,7 +29,7 @@ namespace ExpControlsLib
             // Defer native/managed image-list installation until the orchestrator exists.
             if (_imageListOrchestrator == null) return;
 
-            Debug.WriteLine("ExpList: SetAndLoadImageList Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: SetAndLoadImageList Begin");
             try
             {
                 EnterImageListMutation();
@@ -44,32 +44,32 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: SetAndLoadImageList End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: SetAndLoadImageList End");
             }
         }
         private void LoadImagesForRange(int index, int endIndex = -1)
         {
-            Debug.WriteLine("ExpList: LoadImagesForRange Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: LoadImagesForRange Begin");
             try
             {
                 LoadImagesAtIndexes(index, endIndex);
             }
             finally
             {
-                //Debug.WriteLine("ExpList: LoadImagesForRange End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: LoadImagesForRange End");
             }
         }
 
         private void LoadImagesForVisibleItems()
         {
-            Debug.WriteLine("ExpList: LoadImagesForVisibleItems Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: LoadImagesForVisibleItems Begin");
             try
             {
                 LoadImagesForItems(true);
             }
             finally
             {
-                //Debug.WriteLine("ExpList: LoadImagesForItems End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: LoadImagesForItems End");
             }
         }
 
@@ -80,7 +80,7 @@ namespace ExpControlsLib
         /// <param name="onlyVisible">true if only images near the visible items should be loaded.</param>
         private void LoadImagesForItems(bool onlyVisible = false)
         {
-            Debug.WriteLine("ExpList: LoadImagesForItems Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: LoadImagesForItems Begin");
             try
             {
                 if (!_listView.IsHandleCreated) return;
@@ -141,7 +141,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: LoadImagesForItems End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: LoadImagesForItems End");
             }
         }
 
@@ -157,7 +157,7 @@ namespace ExpControlsLib
             var csi = GetItem(i);
             if (csi is null)
             {
-                Debug.WriteLine($"LoadImagesForItems: GetItem returned null for index {i}");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] LoadImagesForItems: GetItem returned null for index {i}");
                 return false;
             }
             int oldImageIndex = csi.ImageIndex;
@@ -171,7 +171,7 @@ namespace ExpControlsLib
 
                 if (lvi is null)
                 {
-                    Debug.WriteLine($"LoadImagesForItems: GetItemInternal returned null for index {i}");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] LoadImagesForItems: GetItemInternal returned null for index {i}");
                     return false;
                 }
 
@@ -184,7 +184,7 @@ namespace ExpControlsLib
 
         private void LoadImagesAtIndexes(int startIndex, int endIndex = -1)
         {
-            Debug.WriteLine("ExpList: LoadImagesAtIndexes Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: LoadImagesAtIndexes Begin");
             try
             {
                 if (!_listView.IsHandleCreated) return;
@@ -222,7 +222,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: LoadImagesAtIndexes End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: LoadImagesAtIndexes End");
             }
         }
 
@@ -231,7 +231,7 @@ namespace ExpControlsLib
         /// </summary>
         private int GetThumbnailSizeForMode(ListViewDisplayMode? mode = null)
         {
-            //Debug.WriteLine("ExpList: GetThumbnailSizeForMode Begin");
+            //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GetThumbnailSizeForMode Begin");
             try
             {
                 mode ??= DisplayMode;
@@ -245,7 +245,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: GetThumbnailSizeForMode End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GetThumbnailSizeForMode End");
             }
         }
 
@@ -274,7 +274,7 @@ namespace ExpControlsLib
 
             public ListViewScrollHook(VirtualListViewWrapper listView, Action onScroll)
             {
-                Debug.WriteLine("ExpList.ListViewScrollHook: ListViewScrollHook Begin");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ListViewScrollHook: ListViewScrollHook Begin");
                 try
                 {
                     _onScroll = onScroll;
@@ -284,13 +284,13 @@ namespace ExpControlsLib
                 }
                 finally
                 {
-                    Debug.WriteLine("ExpList.ListViewScrollHook: ListViewScrollHook End");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ListViewScrollHook: ListViewScrollHook End");
                 }
             }
 
             protected override void WndProc(ref Message m)
             {
-                //Debug.WriteLine("ExpList.WndProc Begin");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.WndProc Begin");
                 try
                 {
                     try
@@ -299,7 +299,7 @@ namespace ExpControlsLib
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine(ex.ToString());
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] " + ex.ToString());
                         _listView.SelectedIndices.Clear();
                     }
 
@@ -329,14 +329,14 @@ namespace ExpControlsLib
                 }
                 finally
                 {
-                    //Debug.WriteLine("ExpList.WndProc End");
+                    //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.WndProc End");
                 }
             }
 
             private int _scrollQueued;
             private void QueueOnScroll()
             {
-                Debug.WriteLine("ExpList.ListViewScrollHook: QueueOnScroll Begin");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ListViewScrollHook: QueueOnScroll Begin");
                 try
                 {
                     if (_listView.IsDisposed || !_listView.IsHandleCreated) return;
@@ -350,14 +350,14 @@ namespace ExpControlsLib
                 }
                 finally
                 {
-                    Debug.WriteLine("ExpList.ListViewScrollHook: QueueOnScroll End");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.ListViewScrollHook: QueueOnScroll End");
                 }
             }
         }
 
         private void OnScroll()
         {
-            Debug.WriteLine("ExpList: OnListViewScroll Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: OnListViewScroll Begin");
             if (IsShuttingDown) return;
             try
             {
@@ -367,7 +367,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: OnListViewScroll End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: OnListViewScroll End");
             }
         }
 

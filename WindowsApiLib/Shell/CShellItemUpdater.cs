@@ -193,7 +193,7 @@ namespace WindowsApiLib.Shell
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine("Error invoking event handler: " + ex.ToString());
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error invoking event handler: " + ex.ToString());
                 }
             }
         }

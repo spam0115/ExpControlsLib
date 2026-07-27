@@ -21,7 +21,7 @@ namespace ExpControlsLib
         /// </summary>
         private void InitializeComponent()
         {
-            _listView = new ListView();
+            _listView = new FixedListView();
             SuspendLayout();
             // 
             // _listView

@@ -30,7 +30,7 @@ namespace ExpControlsLib
         /// </summary>
         public void DeleteSelectedItems()
         {
-            Debug.WriteLine("ExpList: DeleteSelectedItems Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: DeleteSelectedItems Begin");
             try
             {
                 if (_currentFolderCsi == null || !_currentFolderCsi.IsFolder)
@@ -47,7 +47,7 @@ namespace ExpControlsLib
                     folder = _currentFolderCsi.GetIShellFolder();
                     if (folder == null)
                     {
-                        Debug.WriteLine("Failed to get folder interface for delete operation");
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Failed to get folder interface for delete operation");
                         MessageBox.Show("Cannot delete: folder interface is unavailable.", "Error",
                             MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
@@ -61,7 +61,7 @@ namespace ExpControlsLib
                         i++;
                         if (item == null)
                         {
-                            Debug.WriteLine($"Selected item {i} is null");
+                            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Selected item {i} is null");
                             continue;
                         }
 
@@ -75,7 +75,7 @@ namespace ExpControlsLib
                         IntPtr pidl = item.LastPIDL;
                         if (pidl == IntPtr.Zero)
                         {
-                            Debug.WriteLine($"Failed to get PIDL for item: {item.DisplayName}");
+                            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Failed to get PIDL for item: {item.DisplayName}");
                             MessageBox.Show($"Failed to get ID for item: {item.DisplayName}", "Error",
                                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             continue;
@@ -86,7 +86,7 @@ namespace ExpControlsLib
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Error preparing delete operation: {ex.Message}");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error preparing delete operation: {ex.Message}");
                     MessageBox.Show($"Error preparing delete: {ex.Message}", "Error",
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
@@ -95,7 +95,7 @@ namespace ExpControlsLib
                 deleteCount = relPidls.Count;
                 if (deleteCount == 0)
                 {
-                    Debug.WriteLine("No items to delete");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] No items to delete");
                     return;
                 }
 
@@ -142,13 +142,13 @@ namespace ExpControlsLib
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Unexpected error in DeleteSelectedItems: {ex.Message}");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Unexpected error in DeleteSelectedItems: {ex.Message}");
                 MessageBox.Show($"Unexpected error: {ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             finally
             {
-                Debug.WriteLine("ExpList: DeleteSelectedItems End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: DeleteSelectedItems End");
             }
         }
 
@@ -159,7 +159,7 @@ namespace ExpControlsLib
         /// <param name="cmd">The shell verb to invoke (e.g., "cut", "copy", "paste").</param>
         public void ExecuteShellCommand(string cmd)
         {
-            Debug.WriteLine("ExpList: ExecuteShellCommand Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExecuteShellCommand Begin");
             try
             {
                 if (cmd == "delete")
@@ -189,7 +189,7 @@ namespace ExpControlsLib
 
                         if (folder == null)
                         {
-                            Debug.WriteLine("Failed to get folder interface for paste operation");
+                            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Failed to get folder interface for paste operation");
                             MessageBox.Show("Cannot paste: folder interface is unavailable.", "Paste Error",
                                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             return;
@@ -198,7 +198,7 @@ namespace ExpControlsLib
                         IntPtr relPidl = CPidl.ILFindLastID(_currentFolderCsi.PIDL);
                         if (relPidl == IntPtr.Zero)
                         {
-                            Debug.WriteLine("Failed to get relative PIDL for current folder");
+                            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Failed to get relative PIDL for current folder");
                             return;
                         }
 
@@ -206,7 +206,7 @@ namespace ExpControlsLib
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Error preparing paste operation: {ex.Message}");
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error preparing paste operation: {ex.Message}");
                         MessageBox.Show($"Error preparing paste: {ex.Message}", "Paste Error",
                             MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
@@ -221,7 +221,7 @@ namespace ExpControlsLib
                         folder = _currentFolderCsi.GetIShellFolder();
                         if (folder == null)
                         {
-                            Debug.WriteLine("Failed to get folder interface for selected items");
+                            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Failed to get folder interface for selected items");
                             MessageBox.Show("Cannot perform operation: folder interface is unavailable.", "Error",
                                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             return;
@@ -234,14 +234,14 @@ namespace ExpControlsLib
                         {
                             if (item == null)
                             {
-                                Debug.WriteLine($"Selected item {i} is null");
+                                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Selected item {i} is null");
                                 continue;
                             }
 
                             IntPtr pidl = item.LastPIDL;
                             if (pidl == IntPtr.Zero)
                             {
-                                Debug.WriteLine($"Failed to get PIDL for item: {item.DisplayName}");
+                                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Failed to get PIDL for item: {item.DisplayName}");
                                 MessageBox.Show($"Failed to get ID for item: {item.DisplayName}", "Error",
                                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                                 continue;
@@ -252,7 +252,7 @@ namespace ExpControlsLib
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Error preparing {cmd} operation: {ex.Message}");
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error preparing {cmd} operation: {ex.Message}");
                         MessageBox.Show($"Error preparing operation: {ex.Message}", "Error",
                             MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
@@ -262,7 +262,7 @@ namespace ExpControlsLib
                 // Validate items to process
                 if (relPidls == null || relPidls.Count == 0)
                 {
-                    Debug.WriteLine("No items to process");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] No items to process");
                     return;
                 }
 
@@ -276,13 +276,13 @@ namespace ExpControlsLib
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Unexpected error in ExecuteShellCommand: {ex.Message}");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Unexpected error in ExecuteShellCommand: {ex.Message}");
                 MessageBox.Show($"Unexpected error: {ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExecuteShellCommand End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExecuteShellCommand End");
             }
         }
 
@@ -301,7 +301,7 @@ namespace ExpControlsLib
         /// <param name="sortSubMenu">Output parameter for the Sort by submenu handle.</param>
         private void CreateContextMenu(out IntPtr comContextMenu, out IntPtr viewSubMenu, out IntPtr sortSubMenu)
         {
-            Debug.WriteLine("ExpList: CreateContextMenu Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: CreateContextMenu Begin");
             try
             {
                 comContextMenu = CreatePopupMenu();
@@ -419,7 +419,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: CreateContextMenu End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: CreateContextMenu End");
             }
         }
 
@@ -462,7 +462,7 @@ namespace ExpControlsLib
 
         private async Task ShowAndHandleContextMenuCore(Point pt)
         {
-            Debug.WriteLine("ExpList: ShowAndHandleContextMenu Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ShowAndHandleContextMenu Begin");
             try
             {
                 int MIN = 1;
@@ -607,7 +607,7 @@ namespace ExpControlsLib
 
                         if (_currentFolderCsi.LastPIDL == IntPtr.Zero)
                         {
-                            Debug.WriteLine("ERROR: no relative pidl for CSI.  Is this the root of the namespace?");
+                            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ERROR: no relative pidl for CSI.  Is this the root of the namespace?");
                             Debugger.Break();
                         }
                         var capturedRelPidl = CPidl.Clone(_currentFolderCsi.LastPIDL);
@@ -638,11 +638,11 @@ namespace ExpControlsLib
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Unexpected error in ShowAndHandleContextMenu: {ex.Message}");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Unexpected error in ShowAndHandleContextMenu: {ex.Message}");
             }
             finally
             {
-                Debug.WriteLine("ExpList: objects End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ShowAndHandleContextMenu End");
             }
         }
 
@@ -660,7 +660,7 @@ namespace ExpControlsLib
         /// <param name="e">The <see cref="ShellItemUpdateEventArgs"/> containing the event data.</param>
         private void ShellUpdater_UpdateEventInvoker(object? sender, ShellItemUpdateEventArgs e)
         {
-            //Debug.WriteLine("ExpList: UpdateInvoke Begin");
+            //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: UpdateInvoke Begin");
             try
             {
                 if (sender is null || IsDisposed || !IsHandleCreated)
@@ -688,7 +688,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: UpdateInvoke End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: UpdateInvoke End");
             }
         }
 
@@ -706,7 +706,7 @@ namespace ExpControlsLib
             {
                 if (sender is null || _currentFolderCsi == null || e?.Item is null) return;
 
-                Debug.WriteLine($"ExpList: DoItemUpdate Begin - {e.UpdateType.ToString()}, {e.Item.DisplayName}");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: DoItemUpdate Begin - {e.UpdateType.ToString()}, {e.Item.DisplayName}");
 
                 // If an enumeration is in progress, defer this update to prevent reentrant
                 // mutation of _listView.Items (which causes null items during foreach).
@@ -768,7 +768,7 @@ namespace ExpControlsLib
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine("Error in frmTemplate -- ExpFileList updater -- " + ex);
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error in frmTemplate -- ExpFileList updater -- " + ex);
                 }
                 finally
                 {
@@ -776,11 +776,11 @@ namespace ExpControlsLib
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("EXCEPTION: DoItemUpdate -- " + ex.ToString());
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] EXCEPTION: DoItemUpdate -- " + ex.ToString());
             }
             finally
             {
-                //Debug.WriteLine("ExpList: DoItemUpdate End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: DoItemUpdate End");
             }
         }
 
@@ -799,7 +799,7 @@ namespace ExpControlsLib
         {
             if (_activeDeletes.ContainsKey(item.FullPath))
             {
-                Debug.WriteLine("  [DELETE] Already processing delete for this item. Skipping to avoid duplicate work.");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]   [DELETE] Already processing delete for this item. Skipping to avoid duplicate work.");
                 return false;
             }
 
@@ -881,7 +881,7 @@ namespace ExpControlsLib
 
         private async Task HandleDirectoryUpdateAsync()
         {
-            Debug.WriteLine("\tUpdateDir");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]\tUpdateDir");
             await LoadDirectoryAsync(_currentFolderCsi, true, reload: true);
         }
 
@@ -910,7 +910,7 @@ namespace ExpControlsLib
         /// </summary>
         private void UpdateLviUsingCsiData(ListViewItem lvi, CShellItem csi)
         {
-            //Debug.WriteLine("ExpList: UpdateLviUsingCsiData Begin");
+            //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: UpdateLviUsingCsiData Begin");
             try
             {
                 if (lvi == null || csi == null) return;
@@ -940,7 +940,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: UpdateLviUsingCsi End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: UpdateLviUsingCsi End");
             }
         }
 
@@ -979,7 +979,7 @@ namespace ExpControlsLib
 
         internal ListViewSubitemData GetColumnData(CShellItem item, string colText, int colIndex, string mapping)
         {
-            //Debug.WriteLine("ExpList: GetColumnData Begin");
+            //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GetColumnData Begin");
             try
             {
                 string text = string.Empty;
@@ -1094,7 +1094,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: GetColumnData End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: GetColumnData End");
             }
         }
 

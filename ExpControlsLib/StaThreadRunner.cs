@@ -159,7 +159,7 @@ namespace ExpControlsLib
                     return;
 
                 ThrowIfDisposed();
-                Debug.WriteLine("Starting StaThreadRunner...");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Starting StaThreadRunner...");
 
                 for (int i = 0; i < _threads.Length; i++)
                 {
@@ -173,7 +173,7 @@ namespace ExpControlsLib
                     thread.SetApartmentState(ApartmentState.STA);
                     _threads[i] = thread;
                     thread.Start();
-                    Debug.WriteLine("\tthread started." + DateTime.Now.ToString("HH:mm:ss.fff"));
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]\tthread started." + DateTime.Now.ToString("HH:mm:ss.fff"));
                 }
 
                 _ready.Wait();

@@ -619,7 +619,7 @@ namespace ExpControlsLib
             {
                 if (_initialized) 
                 {
-                    Debug.WriteLine("ExpTree.StartUpDirectory: cannot change startup directory after startup.");
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.StartUpDirectory: cannot change startup directory after startup.");
                     return;
                 }
                 _StartUpDirectory = value;
@@ -1298,7 +1298,7 @@ namespace ExpControlsLib
                 return;
             }
 
-            // Debug.WriteLine("Enter ExpTree OnItemUpdate -- " & e.Item.DisplayName & " - " & e.UpdateType.ToString)
+            // Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Enter ExpTree OnItemUpdate -- " & e.Item.DisplayName & " - " & e.UpdateType.ToString)
             if (e.Item is not null && e.Item.IsFolder)  // no interest in non-folder events (or UpdateDir)
             {
 
@@ -1351,7 +1351,7 @@ namespace ExpControlsLib
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine("ExpTree Update Error -- " + ex.ToString());
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree Update Error -- " + ex.ToString());
                 }
             }
         }
@@ -1667,7 +1667,7 @@ namespace ExpControlsLib
             CShellItem csi = (CShellItem)e.Node.Tag;
             if (csi is null) return;
 
-            Debug.WriteLine("Tv1_BeforeSelect: item selected: " + csi.DisplayName + " " + sender?.ToString());
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Tv1_BeforeSelect: item selected: " + csi.DisplayName + " " + sender?.ToString());
         }
 
         /// <summary>
@@ -1699,7 +1699,7 @@ namespace ExpControlsLib
             //    }
             //    catch (Exception ex)
             //    {
-            //        Debug.WriteLine("Error reading folder: " + ex.Message);
+            //        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error reading folder: " + ex.Message);
             //    }
             //}
 
@@ -1758,7 +1758,7 @@ namespace ExpControlsLib
                                
                                 if (tn.Tag is null)
                                 {
-                                    Debug.WriteLine("ExpTree.Tv1_MouseUp: TreeNode tag is null.  Cannot proceed.");
+                                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Tv1_MouseUp: TreeNode tag is null.  Cannot proceed.");
                                     return;
                                 }
 
@@ -2032,7 +2032,7 @@ namespace ExpControlsLib
                 {
                     System.Media.SystemSounds.Beep.Play();
                 }
-                Debug.WriteLine("Invalid label edit value.  Ex:" + ex.ToString());
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Invalid label edit value.  Ex:" + ex.ToString());
                 return;
             }
 
@@ -2117,7 +2117,7 @@ namespace ExpControlsLib
         /// <summary>ShDragEnter does nothing. It is here for debug tracking</summary>
         private void DragWrapper_ShDragEnter(IntPtr pDataObj, int grfKeyState, int pdwEffect)
         {
-            // Debug.WriteLine("Enter ExpTree ShDragEnter. PdwEffect = " & pdwEffect)
+            // Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Enter ExpTree ShDragEnter. PdwEffect = " & pdwEffect)
         }
 
         /// <summary>Drag has left the control. Cleanup what we have to</summary>
@@ -2363,7 +2363,7 @@ namespace ExpControlsLib
                             int hr = SHGetDesktopFolder(ref desktop);
                             if (hr != S_OK || desktop == null)
                             {
-                                Debug.WriteLine($"InvokeCommand failed with HRESULT: {hr:X}");
+                                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] InvokeCommand failed with HRESULT: {hr:X}");
                                 return hr;
                             }
 
@@ -2388,7 +2388,7 @@ namespace ExpControlsLib
 
                             if (hr != S_OK || iUnknownOut == IntPtr.Zero)
                             {
-                                Debug.WriteLine($"InvokeCommand failed with HRESULT: {hr:X}");
+                                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] InvokeCommand failed with HRESULT: {hr:X}");
                                 return hr;
                             }
                             contextMenu = (IContextMenu)Marshal.GetTypedObjectForIUnknown(iUnknownOut, typeof(IContextMenu));
@@ -2409,12 +2409,12 @@ namespace ExpControlsLib
                             };
 
                             hr = contextMenu.InvokeCommand(cmi);
-                            if (hr != S_OK) Debug.WriteLine($"InvokeCommand failed with HRESULT: {hr:X}");
+                            if (hr != S_OK) Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] InvokeCommand failed with HRESULT: {hr:X}");
                             return hr;
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"Error in background WinMenuCmd: {ex.Message}");
+                            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error in background WinMenuCmd: {ex.Message}");
                             return -1;
                         }
                         finally

@@ -27,7 +27,7 @@ namespace ExpControlsLib
         #region Event Handlers
         private void ExpFileList_Click(object? sender, EventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpFileList_Click Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_Click Begin");
             try
             {
                 ListView listView = (ListView)sender;
@@ -58,7 +58,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpFileList_Click End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_Click End");
             }
         }
 
@@ -68,7 +68,7 @@ namespace ExpControlsLib
         /// </summary>
         private async void ExpFileList_DoubleClick(object? sender, EventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpFileList_DoubleClick Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_DoubleClick Begin");
             try
             {
                 if (_listView.SelectedIndices.Count <= 0) return;
@@ -100,13 +100,13 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpFileList_DoubleClick End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_DoubleClick End");
             }
         }
 
         private void ExpFileList_SelectedIndexChanged(object? sender, EventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpFileList_SelectedIndexChanged Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_SelectedIndexChanged Begin");
 
             if (IsShuttingDown) return;
 
@@ -139,21 +139,21 @@ namespace ExpControlsLib
             }
             catch (InvalidOperationException ex)
             {
-                Debug.WriteLine("ExpList: InvalidOperationException in ExpFileList_SelectedIndexChanged: " + ex.ToString());
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: InvalidOperationException in ExpFileList_SelectedIndexChanged: " + ex.ToString());
             }
             catch (NullReferenceException ex)
             {
-                Debug.WriteLine("ExpList: NullReferenceException in ExpFileList_SelectedIndexChanged: " + ex.ToString());
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: NullReferenceException in ExpFileList_SelectedIndexChanged: " + ex.ToString());
             }
             finally
             {
-                //Debug.WriteLine("ExpList: ExpFileList_SelectedIndexChanged End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_SelectedIndexChanged End");
             }
         }
 
         private void ExpFileList_ItemSelectionChanged(object? sender, ListViewItemSelectionChangedEventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpFileList_ItemSelectionChanged Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_ItemSelectionChanged Begin");
             try
             {
                 if (e.IsSelected)
@@ -164,7 +164,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: ExpFileList_ItemSelectionChanged End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_ItemSelectionChanged End");
             }
         }
 
@@ -272,7 +272,7 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpFileList_BeforeLabelEdit(object? sender, LabelEditEventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpFileList_BeforeLabelEdit Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_BeforeLabelEdit Begin");
             try
             {
                 IntPtr editWnd = SendMessage(_listView.Handle, LVM_GETEDITCONTROL, 0, IntPtr.Zero);
@@ -292,7 +292,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpFileList_BeforeLabelEdit End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_BeforeLabelEdit End");
             }
         }
 
@@ -302,7 +302,7 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpFileList_AfterLabelEdit(object? sender, LabelEditEventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpFileList_AfterLabelEdit Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_AfterLabelEdit Begin");
             try
             {
                 var item = GetItem(e.Item);
@@ -348,7 +348,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpFileList_AfterLabelEdit End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_AfterLabelEdit End");
             }
         }
 
@@ -408,7 +408,7 @@ namespace ExpControlsLib
             if (image_index == -1)
             {
                 // Failed to add thumbnail, likely due to disposal or mode change. Just exit.
-                Debug.WriteLine("Failed to add thumbnail for item: " + e.Item.DisplayName);
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Failed to add thumbnail for item: " + e.Item.DisplayName);
                 return;
             }
 
@@ -420,11 +420,11 @@ namespace ExpControlsLib
                     if (index == -1)
                     {
                         // Failed to find item in listview, possibly due to deletion or move. Just exit.
-                        Debug.WriteLine("Failed to find the item in the listview: " + e.Item.DisplayName);
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Failed to find the item in the listview: " + e.Item.DisplayName);
                         return;
                     }
                     _listViewWrapper.GetItem(index).ImageIndex = image_index;
-                    //Debug.WriteLine("Redrawing: " + e.Item.DisplayName);
+                    //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Redrawing: " + e.Item.DisplayName);
 
                     //thumbnails that are provided for items that are offscreen will be drawn by the ListView when
                     //they are brought on screen.  Items that are already onscreen are not redrawn unless done so 
@@ -451,7 +451,7 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpFileList_MouseLeave(object? sender, EventArgs e)
         {
-            //Debug.WriteLine("ExpList: ExpFileList_MouseLeave Begin");
+            //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_MouseLeave Begin");
             try
             {
                 m_OutOfRange = true;
@@ -459,20 +459,20 @@ namespace ExpControlsLib
             }
             finally
             {
-                //Debug.WriteLine("ExpList: ExpFileList_MouseLeave End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_MouseLeave End");
             }
         }
 
         private void ExpFileList_MouseEnter(object? sender, EventArgs e)
         {
-            //Debug.WriteLine("ExpList: ExpFileList_MouseEnter Begin");
+            //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_MouseEnter Begin");
             try
             {
                 OnMouseEnter(e);
             }
             finally
             {
-                //Debug.WriteLine("ExpList: ExpFileList_MouseEnter End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_MouseEnter End");
             }
         }
 
@@ -481,7 +481,7 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpFileList_MouseDown(object? sender, MouseEventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpFileList_MouseDown Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_MouseDown Begin");
             try
             {
                 if (e.Button == MouseButtons.Right) m_OutOfRange = false;
@@ -508,7 +508,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpFileList_MouseDown End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_MouseDown End");
             }
         }
 
@@ -517,7 +517,7 @@ namespace ExpControlsLib
         /// </summary>
         private async void ExpFileList_MouseUp(object? sender, MouseEventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpFileList_MouseUp Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_MouseUp Begin");
             try
             {
                 if (e.Button == MouseButtons.Right)
@@ -609,20 +609,20 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpFileList_MouseUp End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_MouseUp End");
             }
         }
 
         private void ExpFileList_MouseMove(object? sender, MouseEventArgs e)
         {
-            //Debug.WriteLine("ExpList: ExpFileList_MouseMove Begin");
+            //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_MouseMove Begin");
             try
             {
                 OnMouseMove(e);
             }
             finally
             {
-                //Debug.WriteLine("ExpList: ExpFileList_MouseMove End");
+                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_MouseMove End");
             }
         }
 
@@ -634,7 +634,7 @@ namespace ExpControlsLib
         /// </summary>
         private async void ExpFileList_KeyDown(object? sender, KeyEventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpFileList_KeyDown Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_KeyDown Begin");
             try
             {
                 // Space toggles the checkbox on focused/selected items in virtual mode
@@ -769,7 +769,7 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpFileList_KeyDown End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_KeyDown End");
             }
         }
 
@@ -779,7 +779,7 @@ namespace ExpControlsLib
         /// </summary>
         private void ExpFileList_KeyUp(object? sender, KeyEventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpFileList_KeyUp Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_KeyUp Begin");
             try
             {
                 if ((e.KeyCode == Keys.Up || e.KeyCode == Keys.Down || e.KeyCode == Keys.Left || e.KeyCode == Keys.Right)
@@ -797,20 +797,20 @@ namespace ExpControlsLib
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpFileList_KeyUp End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_KeyUp End");
             }
         }
 
         private void ExpFileList_KeyPress(object? sender, KeyPressEventArgs e)
         {
-            Debug.WriteLine("ExpList: ExpFileList_KeyPress Begin");
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_KeyPress Begin");
             try
             {
                 OnKeyPress(e);
             }
             finally
             {
-                Debug.WriteLine("ExpList: ExpFileList_KeyPress End");
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: ExpFileList_KeyPress End");
             }
         }
 

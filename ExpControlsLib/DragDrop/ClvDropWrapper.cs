@@ -201,7 +201,7 @@ namespace ExpControlsLib
             int res = m_LastTarget.DragEnter(m_DataObj, m_LastKeyState, m_LastPt, ref pdwEffect);
             if (res != 0 && res != 1)
             {
-                Debug.WriteLine("DragEnter on resolved target failed: 0x" + res.ToString("X"));
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] DragEnter on resolved target failed: 0x" + res.ToString("X"));
             }
         }
 
@@ -387,7 +387,7 @@ namespace ExpControlsLib
     /// <remarks></remarks>
         public int DragLeave()
         {
-            // Debug.WriteLine("In DragLeave")
+            // Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] In DragLeave")
             m_Original_Effect = DragDropEffects.None;
             ResetPrevTarget();
             m_DataObj = IntPtr.Zero;
@@ -423,7 +423,7 @@ namespace ExpControlsLib
         {
             try
             {
-                // Debug.WriteLine("In DragDrop: Effect = " & pdwEffect & " Keystate = " & grfKeyState)
+                // Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] In DragDrop: Effect = " & pdwEffect & " Keystate = " & grfKeyState)
                 int res;
 
                 // If the cursor released before the dwell timer fired, resolve the target now
@@ -444,7 +444,7 @@ namespace ExpControlsLib
                                                                // version 21 change 
                     if (res != 0 && res != 1)
                     {
-                        Debug.WriteLine("Error in dropping on DropTarget. res = " + res.ToString("X"));
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error in dropping on DropTarget. res = " + res.ToString("X"));
                     } // No error on drop
 
                     // Record the in-app destination so CDragWrapper can stamp it onto
@@ -461,7 +461,7 @@ namespace ExpControlsLib
                     res = m_ParentTarget.DragDrop(pDataObj, grfKeyState, pt, ref pdwEffect);
                     if (res != 0 && res != 1)
                     {
-                        Debug.WriteLine("Error in dropping on DropTarget. res = " + res.ToString("X"));
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error in dropping on DropTarget. res = " + res.ToString("X"));
                     } // No error on drop
 
                     // Dropped on empty area / non-folder item: destination is the list's
