@@ -11,15 +11,6 @@ public partial class ExpTree
     public void CollapseAll() => _TreeView.CollapseAll();
 
     /// <summary>
-    /// Legacy name retained for source compatibility. Use <see cref="CollapseAll"/>.
-    /// </summary>
-    [Obsolete("Use CollapseAll instead.")]
-    public void ExpCollapseAll(bool collapse = true)
-    {
-        if (collapse) CollapseAll();
-    }
-
-    /// <summary>
     /// Expands and selects a node without raising <see cref="ExpTreeNodeSelected"/>.
     /// </summary>
     public async Task<bool> SelectNodeSilentlyAsync(CShellItem target)

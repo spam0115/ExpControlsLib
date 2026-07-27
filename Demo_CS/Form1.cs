@@ -1,5 +1,6 @@
 ﻿using ExpControlsLib;
 using System;
+using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
@@ -38,6 +39,16 @@ namespace Demo_CS
 
         private void expList1_ExpListItemDoubleClick(string SelPath, CShellItem Item)
         {
+            if (string.IsNullOrEmpty(SelPath)) return;
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(SelPath) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Open Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void expList1_ItemSelectionChanged(ListViewItemSelectionChangedEventArgs e)

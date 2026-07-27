@@ -161,26 +161,11 @@ namespace ExpControlsLib
             };
 
             if (!_capacities.ContainsKey(thumbnailSize))
-                _capacities[thumbnailSize] = Math.Max(1, 16384 / thumbnailSize * 2);
+                _capacities[thumbnailSize] = Math.Max(1, 16384 / thumbnailSize * 4);
 
             int capacity = _capacities[thumbnailSize];
 
-            //// ImageList has no public capacity property. Populate every
-            //// slot once so the native image list allocates its full
-            //// configured size, then reuse those slots forever.
-            ////imageList.Images[capacity - 1] = dummy; //crash
-            //var dummy = new Bitmap(thumbnailSize, thumbnailSize);
-            //try
-            //{
-            //    imageList.Images.AddRange(Enumerable.Repeat(dummy, capacity).ToArray());
-            //}
-            //catch
-            //{
-            //    dummy.Dispose();
-            //    throw;
-            //}
-
-            // Force the normal 4-image native allocation.
+            // Force handle creation
             IntPtr handle = imageList.Handle;
 
             // Expand it once to the final logical size.
