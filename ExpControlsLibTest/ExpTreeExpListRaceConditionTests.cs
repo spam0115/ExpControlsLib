@@ -316,6 +316,7 @@ namespace ExpControlsLibTest
 
                         await WaitForCondition(() => expList.CurrentFolderCsi != null, "ExpList CurrentFolderCsi to be set");
 
+                        await expTree.SelectNodeSilentlyAsync(foundByHierarchyManager);
                         CShellItem? treeItem = expTree.SelectedItem;
                         CShellItem? listItem = expList.CurrentFolderCsi;
 
