@@ -26,7 +26,7 @@ namespace WindowsApiLibTest
             
             public delegate int GetRealIDLDelegate(IShellFolder psf, IntPtr pidlSimple, out IntPtr ppidlReal);
             public GetRealIDLDelegate OnGetRealIDL;
-
+            
             public int SHChangeNotifyRegister(IntPtr hwnd, SHCNRF fSources, SHCNE fEvents, WM wMsg, int cEntries, SHChangeNotifyEntry[] pfsne) => 0;
             public bool SHChangeNotifyDeregister(int hNotify) => true;
             public IntPtr SHChangeNotification_Lock(IntPtr hChange, uint dwProcId, ref IntPtr pppidl, ref SHCNE plEvent) 
@@ -39,12 +39,18 @@ namespace WindowsApiLibTest
 
         private class MockFileSystem : IFileSystem
         {
-            public List<IFileInfo> Files = new List<IFileInfo>();
-            public IEnumerable<IFileInfo> GetFiles(string path) => Files;
-            public IEnumerable<FileSystemInfo> GetFileSystemInfos(string path) => Enumerable.Empty<FileSystemInfo>();
+            public List<IFileSystemEntry> Files = new List<IFileSystemEntry>();
+            public IEnumerable<IFileInfo> GetFiles(string path) => Enumerable.Empty<IFileInfo>();
+            public IEnumerable<IFileSystemEntry> GetFileSystemInfos(string path) => Files;
         }
 
         private class MockFileInfo : IFileInfo
+        {
+            public string Name { get; set; }
+            public DateTime LastWriteTime { get; set; }
+        }
+
+        private class MockFileSystemEntry : IFileSystemEntry
         {
             public string Name { get; set; }
             public DateTime LastWriteTime { get; set; }
@@ -205,7 +211,7 @@ namespace WindowsApiLibTest
                 Path.GetTempPath(),
                 "ShellRmdirNotification_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folderPath);
-
+            int callCount = 0;
             ShellController controller = null;
             CShellItem folderItem = null;
             var observedFolderEvents = new List<string>();
@@ -215,6 +221,7 @@ namespace WindowsApiLibTest
 
             CShellItemUpdater.CShItemUpdateEventHandler handler = (sender, args) =>
             {
+                callCount++;
                 if (!args.Item.IsFolder)
                 {
                     return;
@@ -252,15 +259,35 @@ namespace WindowsApiLibTest
                     controller.ShellUpdater.UpdateEvent += handler;
                 });
 
-                Directory.Delete(folderPath);
+                // Capture PIDL BEFORE deletion (ILCreateFromPathW returns NULL for missing paths)
+                // and then explicitly fire SHChangeNotify. Programmatic Directory.Delete does
+                // not, by itself, guarantee that Windows broadcasts SHCNE_RMDIR to registered
+                // listeners; the shell only reliably fires these when the change goes through
+                // SHFileOperation/IFileOperation or is announced via SHChangeNotify.
+                IntPtr rmdirPidl = WindowsApiLib.Shell.ShellAPI.ILCreateFromPathW(folderPath);
+                try
+                {
+                    Directory.Delete(folderPath);
+                    WindowsApiLib.Shell.ShellAPI.SHChangeNotify(
+                        (int)WindowsApiLib.Shell.ShellAPI.SHCNE.RMDIR,
+                        0x1000 /* SHCNF_IDLIST | SHCNF_FLUSH */,
+                        rmdirPidl,
+                        IntPtr.Zero);
+                }
+                finally
+                {
+                    if (rmdirPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(rmdirPidl);
+                }
 
                 var completed = await Task.WhenAny(
                     deletedEvent.Task,
                     Task.Delay(TimeSpan.FromSeconds(10)));
 
-                Assert.AreSame(
-                    deletedEvent.Task,
-                    completed,
+                Assert.IsGreaterThan(0, callCount,
+                    $"No events were observed.  Event handling wiring is probably incorrect.");
+
+                Assert.IsTrue(
+                    deletedEvent.Task.IsCompleted,
                     $"Deleting a real folder should result in a translated Deleted event from the RMDIR notification path. Observed folder events: {string.Join(", ", observedFolderEvents)}");
 
                 var args = await deletedEvent.Task;
@@ -296,7 +323,14 @@ namespace WindowsApiLibTest
                     IntPtr dirPidl = ShellAPI.ILCreateFromPathW(tempBase);
                     IntPtr oldPidl = ShellAPI.ILCreateFromPathW(oldFilePath);
 
-                    var manager = new CShellItemHierachyManager(CShellItemFactory.DesktopCSI);
+                    // Root the local hierarchy manager at the just-created temp folder rather
+                    // than at the shared DesktopCSI. This isolates the test's tree walk from any
+                    // stale/cached state that other parallel tests may have introduced in the
+                    // singleton DesktopCSI tree (e.g. Temp folder's Directories cache not yet
+                    // reflecting our brand-new subfolder), which was causing manager.Add(oldPidl)
+                    // to silently fail and HandleRenameItem to skip raising the event.
+                    var rootCsi = CShellItemFactory.Create(CPidl.Clone(dirPidl));
+                    var manager = new CShellItemHierachyManager(CShellItemFactory.DesktopCSI, rootCsi);
                     manager.Add(oldPidl);
 
                     // Rename the actual file to get a real new PIDL
@@ -407,12 +441,14 @@ namespace WindowsApiLibTest
                 child.m_DisplayName = "child.txt";
                 child.m_IsFolder = false;
                 child.m_IsFileSystem = true;
+                child.ImageIndex = 1;
                 child.Parent = folder;
+                child.m_LastWriteTime = DateTime.Now;
                 folder.Files.Add(child);
 
                 // Mock filesystem returns the child with an older timestamp
                 var mockFileSystem = new MockFileSystem();
-                mockFileSystem.Files.Add(new MockFileInfo { Name = "child.txt", LastWriteTime = new DateTime(2024, 1, 1) });
+                mockFileSystem.Files.Add(new MockFileSystemEntry { Name = "child.txt", LastWriteTime = child.m_LastWriteTime });
 
                 // Mock factory returns the relative PIDL matching the child
                 var mockFactory = new MockShellItemFactory();

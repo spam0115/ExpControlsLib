@@ -1205,7 +1205,7 @@ namespace ExpControlsLib
                 if (imageIndex != -1)
                     item.ImageIndex = imageIndex;
             }
-            _listViewWrapper.RefreshItemData(item);
+            _listViewWrapper.UpdateLvi(item);
             _listViewWrapper.RedrawItem(GetIndexFromFullPath(item.FullPath));
         }
 

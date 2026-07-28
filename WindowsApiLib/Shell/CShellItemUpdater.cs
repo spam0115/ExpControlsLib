@@ -70,33 +70,55 @@ namespace WindowsApiLib.Shell
             _initializedEvent.WaitOne();
         }
 
+        [DllImport("ole32.dll")]
+        private static extern int OleInitialize(IntPtr pvReserved);
+
+        [DllImport("ole32.dll")]
+        private static extern void OleUninitialize();
+
         private void RunBackgroundMessageLoop()
         {
-            // Create a message-only window (HWND_MESSAGE = -3)
-            CreateParams cp = new CreateParams();
-            cp.Caption = "CShellItemUpdaterMsgWindow";
-            cp.ClassName = "Static"; // Use the standard Static window class - always registered
-            cp.Parent = new IntPtr(-3); // HWND_MESSAGE - message-only window
-            cp.Style = 0;
-            cp.ExStyle = 0;
-            cp.X = 0;
-            cp.Y = 0;
-            cp.Width = 0;
-            cp.Height = 0;
-            CreateHandle(cp);
-
-            // Subscribe to windows events        
-            var entry = new SHChangeNotifyEntry()
+            // SHChangeNotifyRegister requires the calling thread to have COM/OLE
+            // initialized (STA). SetApartmentState(STA) on the Thread only marks
+            // the apartment; it does NOT initialize COM. Without OleInitialize the
+            // shell accepts the registration and returns a valid notifyId but never
+            // actually delivers change notifications to the registered HWND.
+            int oleHr = OleInitialize(IntPtr.Zero);
+            try
             {
-                pIdl = HierachyManager.Root.PIDL,
-                Recursively = true
-            };
-            m_notifyId = SHChangeNotifyRegister(Handle, SHCNRF.InterruptLevel | SHCNRF.ShellLevel | SHCNRF.NewDelivery
-                , (SHCNE)_eventFlags, (WM)((long)WM.USER + 200L), 1, new SHChangeNotifyEntry[] { entry });
+                // Create a message-only window (HWND_MESSAGE = -3)
+                CreateParams cp = new CreateParams();
+                cp.Caption = "CShellItemUpdaterMsgWindow";
+                cp.ClassName = "Static"; // Use the standard Static window class - always registered
+                cp.Parent = new IntPtr(-3); // HWND_MESSAGE - message-only window
+                cp.Style = 0;
+                cp.ExStyle = 0;
+                cp.X = 0;
+                cp.Y = 0;
+                cp.Width = 0;
+                cp.Height = 0;
+                CreateHandle(cp);
 
-            _initializedEvent.Set();
+                // Subscribe to windows events        
+                var entry = new SHChangeNotifyEntry()
+                {
+                    pIdl = HierachyManager.Root.PIDL,
+                    Recursively = true
+                };
+                m_notifyId = SHChangeNotifyRegister(Handle, SHCNRF.InterruptLevel | SHCNRF.ShellLevel | SHCNRF.NewDelivery
+                    , (SHCNE)_eventFlags, (WM)((long)WM.USER + 200L), 1, new SHChangeNotifyEntry[] { entry });
 
-            Application.Run();
+                _initializedEvent.Set();
+
+                Application.Run();
+            }
+            finally
+            {
+                if (oleHr >= 0)
+                {
+                    OleUninitialize();
+                }
+            }
         }
 
         protected override void WndProc(ref Message msg)

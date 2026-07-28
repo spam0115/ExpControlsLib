@@ -847,7 +847,7 @@ namespace WindowsApiLib.Shell
                         }
                     }
 
-                    Dictionary<string, FileSystemInfo> fileInfos = null;
+                    Dictionary<string, IFileSystemEntry> fileInfos = null;
                     if (csiFolder.IsFileSystem)
                     {
                         fileInfos = _fileSystem.GetFileSystemInfos(csiFolder.FullPath).ToDictionary(file => file.Name, file => file);
@@ -875,7 +875,7 @@ namespace WindowsApiLib.Shell
                                     }
                                     else if (csiFolder.IsFileSystem && fileInfos != null)
                                     {
-                                        if (fileInfos.TryGetValue(newFileName, out FileSystemInfo fi))
+                                        if (fileInfos.TryGetValue(newFileName, out IFileSystemEntry fi))
                                         {
                                             // Compare the on-disk LastWriteTime time to the CHILD's cached LastWriteTime, not the
                                             // folder's. Comparing against csiFolder.LastWriteTime (the folder) causes

@@ -8,11 +8,17 @@ namespace WindowsApiLib.Util
     {
         IEnumerable<IFileInfo> GetFiles(string path);
 
-        IEnumerable<FileSystemInfo> GetFileSystemInfos(string path);
+        IEnumerable<IFileSystemEntry> GetFileSystemInfos(string path);
 
     }
 
     public interface IFileInfo
+    {
+        string Name { get; }
+        DateTime LastWriteTime { get; }
+    }
+
+    public interface IFileSystemEntry
     {
         string Name { get; }
         DateTime LastWriteTime { get; }
@@ -29,12 +35,28 @@ namespace WindowsApiLib.Util
             }
         }
 
-        public IEnumerable<FileSystemInfo> GetFileSystemInfos(string path)
+        public IEnumerable<IFileSystemEntry> GetFileSystemInfos(string path)
         {
             var di = new DirectoryInfo(path);
-            return di.GetFileSystemInfos();
+            foreach (var fsi in di.GetFileSystemInfos())
+            {
+                yield return new FileSystemEntryWrapper(fsi);
+            }
         }
 
+    }
+
+    public class FileSystemEntryWrapper : IFileSystemEntry
+    {
+        private readonly FileSystemInfo _info;
+
+        public FileSystemEntryWrapper(FileSystemInfo info)
+        {
+            _info = info;
+        }
+
+        public string Name => _info.Name;
+        public DateTime LastWriteTime => _info.LastWriteTime;
     }
 
     public class FileInfoWrapper : IFileInfo

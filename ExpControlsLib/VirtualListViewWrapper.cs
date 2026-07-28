@@ -943,7 +943,7 @@ namespace ExpControlsLib
         /// Does NOT redraw the item.
         /// </summary>
         /// <param name="csi"></param>
-        public void RefreshItemData(CShellItem? csi)
+        public void UpdateLvi(CShellItem? csi)
         {
             if (csi is null) return;
 
