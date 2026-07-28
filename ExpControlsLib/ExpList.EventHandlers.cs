@@ -46,7 +46,9 @@ namespace ExpControlsLib
 
                     if (csi.ImageIndex == -1)
                     {
-                        _imageListOrchestrator.EnsureImage(csi, listView.FocusedItem.Index);
+                        var imageIndex = _imageListOrchestrator.GetInitialImageIndexOrQueue(csi, listView.FocusedItem.Index);
+                        if (imageIndex != -1)
+                            csi.ImageIndex = imageIndex;
                     }
 
                     ExpListItemClick?.Invoke(listView.FocusedItem, csi);
@@ -546,6 +548,10 @@ namespace ExpControlsLib
                             else if (verbId == 99998)
                             {
                                 ExpListCopy?.Invoke(this, new ExpListCopyEventArgs(itms));
+                            }
+                            else if (verbId == 99997)
+                            {
+                                PromptAndCreateNewFolder();
                             }
                             else
                             {

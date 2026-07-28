@@ -25,7 +25,7 @@ namespace Demo_CS
         {
             this.expTree1.AllowDrop = true;
 
-            this.expTree1.ExpandANodeAsync("C:\\temp2");
+            _ = this.expTree1.ExpandANodeAsync("C:\\temp");
 
             _initialized = true;
         }

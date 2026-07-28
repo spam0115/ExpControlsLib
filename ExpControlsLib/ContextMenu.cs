@@ -282,7 +282,7 @@ namespace ExpControlsLib
             }
         }
 
-        private static string GetVerbString(IContextMenu contextMenu, int verbId)
+        internal static string GetVerbString(IContextMenu contextMenu, int verbId)
         {
             try
             {

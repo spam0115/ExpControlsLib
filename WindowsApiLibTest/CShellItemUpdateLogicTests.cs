@@ -41,6 +41,7 @@ namespace WindowsApiLibTest
         {
             public List<IFileInfo> Files = new List<IFileInfo>();
             public IEnumerable<IFileInfo> GetFiles(string path) => Files;
+            public IEnumerable<FileSystemInfo> GetFileSystemInfos(string path) => Enumerable.Empty<FileSystemInfo>();
         }
 
         private class MockFileInfo : IFileInfo

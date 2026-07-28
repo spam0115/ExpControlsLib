@@ -34,6 +34,40 @@ namespace ExpControlsLibTest
         }
 
         [Test]
+        public void GetAvailableNewFolderName_UsesDefaultWhenAvailable()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "ExpListNewFolder_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            try
+            {
+                Assert.That(ExpList.GetAvailableNewFolderName(tempDir), Is.EqualTo("New Folder"));
+            }
+            finally
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Test]
+        public void GetAvailableNewFolderName_IncrementsPastExistingFilesAndFolders()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "ExpListNewFolder_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(tempDir, "New Folder"));
+                File.WriteAllText(Path.Combine(tempDir, "New Folder (2)"), "occupied");
+                Directory.CreateDirectory(Path.Combine(tempDir, "New Folder (3)"));
+
+                Assert.That(ExpList.GetAvailableNewFolderName(tempDir), Is.EqualTo("New Folder (4)"));
+            }
+            finally
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Test]
         public void VirtualModeCannotChangeAfterDisplay()
         {
             using var expList = new ExpList();

@@ -79,10 +79,10 @@ namespace ExpControlsLib
         /// Gets an icon immediately, or gets/queues the active thumbnail and returns -1 while
         /// the thumbnail request is pending.
         /// </summary>
-        public int EnsureImage(CShellItem item, int itemIndex = -1)
+        public int GetInitialImageIndexOrQueue(CShellItem item, int itemIndex = -1)
         {
             if (item == null) return -1;
-
+            
             if (IsThumbnailMode)
                 return _thumbnailManager.EnsureThumbnail(item, ActiveThumbnailSize, itemIndex);
 

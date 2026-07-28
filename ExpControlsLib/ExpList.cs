@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -101,6 +103,8 @@ namespace ExpControlsLib
         // m_WindowsContextMenu state.
         private bool m_IsShowingContextMenu = false;
 
+        private const string DefaultNewFolderName = "New Folder";
+
         // Reentrancy guard for image list modifications. Prevents modifying the 
         // image list while the OS is in the middle of a draw cycle (e.g. RetrieveVirtualItem).
         private int _imageListMutationDepth = 0;
@@ -112,6 +116,153 @@ namespace ExpControlsLib
         private bool _drainScheduled = false;
 
         private bool IsInDesignMode => (DesignMode || LicenseManager.UsageMode == LicenseUsageMode.Designtime);
+
+        /// <summary>
+        /// Returns a Windows Explorer-style folder name that is not already used by a
+        /// file or directory in <paramref name="currentFolderPath"/>.
+        /// </summary>
+        internal static string GetAvailableNewFolderName(
+            string currentFolderPath,
+            string baseName = DefaultNewFolderName)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(currentFolderPath);
+            ArgumentException.ThrowIfNullOrWhiteSpace(baseName);
+
+            string candidate = baseName;
+            int suffix = 2;
+            while (File.Exists(Path.Combine(currentFolderPath, candidate)) ||
+                   Directory.Exists(Path.Combine(currentFolderPath, candidate)))
+            {
+                candidate = $"{baseName} ({suffix++})";
+            }
+
+            return candidate;
+        }
+
+        private void PromptAndCreateNewFolder()
+        {
+            if (_currentFolderCsi == null)
+                return;
+
+            string currentFolderPath = _currentFolderCsi.FullPath;
+            if (!Path.IsPathFullyQualified(currentFolderPath) || !Directory.Exists(currentFolderPath))
+            {
+                MessageBox.Show(this, "A folder cannot be created in this location.", "New Folder",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string defaultName = GetAvailableNewFolderName(currentFolderPath);
+            using var dialog = CreateNewFolderDialog(currentFolderPath, defaultName);
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            var nameTextBox = (TextBox)dialog.Tag!;
+            string newFolderPath = Path.Combine(currentFolderPath, nameTextBox.Text.Trim());
+
+            try
+            {
+                Directory.CreateDirectory(newFolderPath);
+                m_CreateNew = true;
+            }
+            catch (Exception ex) when (ex is IOException ||
+                                       ex is UnauthorizedAccessException ||
+                                       ex is ArgumentException ||
+                                       ex is NotSupportedException)
+            {
+                MessageBox.Show(this, $"The folder could not be created.\r\n\r\n{ex.Message}", "New Folder",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private Form CreateNewFolderDialog(string currentFolderPath, string defaultName)
+        {
+            var dialog = new Form
+            {
+                Text = "New Folder",
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                StartPosition = FormStartPosition.CenterParent,
+                ClientSize = new Size(390, 132),
+                MaximizeBox = false,
+                MinimizeBox = false,
+                ShowInTaskbar = false
+            };
+
+            var prompt = new Label
+            {
+                AutoSize = true,
+                Location = new Point(12, 14),
+                Text = "Enter a name for the new folder:"
+            };
+            var nameTextBox = new TextBox
+            {
+                Location = new Point(15, 39),
+                Size = new Size(360, 23),
+                Text = defaultName
+            };
+            var okButton = new Button
+            {
+                Location = new Point(219, 87),
+                Size = new Size(75, 27),
+                Text = "OK"
+            };
+            var cancelButton = new Button
+            {
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(300, 87),
+                Size = new Size(75, 27),
+                Text = "Cancel"
+            };
+
+            okButton.Click += (_, _) =>
+            {
+                string folderName = nameTextBox.Text.Trim();
+                string? validationError = ValidateNewFolderName(currentFolderPath, folderName);
+                if (validationError != null)
+                {
+                    MessageBox.Show(dialog, validationError, "New Folder",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    nameTextBox.Focus();
+                    nameTextBox.SelectAll();
+                    return;
+                }
+
+                nameTextBox.Text = folderName;
+                dialog.DialogResult = DialogResult.OK;
+            };
+
+            dialog.AcceptButton = okButton;
+            dialog.CancelButton = cancelButton;
+            dialog.Controls.AddRange(new Control[] { prompt, nameTextBox, okButton, cancelButton });
+            dialog.Tag = nameTextBox;
+            dialog.Shown += (_, _) =>
+            {
+                nameTextBox.Focus();
+                nameTextBox.SelectAll();
+            };
+            return dialog;
+        }
+
+        private static string? ValidateNewFolderName(string currentFolderPath, string folderName)
+        {
+            if (string.IsNullOrWhiteSpace(folderName))
+                return "Enter a folder name.";
+
+            if (folderName is "." or ".." ||
+                folderName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+                folderName.EndsWith(' ') ||
+                folderName.EndsWith('.'))
+            {
+                return "The folder name contains invalid characters or formatting.";
+            }
+
+            string candidatePath = Path.Combine(currentFolderPath, folderName);
+            if (File.Exists(candidatePath) || Directory.Exists(candidatePath))
+                return $"A file or folder named \"{folderName}\" already exists.";
+
+            return null;
+        }
 
         // These methods are the narrow internal surface used by thumbnail management.
         // Keep the ListView itself private so callers cannot depend on its implementation.

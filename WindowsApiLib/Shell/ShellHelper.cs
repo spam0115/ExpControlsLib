@@ -772,7 +772,7 @@ namespace WindowsApiLib.Shell
                     Marshal.Release(ptr);
 #if DEBUG
                 CPidl.Dump(relPidl);
-                Debug.WriteLine($"pidl path = '{ CPidl.ToString(relPidl) }'");
+                Debug.WriteLine($"pidl path = '{ CPidl.GetDisplayNameFull(relPidl) }'");
                 HResultLogger.LogHResult(HR);
 #endif
                 return null;

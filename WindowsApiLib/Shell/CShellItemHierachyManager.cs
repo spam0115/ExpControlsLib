@@ -28,7 +28,7 @@ namespace WindowsApiLib.Shell
         public CShellItem? CurrentFolder { get; set; }
         public string? CurrentPath { get {
                 if (CurrentFolder?.PIDL == null) return string.Empty;
-                return CPidl.ToString(CurrentFolder.PIDL);
+                return CPidl.GetDisplayNameFull(CurrentFolder.PIDL);
             } }
 
         public CShellItem DesktopCSI { 
@@ -441,7 +441,7 @@ namespace WindowsApiLib.Shell
             //This can happen for fake paths or for paths that require additional subfolders to be created.
             //This code has chosen not to try to created additoinal subfolders so we will return an error results for this case.
             if (CPidl.SegmentCount(currentFolder.PIDL) + 1 != CPidl.SegmentCount(absPidl)) {
-                Debug.WriteLine("Invalid pidl provided to FindOrAdd(): '" + CPidl.ToString(absPidl) + "'");
+                Debug.WriteLine("Invalid pidl provided to FindOrAdd(): '" + CPidl.GetDisplayNameFull(absPidl) + "'");
                 return null;
             }
 

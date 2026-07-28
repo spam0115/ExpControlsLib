@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -585,9 +586,23 @@ namespace ExpControlsLib
                             break;
                         default:
                             // Handle commands from the "New" submenu.
-                            cmdID -= 1;
-                            cmi.lpVerb = (IntPtr)cmdID;
-                            cmi.lpVerbW = (IntPtr)cmdID;
+                            int newMenuCommandId = cmdID - MIN;
+                            string newMenuVerb = ExpControlsLib.ContextMenu.GetVerbString(
+                                m_WindowsContextMenu.newMenuBase,
+                                newMenuCommandId);
+
+                            // "Folder" is the first standard entry in the shell's New
+                            // submenu. Prefer its canonical verb when the shell supplies
+                            // one, with the command position as a compatibility fallback.
+                            if (newMenuVerb.Equals("newfolder", StringComparison.OrdinalIgnoreCase) ||
+                                newMenuCommandId == 0)
+                            {
+                                PromptAndCreateNewFolder();
+                                goto CLEANUP;
+                            }
+
+                            cmi.lpVerb = (IntPtr)newMenuCommandId;
+                            cmi.lpVerbW = (IntPtr)newMenuCommandId;
                             m_CreateNew = true;
                             
                             var newMenuBase = m_WindowsContextMenu.newMenuBase;
@@ -790,7 +805,14 @@ namespace ExpControlsLib
             if (IsExcluded(item)) return false;
             if (_filter != null && !_filter(item)) return false;
 
+            int imageIndex = _imageListOrchestrator.GetInitialImageIndexOrQueue(item);
+            if (imageIndex != -1)
+                item.ImageIndex = imageIndex;
+
+            _listViewWrapper._listView.BeginUpdate();
             _listViewWrapper.InsertSorted(item);
+            //_listViewWrapper._listView.Refresh();
+            _listViewWrapper._listView.EndUpdate();
             m_CreateNew = false;
             return true;
         }
@@ -875,7 +897,12 @@ namespace ExpControlsLib
             int index = _listViewWrapper.GetIndexFromFullPath(item.FullPath);
             if (index >= 0)
             {
-                _listViewWrapper.RedrawItem(index);
+                if (item.NeedsRefresh)
+                {
+                    RefreshItem(item);
+                }
+                else 
+                    _listViewWrapper.RedrawItem(index); //should we just refresh it all the time?
             }
         }
 
@@ -903,7 +930,6 @@ namespace ExpControlsLib
                 : _currentFolderCsi.FullPath;
             ExpListItemsChanged?.Invoke(path, _currentFolderCsi);
         }
-
 
         /// <summary>
         /// Refreshes the display of a single item whose underlying filesystem or scoring data has changed.
@@ -1165,14 +1191,22 @@ namespace ExpControlsLib
             _listViewWrapper.Sort();
         }
 
-        public void RefreshItemByFullPath(string path)
+        public void RefreshItem(string path)
         {
-            _listViewWrapper.RefreshItemByFullPath(path);
+            var csi = _shellController.HierachyManager.Find(path);
+            RefreshItem(csi);
         }
 
         public void RefreshItem(CShellItem? item)
         {
-            _listViewWrapper.RefreshItem(item);
+            if (item is null) return;
+            if (item.NeedsRefresh) {
+                int imageIndex = _imageListOrchestrator.GetInitialImageIndexOrQueue(item);
+                if (imageIndex != -1)
+                    item.ImageIndex = imageIndex;
+            }
+            _listViewWrapper.RefreshItemData(item);
+            _listViewWrapper.RedrawItem(GetIndexFromFullPath(item.FullPath));
         }
 
         #endregion

@@ -414,8 +414,8 @@ namespace ExpControlsLib
                 }
 
                 imageList = GetOrCreateImageList(size);
-                if (_expList.LargeImageList != imageList)
-                    _expList.LargeImageList = imageList;
+                //if (_expList.LargeImageList != imageList)
+                //    _expList.LargeImageList = imageList;
 
                 string key = CreateKey(reqArgs.Item.FullPath, size);
                 _invalidatedKeys.Remove(key);

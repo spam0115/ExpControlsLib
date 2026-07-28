@@ -20,7 +20,7 @@ namespace WindowsApiLib.Shell
         private readonly LruConcurrentDictionary<string, bool> _activeDeletes = new(1000);
         private bool _isUpdatingDir = false;
 
-        public event CShellItemUpdater.CShItemUpdateEventHandler? UpdateEvent;
+        public event CShellItemUpdater.CShItemUpdateEventHandler? UpdateEvent; //we're not actually using this for anything right now.  really need to rethink this whole thing.
 
         public bool AllowUpdates { get; set; }
 
@@ -79,376 +79,45 @@ namespace WindowsApiLib.Shell
                 userPidl1 = TPidl.Clone(shNotify.dwItem1);
                 userPidl2 = shNotify.dwItem2 != IntPtr.Zero ? TPidl.Clone(shNotify.dwItem2) : IntPtr.Zero;
 
-                var pidlName = TPidl.ToString(userPidl1);
+                var pidlName = TPidl.GetDisplayNameFull(userPidl1);
                 Debug.WriteLine(", dwItem1: " + pidlName);
 
                 lock (_hierarchyManager.Lock)
                 {
-                    CShellItem? parentItem = null;
-                    PidlSplitResult splitPidl = default;
-
                     switch (msgID)
                     {
                         case SHCNE.CREATE:
-                            {
-                                Debug.WriteLine("  [CREATE] processing...");
-                                try
-                                {
-                                    splitPidl = TPidl.Split(userPidl1);
-
-                                    parentItem = _hierarchyManager.Find(splitPidl.ParentPidl);
-                                    if (parentItem is not null)
-                                    {
-                                        Debug.WriteLine("  [CREATE] Parent found: " + parentItem.ItemPath);
-                                        if (parentItem.DirectoriesInitialized || parentItem.FilesInitialized)
-                                        {
-                                            CShellItem existingItem = null;
-                                            if (pidlName is not null)
-                                            {
-                                                if (parentItem.FilesInitialized)
-                                                    parentItem.Files.Dictionary.TryGetValue(pidlName, out existingItem);
-                                                if (existingItem is null && parentItem.DirectoriesInitialized)
-                                                    parentItem.Directories.Dictionary.TryGetValue(pidlName, out existingItem);
-                                            }
-
-                                            if (existingItem is not null)
-                                            {
-                                                Debug.WriteLine("  [CREATE] Item already in list: " + existingItem.ItemPath + ". Updating PIDL and refreshing info.");
-                                                IntPtr newPidl = TPidl.Clone(userPidl1);
-                                                Marshal.FreeCoTaskMem(existingItem.m_Pidl);
-                                                existingItem.m_Pidl = newPidl;
-                                                existingItem.m_FullPath = null;
-                                                existingItem.ReloadInfo();
-                                                RaiseUpdateEvent(parentItem, new ShellItemUpdateEventArgs(existingItem, CShItemUpdateType.Updated));
-                                            }
-                                            else
-                                            {
-                                                var clonedCreatePidl = TPidl.Clone(userPidl1);
-                                                var newItem = _shellItemFactory.Create(clonedCreatePidl, parentItem);
-                                                if (newItem is not null)
-                                                {
-                                                    Debug.WriteLine("  [CREATE] Created newItem: " + newItem.ItemPath);
-                                                    AddItem(parentItem, newItem);
-                                                }
-                                                else
-                                                {
-                                                    Debug.WriteLine("  [CREATE] CShellItemFactory.Create returned null");
-                                                }
-                                            }
-                                        }
-                                        else
-                                        {
-                                            Debug.WriteLine("  [CREATE] Parent not ready (neither Directories nor Files initialized). Skipping add.");
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Debug.WriteLine("  [CREATE] Parent NOT found in hierarchy.");
-                                    }
-                                }
-                                finally
-                                {
-                                    if (splitPidl.ParentPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
-                                    if (splitPidl.ChildPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
-                                }
-                                
-                                break;
-                            }
+                            HandleCreate(userPidl1, pidlName);
+                            break;
                         case SHCNE.DELETE:
-                            Debug.WriteLine("  [DELETE] processing...");
-
-                            if (userPidl1 == IntPtr.Zero)
-                            {
-                                Debug.WriteLine("  [DELETE] message with no location specified. Skipping.");
-                                return;
-                            }
-
-                            if (_activeDeletes.ContainsKey(pidlName))
-                            {
-                                Debug.WriteLine("  [DELETE] Already processing delete for this item. Skipping to avoid duplicate work.");
-                                return;
-                            }
-
-                            try
-                            {
-                                _activeDeletes.Add(pidlName, true);
-                                splitPidl = TPidl.Split(userPidl1);
-                                parentItem = _hierarchyManager.Find(splitPidl.ParentPidl);
-
-                                if (parentItem != null)
-                                {
-                                    Debug.WriteLine("  [DELETE] Parent found: " + parentItem.ItemPath);
-
-                                    string? name = TPidl.GetDisplayNameFull(userPidl1);
-
-                                    if (name != null) 
-                                    {
-                                        CShellItem childItem = null;
-
-                                        if (parentItem.FilesInitialized) 
-                                        { 
-                                            parentItem.Files.Dictionary.TryGetValue(name, out childItem);
-                                        }
-
-                                        if (childItem == null && parentItem.Directories != null)
-                                            parentItem.Directories.Dictionary.TryGetValue(name, out childItem);
-
-                                        if (childItem != null)
-                                        {
-                                            Debug.WriteLine("  [DELETE] Child item found: " + childItem.ItemPath + ". Updating as deleted.");
-                                            childItem.Ghostify();
-                                            DoUpdateDeleted(childItem);
-                                        }
-                                        else
-                                        {
-                                            Debug.WriteLine("  [DELETE] Child item NOT found in parent's lists.");
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    Debug.WriteLine("  [DELETE] Parent NOT found.");
-                                }
-                            }
-                            finally
-                            {
-                                if (splitPidl.ParentPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
-                                if (splitPidl.ChildPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
-                                _activeDeletes.Remove(pidlName);
-                            }
-
+                            HandleDelete(userPidl1, pidlName);
                             break;
                         case SHCNE.RENAMEITEM:
-                            Debug.WriteLine("  [RENAMEITEM] processing...");
-                            if (userPidl2 != IntPtr.Zero)
-                            {
-                                //if the parent folder is not already part of the hierarchy, we don't need to do anything
-                                //because the rename is happening in a folder that we are not monitoring.
-                                splitPidl = CPidl.Split(userPidl1);
-                                parentItem = _hierarchyManager.Find(splitPidl.ParentPidl);
-                                if (parentItem is null)
-                                {
-                                    return;
-                                }
-                                
-                                var item = _hierarchyManager.Find(userPidl1); //find old item
-                                if (item is not null)
-                                {
-                                    Debug.WriteLine("  [RENAMEITEM] Item found: " + item.ItemPath + ". New PIDL: " + userPidl2.ToString("X"));
-                                    HandleRenamed(item, userPidl2);
-                                }
-                                else
-                                {
-                                    Debug.WriteLine("  [RENAMEITEM] Item NOT found.");
-                                }
-                            }
-                            else
-                            {
-                                Debug.WriteLine("  [RENAMEITEM] dwItem2 is Zero.");
-                            }
+                            HandleRenameItem(userPidl1, userPidl2);
                             break;
                         case SHCNE.UPDATEDIR:
-                            {
-                                Debug.WriteLine("  [UPDATEDIR] processing...");
-                                if (userPidl1 == IntPtr.Zero || TPidl.SegmentCount(userPidl1) == 0)
-                                {
-                                    Debug.WriteLine("  [UPDATEDIR] message with no location specified.");
-                                    return;
-                                }
-                                else
-                                {
-                                    var upCSI = _hierarchyManager.Find(userPidl1);
-                                    if (upCSI is not null)
-                                    {
-                                        Debug.WriteLine("  [UPDATEDIR] Found item: " + upCSI.ItemPath + ".  Updating dir.");
-                                        DoUpdateDir(upCSI);
-                                    }
-                                    else
-                                    {
-                                        Debug.WriteLine("  [UPDATEDIR] Item NOT found.");
-                                    }
-                                }
-
-                                break;
-                            }
-
+                            HandleUpdateDir(userPidl1);
+                            break;
                         case SHCNE.UPDATEITEM:
-                            {
-                                Debug.WriteLine("  [UPDATEITEM] processing... " + DateTime.Now.ToString("HH:mm:ss.fff"));
-                                if (userPidl1 == IntPtr.Zero || TPidl.SegmentCount(userPidl1) == 0)
-                                {
-                                    Debug.WriteLine("  [UPDATEITEM] Empty pidl received from UPDATEITEM event");
-                                }
-                                else
-                                {
-                                    var item = _hierarchyManager.Find(userPidl1);
-                                    if (item is null)
-                                    {
-                                        Debug.WriteLine("  [UPDATEITEM] item was not found " + DateTime.Now.ToString("HH:mm:ss.fff"));
-                                        return;
-                                    }
-
-                                    Debug.WriteLine("  [UPDATEITEM] Found item: " + item.ItemPath + (item.IsFolder ? " (Folder)" : " (File)"));
-                                    if (item.IsFolder)
-                                    {
-                                        DoUpdateDir(item);
-                                    }
-                                    else
-                                    {
-                                        DoUpdateUpdated(item);
-                                    }
-                                }
-                                break;
-                            }
-
+                            HandleUpdateItem(userPidl1);
+                            break;
                         case SHCNE.MKDIR:
                         case SHCNE.DRIVEADD:
-                            Debug.WriteLine("  [MKDIR/DRIVEADD] processing... " + DateTime.Now.ToString("HH:mm:ss.fff"));
-                            try
-                            {
-                                splitPidl = TPidl.Split(userPidl1);
-                                parentItem = _hierarchyManager.Find(splitPidl.ParentPidl);
-                                if (parentItem is not null)
-                                {
-                                    Debug.WriteLine("  [MKDIR] Parent found: " + parentItem.ItemPath);
-                                    if (parentItem.DirectoriesInitialized)
-                                    {
-                                        if (!parentItem.Directories.Contains(userPidl1))
-                                        {
-                                            Debug.WriteLine("  [MKDIR] Parent folders initialized and NOT in list. Adding.");
-                                            var clonedMkdirPidl = TPidl.Clone(userPidl1);
-                                            var newItem = _shellItemFactory.Create(clonedMkdirPidl, parentItem);
-                                            if (newItem is not null)
-                                            {
-                                                Debug.WriteLine("  [MKDIR] Created newItem: " + newItem.ItemPath);
-                                                AddItem(parentItem, newItem);
-                                            }
-                                            else
-                                            {
-                                                Debug.WriteLine("  [MKDIR] CShellItemFactory.Create returned null");
-                                            }
-                                        }
-                                        else
-                                        {
-                                            Debug.WriteLine("  [MKDIR] Folder already in DirectoryList");
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Debug.WriteLine("  [MKDIR] Parent folders NOT initialized.");
-                                        if (!IsVistaOrAbove())
-                                        {
-                                            Debug.WriteLine("  [MKDIR] XP path: Updating parent.");
-                                            DoUpdateUpdated(parentItem);
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    Debug.WriteLine("  [MKDIR] Parent Not Found " + DateTime.Now.ToString("HH:mm:ss.fff"));
-                                }
-                            }
-                            finally
-                            {
-                                if (splitPidl.ParentPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
-                                if (splitPidl.ChildPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
-                            }
-
+                            HandleMkdirOrDriveAdd(userPidl1);
                             break;
                         case SHCNE.RENAMEFOLDER:
-                            Debug.WriteLine("  [RENAMEFOLDER] processing...");
-                            if (userPidl2 != IntPtr.Zero)
-                            {
-                                var item = _hierarchyManager.Find(userPidl1);
-                                if (item is not null)
-                                {
-                                    Debug.WriteLine("  [RENAMEFOLDER] Found item: " + item.ItemPath + ". New PIDL: " + userPidl2.ToString("X"));
-                                    HandleRenamed(item, userPidl2);
-                                }
-                                else
-                                {
-                                    Debug.WriteLine("  [RENAMEFOLDER] Item NOT found.");
-                                }
-                            }
-                            else
-                            {
-                                Debug.WriteLine("  [RENAMEFOLDER] dwItem2 is Zero.");
-                            }
-
+                            HandleRenameFolder(userPidl1, userPidl2);
                             break;
                         case SHCNE.RMDIR:
                         case SHCNE.DRIVEREMOVED:
-                            Debug.WriteLine("  [RMDIR/DRIVEREMOVED] processing...");
-                            var parent = TPidl.TrimLast(userPidl1);
-
-                            try
-                            {
-                                parentItem = _hierarchyManager.Find(parent);
-                                if (parentItem is not null)
-                                {
-                                    Debug.WriteLine("  [RMDIR] Parent found: " + parentItem.ItemPath);
-                                    if (parentItem.Directories is not null)
-                                    {
-                                        CShellItem? itemToRemove = parentItem.Directories[userPidl1];
-                                        if (itemToRemove != null)
-                                        {
-                                            Debug.WriteLine("  [RMDIR] Found item in DirectoryList. Removing: " + itemToRemove.ItemPath);
-                                            RemoveItem(parentItem, itemToRemove);
-                                        }
-                                        else
-                                        {
-                                            Debug.WriteLine("  [RMDIR] Item NOT found in DirectoryList.");
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Debug.WriteLine("  [RMDIR] DirectoryList is null.");
-                                        if (!IsVistaOrAbove())
-                                        {
-                                            Debug.WriteLine("  [RMDIR] XP path: Updating parent.");
-                                            DoUpdateUpdated(parentItem);
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    Debug.WriteLine("  [RMDIR] Parent NOT found.");
-                                }
-                            }
-                            finally
-                            {
-                                Marshal.FreeCoTaskMem(parent);
-                            }
-
+                            HandleRmdirOrDriveRemoved(userPidl1);
                             break;
                         case SHCNE.MEDIAINSERTED:
                         case SHCNE.MEDIAREMOVED:
-                            Debug.WriteLine("  [MEDIA CHANGE] processing...");
-                            var mediaCSI = _hierarchyManager.Find(userPidl1);
-                            if (mediaCSI is not null)
-                            {
-                                Debug.WriteLine("  [MEDIA CHANGE] Found item: " + mediaCSI.ItemPath + ". Updating.");
-                                DoUpdateMediaChange(mediaCSI);
-                            }
-                            else
-                            {
-                                Debug.WriteLine("  [MEDIA CHANGE] Item NOT found.");
-                            }
-
+                            HandleMediaChange(userPidl1);
                             break;
                         case SHCNE.UPDATEIMAGE:
-                            Debug.WriteLine("  [UPDATEIMAGE] processing...");
-                            var imgCSI = _hierarchyManager.Find(userPidl1);
-                            if (imgCSI is not null)
-                            {
-                                Debug.WriteLine("  [UPDATEIMAGE] Found item: " + imgCSI.ItemPath + ". Updating icon.");
-                                DoUpdateIconChange(imgCSI);
-                            }
-                            else
-                            {
-                                Debug.WriteLine("  [UPDATEIMAGE] Item NOT found.");
-                            }
-
+                            HandleUpdateImage(userPidl1);
                             break;
                         default:
                             Debug.WriteLine("  [OTHER] processing... No action taken.");
@@ -465,6 +134,354 @@ namespace WindowsApiLib.Shell
                 _shellApi.SHChangeNotification_Unlock(hLock);
                 if (userPidl1 != IntPtr.Zero) Marshal.FreeCoTaskMem(userPidl1);
                 if (userPidl2 != IntPtr.Zero) Marshal.FreeCoTaskMem(userPidl2);
+            }
+        }
+
+        private void HandleCreate(IntPtr userPidl1, string? pidlName)
+        {
+            Debug.WriteLine("  [CREATE] processing...");
+            CShellItem? parentItem = null;
+            PidlSplitResult splitPidl = default;
+            try
+            {
+                splitPidl = TPidl.Split(userPidl1);
+                parentItem = _hierarchyManager.Find(splitPidl.ParentPidl);
+                if (parentItem is not null)
+                {
+                    Debug.WriteLine("  [CREATE] Parent found: " + parentItem.ItemPath);
+                    if (parentItem.DirectoriesInitialized || parentItem.FilesInitialized)
+                    {
+                        CShellItem existingItem = null;
+                        if (pidlName is not null)
+                        {
+                            if (parentItem.FilesInitialized)
+                                parentItem.Files.Dictionary.TryGetValue(pidlName, out existingItem);
+                            if (existingItem is null && parentItem.DirectoriesInitialized)
+                                parentItem.Directories.Dictionary.TryGetValue(pidlName, out existingItem);
+                        }
+
+                        if (existingItem is not null)
+                        {
+                            Debug.WriteLine("  [CREATE] Item already in list: " + existingItem.ItemPath + ". Updating PIDL and refreshing info.");
+                            IntPtr newPidl = TPidl.Clone(userPidl1);
+                            Marshal.FreeCoTaskMem(existingItem.m_Pidl);
+                            existingItem.m_Pidl = newPidl;
+                            existingItem.m_FullPath = null;
+                            existingItem.ReloadInfo();
+                            RaiseUpdateEvent(parentItem, new ShellItemUpdateEventArgs(existingItem, CShItemUpdateType.Updated));
+                        }
+                        else
+                        {
+                            var clonedCreatePidl = TPidl.Clone(userPidl1);
+                            var newItem = _shellItemFactory.Create(clonedCreatePidl, parentItem);
+                            if (newItem is not null)
+                            {
+                                Debug.WriteLine("  [CREATE] Created newItem: " + newItem.ItemPath);
+                                AddItem(parentItem, newItem);
+                            }
+                            else
+                            {
+                                Debug.WriteLine("  [CREATE] CShellItemFactory.Create returned null");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Debug.WriteLine("  [CREATE] Parent not ready (neither Directories nor Files initialized). Skipping add.");
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine("  [CREATE] Parent NOT found in hierarchy.");
+                }
+            }
+            finally
+            {
+                if (splitPidl.ParentPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
+                if (splitPidl.ChildPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
+            }
+        }
+
+        private void HandleDelete(IntPtr userPidl1, string? pidlName)
+        {
+            Debug.WriteLine("  [DELETE] processing...");
+
+            if (userPidl1 == IntPtr.Zero)
+            {
+                Debug.WriteLine("  [DELETE] message with no location specified. Skipping.");
+                return;
+            }
+
+            if (_activeDeletes.ContainsKey(pidlName))
+            {
+                Debug.WriteLine("  [DELETE] Already processing delete for this item. Skipping to avoid duplicate work.");
+                return;
+            }
+
+            PidlSplitResult splitPidl = default;
+            try
+            {
+                _activeDeletes.Add(pidlName, true);
+                splitPidl = TPidl.Split(userPidl1);
+                var parentItem = _hierarchyManager.Find(splitPidl.ParentPidl);
+
+                if (parentItem is null)
+                { 
+                    Debug.WriteLine("  [DELETE] Parent NOT found."); 
+                    return;
+                }
+
+                Debug.WriteLine("  [DELETE] Parent found: " + parentItem.ItemPath);
+
+                string? name = TPidl.GetDisplayNameFull(userPidl1);
+
+                if (name != null)
+                {
+                    CShellItem childItem = null;
+
+                    if (parentItem.FilesInitialized)
+                    {
+                        parentItem.Files.Dictionary.TryGetValue(name, out childItem);
+                    }
+
+                    if (childItem == null && parentItem.Directories != null)
+                        parentItem.Directories.Dictionary.TryGetValue(name, out childItem);
+
+                    if (childItem != null)
+                    {
+                        Debug.WriteLine("  [DELETE] Child item found: " + childItem.ItemPath + ". Updating as deleted.");
+                        childItem.Ghostify();
+                        DoUpdateDeleted(childItem);
+                    }
+                    else
+                    {
+                        Debug.WriteLine("  [DELETE] Child item NOT found in parent's lists.");
+                    }
+                }
+            }
+            finally
+            {
+                if (splitPidl.ParentPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
+                if (splitPidl.ChildPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
+                _activeDeletes.Remove(pidlName);
+            }
+        }
+
+        private void HandleRenameItem(IntPtr userPidl1, IntPtr userPidl2)
+        {
+            Debug.WriteLine("  [RENAMEITEM] processing...");
+            if (userPidl2 != IntPtr.Zero)
+            {
+                //if the parent folder is not already part of the hierarchy, we don't need to do anything
+                //because the rename is happening in a folder that we are not monitoring.
+                var splitPidl = CPidl.Split(userPidl1);
+                var parentItem = _hierarchyManager.Find(splitPidl.ParentPidl);
+                if (parentItem is null)
+                    return;
+
+                var item = _hierarchyManager.Find(userPidl1); //find old item
+                if (item is not null)
+                {
+                    Debug.WriteLine("  [RENAMEITEM] Item found: " + item.ItemPath + ". New PIDL: " + TPidl.GetDisplayNameFull(userPidl2));
+                    HandleRenamed(item, userPidl2);
+                }
+                else
+                {
+                    Debug.WriteLine("  [RENAMEITEM] Item NOT found.");
+                }
+            }
+            else
+            {
+                Debug.WriteLine("  [RENAMEITEM] dwItem2 is Zero.");
+            }
+        }
+
+        private void HandleUpdateDir(IntPtr userPidl1)
+        {
+            Debug.WriteLine("  [UPDATEDIR] processing...");
+            if (userPidl1 == IntPtr.Zero || TPidl.SegmentCount(userPidl1) == 0)
+            {
+                Debug.WriteLine("  [UPDATEDIR] message with no location specified.");
+                return;
+            }
+
+            var upCSI = _hierarchyManager.Find(userPidl1);
+            if (upCSI is not null)
+            {
+                Debug.WriteLine("  [UPDATEDIR] Found item: " + upCSI.ItemPath + ".  Updating dir.");
+                DoUpdateDir(upCSI);
+            }
+            else
+            {
+                Debug.WriteLine("  [UPDATEDIR] Item NOT found.");
+            }
+        }
+
+        private void HandleUpdateItem(IntPtr userPidl1)
+        {
+            Debug.WriteLine("  [UPDATEITEM] processing... " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            if (userPidl1 == IntPtr.Zero || TPidl.SegmentCount(userPidl1) == 0)
+            {
+                Debug.WriteLine("  [UPDATEITEM] Empty pidl received from UPDATEITEM event");
+                return;
+            }
+
+            var item = _hierarchyManager.Find(userPidl1);
+            if (item is null)
+            {
+                Debug.WriteLine("  [UPDATEITEM] item was not found " + DateTime.Now.ToString("HH:mm:ss.fff"));
+                return;
+            }
+
+            Debug.WriteLine("  [UPDATEITEM] Found item: " + item.ItemPath + (item.IsFolder ? " (Folder)" : " (File)"));
+            if (item.IsFolder)
+            {
+                DoUpdateDir(item);
+            }
+            else
+            {
+                DoUpdateUpdated(item);
+            }
+        }
+
+        private void HandleMkdirOrDriveAdd(IntPtr userPidl1)
+        {
+            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]  [MKDIR/DRIVEADD] processing... ");
+            PidlSplitResult splitPidl = default;
+            try
+            {
+                splitPidl = TPidl.Split(userPidl1);
+                var parentItem = _hierarchyManager.Find(splitPidl.ParentPidl);
+                if (parentItem is null)
+                {
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]  [MKDIR] Parent Not Found");
+                    return;
+                }
+
+                Debug.WriteLine("  [MKDIR] Parent found: " + parentItem.ItemPath);
+                if (parentItem.DirectoriesInitialized)
+                {
+                    Debug.WriteLine("  [MKDIR] Parent folders NOT initialized.");
+                    return;
+                }
+
+                if (parentItem.Directories.Contains(userPidl1))
+                {
+                    Debug.WriteLine("  [MKDIR] Folder already in DirectoryList");
+                    return;
+                }
+
+                Debug.WriteLine("  [MKDIR] Parent folders initialized and new item NOT in list.  Adding...");
+                var clonedMkdirPidl = TPidl.Clone(userPidl1);
+                var newItem = _shellItemFactory.Create(clonedMkdirPidl, parentItem);
+                if (newItem is null)
+                {
+                    Debug.WriteLine("  [MKDIR] CShellItemFactory.Create returned null");
+                    return;
+                }
+                Debug.WriteLine("  [MKDIR] Created newItem: " + newItem.ItemPath);
+                AddItem(parentItem, newItem);
+            }
+            finally
+            {
+                if (splitPidl.ParentPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(splitPidl.ParentPidl);
+                if (splitPidl.ChildPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(splitPidl.ChildPidl);
+            }
+        }
+
+        private void HandleRenameFolder(IntPtr userPidl1, IntPtr userPidl2)
+        {
+            Debug.WriteLine("  [RENAMEFOLDER] processing...");
+            if (userPidl2 != IntPtr.Zero)
+            {
+                var item = _hierarchyManager.Find(userPidl1);
+                if (item is not null)
+                {
+                    Debug.WriteLine("  [RENAMEFOLDER] Found item: " + item.ItemPath + ". New PIDL: " + userPidl2.ToString("X"));
+                    HandleRenamed(item, userPidl2);
+                }
+                else
+                {
+                    Debug.WriteLine("  [RENAMEFOLDER] Item NOT found.");
+                }
+            }
+            else
+            {
+                Debug.WriteLine("  [RENAMEFOLDER] dwItem2 is Zero.");
+            }
+        }
+
+        private void HandleRmdirOrDriveRemoved(IntPtr userPidl1)
+        {
+            Debug.WriteLine("  [RMDIR/DRIVEREMOVED] processing...");
+            var parent = TPidl.TrimLast(userPidl1);
+            try
+            {
+                var parentItem = _hierarchyManager.Find(parent);
+                if (parentItem is not null)
+                {
+                    Debug.WriteLine("  [RMDIR] Parent found: " + parentItem.ItemPath);
+                    if (parentItem.Directories is not null)
+                    {
+                        CShellItem? itemToRemove = parentItem.Directories[userPidl1];
+                        if (itemToRemove != null)
+                        {
+                            Debug.WriteLine("  [RMDIR] Found item in DirectoryList. Removing: " + itemToRemove.ItemPath);
+                            RemoveItem(parentItem, itemToRemove);
+                        }
+                        else
+                        {
+                            Debug.WriteLine("  [RMDIR] Item NOT found in DirectoryList.");
+                        }
+                    }
+                    else
+                    {
+                        Debug.WriteLine("  [RMDIR] DirectoryList is null.");
+                        if (!IsVistaOrAbove())
+                        {
+                            Debug.WriteLine("  [RMDIR] XP path: Updating parent.");
+                            DoUpdateUpdated(parentItem);
+                        }
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine("  [RMDIR] Parent NOT found.");
+                }
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(parent);
+            }
+        }
+
+        private void HandleMediaChange(IntPtr userPidl1)
+        {
+            Debug.WriteLine("  [MEDIA CHANGE] processing...");
+            var mediaCSI = _hierarchyManager.Find(userPidl1);
+            if (mediaCSI is not null)
+            {
+                Debug.WriteLine("  [MEDIA CHANGE] Found item: " + mediaCSI.ItemPath + ". Updating.");
+                DoUpdateMediaChange(mediaCSI);
+            }
+            else
+            {
+                Debug.WriteLine("  [MEDIA CHANGE] Item NOT found.");
+            }
+        }
+
+        private void HandleUpdateImage(IntPtr userPidl1)
+        {
+            Debug.WriteLine("  [UPDATEIMAGE] processing...");
+            var imgCSI = _hierarchyManager.Find(userPidl1);
+            if (imgCSI is not null)
+            {
+                Debug.WriteLine("  [UPDATEIMAGE] Found item: " + imgCSI.ItemPath + ". Updating icon.");
+                DoUpdateIconChange(imgCSI);
+            }
+            else
+            {
+                Debug.WriteLine("  [UPDATEIMAGE] Item NOT found.");
             }
         }
 
@@ -512,7 +529,7 @@ namespace WindowsApiLib.Shell
             try
             {
                 _isUpdatingDir = true;
-                if (ReferenceEquals(csi, CShellItemFactory.RecycleBin)) return 0;
+                if (TPidl.ResolvesToSamePathOrName(csi.PIDL, CShellItemFactory.RecycleBin.PIDL)) return 0; //ignore recycle bin
 
                 var count = SelectiveFolderUpdate(csi, true, true);
                 Debug.WriteLine("DoUpdateDir end - " + csi.Text + " - " + DateTime.Now.ToString("HH:mm:ss.fff"));
@@ -742,54 +759,57 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        private int SelectiveFolderUpdate(CShellItem? csi, bool updateFiles = true, bool updateFolders = true)
+        private int SelectiveFolderUpdate(CShellItem? csiFolder, bool updateFiles = true, bool updateFolders = true)
         {
-            if (csi is null) return 0;
-            if (!csi.m_IsFolder) return 0;
+            if (csiFolder is null) return 0;
+            if (!csiFolder.m_IsFolder) return 0;
 
-            Debug.WriteLine("SelectiveFolderUpdate begin - " + csi.Text + " - " + DateTime.Now.ToString("HH:mm:ss.fff"));
+            Debug.WriteLine("SelectiveFolderUpdate begin - " + csiFolder.Text + " - " + DateTime.Now.ToString("HH:mm:ss.fff"));
 
             var attrFlag = SHCONTF.INCLUDEHIDDEN;
-            if (csi.FilesInitialized && updateFiles)
+            if (csiFolder.FilesInitialized && updateFiles)
                 attrFlag = attrFlag | SHCONTF.NONFOLDERS;
-            if (csi.DirectoriesInitialized && updateFolders)
+            if (csiFolder.DirectoriesInitialized && updateFolders)
                 attrFlag = attrFlag | SHCONTF.FOLDERS;
             if (attrFlag == SHCONTF.INCLUDEHIDDEN)
                 return 0;
 
-            var newRelPidls = _shellItemFactory.GetPidlsOfFolder(csi, attrFlag);
+            var newRelPidls = _shellItemFactory.GetPidlsOfFolder(csiFolder, attrFlag);
 
             List<(CShellItem, CShItemUpdateType)> operations;
             bool lockTaken = false;
             try
             {
-                Monitor.TryEnter(csi, TimeSpan.FromMilliseconds(1), ref lockTaken);
+                Monitor.TryEnter(csiFolder, TimeSpan.FromMilliseconds(1), ref lockTaken);
                 if (!lockTaken)
                     return 0;
 
-                operations = CrossCheckOldAndNewFolderContents(csi, updateFiles, updateFolders, newRelPidls);
+                operations = CrossCheckOldAndNewFolderContents(csiFolder, updateFiles, updateFolders, newRelPidls);
             }
             finally
             {
                 if (lockTaken)
-                    Monitor.Exit(csi);
+                    Monitor.Exit(csiFolder);
             }
 
             if (operations.Count > 0)
             {
                 foreach (var (item, type) in operations)
                 {
-                    RaiseUpdateEvent(csi, new ShellItemUpdateEventArgs(item, type));
+                    RaiseUpdateEvent(csiFolder, new ShellItemUpdateEventArgs(item, type));
                 }
             }
 
             return operations.Count;
         }
 
-        private List<(CShellItem, CShItemUpdateType)> CrossCheckOldAndNewFolderContents(CShellItem csi, bool UpdateFiles, bool UpdateFolders, List<IntPtr> newRelPidls)
+        private List<(CShellItem, CShItemUpdateType)> CrossCheckOldAndNewFolderContents(CShellItem csiFolder, bool UpdateFiles, bool UpdateFolders, List<IntPtr> newRelPidls)
         {
             Debug.WriteLine("CrossCheckOldAndNewFolderContents begin");
             var operations = new List<(CShellItem Item, CShItemUpdateType Type)>();
+
+            if (!csiFolder.IsFileSystem)
+                return operations;
 
             lock (_hierarchyManager.Lock)
             {
@@ -797,16 +817,16 @@ namespace WindowsApiLib.Shell
                 {
                     var invalidItems = new List<CShellItem>();
 
-                    if (csi.FilesInitialized && UpdateFiles)
-                        invalidItems.AddRange(csi.Files.ToArray());
-                    if (csi.DirectoriesInitialized && UpdateFolders)
-                        invalidItems.AddRange(csi.Directories.ToArray());
+                    if (csiFolder.FilesInitialized && UpdateFiles)
+                        invalidItems.AddRange(csiFolder.Files.ToArray());
+                    if (csiFolder.DirectoriesInitialized && UpdateFolders)
+                        invalidItems.AddRange(csiFolder.Directories.ToArray());
 
                     if (invalidItems.Count > 0)
                     {
                         foreach (var item in invalidItems)
                         {
-                            RemoveItem(csi, item);
+                            RemoveItem(csiFolder, item);
                             operations.Add((item, CShItemUpdateType.Deleted));
                         }
                     }
@@ -814,23 +834,23 @@ namespace WindowsApiLib.Shell
                 else
                 {
                     var oldCsiDic = new Dictionary<string, CShellItem>();
-                    if (csi.DirectoriesInitialized && UpdateFolders)
+                    if (csiFolder.DirectoriesInitialized && UpdateFolders)
                     {
-                        foreach (var item in csi.Directories.Items)
-                            oldCsiDic.TryAdd(TPidl.ToString(item.LastPIDL, false) ?? string.Empty, item);
+                        foreach (var item in csiFolder.Directories.Items)
+                            oldCsiDic.TryAdd(TPidl.GetDisplayNameFull(item.LastPIDL) ?? string.Empty, item);
                     }
-                    if (csi.FilesInitialized && UpdateFiles)
+                    if (csiFolder.FilesInitialized && UpdateFiles)
                     {
-                        foreach (var item in csi.Files.Items)
+                        foreach (var item in csiFolder.Files.Items)
                         {
-                            oldCsiDic.TryAdd(TPidl.ToString(item.LastPIDL, false) ?? string.Empty, item);
+                            oldCsiDic.TryAdd(TPidl.GetDisplayNameFull(item.LastPIDL) ?? string.Empty, item);
                         }
                     }
 
-                    Dictionary<string, IFileInfo> fileInfos = null;
-                    if (csi.IsFileSystem)
+                    Dictionary<string, FileSystemInfo> fileInfos = null;
+                    if (csiFolder.IsFileSystem)
                     {
-                        fileInfos = _fileSystem.GetFiles(csi.FullPath).ToDictionary(file => file.Name, file => file);
+                        fileInfos = _fileSystem.GetFileSystemInfos(csiFolder.FullPath).ToDictionary(file => file.Name, file => file);
                     }
 
                     for (int i = 0; i < newRelPidls.Count; i++)
@@ -838,19 +858,32 @@ namespace WindowsApiLib.Shell
                         IntPtr newRelPidl = newRelPidls[i];
                         if (newRelPidl == IntPtr.Zero) continue;
 
-                        string newFileName = TPidl.ToString(newRelPidl, false) ?? string.Empty;
+                        string newFileName = TPidl.GetDisplayNameFull(newRelPidl) ?? string.Empty;
+                        
                         if (oldCsiDic.TryGetValue(newFileName, out CShellItem? oldCsi))
                         {
                             if (oldCsi != null && TPidl.ResolvesToSamePathOrName(oldCsi.LastPIDL, newRelPidl))
                             {
-                                if (!ReferenceEquals(csi, CShellItemFactory.RecycleBin))
+                                if (!ReferenceEquals(oldCsi, CShellItemFactory.RecycleBin))
                                 {
                                     bool doupdate = false;
-                                    if (csi.IsFileSystem && fileInfos != null)
+
+                                    if (oldCsi.ImageIndex == -1) //new item without image yet
                                     {
-                                        if (fileInfos.TryGetValue(newFileName, out IFileInfo fi))
+                                        oldCsi.NeedsRefresh = true;
+                                        doupdate = true; 
+                                    }
+                                    else if (csiFolder.IsFileSystem && fileInfos != null)
+                                    {
+                                        if (fileInfos.TryGetValue(newFileName, out FileSystemInfo fi))
                                         {
-                                            if (fi.LastWriteTime > csi.LastWriteTime)
+                                            // Compare the on-disk LastWriteTime time to the CHILD's cached LastWriteTime, not the
+                                            // folder's. Comparing against csiFolder.LastWriteTime (the folder) causes
+                                            // nearly every child to be flagged as "updated" whenever the folder's
+                                            // own LastWriteTime is stale, which then calls oldCsi.ResetInfo() -> resets
+                                            // ImageIndex to -1 on every item, blanking icons/thumbnails on the
+                                            // next repaint.
+                                            if (fi.LastWriteTime > oldCsi.LastWriteTime)
                                                 doupdate = true;
                                         }
                                         else doupdate = true;
@@ -872,7 +905,7 @@ namespace WindowsApiLib.Shell
                             }
                         }
                         
-                        var newItem = _shellItemFactory.Create(newRelPidl, csi);
+                        var newItem = _shellItemFactory.Create(newRelPidl, csiFolder);
                         Marshal.FreeCoTaskMem(newRelPidl);
                         if (newItem is null)
                         {
@@ -890,7 +923,7 @@ namespace WindowsApiLib.Shell
                     {
                         foreach (var item in oldCsiDic.Values)
                         {
-                            RemoveItem(csi, item);
+                            RemoveItem(csiFolder, item);
                             operations.Add((item, CShItemUpdateType.Deleted));
                         }
                     }
@@ -948,7 +981,7 @@ namespace WindowsApiLib.Shell
         {
             if (pidl == IntPtr.Zero) return false;
 
-            var name = TPidl.ToString(pidl);
+            var name = TPidl.GetDisplayNameFull(pidl);
             if (name.ToUpper().Contains("$RECYCLE.BIN")) return true;
 
             var recycleBinPidl = CShellItemFactory.RecycleBin.PIDL;

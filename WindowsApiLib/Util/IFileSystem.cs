@@ -7,6 +7,9 @@ namespace WindowsApiLib.Util
     public interface IFileSystem
     {
         IEnumerable<IFileInfo> GetFiles(string path);
+
+        IEnumerable<FileSystemInfo> GetFileSystemInfos(string path);
+
     }
 
     public interface IFileInfo
@@ -25,6 +28,13 @@ namespace WindowsApiLib.Util
                 yield return new FileInfoWrapper(fi);
             }
         }
+
+        public IEnumerable<FileSystemInfo> GetFileSystemInfos(string path)
+        {
+            var di = new DirectoryInfo(path);
+            return di.GetFileSystemInfos();
+        }
+
     }
 
     public class FileInfoWrapper : IFileInfo

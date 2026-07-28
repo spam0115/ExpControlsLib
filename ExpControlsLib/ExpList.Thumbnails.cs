@@ -127,7 +127,7 @@ namespace ExpControlsLib
 
                             if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
                             {
-                                int imageIndex = _imageListOrchestrator.EnsureImage(csi);
+                                int imageIndex = _imageListOrchestrator.GetInitialImageIndexOrQueue(csi);
                                 if (imageIndex != -1)
                                     item.ImageIndex = imageIndex;
                             }
@@ -161,7 +161,7 @@ namespace ExpControlsLib
                 return false;
             }
             int oldImageIndex = csi.ImageIndex;
-            int imageIndex = _imageListOrchestrator.EnsureImage(csi, i);
+            int imageIndex = _imageListOrchestrator.GetInitialImageIndexOrQueue(csi, i);
             if (imageIndex != -1)
                 csi.ImageIndex = imageIndex;
 
@@ -208,7 +208,7 @@ namespace ExpControlsLib
 
                             if (item.Tag is CShellItem csi && !string.IsNullOrWhiteSpace(csi.FullPath))
                             {
-                                int imageIndex = _imageListOrchestrator.EnsureImage(csi);
+                                int imageIndex = _imageListOrchestrator.GetInitialImageIndexOrQueue(csi);
                                 if (imageIndex != -1)
                                     item.ImageIndex = imageIndex;
                             }

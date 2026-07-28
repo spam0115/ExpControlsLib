@@ -233,7 +233,7 @@ namespace ExpControlsLib
         private void ApplyFilteredViewToListView()
         {
             LastTopIndex = -1;
-            _indexedLviCache.Clear(); //the indxes are about to change so we clear this instead of doing a complicated remapping of the cache
+            _indexedLviCache.Clear(); //the indexes are about to change so we clear this instead of doing a complicated remapping of the cache
             RecreateIndexMapping();
 
             if (VirtualMode)
@@ -540,19 +540,19 @@ namespace ExpControlsLib
                 ApplyFilteredViewToListView();
 
                 // Determine if we need to redraw visible items
-                int viewIndex = index; // For filtered view, this is the position in the rebuilt view
-                int top = GetTopIndex();
-                int visibleCount = GetApproxVisibleCount();
-                int lastVisible = top + visibleCount;
+                //int viewIndex = index; // For filtered view, this is the position in the rebuilt view
+                //int top = GetTopIndex();
+                //int visibleCount = GetApproxVisibleCount();
+                //int lastVisible = top + visibleCount;
 
-                // Only redraw if the insertion affects currently visible items or items that shift into view
-                int startRedraw = Math.Max(viewIndex, Math.Max(0, top));
-                int endRedraw = Math.Min(lastVisible, ActiveViewCount - 1);
+                //// Only redraw if the insertion affects currently visible items or items that shift into view
+                //int startRedraw = Math.Max(viewIndex, Math.Max(0, top));
+                //int endRedraw = Math.Min(lastVisible, ActiveViewCount - 1);
 
-                if (startRedraw <= endRedraw)
-                {
-                    _listView.RedrawItems(startRedraw, endRedraw, false);
-                }
+                //if (startRedraw <= endRedraw)
+                //{
+                //    _listView.RedrawItems(startRedraw, endRedraw, false);
+                //}
             }
             else
             {
@@ -940,11 +940,10 @@ namespace ExpControlsLib
 
         /// <summary>
         /// Refreshes the ListViewItem corresponding to the given CShellItem whose data has changed. 
-        /// In virtual mode, this updates the cached ListViewItem and triggers a redraw. 
-        /// In non-virtual mode, it updates the existing ListViewItem directly.
+        /// Does NOT redraw the item.
         /// </summary>
         /// <param name="csi"></param>
-        public void RefreshItem(CShellItem? csi)
+        public void RefreshItemData(CShellItem? csi)
         {
             if (csi is null) return;
 
@@ -974,9 +973,6 @@ namespace ExpControlsLib
                         UpdateListviewItemCallback?.Invoke(lvi, csi);
                     }
                 }
-
-                RedrawItem(index);
-                csi.NeedsRefresh = false;
             }
             finally
             {
@@ -984,26 +980,25 @@ namespace ExpControlsLib
             }
         }
 
-        public void RefreshItemByFullPath(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path)) return;
+        //public void RefreshItemByFullPath(string path)
+        //{
+        //    if (string.IsNullOrWhiteSpace(path)) return;
 
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: RefreshItemByFullPath Begin");
-            try
-            {
-                int index = GetIndexFromFullPath(path);
-                if (index >= 0)
-                {
-                    var csi = GetItem(index);
-                    csi?.ColumnDic.Clear();
-                    RedrawItem(index);
-                }
-            }
-            finally
-            {
-                //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: RefreshItemByFullPath End");
-            }
-        }
+        //    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: RefreshItemByFullPath Begin");
+        //    try
+        //    {
+        //        int index = GetIndexFromFullPath(path);
+        //        if (index >= 0)
+        //        {
+        //            var csi = GetItem(index);
+        //            csi?.ColumnDic.Clear();
+        //        }
+        //    }
+        //    finally
+        //    {
+        //        //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList: RefreshItemByFullPath End");
+        //    }
+        //}
 
         public void RedrawAll()
         {
@@ -1193,6 +1188,20 @@ namespace ExpControlsLib
                 }
             }
             item.NeedsRefresh = false;
+
+            // Ensure the freshly-materialized LVI reflects the current thumbnail slot
+            // held by the model. Without this, wiping _indexedLviCache (e.g. from
+            // ApplyFilteredViewToListView) causes every visible item to be recreated
+            // with ImageIndex = -1, blanking all icons until the model happens to
+            // reassign a slot.
+            //
+            // IMPORTANT: only sync when the model holds a valid (non-negative) slot.
+            // In non-thumbnail (system-icon) modes, CShellItem.ImageIndex is never
+            // populated — the correct system-icon index is fetched on demand inside
+            // the create callback via SystemImageListManager.GetIconIndex. Copying
+            // item.ImageIndex (-1) over that valid value would blank system icons.
+            if (item.ImageIndex >= 0 && lvi.ImageIndex != item.ImageIndex)
+                lvi.ImageIndex = item.ImageIndex;
 
             SyncCheckboxState(lvi, item);
 

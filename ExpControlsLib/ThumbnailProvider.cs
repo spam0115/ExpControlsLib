@@ -453,7 +453,7 @@ namespace ExpControlsLib
         /// </returns>
         public Bitmap? GetThumbnailFromOS(IntPtr pidl, int size)
         {
-            string? fileName = pidl == IntPtr.Zero ? null : CPidl.ToString(pidl);
+            string? fileName = pidl == IntPtr.Zero ? null : CPidl.GetDisplayNameFull(pidl);
             using (var magickImage = GetMagickThumbnailFromOS(pidl, size, CancellationToken.None, IsThumbnailCandidate(fileName)))
             {
                 return magickImage?.ToBitmap();
@@ -521,7 +521,7 @@ namespace ExpControlsLib
             if (cancellationToken.IsCancellationRequested) return null;
             if (pidl == IntPtr.Zero) return null;
 
-            string? fileName = CPidl.ToString(pidl);
+            string? fileName = CPidl.GetDisplayNameFull(pidl);
 
             return GetMagickThumbnailFromOsCore(fileName, size, cancellationToken, requestThumbnail, () =>
             {
