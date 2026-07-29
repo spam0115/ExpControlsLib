@@ -70,12 +70,6 @@ namespace WindowsApiLib.Shell
             _initializedEvent.WaitOne();
         }
 
-        [DllImport("ole32.dll")]
-        private static extern int OleInitialize(IntPtr pvReserved);
-
-        [DllImport("ole32.dll")]
-        private static extern void OleUninitialize();
-
         private void RunBackgroundMessageLoop()
         {
             // SHChangeNotifyRegister requires the calling thread to have COM/OLE
@@ -105,7 +99,7 @@ namespace WindowsApiLib.Shell
                     pIdl = HierachyManager.Root.PIDL,
                     Recursively = true
                 };
-                m_notifyId = SHChangeNotifyRegister(Handle, SHCNRF.InterruptLevel | SHCNRF.ShellLevel | SHCNRF.NewDelivery
+                m_notifyId = SHChangeNotifyRegister(Handle, SHCNRF.InterruptLevel | SHCNRF.ShellLevel | SHCNRF.NewDelivery | SHCNRF.RecursiveInterrupt
                     , (SHCNE)_eventFlags, (WM)((long)WM.USER + 200L), 1, new SHChangeNotifyEntry[] { entry });
 
                 _initializedEvent.Set();

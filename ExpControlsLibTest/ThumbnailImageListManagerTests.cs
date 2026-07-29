@@ -1,5 +1,6 @@
 using ExpControlsLib;
 using WindowsApiLib.Shell;
+using WindowsApiLibTest;
 
 namespace ExpControlsLibTest
 {
@@ -29,7 +30,7 @@ namespace ExpControlsLibTest
         {
             _shellController = ShellController.Instance;
             _expList = new ExpList();
-            _expList.Initialize(_shellController);
+            _expList.Initialize(_shellController, new MockFileSystem());
             
             _form = new Form();
             _form.Controls.Add(_expList);

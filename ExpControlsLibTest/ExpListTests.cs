@@ -1,5 +1,6 @@
 using ExpControlsLib;
 using WindowsApiLib.Shell;
+using WindowsApiLibTest;
 using static WindowsApiLib.Shell.ShellAPI;
 
 namespace ExpControlsLibTest
@@ -28,9 +29,9 @@ namespace ExpControlsLibTest
         public void ExpListInitializeTwiceThrows()
         {
             using var expList = new ExpList();
-            expList.Initialize(_shellController);
+            expList.Initialize(_shellController, new MockFileSystem());
 
-            Assert.Throws<InvalidOperationException>(() => expList.Initialize(_shellController));
+            Assert.Throws<InvalidOperationException>(() => expList.Initialize(_shellController, new MockFileSystem()));
         }
 
         [Test]
@@ -71,7 +72,7 @@ namespace ExpControlsLibTest
         public void VirtualModeCannotChangeAfterDisplay()
         {
             using var expList = new ExpList();
-            expList.Initialize(_shellController);
+            expList.Initialize(_shellController, new MockFileSystem());
 
             using var form = new Form();
             form.Controls.Add(expList);
@@ -95,7 +96,7 @@ namespace ExpControlsLibTest
         public async Task TestInitialLoad(ExpTree.StartDir startDir)
         {
             var expList = new ExpList();
-            expList.Initialize(_shellController);
+            expList.Initialize(_shellController, new MockFileSystem());
             
             // Host it in a form to ensure handle is created
             using var form = new Form();
@@ -129,7 +130,7 @@ namespace ExpControlsLibTest
         public async Task TestNavigationHistory()
         {
             var expList = new ExpList();
-            expList.Initialize(_shellController);
+            expList.Initialize(_shellController, new MockFileSystem());
 
             // Host it in a form to ensure handle is created
             using var form = new Form();
@@ -202,7 +203,7 @@ namespace ExpControlsLibTest
                 }
 
                 using var expList = new ExpList();
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -242,7 +243,7 @@ namespace ExpControlsLibTest
                 File.WriteAllText(Path.Combine(tempDir, "B.txt"), "test");
 
                 var expList = new ExpList();
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -290,7 +291,7 @@ namespace ExpControlsLibTest
         public async Task TestCustomColumnData()
         {
             var expList = new ExpList();
-            expList.Initialize(_shellController);
+            expList.Initialize(_shellController, new MockFileSystem());
             using var form = new Form();
             form.Controls.Add(expList);
             form.Show();
@@ -334,7 +335,7 @@ namespace ExpControlsLibTest
             try
             {
                 using var expList = new ExpList();
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -373,7 +374,7 @@ namespace ExpControlsLibTest
                 File.WriteAllText(file1, "test");
 
                 var expList = new ExpList();
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -439,7 +440,7 @@ namespace ExpControlsLibTest
                 }
 
                 using var expList = new ExpList();
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -475,7 +476,7 @@ namespace ExpControlsLibTest
                     File.WriteAllText(Path.Combine(tempDir, $"item-{i}.txt"), "test");
 
                 using var expList = new ExpList { VirtualMode = true };
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -529,7 +530,7 @@ namespace ExpControlsLibTest
             {
                 EnsurePathInHierarchy(tempDir);
                 var expList = new ExpList();
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -599,7 +600,7 @@ namespace ExpControlsLibTest
             {
                 EnsurePathInHierarchy(tempDir);
                 var expList = new ExpList();
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -677,7 +678,7 @@ namespace ExpControlsLibTest
                 EnsurePathInHierarchy(tempDir1);
                 EnsurePathInHierarchy(tempDir2);
                 var expList = new ExpList();
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -735,7 +736,7 @@ namespace ExpControlsLibTest
                 EnsurePathInHierarchy(tempDir1);
                 EnsurePathInHierarchy(tempDir2);
                 var expList = new ExpList();
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 using var form = new Form();
                 form.Controls.Add(expList);
                 form.Show();
@@ -781,7 +782,7 @@ namespace ExpControlsLibTest
         public void CheckBoxes_Property_ForwardsToInnerListView()
         {
             using var expList = new ExpList();
-            expList.Initialize(_shellController);
+            expList.Initialize(_shellController, new MockFileSystem());
             using var form = new Form();
             form.Controls.Add(expList);
             form.Show();
@@ -805,7 +806,7 @@ namespace ExpControlsLibTest
             try
             {
                 using var expList = new ExpList();
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 expList.CheckBoxes = true;
                 expList.VirtualMode = true;
                 using var form = new Form();
@@ -850,7 +851,7 @@ namespace ExpControlsLibTest
             try
             {
                 using var expList = new ExpList();
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 expList.CheckBoxes = true;
                 expList.VirtualMode = true;
                 using var form = new Form();
@@ -889,7 +890,7 @@ namespace ExpControlsLibTest
             try
             {
                 using var expList = new ExpList();
-                expList.Initialize(_shellController);
+                expList.Initialize(_shellController, new MockFileSystem());
                 expList.CheckBoxes = true;
                 expList.VirtualMode = true;
                 using var form = new Form();

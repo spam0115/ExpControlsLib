@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 using WindowsApiLib.Shell;
+using WindowsApiLib.Util;
 
 namespace Demo_CS
 {
@@ -16,8 +17,10 @@ namespace Demo_CS
         {
             InitializeComponent();
 
+            int oleHr = ShellAPI.OleInitialize(IntPtr.Zero);
+
             expTree1.Initialize(ShellController.Instance);
-            expList1.Initialize(ShellController.Instance);
+            expList1.Initialize(ShellController.Instance, new FileSystemWrapper());
 
         }
 

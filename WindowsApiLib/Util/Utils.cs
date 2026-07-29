@@ -35,7 +35,6 @@ namespace WindowsApiLib
             }
         }
 
-
         public static string EnsureTrailingSlash(string? path)
         {
             if (string.IsNullOrEmpty(path))

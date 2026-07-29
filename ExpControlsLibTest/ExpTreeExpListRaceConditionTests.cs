@@ -100,7 +100,7 @@ namespace ExpControlsLibTest
                         var expList = new ExpList();
                         expTree.StartUpDirectory = ExpTree.StartDir.Desktop;
                         expTree.Initialize(ShellController.Instance);
-                        expList.Initialize(ShellController.Instance);
+                        expList.Initialize(ShellController.Instance, null);
 
                         CShellItem targetItem = ShellController.Instance.HierachyManager.FindAndAllowExpansion(_testPath);
                         Assert.IsNotNull(targetItem, $"'{_testPath}' item should be found or added");
@@ -196,7 +196,7 @@ namespace ExpControlsLibTest
                         var expTree = new ExpTree();
                         var expList = new ExpList();
                         expTree.StartUpDirectory = ExpTree.StartDir.Desktop;
-                        expList.Initialize(ShellController.Instance);
+                        expList.Initialize(ShellController.Instance, null);
                         expTree.Initialize(ShellController.Instance);
 
                         using var form = new Form();
@@ -297,7 +297,7 @@ namespace ExpControlsLibTest
                         var expTree = new ExpTree();
                         var expList = new ExpList();
                         expTree.StartUpDirectory = ExpTree.StartDir.Desktop;
-                        expList.Initialize(ShellController.Instance);
+                        expList.Initialize(ShellController.Instance, null);
                         expTree.Initialize(ShellController.Instance);
 
 

@@ -14,6 +14,7 @@ using WindowsApiLib.Shell;
 using static WindowsApiLib.Shell.ShellAPI;
 using MethodInvoker = System.Windows.Forms.MethodInvoker;
 using ListView = System.Windows.Forms.ListView;
+using WindowsApiLib.Util;
 
 namespace ExpControlsLib
 {
@@ -73,6 +74,7 @@ namespace ExpControlsLib
 
         private ShellController? _shellController = null;
         private ShellDirectoryLoader? _directoryLoader;
+        private IFileSystem _fileSystem;
         private HashSet<string> _excludedItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private Func<CShellItem, bool>? _filter;
         private ImageListOrchestrator _imageListOrchestrator = null!;
@@ -163,7 +165,13 @@ namespace ExpControlsLib
 
             try
             {
-                Directory.CreateDirectory(newFolderPath);
+                _fileSystem.CreateFolderViaShell(newFolderPath);
+
+                //Directory.CreateDirectory(newFolderPath);
+                //IntPtr pidl = ShellAPI.ILCreateFromPathW(newFolderPath);
+                //try { ShellAPI.SHChangeNotify((uint)SHCNE.MKDIR, (uint)(SHCNF.IDLIST | SHCNF.FLUSH), pidl, IntPtr.Zero); }
+                //finally { Marshal.FreeCoTaskMem(pidl); }
+
                 m_CreateNew = true;
             }
             catch (Exception ex) when (ex is IOException ||
@@ -1054,7 +1062,7 @@ namespace ExpControlsLib
         /// This initializes some fields in this user control.  This should be called before the Load event.
         /// </summary>
         /// <param name="shellController"></param>
-        public void Initialize(ShellController shellController)
+        public void Initialize(ShellController shellController, IFileSystem fileSystemIntermediary)
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.Initialize: Begin");
             if (_initialized)
@@ -1062,6 +1070,7 @@ namespace ExpControlsLib
 
             _shellController = shellController ?? throw new ArgumentNullException(nameof(shellController));
             _directoryLoader = new ShellDirectoryLoader(_shellController);
+            _fileSystem = fileSystemIntermediary;
             _initialized = true;
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList.Initialize: End");
         }

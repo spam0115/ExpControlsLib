@@ -82,6 +82,10 @@ namespace WindowsApiLib.Shell
                 var pidlName = TPidl.GetDisplayNameFull(userPidl1);
                 Debug.WriteLine(", dwItem1: " + pidlName);
 
+                //Debug.WriteLine($"[SHCN] event=0x{(int)msgID:X} ({msgID})  " +
+                //$"pidl1={TPidl.GetDisplayNameFull(userPidl1)}  " +
+                //$"pidl2={(userPidl2 != IntPtr.Zero ? TPidl.GetDisplayNameFull(userPidl2) : "<null>")}");
+
                 lock (_hierarchyManager.Lock)
                 {
                     switch (msgID)
@@ -308,12 +312,12 @@ namespace WindowsApiLib.Shell
             var upCSI = _hierarchyManager.Find(userPidl1);
             if (upCSI is not null)
             {
-                Debug.WriteLine("  [UPDATEDIR] Found item: " + upCSI.ItemPath + ".  Updating dir.");
+                Debug.WriteLine("  [UPDATEDIR] Found item: '" + upCSI.ItemPath + "'.  Updating dir.");
                 DoUpdateDir(upCSI);
             }
             else
             {
-                Debug.WriteLine("  [UPDATEDIR] Item NOT found.");
+                Debug.WriteLine("  [UPDATEDIR] Item NOT found '" + upCSI.ItemPath + "'");
             }
         }
 
@@ -359,9 +363,10 @@ namespace WindowsApiLib.Shell
                 }
 
                 Debug.WriteLine("  [MKDIR] Parent found: " + parentItem.ItemPath);
-                if (parentItem.DirectoriesInitialized)
+                if (!parentItem.DirectoriesInitialized)
                 {
-                    Debug.WriteLine("  [MKDIR] Parent folders NOT initialized.");
+                    //Debug.WriteLine("  [MKDIR] Parent folders NOT initialized.");
+                    _ = parentItem.Directories;
                     return;
                 }
 
@@ -983,6 +988,7 @@ namespace WindowsApiLib.Shell
 
             var name = TPidl.GetDisplayNameFull(pidl);
             if (name.ToUpper().Contains("$RECYCLE.BIN")) return true;
+            if (name.ToUpper().Contains("System Volume Information")) return true;
 
             var recycleBinPidl = CShellItemFactory.RecycleBin.PIDL;
             if (recycleBinPidl == IntPtr.Zero) throw new Exception("The Recycle Bin PIDL has not been set up.");

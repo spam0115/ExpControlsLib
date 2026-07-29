@@ -1,8 +1,8 @@
 using System.Reflection;
 using ExpControlsLib;
 using WindowsApiLib.Shell;
+using WindowsApiLibTest;
 
-namespace ExpControlsLibTest;
 
 [TestFixture]
 [Apartment(ApartmentState.STA)]
@@ -26,7 +26,7 @@ public sealed class ExpListLifecycleTests
     public void Dispose_ReleasesControlOwnedStaRunnerAndContextMenu()
     {
         using var expList = new ExpList();
-        expList.Initialize(_shellController);
+        expList.Initialize(_shellController, new MockFileSystem());
         using var form = new Form();
         form.Controls.Add(expList);
         form.Show();
@@ -58,7 +58,7 @@ public sealed class ExpListLifecycleTests
     public void DeleteSelectedItems_WhenShellContextIsUnavailable_IsSafeNoOp()
     {
         using var expList = new ExpList();
-        expList.Initialize(_shellController);
+        expList.Initialize(_shellController, new MockFileSystem());
 
         // No current folder means there is no shell context to invoke. This is the
         // failure path used when a delete request races with navigation/teardown.

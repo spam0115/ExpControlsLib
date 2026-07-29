@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
+using WindowsApiLib.Shell;
 
 namespace WindowsApiLib.Util
 {
@@ -9,6 +11,8 @@ namespace WindowsApiLib.Util
         IEnumerable<IFileInfo> GetFiles(string path);
 
         IEnumerable<IFileSystemEntry> GetFileSystemInfos(string path);
+
+        void CreateFolderViaShell(string parentFolderPath);
 
     }
 
@@ -41,6 +45,44 @@ namespace WindowsApiLib.Util
             foreach (var fsi in di.GetFileSystemInfos())
             {
                 yield return new FileSystemEntryWrapper(fsi);
+            }
+        }
+
+        public void CreateFolderViaShell(string newFolderFullName)
+        {
+            const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
+            // FOFX_SHOWELEVATIONPROMPT | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI
+            const uint FOF_NO_UI = 0x0004 /*FOF_SILENT*/
+                                 | 0x0010 /*FOF_NOCONFIRMATION*/
+                                 | 0x0400 /*FOF_NOERRORUI*/;
+
+            var iidShellItem = typeof(IShellItem).GUID;
+
+            (string parentFolderPath, string newFolderName) = Utils.SplitPathAndFileName(newFolderFullName);
+            parentFolderPath = Utils.RemoveTrailingDirectorySeparator(parentFolderPath);
+
+            // Must be STA + COM initialized. If you're not already on such a thread,
+            // marshal via your existing StaThreadRunner:
+            //   AssemblyInitializer.Runner.EnqueueWork(() => CreateFolderViaShell(...));
+            var parent = ShellAPI.SHCreateItemFromParsingName(
+                parentFolderPath, IntPtr.Zero, ref iidShellItem);
+
+            IFileOperation op = (IFileOperation)new FileOperation();
+            try
+            {
+                op.SetOperationFlags(FOF_NO_UI);
+                // pszTemplateName = null => create an empty item of the given attributes.
+                // FILE_ATTRIBUTE_DIRECTORY makes it a folder.
+                op.NewItem(parent, FILE_ATTRIBUTE_DIRECTORY, newFolderName, null, null);
+                var result = op.PerformOperations();     // <-- this is what actually does the work
+                                            //     and fires SHCNE_MKDIR
+            }
+            finally
+            {
+                if (op != null)
+                    Marshal.ReleaseComObject(op);
+                if (parent != null)
+                    Marshal.ReleaseComObject(parent);
             }
         }
 

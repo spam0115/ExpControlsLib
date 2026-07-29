@@ -686,7 +686,7 @@ namespace WindowsApiLib.Shell
         /// <param name="dwItem1">First PIDL or pointer whose meaning depends on <paramref name="uFlags"/>.</param>
         /// <param name="dwItem2">Second PIDL or pointer whose meaning depends on <paramref name="uFlags"/>.</param>
         [DllImport("shell32", CharSet = CharSet.Auto)]
-        public static extern void SHChangeNotify(int wEventId, int uFlags, IntPtr dwItem1, IntPtr dwItem2);
+        public static extern void SHChangeNotify(uint wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
 
         #endregion
 
@@ -899,6 +899,22 @@ namespace WindowsApiLib.Shell
         );
 
         /// <summary>
+        /// Creates an <see cref="IShellItem"/> from a file system path or shell namespace parsing name.
+        /// </summary>
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+        public static extern void SHCreateItemFromParsingName(
+            string pszPath,
+            IntPtr pbc,
+            [MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+            out IShellItem ppv);
+
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+        public static extern IShellItem SHCreateItemFromParsingName(
+            [MarshalAs(UnmanagedType.LPWStr)] string pszPath,
+            IntPtr pbc,
+            [In] ref Guid riid);
+
+        /// <summary>
         /// Creates an <see cref="IShellItem"/> for a child item given its parent folder and relative PIDL.
         /// This is the preferred shell-validated alternative to <c>ILCombine</c> for constructing
         /// absolute shell items from a parent/child pair.
@@ -1009,17 +1025,7 @@ namespace WindowsApiLib.Shell
         public const uint SICHINT_CANONICAL = 0x10000000;
         public const uint SICHINT_TEST_FILESYSPATH_IF_NOT_EQUAL = 0x20000000;
 
-        /// <summary>
-        /// Creates an <see cref="IShellItem"/> from a file system path or shell namespace parsing name.
-        /// </summary>
-        [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
-        public static extern void SHCreateItemFromParsingName(
-            string pszPath,
-            IntPtr pbc,
-            [MarshalAs(UnmanagedType.LPStruct)] Guid riid,
-            out IShellItem ppv);
-
-        // SHGetDataFromIDList format values
+                // SHGetDataFromIDList format values
         internal const int SHGDFIL_FINDDATA = 1; //pv should point to a WIN32_FIND_DATA
         internal const int SHGDFIL_NETRESOURCE = 2; //pv should point to a NETRESOURCE
         internal const int SHGDFIL_DESCRIPTIONID = 3; //pv should point to a SHDESCRIPTIONID
@@ -1441,6 +1447,12 @@ namespace WindowsApiLib.Shell
         #endregion
 
         #region        Ole32 Dll Declarations
+        
+        [DllImport("ole32.dll")]
+        public static extern int OleInitialize(IntPtr pvReserved);
+
+        [DllImport("ole32.dll")]
+        public static extern void OleUninitialize();
 
         /// <summary>
         /// Registers the specified application window as a potential target for OLE drag-and-drop operations.
