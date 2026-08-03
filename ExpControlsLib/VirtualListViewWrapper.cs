@@ -573,26 +573,31 @@ namespace ExpControlsLib
         {
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] VirtualListViewWrapper.ShiftLviCacheAfterRemoval: " + index.ToString());
 
-            if (_indexedLviCache.Count == 0) return;
-
-            // Remove the deleted item from cache
-            _indexedLviCache.Remove(index);
-
-            // Shift all subsequent items down by one index
-            var keysToShift = _indexedLviCache.Keys.Where(k => k > index).OrderBy(k => k).ToList();
-            foreach (var k in keysToShift)
+            if (_indexedLviCache.Count > 0)
             {
-                _indexedLviCache[k - 1] = _indexedLviCache[k];
-                _indexedLviCache.Remove(k);
+                // Remove the deleted item from cache
+                _indexedLviCache.Remove(index);
+
+                // Shift all subsequent items down by one index
+                var keysToShift = _indexedLviCache.Keys.Where(k => k > index).OrderBy(k => k).ToList();
+                foreach (var k in keysToShift)
+                {
+                    _indexedLviCache[k - 1] = _indexedLviCache[k];
+                    _indexedLviCache.Remove(k);
+                }
             }
 
+            // The path map is required even when no ListViewItems have been
+            // materialized yet.  Keeping it stale causes later item lookups to
+            // return the wrong row after a deletion.
             _pathToIndex.Remove(path);
-            foreach (var kvp in _pathToIndex)
+            var pathsToShift = _pathToIndex
+                .Where(kvp => kvp.Value > index)
+                .Select(kvp => kvp.Key)
+                .ToList();
+            foreach (var key in pathsToShift)
             {
-                if (kvp.Value > index)
-                {
-                    _pathToIndex[kvp.Key] = kvp.Value - 1;
-                }
+                _pathToIndex[key]--;
             }
 
         }
@@ -827,18 +832,46 @@ namespace ExpControlsLib
 
         public int GetIndex(CShellItem item)
         {
+            if (item is null) return -1;
+
             if (VirtualMode)
             {
-                if (_pathToIndex.TryGetValue(item.FullPath, out int index))
-                {
-                    return index;
-                }
-                return -1;
+                return FindItemIndex(ActiveView, item);
             }
             else
             {
-                return item.LVItem?.Index ?? -1;
+                if (item.LVItem is not null)
+                    return item.LVItem.Index;
+
+                for (int index = 0; index < _listView.Items.Count; index++)
+                {
+                    if (_listView.Items[index].Tag is CShellItem listItem && ItemsMatch(listItem, item))
+                        return index;
+                }
+
+                return -1;
             }
+        }
+
+        private static int FindItemIndex(IEnumerable<CShellItem> items, CShellItem target)
+        {
+            int index = 0;
+            foreach (var item in items)
+            {
+                if (ItemsMatch(item, target))
+                    return index;
+
+                index++;
+            }
+
+            return -1;
+        }
+
+        private static bool ItemsMatch(CShellItem item, CShellItem target)
+        {
+            return ReferenceEquals(item, target)
+                || CPidl.ResolvesToSamePathOrName(item.PIDL, target.PIDL)
+                || string.Equals(item.FullPath, target.FullPath, StringComparison.OrdinalIgnoreCase);
         }
 
         public int GetIndexFromFullPath(string fullPath)

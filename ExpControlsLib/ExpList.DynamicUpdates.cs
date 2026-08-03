@@ -828,12 +828,14 @@ namespace ExpControlsLib
             try
             {
                 _activeDeletes.Add(item.FullPath, true);
-                int index = _listViewWrapper.GetIndexFromFullPath(item.FullPath);
+                int index = _listViewWrapper.GetIndex(item);
                 if (index >= 0)
                 {
                     _listViewWrapper.RemoveAndRedrawAt(index);
+                    return true;
                 }
-                return true;
+
+                return false;
             }
             finally
             {

@@ -826,6 +826,12 @@
             Does not raise <see cref="E:ExpControlsLib.ExpList.ItemChecked"/> per item.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ExpList.GetAvailableNewFolderName(System.String,System.String)">
+            <summary>
+            Returns a Windows Explorer-style folder name that is not already used by a
+            file or directory in <paramref name="currentFolderPath"/>.
+            </summary>
+        </member>
         <member name="T:ExpControlsLib.ExpList.ExpListItemClickEventHandler">
             <summary>
             Delegate for the <see cref="E:ExpControlsLib.ExpList.ExpListItemClick"/> event.
@@ -1184,7 +1190,7 @@
             for the control and its child <see cref="F:ExpControlsLib.ExpList._listView"/> ListView.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ExpList.Initialize(WindowsApiLib.Shell.ShellController)">
+        <member name="M:ExpControlsLib.ExpList.Initialize(WindowsApiLib.Shell.ShellController,WindowsApiLib.Util.IFileSystem)">
             <summary>
             This initializes some fields in this user control.  This should be called before the Load event.
             </summary>
@@ -2683,11 +2689,6 @@
         <member name="M:ExpControlsLib.ExpTree.CollapseAll">
             <summary>Collapses every node currently displayed by the control.</summary>
         </member>
-        <member name="M:ExpControlsLib.ExpTree.ExpCollapseAll(System.Boolean)">
-            <summary>
-            Legacy name retained for source compatibility. Use <see cref="M:ExpControlsLib.ExpTree.CollapseAll"/>.
-            </summary>
-        </member>
         <member name="M:ExpControlsLib.ExpTree.SelectNodeSilentlyAsync(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Expands and selects a node without raising <see cref="E:ExpControlsLib.ExpTree.ExpTreeNodeSelected"/>.
@@ -2724,7 +2725,7 @@
             This is used by virtual-list callbacks that may be invoked for off-screen items.
             </summary>
         </member>
-        <member name="M:ExpControlsLib.ImageListOrchestrator.EnsureImage(WindowsApiLib.Shell.CShellItem,System.Int32)">
+        <member name="M:ExpControlsLib.ImageListOrchestrator.GetInitialImageIndexOrQueue(WindowsApiLib.Shell.CShellItem,System.Int32)">
             <summary>
             Gets an icon immediately, or gets/queues the active thumbnail and returns -1 while
             the thumbnail request is pending.
@@ -2969,6 +2970,9 @@
             Additionally it contains a number of Classes that support the main Classes.
             </summary>
         </member>
+        <member name="T:ExpControlsLib.NewFolderPrompt">
+            <summary>Provides the shared new-folder name prompt used by explorer controls.</summary>
+        </member>
         <member name="T:ExpControlsLib.ShellCommandService">
             <summary>
             Executes shell verbs and context-menu commands on the control's dedicated STA
@@ -3107,7 +3111,7 @@
             </summary>
             <param name="thumbnailSize"></param>
         </member>
-        <member name="M:ExpControlsLib.ThumbnailImageListManager.GetImageList(System.Int32)">
+        <member name="M:ExpControlsLib.ThumbnailImageListManager.GetOrCreateImageList(System.Int32)">
             <summary>
             Gets or creates an ImageList for the specified thumbnail size
             </summary>
@@ -3598,11 +3602,10 @@
             </summary>
             <param name="index"></param>
         </member>
-        <member name="M:ExpControlsLib.VirtualListViewWrapper.RefreshItem(WindowsApiLib.Shell.CShellItem)">
+        <member name="M:ExpControlsLib.VirtualListViewWrapper.UpdateLvi(WindowsApiLib.Shell.CShellItem)">
             <summary>
             Refreshes the ListViewItem corresponding to the given CShellItem whose data has changed. 
-            In virtual mode, this updates the cached ListViewItem and triggers a redraw. 
-            In non-virtual mode, it updates the existing ListViewItem directly.
+            Does NOT redraw the item.
             </summary>
             <param name="csi"></param>
         </member>
