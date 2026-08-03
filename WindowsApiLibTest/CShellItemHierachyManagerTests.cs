@@ -274,6 +274,62 @@ namespace WindowsApiLibTest
             });
         }
 
+        [TestMethod]
+        public async Task TestUpdateRenamedItem_UpdatesCachedItemAndDescendants()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                string tempBase = Path.Combine(Path.GetTempPath(), "HierarchyRename_" + Guid.NewGuid().ToString("N"));
+                string oldFolderPath = Path.Combine(tempBase, "OldFolder");
+                string oldFilePath = Path.Combine(oldFolderPath, "child.txt");
+                string newFolderPath = Path.Combine(tempBase, "NewFolder");
+                string newFilePath = Path.Combine(newFolderPath, "child.txt");
+                Directory.CreateDirectory(oldFolderPath);
+                File.WriteAllText(oldFilePath, "test");
+
+                IntPtr basePidl = IntPtr.Zero;
+                IntPtr oldFolderPidl = IntPtr.Zero;
+                IntPtr newFolderPidl = IntPtr.Zero;
+                IntPtr newFilePidl = IntPtr.Zero;
+                try
+                {
+                    basePidl = ShellAPI.ILCreateFromPathW(tempBase);
+                    var root = CShellItemFactory.Create(CPidl.Clone(basePidl));
+                    var manager = new CShellItemHierachyManager(CShellItemFactory.DesktopCSI, root);
+                    var cachedFile = manager.FindAndAllowExpansion(oldFilePath);
+                    Assert.IsNotNull(cachedFile, "The file should be cached before the rename.");
+                    var cachedFolder = cachedFile.Parent;
+                    Assert.IsNotNull(cachedFolder, "The renamed folder should be cached before the rename.");
+
+                    oldFolderPidl = ShellAPI.ILCreateFromPathW(oldFolderPath);
+                    var notificationItem = CShellItemFactory.Create(CPidl.Clone(oldFolderPidl));
+
+                    Directory.Move(oldFolderPath, newFolderPath);
+                    newFolderPidl = ShellAPI.ILCreateFromPathW(newFolderPath);
+                    newFilePidl = ShellAPI.ILCreateFromPathW(newFilePath);
+
+                    var updatedFolder = manager.UpdateRenamedItem(notificationItem, newFolderPidl);
+
+                    Assert.AreSame(cachedFolder, updatedFolder,
+                        "The hierarchy should update its existing cached item, not retain the notification item.");
+                    Assert.AreEqual(newFolderPath, updatedFolder.FullPath, true);
+                    Assert.AreEqual(newFilePath, cachedFile.FullPath, true,
+                        "Cached descendants should receive their renamed ancestor's new path.");
+                    Assert.AreSame(updatedFolder, manager.Find(newFolderPidl));
+                    Assert.IsTrue(CPidl.ResolvesToSamePathOrName(cachedFile.PIDL, newFilePidl),
+                        "Cached descendants should receive an absolute PIDL rooted at the renamed folder.");
+                }
+                finally
+                {
+                    if (basePidl != IntPtr.Zero) Marshal.FreeCoTaskMem(basePidl);
+                    if (oldFolderPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(oldFolderPidl);
+                    if (newFolderPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(newFolderPidl);
+                    if (newFilePidl != IntPtr.Zero) Marshal.FreeCoTaskMem(newFilePidl);
+                    if (Directory.Exists(tempBase)) Directory.Delete(tempBase, true);
+                }
+            });
+        }
+
 
     }
 

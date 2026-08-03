@@ -632,12 +632,11 @@ namespace WindowsApiLib.Shell
                     }
                 }
 
-                IntPtr newIShellFolderPtr = IntPtr.Zero;
-                var oldParentCsi = oldCsi.Parent;
+                var renamedCsi = _hierarchyManager.UpdateRenamedItem(oldCsi, newPidl);
+                if (renamedCsi is null)
+                    return false;
 
-                oldCsi.m_Pidl = TPidl.Clone(newPidl);
-                oldCsi.ReloadInfo();
-                RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(oldCsi, CShItemUpdateType.Renamed)
+                RaiseUpdateEvent(renamedCsi.Parent, new ShellItemUpdateEventArgs(renamedCsi, CShItemUpdateType.Renamed)
                 {
                     OldPath = oldPath,
                     NewPath = newPath

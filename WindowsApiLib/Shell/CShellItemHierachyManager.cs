@@ -320,6 +320,55 @@ namespace WindowsApiLib.Shell
             return Add(pidl);
         }
 
+        /// <summary>
+        /// Updates the cached instance of an item that has been renamed in place.
+        /// </summary>
+        /// <param name="oldItem">An item that identifies the pre-rename shell object. It does not need to be the cached instance.</param>
+        /// <param name="newPidl">The absolute PIDL of the renamed item.</param>
+        /// <returns>The updated cached item, or <c>null</c> if the old item is not in the hierarchy.</returns>
+        public CShellItem? UpdateRenamedItem(CShellItem oldItem, IntPtr newPidl)
+        {
+            if (oldItem is null) throw new ArgumentNullException(nameof(oldItem));
+            if (newPidl == IntPtr.Zero) throw new ArgumentNullException(nameof(newPidl));
+
+            lock (Lock)
+            {
+                // The notification can carry a separate CShellItem instance. Always
+                // locate and update the instance owned by this hierarchy.
+                var cachedItem = Find(oldItem.PIDL);
+                if (cachedItem is null)
+                    return null;
+
+                var parent = cachedItem.Parent;
+                lock (parent ?? cachedItem)
+                {
+                    var oldPidl = cachedItem.m_Pidl;
+                    cachedItem.m_Pidl = CPidl.Clone(newPidl);
+                    if (oldPidl != IntPtr.Zero)
+                        Marshal.FreeCoTaskMem(oldPidl);
+
+                    cachedItem.ReloadInfo();
+
+                    // A folder's descendants use absolute PIDLs and cached paths.
+                    // Rebuild those values from the renamed folder's new location.
+                    if (cachedItem.IsFolder)
+                        UpdateDescendantsRecursive(cachedItem);
+
+                    // Collections may already have a dictionary keyed by the old
+                    // display name, so invalidate it after ReloadInfo changes it.
+                    if (parent is not null)
+                    {
+                        if (cachedItem.IsFolder)
+                            parent.Directories.ClearCaches();
+                        else
+                            parent.Files.ClearCaches();
+                    }
+                }
+
+                return cachedItem;
+            }
+        }
+
         public CShellItem? FindAndAllowExpansion(string path)
         {
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException(nameof(path));
