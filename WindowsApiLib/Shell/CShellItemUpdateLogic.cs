@@ -8,6 +8,7 @@ using WindowsApiLib.Util;
 using WindowsApiLib;
 using static WindowsApiLib.Shell.ShellAPI;
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 
 namespace WindowsApiLib.Shell
 {
@@ -70,7 +71,7 @@ namespace WindowsApiLib.Shell
                     return;
                 }
 
-                if (IsInRecycleBin(shNotify.dwItem1))
+                if (IsExcludedSystemFolder(shNotify.dwItem1))
                 {
                     Debug.WriteLine(", dwItem1 is in Recycle Bin (Ignoring)");
                     return;
@@ -982,13 +983,15 @@ namespace WindowsApiLib.Shell
             return !((lEvent & (SHCNE.ASSOCCHANGED | SHCNE.EXTENDED_EVENT | SHCNE.FREESPACE | SHCNE.DRIVEADDGUI | SHCNE.SERVERDISCONNECT)) > 0);
         }
 
-        private static unsafe bool IsInRecycleBin(IntPtr pidl)
+        private static bool IsExcludedSystemFolder(IntPtr pidl)
         {
             if (pidl == IntPtr.Zero) return false;
 
             var name = TPidl.GetDisplayNameFull(pidl);
             if (name.ToUpper().Contains("$RECYCLE.BIN")) return true;
-            if (name.ToUpper().Contains("System Volume Information")) return true;
+            if (name.Contains("System Volume Information")) return true;
+            if (name.Contains(CShellItemFactory.WindowsDir)) return true;
+            if (name.Contains(CShellItemFactory.TempFolder)) return true;
 
             var recycleBinPidl = CShellItemFactory.RecycleBin.PIDL;
             if (recycleBinPidl == IntPtr.Zero) throw new Exception("The Recycle Bin PIDL has not been set up.");

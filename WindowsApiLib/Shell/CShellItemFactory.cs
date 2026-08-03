@@ -65,6 +65,9 @@ namespace WindowsApiLib.Shell
 
         public static string SystemName { get; private set; }
 
+        public static string WindowsDir { get; private set; }
+        public static string TempFolder { get; private set; }  
+
 
         //public static CShellItemHierachyManager? HierachyManager { get; internal set; }
 
@@ -87,6 +90,9 @@ namespace WindowsApiLib.Shell
             StrMyDocuments = MyDocuments.m_DisplayName;
             StrSystemFolder = DesktopCSI.m_TypeName;
             StrMyComputer = DesktopCSI.m_DisplayName;
+
+            WindowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            TempFolder = Path.GetTempPath();
         }
 
         // Call once at startup
