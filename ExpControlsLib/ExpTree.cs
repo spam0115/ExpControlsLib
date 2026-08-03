@@ -1746,15 +1746,27 @@ namespace ExpControlsLib
 
                             if (!string.IsNullOrEmpty(parentPath) && System.IO.Directory.Exists(parentPath))
                             {
-                                string newFolderName = "New folder";
-                                string newFolderPath = System.IO.Path.Combine(parentPath, newFolderName);
-                                int counter = 1;
-                                while (System.IO.Directory.Exists(newFolderPath))
+                                if (!NewFolderPrompt.TryShow(this, parentPath, out string newFolderName))
                                 {
-                                    counter++;
-                                    newFolderPath = System.IO.Path.Combine(parentPath, $"{newFolderName} ({counter})");
+                                    OnMouseUp(e);
+                                    return;
                                 }
-                                System.IO.Directory.CreateDirectory(newFolderPath);
+
+                                string newFolderPath = System.IO.Path.Combine(parentPath, newFolderName);
+                                try
+                                {
+                                    System.IO.Directory.CreateDirectory(newFolderPath);
+                                }
+                                catch (Exception ex) when (ex is System.IO.IOException ||
+                                                           ex is UnauthorizedAccessException ||
+                                                           ex is ArgumentException ||
+                                                           ex is NotSupportedException)
+                                {
+                                    MessageBox.Show(this, $"The folder could not be created.\r\n\r\n{ex.Message}", "New Folder",
+                                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                    OnMouseUp(e);
+                                    return;
+                                }
                                
                                 if (tn.Tag is null)
                                 {
@@ -1771,20 +1783,10 @@ namespace ExpControlsLib
                                 tn.Nodes.Clear();
                                 var dirs = parentCsi.Directories;
                                 dirs.Sort();
-                                TreeNode? newNode = null;
                                 foreach (CShellItem child in EnumerateDisplayItems(dirs))
                                 {
                                     var node = MakeNode(child);
                                     tn.Nodes.Add(node);
-                                    if (string.Equals(child.FullPath, newFolderPath, StringComparison.OrdinalIgnoreCase))
-                                        newNode = node;
-                                }
-
-                                if (newNode is not null)
-                                {
-                                    _TreeView.SelectedNode = newNode;
-                                    _TreeView.LabelEdit = true;
-                                    newNode.BeginEdit();
                                 }
                             }
                         }
