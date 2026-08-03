@@ -318,7 +318,7 @@ namespace WindowsApiLib.Shell
             }
             else
             {
-                Debug.WriteLine("  [UPDATEDIR] Item NOT found '" + upCSI.ItemPath + "'");
+                Debug.WriteLine("  [UPDATEDIR] could not find item for '" + TPidl.GetDisplayNameFull(userPidl1) + "' in the shell item hierarchy.");
             }
         }
 
