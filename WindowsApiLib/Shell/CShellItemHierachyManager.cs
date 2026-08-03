@@ -277,28 +277,38 @@ namespace WindowsApiLib.Shell
             if (result == null)
             {
                 var split = CPidl.Split(csi.PIDL);
-                parentCsi = FindAndAllowExpansion(split.ParentPidl, out _);
-                if (result == null)
+                try
                 {
-                    return result;
-                }
+                    parentCsi = FindAndAllowExpansion(split.ParentPidl, out _);
+                    if (parentCsi == null)
+                        return null;
 
-                if (csi.IsFolder)
-                {
-                    lock (parentCsi)
+                    csi.Parent = parentCsi;
+
+                    if (csi.IsFolder)
                     {
-                        parentCsi.Directories.Add(csi);
+                        lock (parentCsi)
+                        {
+                            parentCsi.Directories.Add(csi);
+                        }
                     }
+                    else
+                    {
+                        lock (parentCsi)
+                        {
+                            parentCsi.Files.Add(csi);
+                        }
+                    }
+
+                    return csi;
                 }
-                else
+                finally
                 {
-                    lock (parentCsi)
-                    {
-                        parentCsi.Files.Add(csi);
-                    }
-                } 
-                
-                return csi;
+                    if (split.ParentPidl != IntPtr.Zero)
+                        Marshal.FreeCoTaskMem(split.ParentPidl);
+                    if (split.ChildPidl != IntPtr.Zero)
+                        Marshal.FreeCoTaskMem(split.ChildPidl);
+                }
             }
             return result;
         }
@@ -316,8 +326,15 @@ namespace WindowsApiLib.Shell
             if (string.IsNullOrEmpty(path)) throw new ArgumentNullException(nameof(path));
 
             IntPtr pidl = ShellAPI.ILCreateFromPathW(path);
-
-            return Add(pidl);
+            if (pidl == IntPtr.Zero) return null;
+            try
+            {
+                return Add(pidl);
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(pidl);
+            }
         }
 
         /// <summary>
@@ -562,6 +579,7 @@ namespace WindowsApiLib.Shell
 
             var removedAny = false;
             var groupedByParent = new Dictionary<CShellItem, List<CShellItem>>();
+            var deletionNotifications = new List<(CShellItem Parent, CShellItem Item)>();
 
             try
             {
@@ -589,6 +607,20 @@ namespace WindowsApiLib.Shell
 
                     lock (parent)
                     {
+                        if (raiseEvents)
+                        {
+                            foreach (var target in targets)
+                            {
+                                // Controls need the item's former parent in order to
+                                // remove their corresponding node. A ghost preserves
+                                // that relationship without retaining the hierarchy's
+                                // child collections or UI references.
+                                var ghost = target.ShallowCopy();
+                                ghost.Ghostify();
+                                deletionNotifications.Add((parent, ghost));
+                            }
+                        }
+
                         var filesToRemove = new List<CShellItem>();
                         var dirsToRemove = new List<CShellItem>();
 
@@ -627,19 +659,20 @@ namespace WindowsApiLib.Shell
                         {
                             parent.Directories.RemoveRange(dirsToRemove);
                         }
-                        
+
+                        foreach (var target in targets)
+                            target.Parent = null;
+
                         parent.ClearCaches();
                         removedAny = true;
                     }
+                }
 
-                    //
-                    //if (raiseEvents)
-                    //{
-                    //    foreach (var target in targets)
-                    //    {
-                    //        ShellController.Instance.ShellUpdater.RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(target, CShItemUpdateType.Deleted));
-                    //    }
-                    //}
+                foreach (var notification in deletionNotifications)
+                {
+                    ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                        notification.Parent,
+                        new ShellItemUpdateEventArgs(notification.Item, CShItemUpdateType.Deleted));
                 }
             }
             catch (Exception ex)

@@ -113,7 +113,7 @@ namespace ExpControlsLib
 
                 try
                 {
-                    _shellController.HierachyManager.RemoveRange(csiToRemove, raiseEvents: false); //todo: run this in the background
+                    _shellController.HierachyManager.RemoveRange(csiToRemove); //todo: run this in the background
                     _listViewWrapper.RemoveItems(csiToRemove);
 
                     if (csiToRemove.Count() > _listViewWrapper.GetApproxVisibleCount())

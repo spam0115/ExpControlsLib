@@ -503,8 +503,11 @@ namespace WindowsApiLib.Shell
             Debug.WriteLine("Entered CShellItemUpdateLogic.DoUpdateDeleted");
             //if it's a real deletion, we'd want to run dispose recursively but it could be a move so we can't do that.
             //maybe we should do it anyway and lete the lazy initialization of Files and Directories handle any attempts to read them again.
-            RemoveItem(csi?.Parent, csi);
-            RaiseUpdateEvent(csi.Parent, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Deleted));
+            var parent = csi?.Parent;
+            RemoveItem(parent, csi, raiseEvent: false);
+            RaiseUpdateEvent(parent, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Deleted));
+            if (csi is not null)
+                csi.Parent = null;
         }
 
         public void DoUpdateIconChange(CShellItem csi)
@@ -547,7 +550,7 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        public bool RemoveItem(CShellItem parent, CShellItem item)
+        public bool RemoveItem(CShellItem parent, CShellItem item, bool raiseEvent = true)
         {
             bool changed = false;
             if (parent == null || item == null) return false;
@@ -577,10 +580,13 @@ namespace WindowsApiLib.Shell
                 Debug.WriteLine("Error in CShellItemUpdateLogic.RemoveItem -- " + ex.ToString());
             }
 
-            if (changed)
+            if (changed && raiseEvent)
             {
                 RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
             }
+
+            if (changed)
+                item.Parent = null;
 
             return changed;
         }

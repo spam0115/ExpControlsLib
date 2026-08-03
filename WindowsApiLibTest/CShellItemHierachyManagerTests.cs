@@ -213,6 +213,7 @@ namespace WindowsApiLibTest
 
                     // Verify it's gone
                     Assert.IsNull(manager.Find(tempBase), "Temp folder should no longer be found after removal");
+                    Assert.IsNull(csiTemp.Parent, "Removed items should no longer retain their former parent");
                 }
                 finally
                 {
@@ -325,6 +326,33 @@ namespace WindowsApiLibTest
                     if (oldFolderPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(oldFolderPidl);
                     if (newFolderPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(newFolderPidl);
                     if (newFilePidl != IntPtr.Zero) Marshal.FreeCoTaskMem(newFilePidl);
+                    if (Directory.Exists(tempBase)) Directory.Delete(tempBase, true);
+                }
+            });
+        }
+
+        [TestMethod]
+        public async Task TestAdd_NewItem_AttachesToParent()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                string tempBase = Path.Combine(Path.GetTempPath(), "HierarchyAdd_" + Guid.NewGuid().ToString("N"));
+                string filePath = Path.Combine(tempBase, "new.txt");
+                Directory.CreateDirectory(tempBase);
+                File.WriteAllText(filePath, "test");
+
+                try
+                {
+                    var root = CShellItemFactory.Create(tempBase);
+                    var manager = new CShellItemHierachyManager(CShellItemFactory.DesktopCSI, root);
+                    var added = manager.Add(filePath);
+
+                    Assert.IsNotNull(added, "Add should create and return the new shell item.");
+                    Assert.AreSame(root, added.Parent, "The new item should be attached to the requested parent.");
+                    Assert.IsTrue(root.Files.Contains(added.PIDL), "The new item should be present in the parent's file collection.");
+                }
+                finally
+                {
                     if (Directory.Exists(tempBase)) Directory.Delete(tempBase, true);
                 }
             });

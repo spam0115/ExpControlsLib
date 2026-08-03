@@ -391,6 +391,43 @@ namespace ExpControlsLibTest
         }
 
         [Test]
+        public async Task TestHierarchyRemoval_DeletedEventUsesGhostItem()
+        {
+            string tempPath = Path.Combine(Path.GetTempPath(), "ExpTreeGhostDelete_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "A"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "B"));
+
+            try
+            {
+                EnsurePathInHierarchy(tempPath);
+                var expTree = new ExpTree(tempPath);
+                expTree.Initialize(ShellController.Instance);
+                using var form = new Form();
+                form.Controls.Add(expTree);
+                form.Show();
+
+                await WaitForCondition(
+                    () => expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Count == 2,
+                    "Root node and children to load");
+
+                var rootNode = expTree.Nodes[0];
+                var itemB = ShellController.Instance.HierachyManager.FindAndAllowExpansion(Path.Combine(tempPath, "B"));
+                Assert.IsNotNull(itemB, "B should be in the hierarchy before removal.");
+
+                Assert.IsTrue(ShellController.Instance.HierachyManager.Remove(itemB));
+
+                Assert.IsFalse(rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "B"),
+                    "ExpTree should remove the node from the manager's ghost deletion event.");
+                Assert.IsNull(itemB.Parent, "The removed hierarchy item should be detached after notification.");
+            }
+            finally
+            {
+                if (Directory.Exists(tempPath))
+                    Directory.Delete(tempPath, true);
+            }
+        }
+
+        [Test]
         public async Task TestShellUpdate_RenamedUnderExpandedParent()
         {
             string tempPath = Path.Combine(Path.GetTempPath(), "ExpTreeRenameExp_" + Guid.NewGuid().ToString("N"));
