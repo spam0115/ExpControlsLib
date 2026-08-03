@@ -419,6 +419,44 @@ namespace ExpControlsLibTest
         }
 
         [Test]
+        public async Task TestDynamicUpdate_RenamedInVirtualMode_DoesNotDuplicateItem()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "ExpListTest_Rename_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            try
+            {
+                File.WriteAllText(Path.Combine(tempDir, "A.txt"), "test");
+                File.WriteAllText(Path.Combine(tempDir, "B.txt"), "test");
+
+                using var expList = new ExpList { VirtualMode = true };
+                expList.Initialize(_shellController, new MockFileSystem());
+                using var form = new Form();
+                form.Controls.Add(expList);
+                form.Show();
+
+                await expList.LoadDirectoryAsync(tempDir);
+                Assert.That(expList.Count, Is.EqualTo(2));
+
+                var renamedItem = expList.GetItem(0);
+                Assert.That(renamedItem, Is.Not.Null);
+
+                _shellController.ShellUpdater.RaiseUpdateEvent(
+                    expList.CurrentFolderCsi!,
+                    new ShellItemUpdateEventArgs(renamedItem, CShItemUpdateType.Renamed));
+                Application.DoEvents();
+
+                Assert.That(expList.Count, Is.EqualTo(2),
+                    "A rename notification must reposition the existing item rather than append a duplicate.");
+                Assert.That(Enumerable.Range(0, expList.Count)
+                    .Count(i => ReferenceEquals(expList.GetItem(i), renamedItem)), Is.EqualTo(1));
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Test]
         public async Task TestLatestDirectoryLoadWinsWhenPreviousLoadIsCancelled()
         {
             var firstDir = Path.Combine(Path.GetTempPath(), "ExpListCancelFirst_" + Guid.NewGuid().ToString("N"));

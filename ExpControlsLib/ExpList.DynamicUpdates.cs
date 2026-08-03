@@ -850,7 +850,11 @@ namespace ExpControlsLib
             int index;
             if (VirtualMode)
             {
-                index = _listViewWrapper.FindInsertionPoint(item);
+                // The shell updater mutates the existing CShellItem in place before
+                // raising the rename event. Find the item's current row by identity;
+                // FindInsertionPoint returns its new sorted position and cannot be
+                // used as the index of the row that must be removed.
+                index = _listViewWrapper.GetIndex(item);
             }
             else
             {
