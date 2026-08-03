@@ -391,6 +391,63 @@ namespace ExpControlsLibTest
         }
 
         [Test]
+        public async Task TestShellUpdate_RenamedUnderExpandedParent()
+        {
+            string tempPath = Path.Combine(Path.GetTempPath(), "ExpTreeRenameExp_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "A"));
+            Directory.CreateDirectory(Path.Combine(tempPath, "B"));
+
+            try
+            {
+                EnsurePathInHierarchy(tempPath);
+                var expTree = new ExpTree(tempPath);
+                expTree.Initialize(ShellController.Instance);
+                using var form = new Form();
+                form.Controls.Add(expTree);
+                form.Show();
+
+                await WaitForCondition(
+                    () => expTree.Nodes.Count > 0 && expTree.Nodes[0].Nodes.Count > 0,
+                    "Root node and children to load");
+
+                var rootNode = expTree.Nodes[0];
+                var pathB = Path.Combine(tempPath, "B");
+                var itemB = ShellController.Instance.HierachyManager.FindAndAllowExpansion(pathB);
+                Assert.IsNotNull(itemB, "B should be in hierarchy");
+                Assert.IsTrue(rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "B"),
+                    "B should be in tree before rename");
+
+                // Simulate the shell item's refreshed display name. The important
+                // part of this regression is resolving the already-populated parent
+                // node after async population has replaced its Tag instance.
+                typeof(CShellItem)
+                    .GetField("m_DisplayName", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .SetValue(itemB, "0-RenamedB");
+
+                ShellController.Instance.ShellUpdater.RaiseUpdateEvent(
+                    expTree.Root!,
+                    new ShellItemUpdateEventArgs(itemB, CShItemUpdateType.Renamed)
+                    {
+                        OldPath = pathB,
+                        NewPath = Path.Combine(tempPath, "0-RenamedB")
+                    });
+
+                var childNodes = rootNode.Nodes.Cast<TreeNode>().ToArray();
+                Assert.IsTrue(childNodes.Any(n => n.Text == "0-RenamedB"),
+                    "The existing tree node should reflect the renamed folder.");
+                Assert.IsFalse(rootNode.Nodes.Cast<TreeNode>().Any(n => n.Text == "B"),
+                    "The old folder name should no longer be displayed.");
+                Assert.AreEqual("0-RenamedB", childNodes[0].Text,
+                    "The renamed folder should be reinserted according to its new sort key.");
+            }
+            finally
+            {
+                if (Directory.Exists(tempPath))
+                    Directory.Delete(tempPath, true);
+            }
+        }
+
+        [Test]
         public async Task TestShellUpdate_CreatedUnderCollapsedParent()
         {
             string tempPath = Path.Combine(Path.GetTempPath(), "ExpTreeCrCol_" + Guid.NewGuid().ToString("N"));

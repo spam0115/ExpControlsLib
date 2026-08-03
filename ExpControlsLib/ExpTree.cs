@@ -47,7 +47,7 @@ namespace ExpControlsLib
                 SelectedImageIndex = item.IconIndexOpen;
             }
 
-            public CShellItem? Item { get; }
+            public CShellItem? Item { get; internal set; }
             public bool IsPlaceholder => Item is null;
             public static ExpTreeNode Placeholder() => new ExpTreeNode(DummyText);
         }
@@ -937,9 +937,21 @@ namespace ExpControlsLib
 
         private bool TryFindMatchingChildNode(TreeNode parentNode, CShellItem item, out TreeNode? matchNode)
         {
+            return TryFindMatchingChildNode(parentNode, item, null, out matchNode);
+        }
+
+        private bool TryFindMatchingChildNode(
+            TreeNode parentNode,
+            CShellItem item,
+            string? oldPath,
+            out TreeNode? matchNode)
+        {
             foreach (TreeNode childNode in parentNode.Nodes)
             {
-                if (NodeRepresentsItem(childNode, item))
+                if (NodeRepresentsItem(childNode, item)
+                    || (!string.IsNullOrWhiteSpace(oldPath)
+                        && childNode is ExpTreeNode { Item: CShellItem nodeItem }
+                        && string.Equals(nodeItem.FullPath, oldPath, StringComparison.OrdinalIgnoreCase)))
                 {
                     matchNode = childNode;
                     return true;
@@ -1334,7 +1346,7 @@ namespace ExpControlsLib
                             HandleDeletedUpdate(e.Item, pNode);
                             break;
                         case CShItemUpdateType.Renamed:
-                            HandleRenamedUpdate(e.Item, pNode);
+                            HandleRenamedUpdate(e, pNode);
                             break;
                         case CShItemUpdateType.Moved:
                             HandleMovedUpdate(e.Item, pNode);
@@ -1378,14 +1390,21 @@ namespace ExpControlsLib
             ExpTreeDeleted?.Invoke(item);
         }
 
-        private void HandleRenamedUpdate(CShellItem item, TreeNode parentNode)
+        private void HandleRenamedUpdate(ShellItemUpdateEventArgs e, TreeNode parentNode)
         {
-            if (!TryFindMatchingChildNode(parentNode, item, out var renamedNode))
+            var item = e.Item;
+            if (!TryFindMatchingChildNode(parentNode, item, e.OldPath, out var renamedNode))
             {
                 return;
             }
 
             bool wasSelected = ReferenceEquals(_TreeView.SelectedNode, renamedNode);
+            // Keep the node's model metadata in sync with the refreshed shell
+            // item. InsertNode uses Tag for sorting, while matching logic uses
+            // Item; updating both ensures a rename is placed by its new name.
+            if (renamedNode is ExpTreeNode renamedTreeNode)
+                renamedTreeNode.Item = item;
+            renamedNode.Tag = item;
             renamedNode.Text = item.DisplayName;
             parentNode.Nodes.Remove(renamedNode);
 
@@ -2474,7 +2493,7 @@ namespace ExpControlsLib
             bool found = false;
             while (i < pathList.Count)
             {
-                if (ReferenceEquals(pathList[i], treeNode.Tag))
+                if (NodeRepresentsItem(treeNode, pathList[i]))
                 {
                     found = true;
                     break;
@@ -2492,7 +2511,7 @@ namespace ExpControlsLib
                 found = false;
                 foreach (TreeNode node in treeNode.Nodes)
                 {
-                    if (node.Tag is not null && ReferenceEquals(node.Tag, pathList[i]))
+                    if (NodeRepresentsItem(node, pathList[i]))
                     {
                         treeNode = node;
                         found = true;
@@ -2937,7 +2956,9 @@ namespace ExpControlsLib
 
         private static bool NodeRepresentsSameItem(CShellItem nodeItem, CShellItem item)
         {
-            return ReferenceEquals(nodeItem, item) || CPidl.ResolvesToSamePathOrName(nodeItem.PIDL, item.PIDL);
+            return ReferenceEquals(nodeItem, item)
+                || CPidl.ResolvesToSamePathOrName(nodeItem.PIDL, item.PIDL)
+                || string.Equals(nodeItem.FullPath, item.FullPath, StringComparison.OrdinalIgnoreCase);
         }
 
 

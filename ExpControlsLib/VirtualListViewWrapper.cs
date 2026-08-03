@@ -1492,12 +1492,25 @@ namespace ExpControlsLib
         /// <returns>The index where the item should be inserted in the active view</returns>
         public int FindInsertionPoint(CShellItem item)
         {
-            if (_sortOrder == SortOrder.None || _sortColumn < 0 || _sortColumn >= _listView.Columns.Count)
-                return ActiveViewCount;
+            int sortColumn = _sortColumn;
+            SortOrder sortOrder = _sortOrder;
 
-            var colHeader = _listView.Columns[_sortColumn];
-            var secondaryComparer = GetSecondaryComparer(_sortColumn);
-            var comparer = new CShellItemComparer(_expList, _sortColumn, _sortOrder, colHeader, secondaryComparer);
+            // Directory loads are naturally returned in display-name order, even
+            // before the user clicks a column header. Keep dynamic inserts and
+            // rename repositions consistent with that default order.
+            if (sortOrder == SortOrder.None || sortColumn < 0 || sortColumn >= _listView.Columns.Count)
+            {
+                var displayNameColumn = GetDisplayNameColumn();
+                if (displayNameColumn.index < 0)
+                    return ActiveViewCount;
+
+                sortColumn = displayNameColumn.index;
+                sortOrder = SortOrder.Ascending;
+            }
+
+            var colHeader = _listView.Columns[sortColumn];
+            var secondaryComparer = GetSecondaryComparer(sortColumn);
+            var comparer = new CShellItemComparer(_expList, sortColumn, sortOrder, colHeader, secondaryComparer);
 
             if (VirtualMode)
             {

@@ -260,6 +260,29 @@ namespace ExpControlsLib
             return -1;
         }
 
+        internal int RekeyThumbnail(CShellItem item, string oldPath, int thumbnailSize)
+        {
+            if (item == null || string.IsNullOrWhiteSpace(oldPath)) return -1;
+
+            string oldKey = CreateKey(oldPath, thumbnailSize);
+            string newKey = CreateKey(item.FullPath, thumbnailSize);
+            if (string.Equals(oldKey, newKey, StringComparison.OrdinalIgnoreCase))
+                return EnsureThumbnail(item, thumbnailSize);
+
+            if (!_slotByKey.TryGetValue(oldKey, out var slot))
+                return -1;
+
+            _slotByKey.Remove(oldKey);
+            _slotByKey[newKey] = slot;
+            _lruKeys[thumbnailSize].Remove(oldKey);
+            _lruKeys[thumbnailSize].Add(newKey);
+            _invalidatedKeys.Remove(oldKey);
+            slot.Key = newKey;
+            slot.Item = item;
+            item.ImageIndex = slot.Index;
+            return slot.Index;
+        }
+
         /// <summary>
         /// Marks an item's cached thumbnail as stale after a Shell file-change notification.
         /// The old image remains visible until the replacement arrives, but the next request

@@ -759,7 +759,7 @@ namespace ExpControlsLib
                             raiseItemsChanged = HandleDeletedUpdate(e.Item);
                             break;
                         case CShItemUpdateType.Renamed:
-                            HandleRenamedUpdate(e.Item);
+                            HandleRenamedUpdate(e);
                             break;
                         case CShItemUpdateType.Moved:
                             HandleMovedUpdate(sender, e);
@@ -843,8 +843,9 @@ namespace ExpControlsLib
             }
         }
 
-        private void HandleRenamedUpdate(CShellItem item)
+        private void HandleRenamedUpdate(ShellItemUpdateEventArgs e)
         {
+            var item = e.Item;
             if (item.Parent.FullPath != _currentFolderCsi.FullPath) return;
 
             int index;
@@ -869,6 +870,20 @@ namespace ExpControlsLib
                 if (!IsExcluded(item) && (_filter == null || _filter(item)))
                 {
                     _listViewWrapper.InsertSorted(item);
+
+                    // ReloadInfo() resets ImageIndex before the shell raises the
+                    // rename notification. Reacquire the system icon or queue the
+                    // thumbnail using the item's new row index.
+                    int newIndex = _listViewWrapper.GetIndex(item);
+                    if (newIndex >= 0)
+                    {
+                        int imageIndex = _imageListOrchestrator.GetImageIndexAfterRename(
+                            item, e.OldPath, newIndex);
+                        if (imageIndex >= 0)
+                            item.ImageIndex = imageIndex;
+
+                        _listViewWrapper.RedrawItem(newIndex);
+                    }
                 }
             }
         }

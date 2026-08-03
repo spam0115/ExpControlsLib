@@ -90,6 +90,24 @@ namespace ExpControlsLib
         }
 
         /// <summary>
+        /// Restores the image for an item whose shell path changed due to a rename.
+        /// Thumbnail entries are keyed by path, so reuse the old slot when possible;
+        /// otherwise queue a request using the new path and final list index.
+        /// </summary>
+        public int GetImageIndexAfterRename(CShellItem item, string? oldPath, int itemIndex)
+        {
+            if (item == null) return -1;
+
+            if (IsThumbnailMode && !string.IsNullOrWhiteSpace(oldPath))
+            {
+                int reused = _thumbnailManager.RekeyThumbnail(item, oldPath, ActiveThumbnailSize);
+                if (reused >= 0) return reused;
+            }
+
+            return GetInitialImageIndexOrQueue(item, itemIndex);
+        }
+
+        /// <summary>
         /// Refreshes an item after a Shell update. Thumbnail mode queues work; system-icon mode
         /// asks the caller to redraw the item after the synchronous icon lookup.
         /// </summary>
