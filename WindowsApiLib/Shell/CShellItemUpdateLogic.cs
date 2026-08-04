@@ -433,7 +433,9 @@ namespace WindowsApiLib.Shell
                         if (itemToRemove != null)
                         {
                             Debug.WriteLine("  [RMDIR] Found item in DirectoryList. Removing: " + itemToRemove.ItemPath);
-                            RemoveItem(parentItem, itemToRemove);
+                            // Preserve the source parent while the deletion ghost is
+                            // delivered to subscribers.
+                            RemoveItem(parentItem, itemToRemove, clearParent: false);
                         }
                         else
                         {
@@ -504,10 +506,11 @@ namespace WindowsApiLib.Shell
             //if it's a real deletion, we'd want to run dispose recursively but it could be a move so we can't do that.
             //maybe we should do it anyway and lete the lazy initialization of Files and Directories handle any attempts to read them again.
             var parent = csi?.Parent;
-            RemoveItem(parent, csi, raiseEvent: false);
+            // Keep parent/path information on the deletion ghost. The item is
+            // detached from the hierarchy collection, but remains navigable for
+            // asynchronous event subscribers.
+            RemoveItem(parent, csi, raiseEvent: false, clearParent: false);
             RaiseUpdateEvent(parent, new ShellItemUpdateEventArgs(csi, CShItemUpdateType.Deleted));
-            if (csi is not null)
-                csi.Parent = null;
         }
 
         public void DoUpdateIconChange(CShellItem csi)
@@ -704,8 +707,9 @@ namespace WindowsApiLib.Shell
                 var newParentCsi = _hierarchyManager.Find(splitPidl.ParentPidl);
                 if (newParentCsi is null) //moved to somewhere not in the hierarchy
                 {
-                    RemoveItem(oldCsi.Parent, oldCsi);
-                    oldCsi.Parent = null;
+                    RemoveItem(oldCsi.Parent, oldCsi,
+                        raiseEvent: false,
+                        clearParent: false);
                     oldCsi.m_Pidl = TPidl.Copy(newPidl);
                     RaiseUpdateEvent(oldParentCsi, new ShellItemUpdateEventArgs(oldCsi, CShItemUpdateType.Moved)
                     {
@@ -848,7 +852,7 @@ namespace WindowsApiLib.Shell
                     {
                         foreach (var item in invalidItems)
                         {
-                            RemoveItem(csiFolder, item);
+                            RemoveItem(csiFolder, item, clearParent: false);
                             operations.Add((item, CShItemUpdateType.Deleted));
                         }
                     }
@@ -945,7 +949,7 @@ namespace WindowsApiLib.Shell
                     {
                         foreach (var item in oldCsiDic.Values)
                         {
-                            RemoveItem(csiFolder, item);
+                            RemoveItem(csiFolder, item, clearParent: false);
                             operations.Add((item, CShItemUpdateType.Deleted));
                         }
                     }
