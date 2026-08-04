@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using WindowsApiLib;
 using WindowsApiLib.Shell;
+using WindowsApiLib.Util;
 using static WindowsApiLib.Shell.ShellAPI;
 using static WindowsApiLib.SystemImageListManager;
 
@@ -1349,7 +1350,7 @@ namespace ExpControlsLib
                             HandleRenamedUpdate(e, pNode);
                             break;
                         case CShItemUpdateType.Moved:
-                            HandleMovedUpdate(e.Item, pNode);
+                            HandleMovedUpdate(e, pNode);
                             break;
                         case CShItemUpdateType.MediaChange:
                             HandleMediaChangeUpdate(e.Item, pNode);
@@ -1425,21 +1426,32 @@ namespace ExpControlsLib
             }
         }
 
-        private void HandleMovedUpdate(CShellItem item, TreeNode oldParentNode)
+        private void HandleMovedUpdate(ShellItemUpdateEventArgs e, TreeNode parentNode)
         {
-            // HandleMoved emits an event for the old parent and another for the
-            // new parent.  Remove the old node when present, then add the item
-            // under its current parent if it is not already there.  The checks
-            // make this idempotent when the lower-level remove/add events were
-            // delivered first.
-            if (TryFindMatchingChildNode(oldParentNode, item, out var oldNode))
+            var item = e.Item;
+
+            // HandleMoved emits an event for both locations. The source event
+            // contains the old (ghosted) CShellItem, whose Parent intentionally
+            // remains the old parent. Do not treat that event as an add: doing
+            // so removes the node and immediately inserts it back into the old
+            // parent. The destination event contains the replacement item,
+            // whose path has already been updated to NewPath.
+            bool isSourceEvent = e.NewPath is not null &&
+                !string.Equals(item.FullPath, e.NewPath, StringComparison.OrdinalIgnoreCase);
+
+            if (isSourceEvent)
             {
+                if (!TryFindMatchingChildNode(parentNode, item, out var oldNode))
+                    return;
+
                 bool wasSelected = ReferenceEquals(_TreeView.SelectedNode, oldNode);
-                oldParentNode.Nodes.Remove(oldNode);
+                parentNode.Nodes.Remove(oldNode);
                 if (wasSelected)
                 {
                     _TreeView.SelectedNode = null;
                 }
+
+                return;
             }
 
             if (IsExcluded(item) || item.Parent is null)
@@ -1774,7 +1786,9 @@ namespace ExpControlsLib
                                 string newFolderPath = System.IO.Path.Combine(parentPath, newFolderName);
                                 try
                                 {
-                                    System.IO.Directory.CreateDirectory(newFolderPath);
+                                    // Use the Shell file operation so the shared shell updater
+                                    // publishes the creation to both ExpTree and ExpList.
+                                    new FileSystemWrapper().CreateFolderViaShell(newFolderPath);
                                 }
                                 catch (Exception ex) when (ex is System.IO.IOException ||
                                                            ex is UnauthorizedAccessException ||
@@ -1794,9 +1808,12 @@ namespace ExpControlsLib
                                 }
 
                                 CShellItem parentCsi = (CShellItem)tn.Tag;
-                                var flags = SHCONTF.FOLDERS;
-                                if (m_showHiddenFolders) flags |= SHCONTF.INCLUDEHIDDEN;
-                                _shellController.EnsureChildrenPopulatedAndRecent(parentCsi, flags);
+                                // The parent was likely loaded less than FolderTimeout ago,
+                                // so EnsureChildrenPopulatedAndRecent may intentionally skip
+                                // the reload. Force a folder-only cross-check so the new item
+                                // is visible immediately and the shared hierarchy is updated.
+                                _shellController.ShellUpdater.DoUpdateDir(parentCsi,
+                                    updateFiles: false, updateFolders: true);
 
                                 tn.Collapse(false);
                                 tn.Nodes.Clear();

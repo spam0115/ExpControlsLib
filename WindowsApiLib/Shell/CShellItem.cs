@@ -1782,7 +1782,7 @@ namespace WindowsApiLib.Shell
         /// Value types are left untouched.
         /// Note that we can't recursively dispose of child elements here because they might still be
         /// valid because they might have been moved to another directory and are childred of a new item 
-        /// now.
+        /// now./
         /// </summary>
         public void Ghostify()
         {
