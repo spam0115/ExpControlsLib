@@ -1786,10 +1786,6 @@ namespace WindowsApiLib.Shell
         /// </summary>
         public void Ghostify()
         {
-            //m_Parent = null; still might need these
-            //m_FullPath = null;
-            //m_TypeName = null;
-            //m_cPidl = null;
             m_columnDic = null;
             LVItem = null;
             TNode = null;

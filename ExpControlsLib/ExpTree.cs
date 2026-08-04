@@ -1331,7 +1331,10 @@ namespace ExpControlsLib
 
                 try
                 {
-                    CShellItem parent = e.Item.Parent;
+                    // The updater sender identifies the folder associated with the
+                    // notification. This is authoritative for moves, especially for
+                    // source-side ghost items whose Parent may no longer be reliable.
+                    CShellItem parent = sender as CShellItem ?? e.Item.Parent;
                     TreeNode? pNode = default(TreeNode);
                     if (!GetTreeNode(parent, ref pNode))
                     {
@@ -1441,14 +1444,17 @@ namespace ExpControlsLib
 
             if (isSourceEvent)
             {
-                if (!TryFindMatchingChildNode(parentNode, item, out var oldNode))
+                if (!TryFindMatchingChildNode(parentNode, item, e.OldPath, out var oldNode))
                     return;
 
                 bool wasSelected = ReferenceEquals(_TreeView.SelectedNode, oldNode);
                 parentNode.Nodes.Remove(oldNode);
                 if (wasSelected)
                 {
-                    _TreeView.SelectedNode = null;
+                    // Keep selection on a node that still exists. This also
+                    // updates the associated ExpList to the old parent.
+                    _TreeView.SelectedNode = parentNode;
+                    parentNode.EnsureVisible();
                 }
 
                 return;

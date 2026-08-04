@@ -550,7 +550,11 @@ namespace WindowsApiLib.Shell
             }
         }
 
-        public bool RemoveItem(CShellItem parent, CShellItem item, bool raiseEvent = true)
+        public bool RemoveItem(
+            CShellItem parent,
+            CShellItem item,
+            bool raiseEvent = true,
+            bool clearParent = true)
         {
             bool changed = false;
             if (parent == null || item == null) return false;
@@ -585,7 +589,10 @@ namespace WindowsApiLib.Shell
                 RaiseUpdateEvent(this, new ShellItemUpdateEventArgs(item, CShItemUpdateType.Deleted));
             }
 
-            if (changed)
+            // A moved item becomes a ghost for the source-side notification. Its
+            // old parent is intentionally retained so consumers can resolve the
+            // source location after the hierarchy collection has been updated.
+            if (changed && clearParent)
                 item.Parent = null;
 
             return changed;
@@ -723,7 +730,11 @@ namespace WindowsApiLib.Shell
                         * The new csi will be sent to event handlers for the destination folder and the old csi will be sent to 
                         * event handlers for the original folder.
                     */
-                    RemoveItem(oldParentCsi, oldCsi); //update hierarchy
+                    // Remove the source item from the hierarchy without raising a
+                    // misleading Deleted event or detaching the ghost's parent.
+                    RemoveItem(oldParentCsi, oldCsi,
+                        raiseEvent: false,
+                        clearParent: false);
 
                     var newCsi = oldCsi.ShallowCopy();
                     oldCsi.Ghostify();
