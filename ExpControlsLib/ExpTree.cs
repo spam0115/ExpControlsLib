@@ -936,6 +936,14 @@ namespace ExpControlsLib
             }
         }
 
+        private void ExpandProgrammaticallyIfNeeded(TreeNode node, bool childDataUpdated)
+        {
+            if (childDataUpdated || !node.IsExpanded)
+            {
+                WithTreeViewUpdate(() => ExpandProgrammatically(node));
+            }
+        }
+
         private bool TryFindMatchingChildNode(TreeNode parentNode, CShellItem item, out TreeNode? matchNode)
         {
             return TryFindMatchingChildNode(parentNode, item, null, out matchNode);
@@ -1188,10 +1196,10 @@ namespace ExpControlsLib
 
             try
             {
-                //refresh the root node if it is old
+                bool rootChildDataUpdated = false;
+
                 if (NodeNeedsPopulating(rootNode))
                 {
-                    goto SKIP;
                     var result = await PopulateNodeAsync(rootNode);
                     if (result == false)
                     {
@@ -1199,11 +1207,10 @@ namespace ExpControlsLib
                         Debugger.Break();
                         return false;
                     }
+                    rootChildDataUpdated = true;
                 }
-            SKIP:
 
-                if (!rootNode.IsExpanded)
-                    WithTreeViewUpdate(() => ExpandProgrammatically(rootNode));
+                ExpandProgrammaticallyIfNeeded(rootNode, rootChildDataUpdated);
 
                 var baseNode = rootNode;
                 // do the drill down -- Node to expand must be included in tree
@@ -1211,6 +1218,9 @@ namespace ExpControlsLib
                 {
                     if (baseNode.Tag is null)
                         throw new Exception("Base node tag is null");
+
+                    bool childDataUpdated = false;
+
                     //load child items is empty or old
                     if (NodeNeedsPopulating(baseNode))
                     {
@@ -1221,7 +1231,11 @@ namespace ExpControlsLib
                             Debugger.Break();
                             return false;
                         }
+                        childDataUpdated = true;
                     }
+
+                    ExpandProgrammaticallyIfNeeded(baseNode, childDataUpdated);
+
                     //if (baseNode.Nodes.Count == 0)
                     //{
                     //    await Task.Delay(500);
@@ -1238,8 +1252,7 @@ namespace ExpControlsLib
                     {
                         baseNode = match!;
 
-                        if (!baseNode.IsExpanded)
-                            WithTreeViewUpdate(() => ExpandProgrammatically(baseNode));
+                        ExpandProgrammaticallyIfNeeded(baseNode, childDataUpdated: false);
                         depthLimit -= 1;
                         continue;
                     }

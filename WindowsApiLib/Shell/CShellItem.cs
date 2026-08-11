@@ -115,6 +115,7 @@ namespace WindowsApiLib.Shell
         internal FileAttributes m_Attributes;  // True FileAttributes from FileInfo
         internal SFGAO m_SFGAO_Attributes;
         internal bool m_IsRemote;
+        public bool IsDirty = false;
 
         internal W32Find_Data? m_W32Data;
 

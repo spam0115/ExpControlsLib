@@ -2731,6 +2731,13 @@
             the thumbnail request is pending.
             </summary>
         </member>
+        <member name="M:ExpControlsLib.ImageListOrchestrator.GetImageIndexAfterRename(WindowsApiLib.Shell.CShellItem,System.String,System.Int32)">
+            <summary>
+            Restores the image for an item whose shell path changed due to a rename.
+            Thumbnail entries are keyed by path, so reuse the old slot when possible;
+            otherwise queue a request using the new path and final list index.
+            </summary>
+        </member>
         <member name="M:ExpControlsLib.ImageListOrchestrator.RefreshImage(WindowsApiLib.Shell.CShellItem,System.Int32,System.Action)">
             <summary>
             Refreshes an item after a Shell update. Thumbnail mode queues work; system-icon mode
