@@ -214,7 +214,7 @@ namespace WindowsApiLib.Shell
         {
             for (int i = 0; i < _items.Count; i++)
             {
-                if (string.Compare(_items[i].GetFileName(), name, true) == 0)
+                if (string.Compare(_items[i].GetConsistentName(), name, true) == 0)
                 {
                     return i;
                 }

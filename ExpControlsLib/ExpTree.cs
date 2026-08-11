@@ -1170,7 +1170,7 @@ namespace ExpControlsLib
                 return false;
             }
 
-            if (!TryGetRootNodeForExpansion(target, SelectExpandedNode, out var baseNode, out var pendingQueued))
+            if (!TryGetRootNodeForExpansion(target, SelectExpandedNode, out var rootNode, out var pendingQueued))
             {
                 Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: _Root is null");
                 if (pendingQueued)
@@ -1180,7 +1180,7 @@ namespace ExpControlsLib
                 return pendingQueued;
             }
 
-            int depthLimit = GetExpansionDepthLimit(baseNode, target); //drill down limit
+            int depthLimit = GetExpansionDepthLimit(rootNode, target); //drill down limit. this doesn't seem useful?
             if (depthLimit < 0)
             {
                 return false;
@@ -1188,23 +1188,25 @@ namespace ExpControlsLib
 
             try
             {
-                // do the drill down -- Node to expand must be included in tree
-                if (NodeNeedsPopulating(baseNode))
+                //refresh the root node if it is old
+                if (NodeNeedsPopulating(rootNode))
                 {
-                    var result = await PopulateNodeAsync(baseNode);
+                    goto SKIP;
+                    var result = await PopulateNodeAsync(rootNode);
                     if (result == false)
                     {
-                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: PopulateNodeAsync failed for '{baseNode.Text}'");
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: PopulateNodeAsync failed for '{rootNode.Text}'");
                         Debugger.Break();
                         return false;
                     }
-                    else
-                    {
-                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: PopulateNodeAsync succeeded for '{baseNode.Text}'");
-                    }
                 }
-                WithTreeViewUpdate(() => ExpandProgrammatically(baseNode));
+            SKIP:
 
+                if (!rootNode.IsExpanded)
+                    WithTreeViewUpdate(() => ExpandProgrammatically(rootNode));
+
+                var baseNode = rootNode;
+                // do the drill down -- Node to expand must be included in tree
                 while (depthLimit > 0)
                 {
                     if (baseNode.Tag is null)
@@ -1218,10 +1220,6 @@ namespace ExpControlsLib
                             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: PopulateNodeAsync failed for '{baseNode.Text}'");
                             Debugger.Break();
                             return false;
-                        }
-                        else
-                        {
-                            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.ExpandANodeBaseAsync: PopulateNodeAsync succeeded for '{baseNode.Text}'");
                         }
                     }
                     //if (baseNode.Nodes.Count == 0)
@@ -1240,7 +1238,8 @@ namespace ExpControlsLib
                     {
                         baseNode = match!;
 
-                        WithTreeViewUpdate(() => ExpandProgrammatically(baseNode));
+                        if (!baseNode.IsExpanded)
+                            WithTreeViewUpdate(() => ExpandProgrammatically(baseNode));
                         depthLimit -= 1;
                         continue;
                     }
@@ -1642,7 +1641,7 @@ namespace ExpControlsLib
             DragHandler = new ExpControlsLib.CDragWrapper(_TreeView);
             if (m_AllowDrop)
                 DropHandler = new CtvDropWrapper(_TreeView);
-            SetWindowTheme(_TreeView.Handle, "explorer", null);
+            //SetWindowTheme(_TreeView.Handle, "explorer", null);
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.Tv1_HandleCreated: End");
         }
 
@@ -1699,12 +1698,12 @@ namespace ExpControlsLib
 
         private void Tv1_BeforeSelect(object sender, TreeViewCancelEventArgs e)
         {
-            if (e?.Node?.Tag is null) return;
+            //if (e?.Node?.Tag is null) return;
 
-            CShellItem csi = (CShellItem)e.Node.Tag;
-            if (csi is null) return;
+            //CShellItem csi = (CShellItem)e.Node.Tag;
+            //if (csi is null) return;
 
-            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Tv1_BeforeSelect: item selected: " + csi.DisplayName + " " + sender?.ToString());
+            //Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Tv1_BeforeSelect: item selected: " + csi.DisplayName + ", sender: " + sender?.ToString());
         }
 
         /// <summary>

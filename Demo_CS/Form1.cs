@@ -65,7 +65,9 @@ namespace Demo_CS
         {
             if (!_initialized) return;
 
-            this.expTree1.ExpandANodeAsync(newCsi);
+            var name = newCsi.GetFullPath();
+            if (expTree1.SelectedNode.FullPath != name)
+                _ = expTree1.ExpandANodeAsync(newCsi);
         }
     }
 }

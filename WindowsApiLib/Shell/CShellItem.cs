@@ -1428,25 +1428,62 @@ namespace WindowsApiLib.Shell
         /// <summary>GetFileName returns the Full file name of this item.
         /// Specifically, for a link file (xxx.txt.lnk for example) the
         /// DisplayName property will return xxx.txt, this method will
-        /// return xxx.txt.lnk.</summary>
+        /// return xxx.txt.lnk.  Also, if Windows Explorer is set to "hide extensions", then extensions will be
+        /// missing from DisplayName (eg: "notepad.exe" will be shown as "notepad")</summary>
         /// <returns>The Name of this instance</returns>
-        /// <remarks>In most cases this is equivalent to
-        /// System.IO.Path.GetFileName(m_Path).  However, some m_Paths
-        /// actually are GUIDs.  In that case, this routine returns the
-        /// DisplayName</remarks>
-        public string GetFileName()
+        /// <remarks></remarks>
+        public string GetConsistentName()
         {
-            if (FullPath.StartsWith("::{")) // Path is really a GUID
+            int index = FullPath.LastIndexOf(System.IO.Path.DirectorySeparatorChar);
+            string name;
+            if (index == -1)
             {
-                return DisplayName;
+                name = FullPath;
             }
-            else if (m_IsDisk)
+            else if (index == FullPath.Length - 1) //drives (eg: c:\) have a trailing backslash
             {
-                return FullPath.Substring(0, 1);
+                name = DisplayName;
             }
             else
             {
-                return System.IO.Path.GetFileName(FullPath);
+                name = FullPath.Substring(index + 1);
+            }
+
+            if (name.StartsWith("::{")) // Self is a virtual item
+            {
+                return DisplayName;
+            }
+            else return name;
+        }
+
+        public string GetFullPath()
+        {
+            if (m_Parent == null)
+            {
+                return this.GetConsistentName();
+            }
+            else 
+            { 
+                StringBuilder sb = new();
+
+                m_Parent.BuildFullPath(sb);
+                sb.Append(System.IO.Path.DirectorySeparatorChar);
+                sb.Append(this.GetConsistentName());
+                return sb.ToString();
+            }
+        }
+
+        private void BuildFullPath(StringBuilder sb)
+        {
+            if (m_Parent == null)
+            {
+                sb.Append(this.GetConsistentName());
+            }
+            else
+            {
+                m_Parent.BuildFullPath(sb);
+                sb.Append(System.IO.Path.DirectorySeparatorChar);
+                sb.Append(this.GetConsistentName());
             }
         }
 
