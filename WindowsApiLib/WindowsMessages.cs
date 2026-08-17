@@ -17,5 +17,6 @@ namespace WindowsApiLib
         public const int WM_KEYDOWN = 0x0100;
         public const int WM_DESTROY = 2;
         public const int WM_DESTROY_THREAD_WINDOW = (int)WM.USER + 500;
+        public const int WM_DIRTY_FOLDER_REFRESH = (int)WM.USER + 501;
     }
 }

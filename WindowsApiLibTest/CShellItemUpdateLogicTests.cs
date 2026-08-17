@@ -595,6 +595,126 @@ namespace WindowsApiLibTest
         }
 
         [TestMethod]
+        public async Task UpdateDir_WithMarshalCallback_PostsDeferredRefreshWithoutProcessingOnTimerThread()
+        {
+            var deferredRefreshPosted = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var updateDirRaised = false;
+            CShellItem? folder = null;
+            IntPtr pNotifyStruct = IntPtr.Zero;
+            CShellItemUpdateLogic<MockPidl>? logic = null;
+
+            await Runner.EnqueueWork(() =>
+            {
+                var manager = MockShellItemFactory.CreateMockHierarchyManager();
+                var mockApi = new MockShellApi();
+                var mockFactory = new MockShellItemFactory();
+                logic = new CShellItemUpdateLogic<MockPidl>(
+                    manager,
+                    mockApi,
+                    null,
+                    mockFactory,
+                    key => { deferredRefreshPosted.TrySetResult(key); })
+                {
+                    AllowUpdates = true
+                };
+
+                var windowsPidl = MockPidl.BytesToPidl(MockPidlFactory.CreateMockPidl(CSIDL.WINDOWS));
+                folder = manager.Find(windowsPidl);
+                Marshal.FreeCoTaskMem(windowsPidl);
+                Assert.IsNotNull(folder, "Expected mock Windows folder in hierarchy.");
+
+                folder.Directories = new CShellItemCollection(folder);
+                folder.DirsCollectionTimestamp = DateTime.Now - TimeSpan.FromSeconds(Math.Max(1, ShellController.FolderTimeout - 1));
+
+                pNotifyStruct = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(SHNOTIFYSTRUCT)));
+                var sns = new SHNOTIFYSTRUCT { dwItem1 = folder.PIDL, dwItem2 = IntPtr.Zero };
+                Marshal.StructureToPtr(sns, pNotifyStruct, false);
+
+                mockApi.OnLock = (IntPtr h, uint id, ref IntPtr pppidl, ref SHCNE plEvent) =>
+                {
+                    pppidl = pNotifyStruct;
+                    plEvent = SHCNE.UPDATEDIR;
+                    return new IntPtr(1);
+                };
+
+                logic.UpdateEvent += (s, e) =>
+                {
+                    if (e.UpdateType == CShItemUpdateType.UpdateDir && ReferenceEquals(e.Item, folder))
+                    {
+                        updateDirRaised = true;
+                    }
+                };
+
+                logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
+            });
+
+            var posted = await Task.WhenAny(deferredRefreshPosted.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(deferredRefreshPosted.Task, posted, "Timer should post the deferred refresh key through the marshal callback.");
+            Assert.IsFalse(updateDirRaised, "Timer callback should not process the refresh directly when a marshal callback is supplied.");
+            Assert.IsTrue(folder!.IsDirty, "Folder should remain dirty until the posted refresh is processed on the updater thread.");
+
+            logic!.ProcessDeferredDirtyFolderRefresh(await deferredRefreshPosted.Task);
+
+            Assert.IsTrue(updateDirRaised, "Processing the posted key should raise the folder-level UpdateDir event.");
+            Assert.IsFalse(folder.IsDirty, "Processing the posted key should clear the dirty flag.");
+
+            if (pNotifyStruct != IntPtr.Zero) Marshal.FreeCoTaskMem(pNotifyStruct);
+            logic.DisposeDirtyFolderRefreshTimers();
+        }
+
+        [TestMethod]
+        public async Task UpdateDir_InitializedCollectionWithNullTimestamp_InitializesTimestampWithoutRefreshing()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                var manager = MockShellItemFactory.CreateMockHierarchyManager();
+                var mockApi = new MockShellApi();
+                var mockFactory = new MockShellItemFactory();
+                var logic = new CShellItemUpdateLogic<MockPidl>(manager, mockApi, null, mockFactory)
+                {
+                    AllowUpdates = true
+                };
+
+                var windowsPidl = MockPidl.BytesToPidl(MockPidlFactory.CreateMockPidl(CSIDL.WINDOWS));
+                var folder = manager.Find(windowsPidl);
+                Marshal.FreeCoTaskMem(windowsPidl);
+                Assert.IsNotNull(folder, "Expected mock Windows folder in hierarchy.");
+
+                folder.Directories = new CShellItemCollection(folder);
+                folder.DirsCollectionTimestamp = null;
+
+                IntPtr pNotifyStruct = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(SHNOTIFYSTRUCT)));
+                var sns = new SHNOTIFYSTRUCT { dwItem1 = folder.PIDL, dwItem2 = IntPtr.Zero };
+                Marshal.StructureToPtr(sns, pNotifyStruct, false);
+
+                mockApi.OnLock = (IntPtr h, uint id, ref IntPtr pppidl, ref SHCNE plEvent) =>
+                {
+                    pppidl = pNotifyStruct;
+                    plEvent = SHCNE.UPDATEDIR;
+                    return new IntPtr(1);
+                };
+
+                int updateDirCount = 0;
+                logic.UpdateEvent += (s, e) =>
+                {
+                    if (e.UpdateType == CShItemUpdateType.UpdateDir && ReferenceEquals(e.Item, folder))
+                    {
+                        updateDirCount++;
+                    }
+                };
+
+                logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
+
+                Assert.IsNotNull(folder.DirsCollectionTimestamp, "Initialized folder collection should receive a missing timestamp.");
+                Assert.AreEqual(0, updateDirCount, "Missing timestamp should not force an immediate refresh.");
+                Assert.IsTrue(folder.IsDirty, "Folder should remain dirty until the timeout elapses.");
+
+                Marshal.FreeCoTaskMem(pNotifyStruct);
+                logic.DisposeDirtyFolderRefreshTimers();
+            });
+        }
+
+        [TestMethod]
         public async Task DoUpdateDir_DifferentFolders_CanRunConcurrently()
         {
             CShellItem? folderA = null;

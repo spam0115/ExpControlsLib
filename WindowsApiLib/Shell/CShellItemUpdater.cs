@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -29,6 +30,7 @@ namespace WindowsApiLib.Shell
         private uint _eventFlags = 0;
         private Thread _backgroundThread;
         private readonly AutoResetEvent _initializedEvent = new AutoResetEvent(false);
+        private readonly ConcurrentQueue<string> _pendingDirtyFolderRefreshKeys = new();
 
         public event CShItemUpdateEventHandler UpdateEvent;
 
@@ -55,7 +57,7 @@ namespace WindowsApiLib.Shell
         {
             HierachyManager = hierachyManager;
             _eventFlags = SHCNE_flags;
-            UpdateLogic = new CShellItemUpdateLogic<CPidl>(HierachyManager);
+            UpdateLogic = new CShellItemUpdateLogic<CPidl>(HierachyManager, postDeferredDirtyFolderRefresh: PostDeferredDirtyFolderRefresh);
             UpdateLogic.UpdateEvent += (s, e) => RaiseUpdateEvent(s, e);
 
             _backgroundThread = new Thread(RunBackgroundMessageLoop)
@@ -68,6 +70,17 @@ namespace WindowsApiLib.Shell
 
             // Wait until the HWND has been created and registered on the background thread
             _initializedEvent.WaitOne();
+        }
+
+        private void PostDeferredDirtyFolderRefresh(string folderKey)
+        {
+            if (string.IsNullOrWhiteSpace(folderKey)) return;
+
+            _pendingDirtyFolderRefreshKeys.Enqueue(folderKey);
+            if (Handle == IntPtr.Zero || !PostMessage(Handle, WindowsMessages.WM_DIRTY_FOLDER_REFRESH, IntPtr.Zero, IntPtr.Zero))
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Failed to post deferred dirty folder refresh message for '{folderKey}'.");
+            }
         }
 
         private void RunBackgroundMessageLoop()
@@ -124,6 +137,12 @@ namespace WindowsApiLib.Shell
                 return;
             }
 
+            if (msg.Msg == WindowsMessages.WM_DIRTY_FOLDER_REFRESH)
+            {
+                ProcessDeferredDirtyFolderRefreshMessages();
+                return;
+            }
+
             if (!AllowUpdates) { 
                 base.WndProc(ref msg); //the handle in the constructor can't be created unless this is called before exiting this wndproc
                 return;
@@ -138,6 +157,21 @@ namespace WindowsApiLib.Shell
             UpdateLogic.HandleNotification(msg.WParam, msg.LParam);
 
             base.WndProc(ref msg);
+        }
+
+        private void ProcessDeferredDirtyFolderRefreshMessages()
+        {
+            while (_pendingDirtyFolderRefreshKeys.TryDequeue(out var folderKey))
+            {
+                try
+                {
+                    UpdateLogic.ProcessDeferredDirtyFolderRefresh(folderKey);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error processing deferred dirty folder refresh for '{folderKey}' -- {ex}");
+                }
+            }
         }
 
         #endregion

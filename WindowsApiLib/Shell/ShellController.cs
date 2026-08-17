@@ -22,7 +22,7 @@ namespace WindowsApiLib.Shell
 
         public CShellItemHierachyManager HierachyManager { get; private set; }
         public CShellItemUpdater ShellUpdater { get; private set; }
-        public readonly static int FolderTimeout = 10; //seconds
+        public readonly static int FolderTimeout = 5; //seconds
    
         /// <summary>
         /// the desktop cShellIitem

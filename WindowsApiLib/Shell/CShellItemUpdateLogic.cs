@@ -18,6 +18,7 @@ namespace WindowsApiLib.Shell
         private readonly IShellApiWrapper _shellApi;
         private readonly IFileSystem _fileSystem;
         private readonly IShellItemFactoryWrapper _shellItemFactory;
+        private readonly Action<string>? _postDeferredDirtyFolderRefresh;
         private readonly LruConcurrentDictionary<string, bool> _activeDeletes = new(1000);
         private readonly Dictionary<string, System.Threading.Timer> _dirtyFolderRefreshTimers = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _dirtyFolderRefreshTimersLock = new();
@@ -32,12 +33,14 @@ namespace WindowsApiLib.Shell
             CShellItemHierachyManager hierarchyManager,
             IShellApiWrapper shellApi = null,
             IFileSystem fileSystem = null,
-            IShellItemFactoryWrapper shellItemFactory = null)
+            IShellItemFactoryWrapper shellItemFactory = null,
+            Action<string>? postDeferredDirtyFolderRefresh = null)
         {
             _hierarchyManager = hierarchyManager;
             _shellApi = shellApi ?? new ShellApiWrapper();
             _fileSystem = fileSystem ?? new FileSystemWrapper();
             _shellItemFactory = shellItemFactory ?? new ShellItemFactoryWrapper();
+            _postDeferredDirtyFolderRefresh = postDeferredDirtyFolderRefresh;
         }
 
         /// <summary>
@@ -172,16 +175,31 @@ namespace WindowsApiLib.Shell
 
         private void OnDirtyFolderRefreshTimer(object? state)
         {
-            if (state is not string folderKey || string.IsNullOrWhiteSpace(folderKey))
+            try
             {
-                return;
-            }
+                if (state is not string folderKey || string.IsNullOrWhiteSpace(folderKey))
+                {
+                    Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Dirty folder refresh timer fired without a folder key.");
+                    return;
+                }
 
-            RemoveDirtyFolderRefreshTimer(folderKey);
-            RefreshDirtyFolderFromTimer(folderKey);
+                RemoveDirtyFolderRefreshTimer(folderKey);
+                if (_postDeferredDirtyFolderRefresh is not null)
+                {
+                    _postDeferredDirtyFolderRefresh(folderKey);
+                }
+                else
+                {
+                    ProcessDeferredDirtyFolderRefresh(folderKey);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Error in CShellItemUpdateLogic.OnDirtyFolderRefreshTimer -- {ex}");
+            }
         }
 
-        private void RefreshDirtyFolderFromTimer(string folderKey)
+        internal void ProcessDeferredDirtyFolderRefresh(string folderKey)
         {
             lock (_hierarchyManager.Lock)
             {
@@ -233,6 +251,8 @@ namespace WindowsApiLib.Shell
 
         private static TimeSpan CalculateDirtyFolderRefreshDelay(CShellItem folder)
         {
+            EnsureInitializedCollectionTimestamps(folder);
+
             var now = DateTime.Now;
             var threshold = TimeSpan.FromSeconds(ShellController.FolderTimeout);
 
@@ -268,6 +288,8 @@ namespace WindowsApiLib.Shell
                 {
                     return false;
                 }
+
+                EnsureInitializedCollectionTimestamps(folder);
 
                 bool refreshFolders = folder.DirectoriesInitialized && IsTimestampPastTimeout(folder.DirsCollectionTimestamp);
                 bool refreshFiles = folder.FilesInitialized && IsTimestampPastTimeout(folder.FilesCollectionTimestamp);
@@ -333,6 +355,22 @@ namespace WindowsApiLib.Shell
             }
 
             return (DateTime.Now - timestamp.Value) > TimeSpan.FromSeconds(ShellController.FolderTimeout);
+        }
+
+        private static void EnsureInitializedCollectionTimestamps(CShellItem folder)
+        {
+            var now = DateTime.Now;
+            if (folder.DirectoriesInitialized && folder.DirsCollectionTimestamp is null)
+            {
+                folder.DirsCollectionTimestamp = now;
+                Debug.WriteLine($"[{now:HH:mm:ss.fff}] Initialized missing directory timestamp for '{folder.ItemPath}'.");
+            }
+
+            if (folder.FilesInitialized && folder.FilesCollectionTimestamp is null)
+            {
+                folder.FilesCollectionTimestamp = now;
+                Debug.WriteLine($"[{now:HH:mm:ss.fff}] Initialized missing file timestamp for '{folder.ItemPath}'.");
+            }
         }
 
         private bool TryEnterFolderUpdateGuard(CShellItem folder, out string guardKey)
