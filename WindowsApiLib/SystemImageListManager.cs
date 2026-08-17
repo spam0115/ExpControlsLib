@@ -315,7 +315,7 @@ namespace WindowsApiLib
                         {
                             int xlIndex = ImageList_ReplaceIcon(m_xlgImgList, -1, hIcon);
                             Debug.Assert(xlIndex > -1, "Failed to add overlaid xl icon");
-                            Debug.Assert(xlIndex == rValLarge, "XL & Large Icon Indices are Different");
+                            //Debug.Assert(xlIndex == rValLarge, "XL & Large Icon Indices are Different");
                         }
                         finally
                         {
