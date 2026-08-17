@@ -245,6 +245,8 @@ namespace WindowsApiLib.Shell
 
         public void Dispose()
         {
+            UpdateLogic.DisposeDirtyFolderRefreshTimers();
+
             if (m_notifyId > 0)
             {
                 SHChangeNotifyDeregister(m_notifyId);

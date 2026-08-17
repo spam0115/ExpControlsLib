@@ -19,7 +19,10 @@ namespace WindowsApiLib.Shell
         private readonly IFileSystem _fileSystem;
         private readonly IShellItemFactoryWrapper _shellItemFactory;
         private readonly LruConcurrentDictionary<string, bool> _activeDeletes = new(1000);
-        private bool _isUpdatingDir = false;
+        private readonly Dictionary<string, System.Threading.Timer> _dirtyFolderRefreshTimers = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _dirtyFolderRefreshTimersLock = new();
+        private readonly HashSet<string> _updatingFolderKeys = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _updatingFolderKeysLock = new();
 
         public event CShellItemUpdater.CShItemUpdateEventHandler? UpdateEvent; //we're not actually using this for anything right now.  really need to rethink this whole thing.
 
@@ -130,6 +133,7 @@ namespace WindowsApiLib.Shell
                     }
                 }
             }
+
             catch (Exception ex)
             {
                 Debug.WriteLine("ERROR: Exception in CShellItemUpdateLogic.HandleNotification - " + ex.ToString());
@@ -139,6 +143,241 @@ namespace WindowsApiLib.Shell
                 _shellApi.SHChangeNotification_Unlock(hLock);
                 if (userPidl1 != IntPtr.Zero) Marshal.FreeCoTaskMem(userPidl1);
                 if (userPidl2 != IntPtr.Zero) Marshal.FreeCoTaskMem(userPidl2);
+            }
+        }
+
+        private void EnsureDirtyFolderRefreshScheduled(CShellItem folder)
+        {
+            var dueTime = CalculateDirtyFolderRefreshDelay(folder);
+            if (dueTime <= TimeSpan.Zero)
+            {
+                dueTime = TimeSpan.FromMilliseconds(1);
+            }
+
+            var key = GetDirtyFolderRefreshKey(folder);
+            lock (_dirtyFolderRefreshTimersLock)
+            {
+                if (_dirtyFolderRefreshTimers.TryGetValue(key, out var existingTimer))
+                {
+                    existingTimer.Dispose();
+                    _dirtyFolderRefreshTimers.Remove(key);
+                }
+
+                var timer = new System.Threading.Timer(OnDirtyFolderRefreshTimer, key, dueTime, Timeout.InfiniteTimeSpan);
+                _dirtyFolderRefreshTimers[key] = timer;
+            }
+
+            Debug.WriteLine($"  [UPDATEDIR] Scheduled dirty refresh for '{folder.ItemPath}' in {dueTime.TotalMilliseconds:0}ms");
+        }
+
+        private void OnDirtyFolderRefreshTimer(object? state)
+        {
+            if (state is not string folderKey || string.IsNullOrWhiteSpace(folderKey))
+            {
+                return;
+            }
+
+            RemoveDirtyFolderRefreshTimer(folderKey);
+            RefreshDirtyFolderFromTimer(folderKey);
+        }
+
+        private void RefreshDirtyFolderFromTimer(string folderKey)
+        {
+            lock (_hierarchyManager.Lock)
+            {
+                var folder = TryFindFolderByDirtyRefreshKey(folderKey);
+                if (folder is null || !folder.IsFolder)
+                {
+                    return;
+                }
+
+                if (!folder.IsDirty)
+                {
+                    return;
+                }
+
+                if (!TryRefreshDirtyFolderNow(folder, out bool needsDeferredRefresh) && needsDeferredRefresh)
+                {
+                    EnsureDirtyFolderRefreshScheduled(folder);
+                }
+            }
+        }
+
+        private void RemoveDirtyFolderRefreshTimer(string folderKey)
+        {
+            lock (_dirtyFolderRefreshTimersLock)
+            {
+                if (_dirtyFolderRefreshTimers.TryGetValue(folderKey, out var existingTimer))
+                {
+                    existingTimer.Dispose();
+                    _dirtyFolderRefreshTimers.Remove(folderKey);
+                }
+            }
+        }
+
+        private static string GetDirtyFolderRefreshKey(CShellItem folder)
+        {
+            if (!string.IsNullOrWhiteSpace(folder.FullPath))
+            {
+                return folder.FullPath;
+            }
+
+            var pidlDisplayName = TPidl.GetDisplayNameFull(folder.PIDL);
+            if (!string.IsNullOrWhiteSpace(pidlDisplayName))
+            {
+                return pidlDisplayName;
+            }
+
+            return folder.DisplayName ?? string.Empty;
+        }
+
+        private static TimeSpan CalculateDirtyFolderRefreshDelay(CShellItem folder)
+        {
+            var now = DateTime.Now;
+            var threshold = TimeSpan.FromSeconds(ShellController.FolderTimeout);
+
+            DateTime? oldestInitializedTimestamp = null;
+            if (folder.DirectoriesInitialized && folder.DirsCollectionTimestamp is DateTime dirsTimestamp)
+            {
+                oldestInitializedTimestamp = dirsTimestamp;
+            }
+
+            if (folder.FilesInitialized && folder.FilesCollectionTimestamp is DateTime filesTimestamp)
+            {
+                oldestInitializedTimestamp = oldestInitializedTimestamp is null || filesTimestamp < oldestInitializedTimestamp
+                    ? filesTimestamp
+                    : oldestInitializedTimestamp;
+            }
+
+            if (oldestInitializedTimestamp is null)
+            {
+                return threshold;
+            }
+
+            var elapsed = now - oldestInitializedTimestamp.Value;
+            var remaining = threshold - elapsed;
+            return remaining <= TimeSpan.Zero ? TimeSpan.Zero : remaining;
+        }
+
+        private bool TryRefreshDirtyFolderNow(CShellItem folder, out bool needsDeferredRefresh)
+        {
+            lock (_hierarchyManager.Lock)
+            {
+                needsDeferredRefresh = false;
+                if (folder is null || !folder.IsFolder)
+                {
+                    return false;
+                }
+
+                bool refreshFolders = folder.DirectoriesInitialized && IsTimestampPastTimeout(folder.DirsCollectionTimestamp);
+                bool refreshFiles = folder.FilesInitialized && IsTimestampPastTimeout(folder.FilesCollectionTimestamp);
+
+                if (!refreshFolders && !refreshFiles)
+                {
+                    needsDeferredRefresh = folder.DirectoriesInitialized || folder.FilesInitialized;
+                    return false;
+                }
+
+                DoUpdateDir(folder, refreshFiles, refreshFolders);
+                folder.IsDirty = false;
+                RaiseUpdateEvent(folder, new ShellItemUpdateEventArgs(folder, CShItemUpdateType.UpdateDir));
+                return true;
+            }
+        }
+
+        private CShellItem? TryFindFolderByDirtyRefreshKey(string folderKey)
+        {
+            var fullPathMatch = _hierarchyManager.Find(folderKey);
+            if (fullPathMatch is not null && fullPathMatch.IsFolder)
+            {
+                return fullPathMatch;
+            }
+
+            return FindFolderByDirtyRefreshKey(_hierarchyManager.Root, folderKey);
+        }
+
+        private CShellItem? FindFolderByDirtyRefreshKey(CShellItem? currentFolder, string folderKey)
+        {
+            if (currentFolder is null || !currentFolder.IsFolder)
+            {
+                return null;
+            }
+
+            if (string.Equals(GetDirtyFolderRefreshKey(currentFolder), folderKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return currentFolder;
+            }
+
+            if (!currentFolder.DirectoriesInitialized)
+            {
+                return null;
+            }
+
+            foreach (var childFolder in currentFolder.Directories.Items)
+            {
+                var found = FindFolderByDirtyRefreshKey(childFolder, folderKey);
+                if (found is not null)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool IsTimestampPastTimeout(DateTime? timestamp)
+        {
+            if (timestamp is null)
+            {
+                return false;
+            }
+
+            return (DateTime.Now - timestamp.Value) > TimeSpan.FromSeconds(ShellController.FolderTimeout);
+        }
+
+        private bool TryEnterFolderUpdateGuard(CShellItem folder, out string guardKey)
+        {
+            guardKey = GetFolderUpdateGuardKey(folder);
+            lock (_updatingFolderKeysLock)
+            {
+                if (_updatingFolderKeys.Contains(guardKey))
+                {
+                    return false;
+                }
+
+                _updatingFolderKeys.Add(guardKey);
+                return true;
+            }
+        }
+
+        private void ExitFolderUpdateGuard(string guardKey)
+        {
+            lock (_updatingFolderKeysLock)
+            {
+                _updatingFolderKeys.Remove(guardKey);
+            }
+        }
+
+        private static string GetFolderUpdateGuardKey(CShellItem folder)
+        {
+            var folderKey = GetDirtyFolderRefreshKey(folder);
+            if (!string.IsNullOrWhiteSpace(folderKey))
+            {
+                return folderKey;
+            }
+
+            return $"__folder_{RuntimeHelpers.GetHashCode(folder)}";
+        }
+
+        internal void DisposeDirtyFolderRefreshTimers()
+        {
+            lock (_dirtyFolderRefreshTimersLock)
+            {
+                foreach (var timer in _dirtyFolderRefreshTimers.Values)
+                {
+                    timer.Dispose();
+                }
+                _dirtyFolderRefreshTimers.Clear();
             }
         }
 
@@ -313,8 +552,13 @@ namespace WindowsApiLib.Shell
             var upCSI = _hierarchyManager.Find(userPidl1);
             if (upCSI is not null)
             {
-                Debug.WriteLine("  [UPDATEDIR] Found item: '" + upCSI.ItemPath + "'.  Updating dir.");
-                DoUpdateDir(upCSI);
+                Debug.WriteLine("  [UPDATEDIR] Found item: '" + upCSI.ItemPath + "'. Marking folder dirty.");
+                upCSI.IsDirty = true;
+
+                if (!TryRefreshDirtyFolderNow(upCSI, out bool needsDeferredRefresh) && needsDeferredRefresh)
+                {
+                    EnsureDirtyFolderRefreshScheduled(upCSI);
+                }
             }
             else
             {
@@ -532,24 +776,25 @@ namespace WindowsApiLib.Shell
         public int DoUpdateDir(CShellItem csi, bool updateFiles = true, bool updateFolders = true)
         {
             if (csi is null) return 0;
+            if (!updateFiles && !updateFolders) return 0;
 
-            if (_isUpdatingDir)
+            if (!TryEnterFolderUpdateGuard(csi, out string guardKey))
             {
                 Debug.WriteLine("DoUpdateDir called but an update is already in progress for this folder. Ignoring.");
                 return 0;
             }
+
             try
             {
-                _isUpdatingDir = true;
                 if (TPidl.ResolvesToSamePathOrName(csi.PIDL, CShellItemFactory.RecycleBin.PIDL)) return 0; //ignore recycle bin
 
-                var count = SelectiveFolderUpdate(csi, true, true);
+                var count = SelectiveFolderUpdate(csi, updateFiles, updateFolders);
                 Debug.WriteLine("DoUpdateDir end - " + csi.Text + " - " + DateTime.Now.ToString("HH:mm:ss.fff"));
                 return count;
             }
             finally
             {
-                _isUpdatingDir = false;
+                ExitFolderUpdateGuard(guardKey);
             }
         }
 

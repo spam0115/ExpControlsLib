@@ -4,6 +4,7 @@ using WindowsApiLib;
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using WindowsApiLib.Util;
 using ExpControlsLib;
@@ -426,6 +427,264 @@ namespace WindowsApiLibTest
                 
                 Marshal.FreeCoTaskMem(childPidl);
             });
+        }
+
+        [TestMethod]
+        public async Task UpdateDir_StaleInitializedFolder_RefreshesImmediatelyAndClearsDirty()
+        {
+            await Runner.EnqueueWork(() =>
+            {
+                var manager = MockShellItemFactory.CreateMockHierarchyManager();
+                var mockApi = new MockShellApi();
+                var mockFactory = new MockShellItemFactory();
+                var logic = new CShellItemUpdateLogic<MockPidl>(manager, mockApi, null, mockFactory)
+                {
+                    AllowUpdates = true
+                };
+
+                var windowsPidl = MockPidl.BytesToPidl(MockPidlFactory.CreateMockPidl(CSIDL.WINDOWS));
+                var folder = manager.Find(windowsPidl);
+                Marshal.FreeCoTaskMem(windowsPidl);
+                Assert.IsNotNull(folder, "Expected mock Windows folder in hierarchy.");
+
+                folder.Directories = new CShellItemCollection(folder);
+                folder.DirsCollectionTimestamp = DateTime.Now - TimeSpan.FromSeconds(ShellController.FolderTimeout + 1);
+
+                IntPtr pNotifyStruct = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(SHNOTIFYSTRUCT)));
+                var sns = new SHNOTIFYSTRUCT { dwItem1 = folder.PIDL, dwItem2 = IntPtr.Zero };
+                Marshal.StructureToPtr(sns, pNotifyStruct, false);
+
+                mockApi.OnLock = (IntPtr h, uint id, ref IntPtr pppidl, ref SHCNE plEvent) =>
+                {
+                    pppidl = pNotifyStruct;
+                    plEvent = SHCNE.UPDATEDIR;
+                    return new IntPtr(1);
+                };
+
+                int updateDirEventCount = 0;
+                logic.UpdateEvent += (s, e) =>
+                {
+                    if (e.UpdateType == CShItemUpdateType.UpdateDir && ReferenceEquals(e.Item, folder))
+                    {
+                        updateDirEventCount++;
+                    }
+                };
+
+                logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
+
+                Assert.IsFalse(folder.IsDirty, "Dirty flag should be cleared after immediate stale refresh.");
+                Assert.AreEqual(1, updateDirEventCount, "Immediate stale refresh should raise one folder-level UpdateDir event.");
+
+                Marshal.FreeCoTaskMem(pNotifyStruct);
+                logic.DisposeDirtyFolderRefreshTimers();
+            });
+        }
+
+        [TestMethod]
+        public async Task UpdateDir_FreshInitializedFolder_DefersRefreshThenClearsDirty()
+        {
+            var updateDirRaised = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            CShellItem? folder = null;
+            IntPtr pNotifyStruct = IntPtr.Zero;
+            CShellItemUpdateLogic<MockPidl>? logic = null;
+
+            await Runner.EnqueueWork(() =>
+            {
+                var manager = MockShellItemFactory.CreateMockHierarchyManager();
+                var mockApi = new MockShellApi();
+                var mockFactory = new MockShellItemFactory();
+                logic = new CShellItemUpdateLogic<MockPidl>(manager, mockApi, null, mockFactory)
+                {
+                    AllowUpdates = true
+                };
+
+                var windowsPidl = MockPidl.BytesToPidl(MockPidlFactory.CreateMockPidl(CSIDL.WINDOWS));
+                folder = manager.Find(windowsPidl);
+                Marshal.FreeCoTaskMem(windowsPidl);
+                Assert.IsNotNull(folder, "Expected mock Windows folder in hierarchy.");
+
+                folder.Directories = new CShellItemCollection(folder);
+                folder.DirsCollectionTimestamp = DateTime.Now - TimeSpan.FromSeconds(Math.Max(1, ShellController.FolderTimeout - 1));
+
+                pNotifyStruct = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(SHNOTIFYSTRUCT)));
+                var sns = new SHNOTIFYSTRUCT { dwItem1 = folder.PIDL, dwItem2 = IntPtr.Zero };
+                Marshal.StructureToPtr(sns, pNotifyStruct, false);
+
+                mockApi.OnLock = (IntPtr h, uint id, ref IntPtr pppidl, ref SHCNE plEvent) =>
+                {
+                    pppidl = pNotifyStruct;
+                    plEvent = SHCNE.UPDATEDIR;
+                    return new IntPtr(1);
+                };
+
+                logic.UpdateEvent += (s, e) =>
+                {
+                    if (e.UpdateType == CShItemUpdateType.UpdateDir && ReferenceEquals(e.Item, folder))
+                    {
+                        updateDirRaised.TrySetResult(true);
+                    }
+                };
+
+                logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
+                Assert.IsTrue(folder.IsDirty, "Folder should stay dirty until deferred refresh executes.");
+            });
+
+            var finished = await Task.WhenAny(updateDirRaised.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(updateDirRaised.Task, finished, "Deferred UPDATEDIR refresh did not execute within expected time.");
+            Assert.IsFalse(folder!.IsDirty, "Dirty flag should be cleared after deferred refresh executes.");
+
+            if (pNotifyStruct != IntPtr.Zero) Marshal.FreeCoTaskMem(pNotifyStruct);
+            logic!.DisposeDirtyFolderRefreshTimers();
+        }
+
+        [TestMethod]
+        public async Task UpdateDir_FreshInitializedFolder_CoalescesMultipleNotifications()
+        {
+            var updateDirCount = 0;
+            CShellItem? folder = null;
+            IntPtr pNotifyStruct = IntPtr.Zero;
+            CShellItemUpdateLogic<MockPidl>? logic = null;
+
+            await Runner.EnqueueWork(() =>
+            {
+                var manager = MockShellItemFactory.CreateMockHierarchyManager();
+                var mockApi = new MockShellApi();
+                var mockFactory = new MockShellItemFactory();
+                logic = new CShellItemUpdateLogic<MockPidl>(manager, mockApi, null, mockFactory)
+                {
+                    AllowUpdates = true
+                };
+
+                var windowsPidl = MockPidl.BytesToPidl(MockPidlFactory.CreateMockPidl(CSIDL.WINDOWS));
+                folder = manager.Find(windowsPidl);
+                Marshal.FreeCoTaskMem(windowsPidl);
+                Assert.IsNotNull(folder, "Expected mock Windows folder in hierarchy.");
+
+                folder.Directories = new CShellItemCollection(folder);
+                folder.DirsCollectionTimestamp = DateTime.Now - TimeSpan.FromSeconds(Math.Max(1, ShellController.FolderTimeout - 1));
+
+                pNotifyStruct = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(SHNOTIFYSTRUCT)));
+                var sns = new SHNOTIFYSTRUCT { dwItem1 = folder.PIDL, dwItem2 = IntPtr.Zero };
+                Marshal.StructureToPtr(sns, pNotifyStruct, false);
+
+                mockApi.OnLock = (IntPtr h, uint id, ref IntPtr pppidl, ref SHCNE plEvent) =>
+                {
+                    pppidl = pNotifyStruct;
+                    plEvent = SHCNE.UPDATEDIR;
+                    return new IntPtr(1);
+                };
+
+                logic.UpdateEvent += (s, e) =>
+                {
+                    if (e.UpdateType == CShItemUpdateType.UpdateDir && ReferenceEquals(e.Item, folder))
+                    {
+                        Interlocked.Increment(ref updateDirCount);
+                    }
+                };
+
+                logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
+                logic.HandleNotification(IntPtr.Zero, IntPtr.Zero);
+            });
+
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            Assert.AreEqual(1, updateDirCount, "Multiple UPDATEDIR notifications should coalesce to one deferred folder refresh.");
+            Assert.IsFalse(folder!.IsDirty, "Dirty flag should be cleared after the coalesced deferred refresh.");
+
+            if (pNotifyStruct != IntPtr.Zero) Marshal.FreeCoTaskMem(pNotifyStruct);
+            logic!.DisposeDirtyFolderRefreshTimers();
+        }
+
+        [TestMethod]
+        public async Task DoUpdateDir_DifferentFolders_CanRunConcurrently()
+        {
+            CShellItem? folderA = null;
+            CShellItem? folderB = null;
+            CShellItemUpdateLogic<MockPidl>? logic = null;
+            BlockingShellItemFactory? blockingFactory = null;
+
+            await Runner.EnqueueWork(() =>
+            {
+                var manager = MockShellItemFactory.CreateMockHierarchyManager();
+                IntPtr windowsPidl = MockPidl.BytesToPidl(MockPidlFactory.CreateMockPidl(CSIDL.WINDOWS));
+                IntPtr profilePidl = MockPidl.BytesToPidl(MockPidlFactory.CreateMockPidl(CSIDL.PROFILE));
+
+                folderA = manager.Find(windowsPidl);
+                folderB = manager.Find(profilePidl);
+
+                Marshal.FreeCoTaskMem(windowsPidl);
+                Marshal.FreeCoTaskMem(profilePidl);
+
+                Assert.IsNotNull(folderA, "Expected first folder in mock hierarchy.");
+                Assert.IsNotNull(folderB, "Expected second folder in mock hierarchy.");
+
+                folderA.Files = new CShellItemCollection(folderA);
+                folderB.Files = new CShellItemCollection(folderB);
+
+                blockingFactory = new BlockingShellItemFactory();
+                logic = new CShellItemUpdateLogic<MockPidl>(
+                    manager,
+                    new MockShellApi(),
+                    new MockFileSystem(),
+                    blockingFactory);
+            });
+
+            try
+            {
+                var taskA = Task.Run(() => logic!.DoUpdateDir(folderA!));
+                var taskB = Task.Run(() => logic!.DoUpdateDir(folderB!));
+
+                bool bothEntered = SpinWait.SpinUntil(
+                    () => Volatile.Read(ref blockingFactory!.CallCount) >= 2,
+                    TimeSpan.FromSeconds(2));
+
+                blockingFactory!.Release();
+
+                await Task.WhenAll(taskA, taskB);
+
+                Assert.IsTrue(bothEntered, "Both folder updates should enter shell enumeration concurrently.");
+                Assert.AreEqual(2, Volatile.Read(ref blockingFactory.CallCount), "Each folder should run its own DoUpdateDir path.");
+            }
+            finally
+            {
+                blockingFactory?.Dispose();
+            }
+        }
+
+        private sealed class BlockingShellItemFactory : IShellItemFactoryWrapper, IDisposable
+        {
+            private readonly ManualResetEventSlim _releaseGate = new(false);
+            public int CallCount;
+
+            public List<IntPtr> GetPidlsOfFolder(CShellItem csi, SHCONTF flags)
+            {
+                Interlocked.Increment(ref CallCount);
+                _releaseGate.Wait(TimeSpan.FromSeconds(3));
+                return new List<IntPtr>();
+            }
+
+            public CShellItem Create(IntPtr pidl, CShellItem parent = null)
+            {
+                var csi = new CShellItem();
+                csi.m_Pidl = MockPidl.Clone(pidl);
+                csi.Parent = parent;
+                csi.m_IsFolder = true;
+                return csi;
+            }
+
+            public string GetFullPath(CShellItem csi)
+            {
+                return csi.FullPath ?? csi.DisplayName;
+            }
+
+            public void Release()
+            {
+                _releaseGate.Set();
+            }
+
+            public void Dispose()
+            {
+                _releaseGate.Dispose();
+            }
         }
     }
 }
