@@ -827,6 +827,10 @@ namespace ExpControlsLib
             if (IsExcluded(item)) return false;
             if (_filter != null && !_filter(item)) return false;
 
+            // A Shell operation can publish the same creation more than once.
+            // Do not insert a second row for an item already in the active view.
+            if (_listViewWrapper.GetIndex(item) >= 0) return false;
+
             int imageIndex = _imageListOrchestrator.GetInitialImageIndexOrQueue(item);
             if (imageIndex != -1)
                 item.ImageIndex = imageIndex;

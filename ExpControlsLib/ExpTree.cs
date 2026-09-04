@@ -1391,6 +1391,13 @@ namespace ExpControlsLib
                 return;
             }
 
+            // Shell notifications may repeat an already-observed creation. The
+            // TreeNode collection is not deduplicated by InsertNode, so ignore it.
+            if (TryFindMatchingChildNode(parentNode, item, out _))
+            {
+                return;
+            }
+
             var node = MakeNode(item);
             InsertNode(node, parentNode);
         }
