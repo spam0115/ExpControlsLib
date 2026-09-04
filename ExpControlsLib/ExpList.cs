@@ -147,6 +147,7 @@ namespace ExpControlsLib
             try
             {
                 _fileSystem.CreateFolderViaShell(newFolderPath);
+                ForceImmediateCurrentFolderRefresh("new-folder");
 
                 //Directory.CreateDirectory(newFolderPath);
                 //IntPtr pidl = ShellAPI.ILCreateFromPathW(newFolderPath);
@@ -162,6 +163,21 @@ namespace ExpControlsLib
             {
                 MessageBox.Show(this, $"The folder could not be created.\r\n\r\n{ex.Message}", "New Folder",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ForceImmediateCurrentFolderRefresh(string reason)
+        {
+            try
+            {
+                if (_shellController?.ShellUpdater is null || _currentFolderCsi is null || !_currentFolderCsi.IsFolder)
+                    return;
+
+                _shellController.ShellUpdater.DoUpdateDir(_currentFolderCsi, updateFiles: true, updateFolders: true);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList immediate refresh failed ({reason}) -- {ex}");
             }
         }
 

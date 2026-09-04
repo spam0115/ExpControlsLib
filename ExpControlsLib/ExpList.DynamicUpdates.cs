@@ -273,7 +273,24 @@ namespace ExpControlsLib
 
                 // Offload shell interaction to background STA thread. 
                 // Binding MUST happen on this thread to avoid marshaling back to UI thread.
-                _shellCommandService?.InvokeVerbAsync(cmd, capturedParentPidl, capturedRelPidls);
+                var invokeTask = _shellCommandService?.InvokeVerbAsync(cmd, capturedParentPidl, capturedRelPidls);
+                if (invokeTask is not null &&
+                    (cmd.Equals("paste", StringComparison.OrdinalIgnoreCase)
+                    || cmd.Equals("pastelink", StringComparison.OrdinalIgnoreCase)))
+                {
+                    invokeTask.ContinueWith(_ =>
+                    {
+                        try
+                        {
+                            if (IsDisposed || Disposing || !IsHandleCreated) return;
+                            BeginInvoke(new Action(() => ForceImmediateCurrentFolderRefresh(cmd)));
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpList immediate refresh continuation failed for '{cmd}' -- {ex}");
+                        }
+                    }, TaskScheduler.Default);
+                }
             }
             catch (Exception ex)
             {
@@ -633,6 +650,11 @@ namespace ExpControlsLib
                             capturedParentPidl,
                             new[] { capturedRelPidl },
                             cmi_shell);
+
+                        if (cmdEnum == CMD.PASTE || cmdEnum == CMD.PASTELINK)
+                        {
+                            ForceImmediateCurrentFolderRefresh(cmdEnum.ToString());
+                        }
 
                         // Clean up allocated strings
                         if (cmi.lpVerb != IntPtr.Zero && cmi.lpVerb.ToInt64() > 0xFFFF) Marshal.FreeHGlobal(cmi.lpVerb);

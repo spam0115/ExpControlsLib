@@ -1826,22 +1826,18 @@ namespace ExpControlsLib
                                 }
 
                                 CShellItem parentCsi = (CShellItem)tn.Tag;
-                                // The parent was likely loaded less than FolderTimeout ago,
-                                // so EnsureChildrenPopulatedAndRecent may intentionally skip
-                                // the reload. Force a folder-only cross-check so the new item
-                                // is visible immediately and the shared hierarchy is updated.
-                                _shellController.ShellUpdater.DoUpdateDir(parentCsi,
-                                    updateFiles: false, updateFolders: true);
-
-                                tn.Collapse(false);
-                                tn.Nodes.Clear();
-                                var dirs = parentCsi.Directories;
-                                dirs.Sort();
-                                foreach (CShellItem child in EnumerateDisplayItems(dirs))
+                                // The shell operation can still have a folder update in progress.
+                                // Defer the cross-check until the next UI message so it can acquire
+                                // the updater guard and publish the created child. Do not collapse or
+                                // rebuild the node from a potentially stale directory cache.
+                                BeginInvoke(new Action(() =>
                                 {
-                                    var node = MakeNode(child);
-                                    tn.Nodes.Add(node);
-                                }
+                                    if (!IsDisposed && !Disposing)
+                                    {
+                                        _shellController.ShellUpdater.DoUpdateDir(parentCsi,
+                                            updateFiles: false, updateFolders: true);
+                                    }
+                                }));
                             }
                         }
                         else if (verbId == 99996)
@@ -2487,6 +2483,48 @@ namespace ExpControlsLib
                         }
                     }
                 });
+
+                if (cmd.Equals("delete", StringComparison.OrdinalIgnoreCase)
+                    || cmd.Equals("paste", StringComparison.OrdinalIgnoreCase)
+                    || cmd.Equals("pastelink", StringComparison.OrdinalIgnoreCase))
+                {
+                    task.ContinueWith(_ =>
+                    {
+                        try
+                        {
+                            if (IsDisposed || Disposing || !IsHandleCreated)
+                                return;
+
+                            BeginInvoke(new Action(() => ForceImmediateTreeRefreshAfterInControlCommand(csi, cmd)));
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree.WinMenuCmd continuation error for '{cmd}' -- {ex}");
+                        }
+                    }, TaskScheduler.Default);
+                }
+            }
+        }
+
+        private void ForceImmediateTreeRefreshAfterInControlCommand(CShellItem sourceItem, string cmd)
+        {
+            if (_shellController?.ShellUpdater is null || sourceItem is null)
+                return;
+
+            try
+            {
+                CShellItem? refreshTarget = cmd.Equals("delete", StringComparison.OrdinalIgnoreCase)
+                    ? sourceItem.Parent
+                    : sourceItem;
+
+                if (refreshTarget is null || !refreshTarget.IsFolder)
+                    return;
+
+                _shellController.ShellUpdater.DoUpdateDir(refreshTarget, updateFiles: true, updateFolders: true);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ExpTree immediate refresh failed for '{cmd}' -- {ex}");
             }
         }
 
